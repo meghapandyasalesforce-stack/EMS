@@ -32,7 +32,7 @@ const workforcePlanSchema = new mongoose.Schema({
     reason: String,
     status: {
         type: String,
-        enum: ['Draft', 'Approved', 'In Progress', 'Completed', 'Cancelled'],
+        enum: ['Draft', 'Pending Approval', 'Approved', 'Rejected', 'In Progress', 'Completed', 'Cancelled'],
         default: 'Draft'
     },
     currentHeadcount: {
@@ -98,7 +98,18 @@ const workforcePlanSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee'
     },
-    approvedAt: Date
+    approvedAt: Date,
+    rejectionReason: String,
+    rejectedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    },
+    rejectedAt: Date,
+    submittedAt: Date,
+    submittedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    }
 }, {
     timestamps: true
 });

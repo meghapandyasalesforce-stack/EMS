@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     FaArrowLeft, FaUsers, FaDollarSign,
-    FaExclamationTriangle, FaPlus, FaBriefcase, FaLink
+    FaExclamationTriangle, FaPlus, FaBriefcase, FaLink,
+    FaPaperPlane, FaCheck, FaTimes, FaPlay, FaFlagCheckered
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -19,6 +20,7 @@ import {
     WfField,
     wfInputClass,
     gapTone,
+    formatPlanStatus,
 } from './components/workforceUi';
 
 const WorkforceDetailPage = () => {
@@ -27,10 +29,13 @@ const WorkforceDetailPage = () => {
     const [plan, setPlan] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [workflowBusy, setWorkflowBusy] = useState(false);
     const [creatingJobIndex, setCreatingJobIndex] = useState(null);
     const [updatingFillIndex, setUpdatingFillIndex] = useState(null);
     const [showAddHiringModal, setShowAddHiringModal] = useState(false);
     const [showAddRiskModal, setShowAddRiskModal] = useState(false);
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState('');
 
     const [hiringForm, setHiringForm] = useState({
         position: '',
@@ -70,6 +75,43 @@ const WorkforceDetailPage = () => {
             navigate('/workforce');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const runWorkflowAction = async (action, body = {}) => {
+        try {
+            setWorkflowBusy(true);
+            const response = await axios.post(
+                `/v1/admin/workforce/workforce-plans/${id}/${action}`,
+                body,
+                { withCredentials: true }
+            );
+            if (response.data?.data) {
+                setPlan(response.data.data);
+            } else {
+                await fetchPlan();
+            }
+            toast.success(response.data?.message || 'Status updated');
+            return true;
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to update plan status');
+            return false;
+        } finally {
+            setWorkflowBusy(false);
+        }
+    };
+
+    const handleReject = async (e) => {
+        e.preventDefault();
+        const reason = rejectionReason.trim();
+        if (!reason) {
+            toast.error('Rejection reason is required');
+            return;
+        }
+        const ok = await runWorkflowAction('reject', { reason });
+        if (ok) {
+            setShowRejectModal(false);
+            setRejectionReason('');
         }
     };
 
@@ -235,6 +277,7 @@ const WorkforceDetailPage = () => {
         : 0;
 
     const infoRows = [
+        { label: 'Status', value: formatPlanStatus(plan.status), badge: true, badgeStatus: plan.status },
         { label: 'Year', value: plan.planYear },
         { label: 'Quarter', value: `Q${plan.quarter}` },
         plan.department && { label: 'Department', value: plan.department },
@@ -242,15 +285,84 @@ const WorkforceDetailPage = () => {
             label: 'Designation',
             value: plan.jobTitle || plan.designation,
         },
-        plan.priority && { label: 'Priority', value: plan.priority, badge: true },
+        plan.priority && { label: 'Priority', value: plan.priority, badge: true, badgeStatus: plan.priority },
         plan.reason && { label: 'Reason', value: plan.reason },
         plan.createdBy && { label: 'Created By', value: plan.createdBy.name || 'N/A' },
+        plan.submittedAt && {
+            label: 'Submitted At',
+            value: format(new Date(plan.submittedAt), 'MMM dd, yyyy'),
+        },
         plan.approvedBy && { label: 'Approved By', value: plan.approvedBy.name || 'N/A' },
         plan.approvedAt && {
             label: 'Approved At',
             value: format(new Date(plan.approvedAt), 'MMM dd, yyyy'),
         },
+        plan.status === 'Rejected' && plan.rejectedBy && {
+            label: 'Rejected By',
+            value: plan.rejectedBy.name || 'N/A',
+        },
+        plan.status === 'Rejected' && plan.rejectedAt && {
+            label: 'Rejected At',
+            value: format(new Date(plan.rejectedAt), 'MMM dd, yyyy'),
+        },
     ].filter(Boolean);
+
+    const workflowActions = (
+        <div className="flex flex-wrap items-center gap-2">
+            <WfBadge status={plan.status} className="px-3 py-1 text-sm">
+                {formatPlanStatus(plan.status)}
+            </WfBadge>
+            {['Draft', 'Rejected'].includes(plan.status) && (
+                <WfButton
+                    size="sm"
+                    loading={workflowBusy}
+                    onClick={() => runWorkflowAction('submit')}
+                >
+                    <FaPaperPlane /> Submit for Approval
+                </WfButton>
+            )}
+            {plan.status === 'Pending Approval' && (
+                <>
+                    <WfButton
+                        size="sm"
+                        loading={workflowBusy}
+                        onClick={() => runWorkflowAction('approve')}
+                    >
+                        <FaCheck /> Approve
+                    </WfButton>
+                    <WfButton
+                        variant="danger"
+                        size="sm"
+                        disabled={workflowBusy}
+                        onClick={() => {
+                            setRejectionReason('');
+                            setShowRejectModal(true);
+                        }}
+                    >
+                        <FaTimes /> Reject
+                    </WfButton>
+                </>
+            )}
+            {plan.status === 'Approved' && (
+                <WfButton
+                    size="sm"
+                    loading={workflowBusy}
+                    onClick={() => runWorkflowAction('start')}
+                >
+                    <FaPlay /> Start (In Progress)
+                </WfButton>
+            )}
+            {plan.status === 'In Progress' && (
+                <WfButton
+                    size="sm"
+                    loading={workflowBusy}
+                    onClick={() => runWorkflowAction('complete')}
+                >
+                    <FaFlagCheckered /> Mark Completed
+                </WfButton>
+            )}
+        </div>
+    );
 
     return (
         <div className="min-h-screen transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
@@ -269,8 +381,17 @@ const WorkforceDetailPage = () => {
                     eyebrow="Workforce Plan"
                     title={plan.planName}
                     subtitle={`${plan.planYear} Q${plan.quarter}${plan.department ? ` · ${plan.department}` : ''}${plan.jobTitle ? ` · ${plan.jobTitle}` : ''}`}
-                    actions={<WfBadge status={plan.status} className="px-3 py-1 text-sm">{plan.status}</WfBadge>}
+                    actions={workflowActions}
                 />
+
+                {plan.status === 'Rejected' && plan.rejectionReason && (
+                    <div className="rounded-2xl border border-rose-100 bg-rose-50/80 px-5 py-4 ring-1 ring-rose-100">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-600">
+                            Rejection Reason
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-rose-900">{plan.rejectionReason}</p>
+                    </div>
+                )}
 
                 <div className="hrms-main-rail">
                     <div className="min-w-0 space-y-5">
@@ -591,7 +712,7 @@ const WorkforceDetailPage = () => {
                                         <dt className="text-sm text-slate-500">{row.label}</dt>
                                         <dd className="text-right text-sm font-medium text-slate-800">
                                             {row.badge ? (
-                                                <WfBadge status={row.value}>{row.value}</WfBadge>
+                                                <WfBadge status={row.badgeStatus || row.value}>{row.value}</WfBadge>
                                             ) : (
                                                 row.value
                                             )}
@@ -816,6 +937,48 @@ const WorkforceDetailPage = () => {
                             </WfButton>
                             <WfButton type="submit" variant="amber" loading={submitting}>
                                 Add Risk
+                            </WfButton>
+                        </div>
+                    </form>
+                </WfModal>
+            )}
+
+            {showRejectModal && (
+                <WfModal
+                    title="Reject Workforce Plan"
+                    subtitle="Provide a reason that will remain visible on this plan"
+                    maxWidth="max-w-lg"
+                    onClose={() => {
+                        if (!workflowBusy) {
+                            setShowRejectModal(false);
+                            setRejectionReason('');
+                        }
+                    }}
+                >
+                    <form onSubmit={handleReject} className="space-y-4">
+                        <WfField label="Rejection Reason" required>
+                            <textarea
+                                value={rejectionReason}
+                                onChange={(e) => setRejectionReason(e.target.value)}
+                                className={wfInputClass}
+                                rows="4"
+                                placeholder="Explain why this plan is being rejected..."
+                                required
+                            />
+                        </WfField>
+                        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                            <WfButton
+                                variant="secondary"
+                                disabled={workflowBusy}
+                                onClick={() => {
+                                    setShowRejectModal(false);
+                                    setRejectionReason('');
+                                }}
+                            >
+                                Cancel
+                            </WfButton>
+                            <WfButton type="submit" variant="danger" loading={workflowBusy}>
+                                Reject Plan
                             </WfButton>
                         </div>
                     </form>

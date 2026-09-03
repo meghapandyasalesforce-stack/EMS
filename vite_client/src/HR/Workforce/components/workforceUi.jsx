@@ -11,10 +11,13 @@ export const wfStatusClass = (status) => {
         case 'In Progress':
         case 'Planned':
             return 'bg-teal-50 text-teal-700 ring-1 ring-teal-100';
+        case 'Pending Approval':
+            return 'bg-amber-50 text-amber-700 ring-1 ring-amber-100';
         case 'Completed':
             return 'bg-violet-50 text-violet-700 ring-1 ring-violet-100';
         case 'Draft':
             return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+        case 'Rejected':
         case 'Shortage':
         case 'Critical':
         case 'Cancelled':
@@ -27,6 +30,21 @@ export const wfStatusClass = (status) => {
         default:
             return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
     }
+};
+
+export const PLAN_STATUS_OPTIONS = [
+    'Draft',
+    'Pending Approval',
+    'Approved',
+    'Rejected',
+    'In Progress',
+    'Completed',
+    'Cancelled',
+];
+
+export const formatPlanStatus = (status = '') => {
+    if (!status) return '—';
+    return String(status);
 };
 
 export const WfBadge = ({ children, status, className = '' }) => (

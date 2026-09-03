@@ -401,7 +401,13 @@
   gap: 1rem;
   width: 100%;
   min-width: 0;
-  align-items: start;
+  align-items: stretch;
+}
+
+.employee-profile-sidebar {
+  width: 100%;
+  max-width: 100%;
+  align-self: stretch;
 }
 
 .employee-profile-sidebar,
@@ -413,25 +419,38 @@
 }
 
 .employee-profile-main {
-  align-self: start;
+  align-self: stretch;
   height: auto;
   width: 100%;
+  max-width: 100%;
 }
 
 .employee-profile-tabs {
+  width: 100%;
+  min-width: 0;
   border-bottom: 1px solid rgb(243 244 246);
 }
 
 .employee-profile-tabs .hrms-tabs-scroll {
+  display: flex;
+  width: 100%;
+  min-width: 0;
   flex-wrap: nowrap;
+  gap: 0.125rem;
   overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
 .employee-profile-tabs .hrms-tabs-scroll::-webkit-scrollbar {
   display: none;
+}
+
+.employee-profile-tabs .hrms-tabs-scroll > * {
+  flex-shrink: 0;
 }
 
 .employee-profile-content {
@@ -441,6 +460,29 @@
 
 .employee-profile-content > * {
   min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .employee-profile-sidebar .profile-meta-row {
+    gap: 0.75rem;
+  }
+
+  .employee-profile-sidebar .profile-meta-row > span:last-child {
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .employee-profile-tabs {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .employee-profile-tabs .hrms-tabs-scroll > button {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+    font-size: 12px;
+  }
 }
 
 @media (min-width: 640px) {
@@ -464,6 +506,7 @@
   }
 
   .employee-profile-main {
+    align-self: start;
     flex: 1 1 0%;
     width: auto;
     max-width: calc(100% - 320px - 1.25rem);
@@ -1043,9 +1086,61 @@ canvas {
   }
 }
 
+@media (max-width: 639px) {
+  .page-shell {
+    padding: 1.5rem 1rem 1.25rem;
+    overflow-x: clip;
+  }
+
+  .page-shell-inner,
+  .hrms-main-rail,
+  .hrms-stack {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .hrms-main-rail > *,
+  .hrms-stack > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* Mobile header (hamburger bar): give all pages breathing room below nav */
+@media (max-width: 1023px) {
+  .main-scroll-area.hrms-page-canvas {
+    padding-top: 1rem;
+    padding-bottom: 1.25rem;
+    box-sizing: border-box;
+  }
+
+  .main-scroll-area.hrms-page-canvas > .page-shell,
+  .main-scroll-area.hrms-page-canvas .page-shell:not(.fixed):not([role='dialog']),
+  .main-scroll-area.hrms-page-canvas > .employee-profile-page,
+  .main-scroll-area.hrms-page-canvas .employee-profile-page.page-shell {
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem;
+  }
+
+  /* Full-bleed wrappers (min-h-screen) that sit under the mobile header */
+  .main-scroll-area.hrms-page-canvas > .min-h-screen:not(.page-shell),
+  .main-scroll-area.hrms-page-canvas > [class*='min-h-screen']:not(.page-shell) {
+    padding-top: 0.5rem;
+    box-sizing: border-box;
+  }
+
+  /* First content block when page has no page-shell padding of its own */
+  .main-scroll-area.hrms-page-canvas > *:first-child:not(.page-shell):not(.employee-profile-page) {
+    margin-top: 0;
+  }
+}
+
 @media (max-width: 380px) {
   .page-shell {
-    padding: 0.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
   }
 
   .main-scroll-area :where(form, [role="dialog"]) .flex.justify-end > button {

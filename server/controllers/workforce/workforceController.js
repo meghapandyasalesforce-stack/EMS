@@ -13,6 +13,27 @@ import {
 
 const normalizeJobTitle = (body = {}) => body.jobTitle || body.designation || undefined;
 
+const getActorId = (req) => req.employee?._id || req.user?._id;
+
+const populatePlanActors = (query) =>
+    query
+        .populate('createdBy', 'name email')
+        .populate('approvedBy', 'name email')
+        .populate('rejectedBy', 'name email')
+        .populate('submittedBy', 'name email');
+
+const findOrgPlan = async (id, organizationId) =>
+    WorkforcePlan.findOne({ _id: id, organizationId });
+
+const respondWithPlan = async (res, plan, organizationId, message, statusCode = 200) => {
+    const populated = await populatePlanActors(WorkforcePlan.findById(plan._id));
+    res.status(statusCode).json({
+        success: true,
+        ...(message ? { message } : {}),
+        data: await enrichPlanWithLiveData(populated, organizationId)
+    });
+};
+
 /**
  * Resolve live current headcount for a plan payload.
  */
@@ -29,7 +50,7 @@ const resolveLiveCurrent = async (organizationId, body = {}) => {
  */
 export const createWorkforcePlan = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const createdBy = req.user?._id || req.employee?._id;
+    const createdBy = getActorId(req);
 
     const jobTitle = normalizeJobTitle(req.body);
     const liveCurrent = await resolveLiveCurrent(organizationId, { ...req.body, jobTitle });
@@ -38,24 +59,27 @@ export const createWorkforcePlan = asyncHandler(async (req, res) => {
             ? Number(req.body.currentHeadcount)
             : liveCurrent;
 
+    // New plans always start as Draft; status transitions use dedicated workflow endpoints
     const workforcePlan = new WorkforcePlan({
         ...req.body,
         jobTitle: jobTitle || req.body.jobTitle,
         designation: req.body.designation || jobTitle,
         currentHeadcount,
         organizationId,
-        createdBy
+        createdBy,
+        status: 'Draft',
+        approvedBy: undefined,
+        approvedAt: undefined,
+        rejectionReason: undefined,
+        rejectedBy: undefined,
+        rejectedAt: undefined,
+        submittedAt: undefined,
+        submittedBy: undefined
     });
 
     await workforcePlan.save();
 
-    const enriched = await enrichPlanWithLiveData(workforcePlan, organizationId);
-
-    res.status(201).json({
-        success: true,
-        message: 'Workforce plan created successfully',
-        data: enriched
-    });
+    await respondWithPlan(res, workforcePlan, organizationId, 'Workforce plan created successfully', 201);
 });
 
 /**
@@ -72,10 +96,9 @@ export const getWorkforcePlans = asyncHandler(async (req, res) => {
     if (status) query.status = status;
     if (jobTitle) query.jobTitle = jobTitle;
 
-    const plans = await WorkforcePlan.find(query)
-        .populate('createdBy', 'name email')
-        .populate('approvedBy', 'name email')
-        .sort({ planYear: -1, createdAt: -1 });
+    const plans = await populatePlanActors(
+        WorkforcePlan.find(query).sort({ planYear: -1, createdAt: -1 })
+    );
 
     const enriched = await Promise.all(plans.map((plan) => enrichPlanWithLiveData(plan, organizationId)));
 
@@ -147,12 +170,12 @@ export const getWorkforcePlan = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
 
-    const plan = await WorkforcePlan.findOne({
-        _id: id,
-        organizationId
-    })
-        .populate('createdBy', 'name email')
-        .populate('approvedBy', 'name email');
+    const plan = await populatePlanActors(
+        WorkforcePlan.findOne({
+            _id: id,
+            organizationId
+        })
+    );
 
     if (!plan) {
         return res.status(404).json({
@@ -163,9 +186,7 @@ export const getWorkforcePlan = asyncHandler(async (req, res) => {
 
     // Refresh persisted live headcount + recruitment fill sync
     await refreshPlanLiveHeadcount(plan, organizationId);
-    const refreshed = await WorkforcePlan.findById(plan._id)
-        .populate('createdBy', 'name email')
-        .populate('approvedBy', 'name email');
+    const refreshed = await populatePlanActors(WorkforcePlan.findById(plan._id));
 
     res.json({
         success: true,
@@ -180,10 +201,7 @@ export const updateWorkforcePlan = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
 
-    const plan = await WorkforcePlan.findOne({
-        _id: id,
-        organizationId
-    });
+    const plan = await findOrgPlan(id, organizationId);
 
     if (!plan) {
         return res.status(404).json({
@@ -192,22 +210,35 @@ export const updateWorkforcePlan = asyncHandler(async (req, res) => {
         });
     }
 
-    const jobTitle = normalizeJobTitle(req.body);
+    // Status transitions are handled only by workflow endpoints
+    const {
+        status: _ignoredStatus,
+        approvedBy: _ignoredApprovedBy,
+        approvedAt: _ignoredApprovedAt,
+        rejectionReason: _ignoredRejectionReason,
+        rejectedBy: _ignoredRejectedBy,
+        rejectedAt: _ignoredRejectedAt,
+        submittedAt: _ignoredSubmittedAt,
+        submittedBy: _ignoredSubmittedBy,
+        ...safeBody
+    } = req.body || {};
+
+    const jobTitle = normalizeJobTitle(safeBody);
     if (jobTitle !== undefined) {
-        req.body.jobTitle = jobTitle;
-        if (!req.body.designation) req.body.designation = jobTitle;
+        safeBody.jobTitle = jobTitle;
+        if (!safeBody.designation) safeBody.designation = jobTitle;
     }
 
-    Object.assign(plan, req.body);
+    Object.assign(plan, safeBody);
     
     // Recalculate budget remaining if budget fields changed
-    if (req.body.budget) {
+    if (safeBody.budget) {
         plan.budget = plan.budget || {};
         plan.budget.remaining = (plan.budget.allocated || 0) - (plan.budget.spent || 0);
     }
 
     // Keep current headcount live unless explicitly overridden
-    if (req.body.useLiveHeadcount !== false) {
+    if (safeBody.useLiveHeadcount !== false) {
         plan.currentHeadcount = await resolveLiveCurrent(organizationId, {
             department: plan.department,
             jobTitle: plan.jobTitle
@@ -216,15 +247,145 @@ export const updateWorkforcePlan = asyncHandler(async (req, res) => {
 
     await plan.save();
 
-    const populatedPlan = await WorkforcePlan.findById(plan._id)
-        .populate('createdBy', 'name email')
-        .populate('approvedBy', 'name email');
+    await respondWithPlan(res, plan, organizationId, 'Workforce plan updated successfully');
+});
 
-    res.json({
-        success: true,
-        message: 'Workforce plan updated successfully',
-        data: await enrichPlanWithLiveData(populatedPlan, organizationId)
-    });
+/**
+ * Submit workforce plan for approval (Draft / Rejected → Pending Approval)
+ */
+export const submitWorkforcePlan = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const plan = await findOrgPlan(req.params.id, organizationId);
+
+    if (!plan) {
+        return res.status(404).json({ success: false, message: 'Workforce plan not found' });
+    }
+    if (!['Draft', 'Rejected'].includes(plan.status)) {
+        return res.status(400).json({
+            success: false,
+            message: 'Only Draft or Rejected plans can be submitted for approval'
+        });
+    }
+
+    plan.status = 'Pending Approval';
+    plan.submittedBy = getActorId(req);
+    plan.submittedAt = new Date();
+    plan.rejectionReason = null;
+    plan.rejectedBy = null;
+    plan.rejectedAt = null;
+    await plan.save();
+
+    await respondWithPlan(res, plan, organizationId, 'Workforce plan submitted for approval');
+});
+
+/**
+ * Approve workforce plan (Pending Approval → Approved)
+ */
+export const approveWorkforcePlan = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const plan = await findOrgPlan(req.params.id, organizationId);
+
+    if (!plan) {
+        return res.status(404).json({ success: false, message: 'Workforce plan not found' });
+    }
+    if (plan.status !== 'Pending Approval') {
+        return res.status(400).json({
+            success: false,
+            message: 'Only plans pending approval can be approved'
+        });
+    }
+
+    plan.status = 'Approved';
+    plan.approvedBy = getActorId(req);
+    plan.approvedAt = new Date();
+    plan.rejectionReason = null;
+    plan.rejectedBy = null;
+    plan.rejectedAt = null;
+    await plan.save();
+
+    await respondWithPlan(res, plan, organizationId, 'Workforce plan approved');
+});
+
+/**
+ * Reject workforce plan (Pending Approval → Rejected)
+ */
+export const rejectWorkforcePlan = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const plan = await findOrgPlan(req.params.id, organizationId);
+
+    if (!plan) {
+        return res.status(404).json({ success: false, message: 'Workforce plan not found' });
+    }
+    if (plan.status !== 'Pending Approval') {
+        return res.status(400).json({
+            success: false,
+            message: 'Only plans pending approval can be rejected'
+        });
+    }
+
+    const reason = String(req.body?.reason || req.body?.rejectionReason || '').trim();
+    if (!reason) {
+        return res.status(400).json({
+            success: false,
+            message: 'Rejection reason is required'
+        });
+    }
+
+    plan.status = 'Rejected';
+    plan.rejectionReason = reason;
+    plan.rejectedBy = getActorId(req);
+    plan.rejectedAt = new Date();
+    plan.approvedBy = null;
+    plan.approvedAt = null;
+    await plan.save();
+
+    await respondWithPlan(res, plan, organizationId, 'Workforce plan rejected');
+});
+
+/**
+ * Start execution (Approved → In Progress)
+ */
+export const startWorkforcePlan = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const plan = await findOrgPlan(req.params.id, organizationId);
+
+    if (!plan) {
+        return res.status(404).json({ success: false, message: 'Workforce plan not found' });
+    }
+    if (plan.status !== 'Approved') {
+        return res.status(400).json({
+            success: false,
+            message: 'Only Approved plans can be moved to In Progress'
+        });
+    }
+
+    plan.status = 'In Progress';
+    await plan.save();
+
+    await respondWithPlan(res, plan, organizationId, 'Workforce plan marked as In Progress');
+});
+
+/**
+ * Complete workforce plan (In Progress → Completed)
+ */
+export const completeWorkforcePlan = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const plan = await findOrgPlan(req.params.id, organizationId);
+
+    if (!plan) {
+        return res.status(404).json({ success: false, message: 'Workforce plan not found' });
+    }
+    if (plan.status !== 'In Progress') {
+        return res.status(400).json({
+            success: false,
+            message: 'Only In Progress plans can be marked Completed'
+        });
+    }
+
+    plan.status = 'Completed';
+    await plan.save();
+
+    await respondWithPlan(res, plan, organizationId, 'Workforce plan marked as Completed');
 });
 
 /**
@@ -234,10 +395,7 @@ export const deleteWorkforcePlan = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
 
-    const plan = await WorkforcePlan.findOne({
-        _id: id,
-        organizationId
-    });
+    const plan = await findOrgPlan(id, organizationId);
 
     if (!plan) {
         return res.status(404).json({
@@ -388,12 +546,14 @@ export const getWorkforceDashboard = asyncHandler(async (req, res) => {
         getLiveHeadcount(organizationId),
         WorkforcePlan.find({
             ...query,
-            status: { $in: ['Draft', 'Approved', 'In Progress', 'Completed'] }
+            status: { $in: ['Draft', 'Pending Approval', 'Approved', 'In Progress', 'Completed'] }
         }).lean(),
         getHeadcountByDepartment(organizationId)
     ]);
 
-    const activePlans = plans.filter((p) => ['Approved', 'In Progress', 'Draft'].includes(p.status));
+    const activePlans = plans.filter((p) =>
+        ['Approved', 'In Progress', 'Draft', 'Pending Approval'].includes(p.status)
+    );
     const plannedWorkforce = activePlans.reduce((sum, p) => sum + (Number(p.targetHeadcount) || 0), 0);
 
     // Prefer sum of plan targets when plans exist; else planned = current
@@ -491,7 +651,7 @@ export const getGapAnalysis = asyncHandler(async (req, res) => {
     const [plans, byDept, byRole] = await Promise.all([
         WorkforcePlan.find({
             ...query,
-            status: { $in: ['Draft', 'Approved', 'In Progress'] }
+            status: { $in: ['Draft', 'Pending Approval', 'Approved', 'In Progress'] }
         }).lean(),
         getHeadcountByDepartment(organizationId),
         getHeadcountByDepartmentAndJobTitle(organizationId)
@@ -633,9 +793,7 @@ export const createRecruitmentFromHiring = asyncHandler(async (req, res) => {
     if (hiring.status === 'Planned') hiring.status = 'In Progress';
     await plan.save();
 
-    const refreshed = await WorkforcePlan.findById(plan._id)
-        .populate('createdBy', 'name email')
-        .populate('approvedBy', 'name email');
+    const refreshed = await populatePlanActors(WorkforcePlan.findById(plan._id));
 
     res.status(201).json({
         success: true,
@@ -701,9 +859,7 @@ export const updateHiringFill = asyncHandler(async (req, res) => {
     });
     await plan.save();
 
-    const refreshed = await WorkforcePlan.findById(plan._id)
-        .populate('createdBy', 'name email')
-        .populate('approvedBy', 'name email');
+    const refreshed = await populatePlanActors(WorkforcePlan.findById(plan._id));
 
     res.json({
         success: true,
@@ -722,7 +878,7 @@ export const getWorkforceReports = asyncHandler(async (req, res) => {
     const [plans, byDept, byRole, totalEmployees] = await Promise.all([
         WorkforcePlan.find({
             ...query,
-            status: { $in: ['Draft', 'Approved', 'In Progress'] }
+            status: { $in: ['Draft', 'Pending Approval', 'Approved', 'In Progress'] }
         }).lean(),
         getHeadcountByDepartment(organizationId),
         getHeadcountByDepartmentAndJobTitle(organizationId),

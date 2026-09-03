@@ -52,12 +52,12 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
         : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
 
     return (
-        <li className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+        <li className={`min-w-0 overflow-hidden rounded-2xl border p-3 sm:p-3.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
             <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 pr-24">
+                <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
                     <p className="truncate font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="break-words text-xs text-slate-500">
                         {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
                     </p>
@@ -66,14 +66,14 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
                     <button
                         type="button"
                         onClick={() => onWishes(item)}
-                        className="absolute right-3.5 top-3.5 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#1ab589] sm:px-3 sm:text-xs"
+                        className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
                     >
                         {isToday ? 'Wishes' : 'Upcoming'}
                     </button>
                 ) : null}
             </div>
             {isToday && onReact ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-2.5">
                     {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
@@ -82,7 +82,7 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
                                 type="button"
                                 disabled={reacting}
                                 onClick={() => onReact(item, emoji)}
-                                className={`inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`}
+                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`}
                                 aria-label={`React ${emoji}`}
                             >
                                 <span>{emoji}</span>
@@ -428,7 +428,7 @@ function DashboardAdmin() {
       <div className="page-shell-inner space-y-4 sm:space-y-5">
         <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Good morning, {greetingName}</h1>
+            <h1 className="truncate text-xl font-bold text-slate-900 sm:text-2xl md:text-3xl">Good morning, {greetingName}</h1>
             <p className="mt-1 text-sm text-slate-500">{todayLabel}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -491,7 +491,7 @@ function DashboardAdmin() {
                     }
                   : undefined
               }
-              className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${card.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+              className={`rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 ${card.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <p className="text-sm text-slate-500">{card.label}</p>

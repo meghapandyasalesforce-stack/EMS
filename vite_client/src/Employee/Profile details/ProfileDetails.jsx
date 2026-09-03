@@ -259,7 +259,7 @@ function ProfileDetails() {
             <aside className="employee-profile-sidebar min-w-0">
               <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden lg:sticky lg:top-4">
                 <div className="relative bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]/80 h-20" />
-                <div className="px-5 pb-5 text-center -mt-10">
+                <div className="px-4 pb-4 text-center -mt-10 sm:px-5 sm:pb-5">
                   <div className="mb-2 flex justify-center">
                       <ProfilePicture
                         key={
@@ -275,10 +275,10 @@ function ProfileDetails() {
                         onEditClick={() => setShowPhotoUpload(true)}
                       />
                   </div>
-                  <h2 className="text-base font-bold text-gray-900">{profileSource?.name || user?.name || 'Employee'}</h2>
-                  <p className="text-xs font-medium text-[var(--color-primary)] mt-0.5">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
+                  <h2 className="truncate text-base font-bold text-gray-900">{profileSource?.name || user?.name || 'Employee'}</h2>
+                  <p className="mt-0.5 truncate text-xs font-medium text-[var(--color-primary)]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
-                  <div className="mt-4 w-full text-left">
+                  <div className="mt-4 w-full min-w-0 text-left">
                     {[
                       { label: 'Department', value: user?.department },
                       { label: 'Employee ID', value: user?.employeeId },
@@ -286,9 +286,9 @@ function ProfileDetails() {
                       { label: 'Manager', value: managerAssignedName },
                       { label: 'HR', value: hrContactName },
                     ].map((item) => (
-                      <div key={item.label} className="flex items-center justify-between border-b border-gray-50 last:border-0 py-2.5">
-                        <span className="text-xs text-gray-500">{item.label}</span>
-                        <span className="text-xs font-semibold text-gray-800">{item.value || 'N/A'}</span>
+                      <div key={item.label} className="profile-meta-row flex items-center justify-between border-b border-gray-50 py-2.5 last:border-0">
+                        <span className="shrink-0 text-xs text-gray-500">{item.label}</span>
+                        <span className="min-w-0 text-right text-xs font-semibold text-gray-800">{item.value || 'N/A'}</span>
                       </div>
                     ))}
                   </div>
@@ -309,7 +309,7 @@ function ProfileDetails() {
 
             <div className="employee-profile-main min-w-0 w-full">
               <div className="employee-profile-panel rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                <div className="employee-profile-tabs px-2 sm:px-4">
+                <div className="employee-profile-tabs px-1 sm:px-4">
                   <div className="hrms-tabs-scroll" role="tablist">
                     {tabs.map((tab) => (
                       <button
@@ -318,7 +318,7 @@ function ProfileDetails() {
                         role="tab"
                         aria-selected={activeTab === tab.id}
                         onClick={() => handleTabClick(tab.id)}
-                        className={`whitespace-nowrap px-3 py-3 text-[13px] font-medium transition sm:px-4 ${
+                        className={`whitespace-nowrap px-2.5 py-3 text-xs font-medium transition sm:px-4 sm:text-[13px] ${
                           activeTab === tab.id
                             ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
                             : 'text-gray-400 hover:text-gray-700'

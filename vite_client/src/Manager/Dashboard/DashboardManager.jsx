@@ -79,12 +79,12 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
         : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
 
     return (
-        <li className={`relative min-w-0 overflow-hidden rounded-xl border p-2.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+        <li className={`min-w-0 overflow-hidden rounded-xl border p-2.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
             <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 pr-20">
+                <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
                     <p className="truncate text-sm font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
-                    <p className="text-[11px] leading-snug text-slate-500">
+                    <p className="break-words text-[11px] leading-snug text-slate-500">
                         {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
                     </p>
@@ -93,14 +93,14 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
                     <button
                         type="button"
                         onClick={() => onWishes(item)}
-                        className="absolute right-2 top-2 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#1ab589]"
+                        className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
                     >
                         {isToday ? 'Wishes' : 'Upcoming'}
                     </button>
                 ) : null}
             </div>
             {isToday && onReact ? (
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div className="mt-2.5 flex flex-wrap gap-2.5">
                     {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
@@ -109,7 +109,7 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
                                 type="button"
                                 disabled={reacting}
                                 onClick={() => onReact(item, emoji)}
-                                className={`inline-flex items-center gap-0.5 rounded-full border bg-white px-1.5 py-0.5 text-xs shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`}
+                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`}
                                 aria-label={`React ${emoji}`}
                             >
                                 <span>{emoji}</span>
@@ -830,10 +830,10 @@ const DashboardManager = () => {
 
                 <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
                     <div className="flex w-full min-w-0 flex-col gap-4">
-                        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm md:px-6">
-                            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                <div>
-                                    <h1 className="text-2xl font-semibold text-slate-900">
+                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-5 sm:py-4 md:px-6">
+                            <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+                                <div className="min-w-0">
+                                    <h1 className="truncate text-xl font-semibold text-slate-900 sm:text-2xl">
                                         Good morning, {user?.name || user?.username || 'Manager'} 👋
                                     </h1>
                                     <p className="text-sm text-slate-500">{format(new Date(), 'dd MMM yyyy')}</p>
@@ -874,42 +874,79 @@ const DashboardManager = () => {
 
                         <AttendanceBox variant="dashboard" />
 
-                        <PersonalDashboardKpiRow />
-
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className={UI_FORM_LABEL_CLASS}>Team size</p>
-                                    <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600"><FaUsers /></div>
-                                </div>
-                                <p className="text-4xl font-bold text-slate-900">{teamSize}</p>
+                        {/* Mobile only: celebrations directly under punch-in */}
+                        <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:hidden">
+                            <div
+                                className="rounded-t-xl px-3 py-2"
+                                style={{ background: 'linear-gradient(90deg, #20C997 0%, #17a67d 100%)' }}
+                            >
+                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                                    <FaBirthdayCake className="h-3 w-3" />
+                                    Upcoming celebrations
+                                </h3>
                             </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className={UI_FORM_LABEL_CLASS}>Pending tasks</p>
-                                    <div className="rounded-lg bg-amber-50 p-2 text-amber-600"><FaTasks /></div>
-                                </div>
-                                <p className="text-4xl font-bold text-slate-900">{pendingTasks}</p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className={UI_FORM_LABEL_CLASS}>Attendance</p>
-                                    <div className="rounded-lg bg-teal-50 p-2 text-teal-600"><FaCheckCircle /></div>
-                                </div>
-                                <p className="text-4xl font-bold text-slate-900">{teamAttendance}%</p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className={UI_FORM_LABEL_CLASS}>Pending leave</p>
-                                    <div className="rounded-lg bg-slate-100 p-2 text-slate-600"><FaCalendarAlt /></div>
-                                </div>
-                                <p className="text-4xl font-bold text-slate-900">{pendingApprovals}</p>
+                            <div className="p-3">
+                                {dashboardStats.celebrations == null ? (
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-500">Loading upcoming celebrations...</div>
+                                ) : dashboardStats.celebrations.length === 0 ? (
+                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
+                                ) : (
+                                    <ul className="space-y-2">
+                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
+                                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                            return (
+                                                <CelebrationDashboardCard
+                                                    key={`mobile-${item.type || 'birthday'}_${item.employeeId || idx}`}
+                                                    item={item}
+                                                    isSelf={false}
+                                                    event={celebrationEvents[itemKey]}
+                                                    reacting={celebrationReacting}
+                                                    onReact={handleCelebrationReact}
+                                                    onWishes={handleOpenCelebrationWishes}
+                                                />
+                                            );
+                                        })}
+                                    </ul>
+                                )}
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <div className="mb-4 flex items-center justify-between">
-                                <h3 className="text-2xl font-semibold text-slate-900">Attendance Health</h3>
+                        <PersonalDashboardKpiRow />
+
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+                                <div className="mb-2 flex items-center justify-between sm:mb-3">
+                                    <p className={UI_FORM_LABEL_CLASS}>Team size</p>
+                                    <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600"><FaUsers /></div>
+                                </div>
+                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{teamSize}</p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+                                <div className="mb-2 flex items-center justify-between sm:mb-3">
+                                    <p className={UI_FORM_LABEL_CLASS}>Pending tasks</p>
+                                    <div className="rounded-lg bg-amber-50 p-2 text-amber-600"><FaTasks /></div>
+                                </div>
+                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{pendingTasks}</p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+                                <div className="mb-2 flex items-center justify-between sm:mb-3">
+                                    <p className={UI_FORM_LABEL_CLASS}>Attendance</p>
+                                    <div className="rounded-lg bg-teal-50 p-2 text-teal-600"><FaCheckCircle /></div>
+                                </div>
+                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{teamAttendance}%</p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+                                <div className="mb-2 flex items-center justify-between sm:mb-3">
+                                    <p className={UI_FORM_LABEL_CLASS}>Pending leave</p>
+                                    <div className="rounded-lg bg-slate-100 p-2 text-slate-600"><FaCalendarAlt /></div>
+                                </div>
+                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{pendingApprovals}</p>
+                            </div>
+                        </div>
+
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                            <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
+                                <h3 className="text-lg font-semibold text-slate-900 sm:text-2xl">Attendance Health</h3>
                                 <div className="flex items-center gap-4 text-xs text-slate-500">
                                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600"></span>Good</span>
                                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Needs attention</span>
@@ -963,14 +1000,14 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h3 className={`mb-4 ${UI_FORM_LABEL_CLASS}`}>Team approvals</h3>
-                            <div className="space-y-4">
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Team approvals</h3>
+                            <div className="space-y-3 sm:space-y-4">
                                 {teamPendingLeaves.slice(0, 2).map((leave, index) => (
-                                    <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <h4 className="font-semibold text-slate-900">{leave?.leaveType || 'Leave Request'}</h4>
-                                            <span className="text-xs text-slate-500">{leave?.createdAt ? format(new Date(leave.createdAt), 'd MMM') : 'Now'}</span>
+                                    <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+                                        <div className="mb-2 flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+                                            <h4 className="truncate font-semibold text-slate-900">{leave?.leaveType || 'Leave Request'}</h4>
+                                            <span className="shrink-0 text-xs text-slate-500">{leave?.createdAt ? format(new Date(leave.createdAt), 'd MMM') : 'Now'}</span>
                                         </div>
                                         <p className="mb-3 text-sm text-slate-600">
                                             {(leave?.employee?.name || leave?.employeeId?.name || leave?.employeeName || 'Team Member')} requested approval
@@ -1050,7 +1087,7 @@ const DashboardManager = () => {
                     </div>
 
                     <div className="flex w-full min-w-0 flex-col gap-4">
-                        <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4">
+                        <div className="hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4 lg:block">
                             <div
                                 className="rounded-t-xl px-3 py-2"
                                 style={{ background: 'linear-gradient(90deg, #20C997 0%, #17a67d 100%)' }}
@@ -1088,8 +1125,8 @@ const DashboardManager = () => {
 
                         <LeaveBalanceCard />
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h3 className={`mb-4 ${UI_FORM_LABEL_CLASS}`}>Upcoming meetings</h3>
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Upcoming meetings</h3>
                             <div className="space-y-3">
                                 {meetingsLoading ? (
                                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
@@ -1148,17 +1185,17 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h3 className={`mb-4 ${UI_FORM_LABEL_CLASS}`}>Active projects</h3>
-                            <div className="space-y-4">
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Active projects</h3>
+                            <div className="space-y-3 sm:space-y-4">
                                 {managerProjects.slice(0, 2).map((project, index) => {
                                     const progress = Number(project?.progress || project?.completion || 40 + index * 25);
                                     const clampedProgress = Math.max(10, Math.min(100, progress));
                                     return (
-                                        <div key={project?._id || index} className="rounded-xl border border-slate-200 p-4">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <p className="font-semibold text-slate-900">{project?.name || 'Project'}</p>
-                                                <span className={`rounded-full bg-emerald-100 text-emerald-700 ${UI_BADGE_TEXT_CLASS}`}>
+                                        <div key={project?._id || index} className="rounded-xl border border-slate-200 p-3 sm:p-4">
+                                            <div className="mb-2 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                                <p className="min-w-0 truncate font-semibold text-slate-900">{project?.name || 'Project'}</p>
+                                                <span className={`shrink-0 rounded-full bg-emerald-100 text-emerald-700 ${UI_BADGE_TEXT_CLASS}`}>
                                                     {formatStatusLabel(clampedProgress >= 70 ? 'On track' : 'At risk')}
                                                 </span>
                                             </div>

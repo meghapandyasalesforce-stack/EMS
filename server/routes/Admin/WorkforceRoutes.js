@@ -5,6 +5,11 @@ import {
     getWorkforcePlan,
     updateWorkforcePlan,
     deleteWorkforcePlan,
+    submitWorkforcePlan,
+    approveWorkforcePlan,
+    rejectWorkforcePlan,
+    startWorkforcePlan,
+    completeWorkforcePlan,
     createHeadcountForecast,
     getHeadcountForecasts,
     getHeadcountForecast,
@@ -45,6 +50,22 @@ router.route('/workforce-plans/:id')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getWorkforcePlan)
     .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateWorkforcePlan)
     .delete(isAdminOrHROrExecutiveAuthenticated, writeLimiter, deleteWorkforcePlan);
+
+// Approval / status workflow
+router.route('/workforce-plans/:id/submit')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, submitWorkforcePlan);
+
+router.route('/workforce-plans/:id/approve')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, approveWorkforcePlan);
+
+router.route('/workforce-plans/:id/reject')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, rejectWorkforcePlan);
+
+router.route('/workforce-plans/:id/start')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, startWorkforcePlan);
+
+router.route('/workforce-plans/:id/complete')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, completeWorkforcePlan);
 
 // Recruitment handoff + fill tracking on hiring lines
 router.route('/workforce-plans/:id/hiring/:hiringIndex/create-job')

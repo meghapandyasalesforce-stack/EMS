@@ -81,28 +81,28 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
         : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
 
     return (
-        <li className={`relative min-w-0 overflow-hidden rounded-xl border p-2.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
-            <div className="flex items-start gap-2">
-                <div className="min-w-0 pr-20">
+        <li className={`min-w-0 overflow-hidden rounded-xl border p-2.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
                     <p className="truncate text-sm font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
-                    <p className="text-[11px] leading-snug text-slate-500">
+                    <p className="break-words text-[11px] leading-snug text-slate-500">
                         {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
                     </p>
                 </div>
                 {onWishes ? (
-                    <button type="button" onClick={() => onWishes(item)} className="absolute right-2 top-2 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#1ab589]">
+                    <button type="button" onClick={() => onWishes(item)} className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]">
                         {isToday ? 'Wishes' : 'Upcoming'}
                     </button>
                 ) : null}
             </div>
             {isToday && onReact ? (
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div className="mt-2.5 flex flex-wrap gap-2.5">
                     {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
-                            <button key={emoji} type="button" disabled={reacting} onClick={() => onReact(item, emoji)} className={`inline-flex items-center gap-0.5 rounded-full border bg-white px-1.5 py-0.5 text-xs shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`} aria-label={`React ${emoji}`}>
+                            <button key={emoji} type="button" disabled={reacting} onClick={() => onReact(item, emoji)} className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`} aria-label={`React ${emoji}`}>
                                 <span>{emoji}</span>
                                 {count > 0 ? <span className="text-[10px] font-semibold text-slate-600">{count}</span> : null}
                             </button>
@@ -1001,12 +1001,11 @@ const DashboardHR = () => {
             <div className="page-shell-inner">
             <div className="hrms-stack gap-4">
                 <AnnouncementBanner />
-                <div className="hrms-main-rail !items-stretch gap-4">
-                    <div className="min-w-0 space-y-4">
-                <header
-                    className="rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur"
-                    style={{ borderColor: WS.border }}
-                >
+                <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
+                    <header
+                        className="order-1 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur lg:col-start-1 lg:row-start-1"
+                        style={{ borderColor: WS.border }}
+                    >
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
                             <div className="hidden h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 sm:flex">
@@ -1038,11 +1037,11 @@ const DashboardHR = () => {
                             </label>
                         </div>
 
-                        <div className="flex items-center gap-3 self-end xl:self-auto">
+                        <div className="flex items-center gap-2 self-end sm:gap-3 xl:self-auto">
                             <button
                                 type="button"
                                 onClick={() => navigate('/notifications')}
-                                className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-600"
+                                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-600 sm:h-11 sm:w-11"
                                 aria-label="Notifications"
                             >
                                 <HiOutlineBell className="h-5 w-5" />
@@ -1050,7 +1049,7 @@ const DashboardHR = () => {
                             <button
                                 type="button"
                                 onClick={() => navigate('/helpdesk')}
-                                className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-600"
+                                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-600 sm:h-11 sm:w-11"
                                 aria-label="Help"
                             >
                                 <HiOutlineQuestionMarkCircle className="h-5 w-5" />
@@ -1058,7 +1057,7 @@ const DashboardHR = () => {
                             <button
                                 type="button"
                                 onClick={() => navigate('/profile-details')}
-                                className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-emerald-200"
+                                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 text-left transition hover:border-emerald-200 sm:gap-3 sm:px-3 sm:py-2"
                             >
                                 <ProfilePicture user={user} size="sm" />
                                 <div className="hidden min-w-0 sm:block">
@@ -1074,17 +1073,16 @@ const DashboardHR = () => {
                     </div>
                 </header>
 
-                <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                <section className="order-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 lg:col-start-1 lg:row-start-2">
                     <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                         Punch in / punch out
                     </h3>
                     <AttendanceBox variant="dashboard" />
                 </section>
-                    </div>
 
-                    <aside className="flex w-full min-w-0 self-stretch">
+                    <aside className="order-3 flex w-full min-w-0 self-stretch lg:col-start-2 lg:row-span-2 lg:row-start-1">
                         <div
-                            className="flex h-full min-h-[280px] w-full flex-col rounded-xl border bg-white shadow-sm"
+                            className="flex h-full min-h-0 w-full flex-col rounded-xl border bg-white shadow-sm sm:min-h-[280px]"
                             style={{ borderColor: WS.border }}
                         >
                             <div
@@ -1118,15 +1116,17 @@ const DashboardHR = () => {
                                 ) : null}
                                 <div className="mt-4 flex flex-1 flex-col justify-evenly gap-3">
                                     {upcomingEvents.filter((eventItem) => eventItem.tone !== 'birthday').slice(0, 2).map((eventItem) => (
-                                        <div key={eventItem.id} className="flex items-start gap-2">
-                                            <div className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg ${getEventToneClasses(eventItem.tone)}`}>
+                                        <div key={eventItem.id} className="flex min-w-0 items-start gap-2">
+                                            <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${getEventToneClasses(eventItem.tone)}`}>
                                                 <FiCalendar className="h-3 w-3" />
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-semibold text-slate-900">{eventItem.title}</p>
+                                                <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+                                                    <p className="min-w-0 truncate text-sm font-semibold text-slate-900">{eventItem.title}</p>
+                                                    <p className="shrink-0 text-[10px] font-medium text-slate-400">{eventItem.dateLabel}</p>
+                                                </div>
                                                 <p className="truncate text-[11px] text-slate-500">{eventItem.subtitle}</p>
                                             </div>
-                                            <p className="shrink-0 text-[10px] font-medium text-slate-400">{eventItem.dateLabel}</p>
                                         </div>
                                     ))}
                                 </div>

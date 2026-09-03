@@ -23,6 +23,8 @@ import {
     wfInputClass,
     wfInputReadonlyClass,
     gapTone,
+    PLAN_STATUS_OPTIONS,
+    formatPlanStatus,
 } from './components/workforceUi';
 
 const DEPARTMENT_OPTIONS = [
@@ -192,6 +194,7 @@ const WorkforcePage = () => {
             const data = {
                 ...planFormData,
                 designation: planFormData.jobTitle,
+                status: 'Draft',
                 budget: {
                     ...planFormData.budget,
                     remaining: planFormData.budget.allocated - planFormData.budget.spent
@@ -720,11 +723,9 @@ const WorkforcePage = () => {
                                     className={`${wfInputClass} appearance-none pl-10 pr-8`}
                                 >
                                     <option value="all">All Status</option>
-                                    <option value="Draft">Draft</option>
-                                    <option value="Approved">Approved</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Completed">Completed</option>
-                                    <option value="Cancelled">Cancelled</option>
+                                    {PLAN_STATUS_OPTIONS.map((status) => (
+                                        <option key={status} value={status}>{formatPlanStatus(status)}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="relative">
@@ -785,10 +786,15 @@ const WorkforcePage = () => {
                                                 {plan.jobTitle ? ` · ${plan.jobTitle}` : ''}
                                             </p>
                                         </div>
-                                        <WfBadge status={plan.status}>{plan.status}</WfBadge>
+                                        <WfBadge status={plan.status}>{formatPlanStatus(plan.status)}</WfBadge>
                                     </div>
 
                                     <div className="flex-1 space-y-4 px-5 py-4">
+                                        {plan.status === 'Rejected' && plan.rejectionReason && (
+                                            <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800 ring-1 ring-rose-100">
+                                                <span className="font-semibold">Rejected:</span> {plan.rejectionReason}
+                                            </div>
+                                        )}
                                         <div className="rounded-xl bg-slate-50/80 p-3 ring-1 ring-slate-100">
                                             <div className="mb-2 flex items-end justify-between text-xs text-slate-500">
                                                 <span>Live headcount</span>
@@ -1100,17 +1106,13 @@ const WorkforcePage = () => {
                                     <option value={4}>Q4</option>
                                 </select>
                             </WfField>
-                            <WfField label="Status">
-                                <select
-                                    value={planFormData.status}
-                                    onChange={(e) => setPlanFormData({ ...planFormData, status: e.target.value })}
-                                    className={wfInputClass}
-                                >
-                                    <option value="Draft">Draft</option>
-                                    <option value="Approved">Approved</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Completed">Completed</option>
-                                </select>
+                            <WfField label="Status" hint="New plans always start as Draft">
+                                <input
+                                    type="text"
+                                    value="Draft"
+                                    readOnly
+                                    className={wfInputReadonlyClass}
+                                />
                             </WfField>
                         </div>
 

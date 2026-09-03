@@ -318,28 +318,34 @@ const Header = () => {
                         <button
                             type="button"
                             aria-label="Close menu overlay"
-                            className="fixed inset-0 top-14 z-20 bg-black/40"
+                            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
                             onClick={() => setMobileMenuOpen(false)}
                         />
                     )}
 
-                    {/* Mobile Menu */}
+                    {/* Mobile Menu — full viewport drawer (mobile only) */}
                     {mobileMenuOpen && (
                         <div
                             className={
                                 useLightEmployeeNav
-                                    ? 'relative z-30 animate-slideDown border-b border-gray-200 bg-white text-gray-800 shadow-lg max-h-[min(calc(100vh-3.5rem),calc(100dvh-3.5rem))] overflow-hidden flex flex-col'
-                                    : 'relative z-30 animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl max-h-[min(calc(100vh-3.5rem),calc(100dvh-3.5rem))] overflow-hidden flex flex-col'
+                                    ? 'fixed inset-0 z-50 flex flex-col overflow-hidden bg-white text-gray-800 lg:hidden'
+                                    : 'fixed inset-0 z-50 flex flex-col overflow-hidden bg-gradient-to-b from-gray-800 to-gray-900 text-white lg:hidden'
                             }
+                            style={{
+                                paddingTop: 'env(safe-area-inset-top, 0px)',
+                                paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                                paddingLeft: 'env(safe-area-inset-left, 0px)',
+                                paddingRight: 'env(safe-area-inset-right, 0px)',
+                            }}
                         >
                             <div
                                 className={
                                     useLightEmployeeNav
-                                        ? 'flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4 flex-shrink-0'
-                                        : 'flex items-center justify-between border-b border-gray-700/50 bg-gray-800/50 px-4 py-4 backdrop-blur-sm flex-shrink-0'
+                                        ? 'flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3'
+                                        : 'flex shrink-0 items-center justify-between border-b border-gray-700/50 bg-gray-800/80 px-4 py-3'
                                 }
                             >
-                                <h3 className="text-2xl font-extrabold tracking-tight">
+                                <h3 className="text-xl font-extrabold tracking-tight" aria-label="paarsiv">
                                     {useLightEmployeeNav ? (
                                         <>
                                             <span style={{ color: 'var(--color-primary)' }}>p</span>
@@ -363,25 +369,27 @@ const Header = () => {
                                     )}
                                 </h3>
                                 <button
+                                    type="button"
+                                    aria-label="Close menu"
                                     onClick={toggleMobileMenu}
                                     className={
                                         useLightEmployeeNav
-                                            ? 'rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-200/80'
+                                            ? 'rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100'
                                             : 'rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50'
                                     }
                                 >
                                     <FaTimes className="text-xl" />
                                 </button>
                             </div>
-                            <div className="flex-shrink-0">
+                            <div className="shrink-0">
                                 <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
                             </div>
-                            <nav className="flex flex-col py-2 overflow-y-auto overflow-x-hidden flex-1">
+                            <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-2 pb-4">
                                 {navItems.map((item, index) => (
                                     <Link
                                         key={item.path}
                                         to={item.path}
-                                        className={`mx-2 flex items-center rounded-xl px-3 py-3 sm:p-4 transition-all duration-300 ${
+                                        className={`mx-2 flex items-center rounded-xl px-3 py-3 transition-all duration-300 ${
                                             isActive(item.path)
                                                 ? 'scale-[1.02] text-white shadow-lg'
                                                 : useLightEmployeeNav
@@ -396,12 +404,12 @@ const Header = () => {
                                                 : {}),
                                         }}
                                     >
-                                        <span className={`text-lg mr-3 transition-transform ${isActive(item.path) ? 'scale-110' : ''}`}>
+                                        <span className={`mr-3 text-lg transition-transform ${isActive(item.path) ? 'scale-110' : ''}`}>
                                             {item.icon}
                                         </span>
                                         <span className="font-medium">{item.name}</span>
                                         {isActive(item.path) && (
-                                            <div className="ml-auto w-1.5 h-1.5 animate-pulse rounded-full bg-white"></div>
+                                            <div className="ml-auto h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                                         )}
                                     </Link>
                                 ))}

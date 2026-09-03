@@ -281,10 +281,10 @@ const DashboardAdministration = () => {
       <div className="page-shell">
       <div className="page-shell-inner">
       <div className="hrms-stack gap-4">
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:px-5">
+        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4 md:px-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">
                 {greeting} 👋
               </h1>
               <p className="text-xs text-slate-500">{format(new Date(), "dd MMM yyyy")}</p>

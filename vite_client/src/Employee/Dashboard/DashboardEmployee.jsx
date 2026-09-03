@@ -143,19 +143,19 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
 
     return (
         <li
-            className={`relative min-w-0 overflow-hidden rounded-xl border p-2.5 ${
+            className={`min-w-0 overflow-hidden rounded-xl border p-2.5 ${
                 isToday
                     ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm'
                     : 'border-slate-100 bg-[#F8F9FB]'
             }`}
         >
             <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 pr-20">
+                <div className="min-w-0 flex-1">
                     {selfHeader}
                     <p className="truncate text-sm font-semibold text-slate-800">
                         {icon} {isSelf ? 'You' : item.name}
                     </p>
-                    <p className="text-[11px] leading-snug text-slate-500">
+                    <p className="break-words text-[11px] leading-snug text-slate-500">
                         {isMarriage && item.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {isWorkAnniversary && item.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
@@ -164,14 +164,14 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                 <button
                     type="button"
                     onClick={() => onWishes(item)}
-                    className="absolute right-2 top-2 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#1ab589]"
+                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
                 >
                     {isToday ? (isSelf ? 'View' : 'Wishes') : 'Upcoming'}
                 </button>
             </div>
 
             {isToday ? (
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div className="mt-2.5 flex flex-wrap gap-2.5">
                     {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
@@ -180,7 +180,7 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                                 type="button"
                                 disabled={reacting}
                                 onClick={() => onReact(item, emoji)}
-                                className={`inline-flex items-center gap-0.5 rounded-full border bg-white px-1.5 py-0.5 text-xs shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
+                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
                                     count > 0 ? 'border-emerald-200' : 'border-slate-200'
                                 }`}
                                 aria-label={`React ${emoji}`}
@@ -209,14 +209,14 @@ function AnniversaryRailCard({ item, isSelf, event, reacting, onReact, onWishes 
 
     return (
         <li
-            className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 ${
+            className={`min-w-0 overflow-hidden rounded-2xl border p-3 sm:p-3.5 ${
                 isTodayAnniversary
                     ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm'
                     : 'border-slate-100 bg-[#F8F9FB]'
             }`}
         >
             <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 pr-24">
+                <div className="min-w-0 flex-1">
                     {isTodayAnniversary && isSelf ? (
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">
                             Your work anniversary
@@ -226,21 +226,21 @@ function AnniversaryRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                         {isTodayAnniversary ? '🎉 ' : ''}
                         {isSelf ? 'You' : item.name}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="break-words text-xs text-slate-500">
                         {item.completedYears} {item.completedYears === 1 ? 'year' : 'years'} · {item.anniversaryDate} · {whenLabel}
                     </p>
                 </div>
                 <button
                     type="button"
                     onClick={() => onWishes(item)}
-                    className="absolute right-3.5 top-3.5 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#1ab589] sm:px-3 sm:text-xs"
+                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
                 >
                     {isTodayAnniversary ? (isSelf ? 'View' : 'Wishes') : 'Upcoming'}
                 </button>
             </div>
 
             {isTodayAnniversary ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-2.5">
                     {BIRTHDAY_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
@@ -249,7 +249,7 @@ function AnniversaryRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                                 type="button"
                                 disabled={reacting}
                                 onClick={() => onReact(item, emoji)}
-                                className={`inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
+                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
                                     count > 0 ? 'border-emerald-200' : 'border-slate-200'
                                 }`}
                                 aria-label={`React ${emoji}`}
@@ -766,7 +766,7 @@ function DashboardEmployee() {
 
     const kpiCard = (label, value, sub, icon) => (
         <div
-            className="rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+            className="rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-5"
             style={{ borderColor: WS.border }}
         >
             <div className="flex items-start justify-between gap-3">
@@ -809,7 +809,7 @@ function DashboardEmployee() {
                     <div className="min-w-0 space-y-4 sm:space-y-6">
                         {/* Top bar */}
                         <header
-                            className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between md:p-6"
+                            className="flex flex-col gap-3 rounded-2xl border bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5 md:p-6"
                             style={{ borderColor: WS.border }}
                         >
                             <div className="flex min-w-0 items-center gap-4">
@@ -851,6 +851,45 @@ function DashboardEmployee() {
                         </header>
 
                         <AttendanceBox variant="dashboard" />
+
+                        {/* Mobile only: celebrations directly under punch-in */}
+                        <div className="rounded-xl border bg-white shadow-sm lg:hidden" style={{ borderColor: WS.border }}>
+                            <div
+                                className="rounded-t-xl px-3 py-2"
+                                style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
+                            >
+                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                                    <FaBirthdayCake className="h-3 w-3" />
+                                    Upcoming celebrations
+                                </h3>
+                            </div>
+                            <div className="p-3">
+                                {dashboardStats.celebrations == null ? (
+                                    <div className="flex justify-center py-4">
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
+                                    </div>
+                                ) : dashboardStats.celebrations.length === 0 ? (
+                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations</p>
+                                ) : (
+                                    <ul className="space-y-2">
+                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
+                                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                            return (
+                                                <CelebrationRailCard
+                                                    key={`mobile-${item.type || 'birthday'}-${item.employeeId || idx}`}
+                                                    item={item}
+                                                    isSelf={Boolean(selfEmployeeId) && String(item.employeeId) === selfEmployeeId}
+                                                    event={birthdayEvents[itemKey]}
+                                                    reacting={birthdayReacting}
+                                                    onReact={handleBirthdayReact}
+                                                    onWishes={handleOpenBirthdayWishes}
+                                                />
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
 
                         {/* KPI row */}
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -897,10 +936,10 @@ function DashboardEmployee() {
 
                         {/* Attendance summary */}
                         <section
-                            className="rounded-2xl border bg-white p-5 shadow-sm md:p-6"
+                            className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5 md:p-6"
                             style={{ borderColor: WS.border }}
                         >
-                            <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900">
+                            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900 sm:mb-4">
                                 <FaChartLine className="text-[#20C997]" />
                                 Attendance summary
                             </h2>
@@ -954,7 +993,7 @@ function DashboardEmployee() {
                                 className="rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
                             >
-                                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
                                     <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                                         <FaProjectDiagram className="text-[#20C997]" />
                                         Projects
@@ -966,7 +1005,7 @@ function DashboardEmployee() {
                                         View all
                                     </Link>
                                 </div>
-                                <div className="p-5">
+                                <div className="p-3 sm:p-5">
                                     {statsLoading ? (
                                         <div className="flex justify-center py-10">
                                             <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
@@ -1004,13 +1043,13 @@ function DashboardEmployee() {
                                 className="rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
                             >
-                                <div className="border-b border-slate-100 px-5 py-4">
+                                <div className="border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
                                     <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                                         <FaTasks className="text-[#20C997]" />
                                         My tasks
                                     </h3>
                                 </div>
-                                <div className="p-5">
+                                <div className="p-3 sm:p-5">
                                     <Todo variant="workspace" />
                                 </div>
                             </section>
@@ -1022,13 +1061,13 @@ function DashboardEmployee() {
                             style={{ borderColor: WS.border }}
                         >
                             <div
-                                className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"
+                                className="flex items-center gap-2 border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4"
                                 style={{ background: `linear-gradient(90deg, ${WS.forest} 0%, #0a5c45 100%)` }}
                             >
                                 <FaBell className="text-white" />
                                 <h3 className="text-base font-semibold text-white">Announcements</h3>
                             </div>
-                            <div className="min-h-[160px] p-4">
+                            <div className="min-h-[140px] p-3 sm:min-h-[160px] sm:p-4">
                                 <NotificationFeed />
                             </div>
                         </section>
@@ -1036,7 +1075,7 @@ function DashboardEmployee() {
 
                     {/* Right rail — celebrations first so they stay above the fold */}
                     <aside className="w-full min-w-0 space-y-5 lg:sticky lg:top-4 lg:self-start">
-                        <div className="rounded-xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
+                        <div className="hidden rounded-xl border bg-white shadow-sm lg:block" style={{ borderColor: WS.border }}>
                             <div
                                 className="rounded-t-xl px-3 py-2"
                                 style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
@@ -1077,7 +1116,7 @@ function DashboardEmployee() {
                         {dashboardStats.anniversaries && dashboardStats.anniversaries.length > 0 ? (
                             <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
                                 <div
-                                    className="rounded-t-2xl px-5 py-3"
+                                    className="rounded-t-2xl px-3 py-2 sm:px-5 sm:py-3"
                                     style={{ background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)' }}
                                 >
                                     <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -1085,8 +1124,8 @@ function DashboardEmployee() {
                                         Work anniversaries
                                     </h3>
                                 </div>
-                                <div className="p-5">
-                                    <ul className="space-y-3">
+                                <div className="p-3 sm:p-5">
+                                    <ul className="space-y-2 sm:space-y-3">
                                         {dashboardStats.anniversaries.map((item, idx) => (
                                             <AnniversaryRailCard
                                                 key={item.employeeId || idx}
@@ -1109,7 +1148,7 @@ function DashboardEmployee() {
                             onNextMonth={() => setCalendarViewDate((d) => addMonths(d, 1))}
                         />
 
-                        <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
+                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Leave balance</h3>
                             {statsLoading ? (
                                 <p className="mt-3 text-3xl font-bold text-[#006D4E]">…</p>
@@ -1221,7 +1260,7 @@ function DashboardEmployee() {
                             </div>
                         </div>
 
-                        <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
+                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
                             <div className="mt-3 flex flex-col gap-2 text-sm">
                                 <button
@@ -1242,7 +1281,7 @@ function DashboardEmployee() {
                         </div>
 
                         {/* Compact links: manager + HR */}
-                        <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
+                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Shortcuts</p>
                             <div className="mt-3 grid grid-cols-1 gap-2">
                                 <button
