@@ -136,26 +136,26 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
     const dateLabel = item.birthday || item.anniversaryDate || item.date || '';
 
     const selfHeader = isToday && isSelf ? (
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">
             {isMarriage ? 'Your marriage anniversary' : isWorkAnniversary ? 'Your work anniversary' : "It's your birthday"}
         </p>
     ) : null;
 
     return (
         <li
-            className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 ${
+            className={`relative min-w-0 overflow-hidden rounded-xl border p-2.5 ${
                 isToday
                     ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm'
                     : 'border-slate-100 bg-[#F8F9FB]'
             }`}
         >
             <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 pr-24">
+                <div className="min-w-0 pr-20">
                     {selfHeader}
-                    <p className="truncate font-semibold text-slate-800">
+                    <p className="truncate text-sm font-semibold text-slate-800">
                         {icon} {isSelf ? 'You' : item.name}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-[11px] leading-snug text-slate-500">
                         {isMarriage && item.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {isWorkAnniversary && item.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
@@ -164,14 +164,14 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                 <button
                     type="button"
                     onClick={() => onWishes(item)}
-                    className="absolute right-3.5 top-3.5 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#1ab589] sm:px-3 sm:text-xs"
+                    className="absolute right-2 top-2 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#1ab589]"
                 >
                     {isToday ? (isSelf ? 'View' : 'Wishes') : 'Upcoming'}
                 </button>
             </div>
 
             {isToday ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-1">
                     {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
@@ -180,14 +180,14 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                                 type="button"
                                 disabled={reacting}
                                 onClick={() => onReact(item, emoji)}
-                                className={`inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
+                                className={`inline-flex items-center gap-0.5 rounded-full border bg-white px-1.5 py-0.5 text-xs shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
                                     count > 0 ? 'border-emerald-200' : 'border-slate-200'
                                 }`}
                                 aria-label={`React ${emoji}`}
                             >
                                 <span>{emoji}</span>
                                 {count > 0 ? (
-                                    <span className="text-xs font-semibold text-slate-600">{count}</span>
+                                    <span className="text-[10px] font-semibold text-slate-600">{count}</span>
                                 ) : null}
                             </button>
                         );
@@ -1034,28 +1034,28 @@ function DashboardEmployee() {
                         </section>
                     </div>
 
-                    {/* Right rail */}
-                    <aside className="w-full min-w-0 space-y-5">
-                        <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
+                    {/* Right rail — celebrations first so they stay above the fold */}
+                    <aside className="w-full min-w-0 space-y-5 lg:sticky lg:top-4 lg:self-start">
+                        <div className="rounded-xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
                             <div
-                                className="rounded-t-2xl px-5 py-3"
+                                className="rounded-t-xl px-3 py-2"
                                 style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
                             >
-                                <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
-                                    <FaBirthdayCake />
+                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                                    <FaBirthdayCake className="h-3 w-3" />
                                     Upcoming celebrations
                                 </h3>
                             </div>
-                            <div className="p-5">
+                            <div className="p-3">
                                 {dashboardStats.celebrations == null ? (
-                                    <div className="flex justify-center py-6">
-                                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
+                                    <div className="flex justify-center py-4">
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
                                     </div>
                                 ) : dashboardStats.celebrations.length === 0 ? (
-                                    <p className="py-4 text-center text-sm text-slate-500">No upcoming celebrations</p>
+                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations</p>
                                 ) : (
-                                    <ul className="space-y-3">
-                                        {dashboardStats.celebrations.map((item, idx) => {
+                                    <ul className="space-y-2">
+                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
                                             const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
                                             return (
                                                 <CelebrationRailCard

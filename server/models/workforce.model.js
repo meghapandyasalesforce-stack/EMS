@@ -21,6 +21,15 @@ const workforcePlanSchema = new mongoose.Schema({
         max: 4
     },
     department: String,
+    /** Role-level planning: designation / job title */
+    jobTitle: String,
+    designation: String,
+    priority: {
+        type: String,
+        enum: ['Low', 'Medium', 'High', 'Critical'],
+        default: 'Medium'
+    },
+    reason: String,
     status: {
         type: String,
         enum: ['Draft', 'Approved', 'In Progress', 'Completed', 'Cancelled'],
@@ -44,12 +53,23 @@ const workforcePlanSchema = new mongoose.Schema({
         department: String,
         jobTitle: String,
         numberOfPositions: Number,
+        filledPositions: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
         priority: {
             type: String,
             enum: ['Low', 'Medium', 'High', 'Critical']
         },
         expectedStartDate: Date,
         budget: Number,
+        reason: String,
+        recruitmentJobId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Recruitment',
+            default: null
+        },
         status: {
             type: String,
             enum: ['Planned', 'In Progress', 'Filled', 'Cancelled'],
@@ -122,6 +142,7 @@ const headcountForecastSchema = new mongoose.Schema({
 // Indexes
 workforcePlanSchema.index({ organizationId: 1, planYear: 1, department: 1 });
 workforcePlanSchema.index({ organizationId: 1, status: 1 });
+workforcePlanSchema.index({ organizationId: 1, department: 1, jobTitle: 1 });
 headcountForecastSchema.index({ organizationId: 1, forecastDate: 1 });
 headcountForecastSchema.index({ organizationId: 1, department: 1 });
 

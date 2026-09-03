@@ -10,6 +10,7 @@ import {
     FiCheckCircle,
     FiClock,
     FiFileText,
+    FiGift,
     FiGrid,
     FiPlus,
     FiSettings,
@@ -80,30 +81,30 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
         : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
 
     return (
-        <li className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+        <li className={`relative min-w-0 overflow-hidden rounded-xl border p-2.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
             <div className="flex items-start gap-2">
-                <div className="min-w-0 pr-24">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
-                    <p className="truncate font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
-                    <p className="text-xs text-slate-500">
+                <div className="min-w-0 pr-20">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
+                    <p className="text-[11px] leading-snug text-slate-500">
                         {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
                     </p>
                 </div>
                 {onWishes ? (
-                    <button type="button" onClick={() => onWishes(item)} className="absolute right-3.5 top-3.5 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1ab589]">
+                    <button type="button" onClick={() => onWishes(item)} className="absolute right-2 top-2 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#1ab589]">
                         {isToday ? 'Wishes' : 'Upcoming'}
                     </button>
                 ) : null}
             </div>
             {isToday && onReact ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-1">
                     {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
-                            <button key={emoji} type="button" disabled={reacting} onClick={() => onReact(item, emoji)} className={`inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`} aria-label={`React ${emoji}`}>
+                            <button key={emoji} type="button" disabled={reacting} onClick={() => onReact(item, emoji)} className={`inline-flex items-center gap-0.5 rounded-full border bg-white px-1.5 py-0.5 text-xs shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`} aria-label={`React ${emoji}`}>
                                 <span>{emoji}</span>
-                                {count > 0 ? <span className="text-xs font-semibold text-slate-600">{count}</span> : null}
+                                {count > 0 ? <span className="text-[10px] font-semibold text-slate-600">{count}</span> : null}
                             </button>
                         );
                     })}
@@ -999,6 +1000,9 @@ const DashboardHR = () => {
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack gap-4">
+                <AnnouncementBanner />
+                <div className="hrms-main-rail !items-stretch gap-4">
+                    <div className="min-w-0 space-y-4">
                 <header
                     className="rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur"
                     style={{ borderColor: WS.border }}
@@ -1070,13 +1074,66 @@ const DashboardHR = () => {
                     </div>
                 </header>
 
-                <AnnouncementBanner />
                 <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
                     <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                         Punch in / punch out
                     </h3>
                     <AttendanceBox variant="dashboard" />
                 </section>
+                    </div>
+
+                    <aside className="flex w-full min-w-0 self-stretch">
+                        <div
+                            className="flex h-full min-h-[280px] w-full flex-col rounded-xl border bg-white shadow-sm"
+                            style={{ borderColor: WS.border }}
+                        >
+                            <div
+                                className="shrink-0 rounded-t-xl px-3 py-2"
+                                style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
+                            >
+                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                                    <FiGift className="h-3 w-3" />
+                                    Upcoming celebrations
+                                </h3>
+                            </div>
+                            <div className="flex flex-1 flex-col p-3">
+                                <ul className="space-y-2">
+                                    {sortCelebrations(dashboardExtras.birthdays || []).slice(0, 3).map((item, idx) => {
+                                        const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                        return (
+                                            <CelebrationDashboardCard
+                                                key={`${item.type || 'birthday'}_${item.employeeId || idx}`}
+                                                item={item}
+                                                isSelf={false}
+                                                event={celebrationEvents[itemKey]}
+                                                reacting={celebrationReacting}
+                                                onReact={handleCelebrationReact}
+                                                onWishes={handleOpenCelebrationWishes}
+                                            />
+                                        );
+                                    })}
+                                </ul>
+                                {(!dashboardExtras.birthdays || dashboardExtras.birthdays.length === 0) ? (
+                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
+                                ) : null}
+                                <div className="mt-4 flex flex-1 flex-col justify-evenly gap-3">
+                                    {upcomingEvents.filter((eventItem) => eventItem.tone !== 'birthday').slice(0, 2).map((eventItem) => (
+                                        <div key={eventItem.id} className="flex items-start gap-2">
+                                            <div className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg ${getEventToneClasses(eventItem.tone)}`}>
+                                                <FiCalendar className="h-3 w-3" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-sm font-semibold text-slate-900">{eventItem.title}</p>
+                                                <p className="truncate text-[11px] text-slate-500">{eventItem.subtitle}</p>
+                                            </div>
+                                            <p className="shrink-0 text-[10px] font-medium text-slate-400">{eventItem.dateLabel}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
 
                 <div
                     className={`grid grid-cols-1 gap-4 ${
@@ -1264,7 +1321,7 @@ const DashboardHR = () => {
                     </Panel>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <section
                         className="rounded-2xl border bg-white p-4 shadow-sm"
                         style={{ borderColor: WS.border }}
@@ -1389,42 +1446,6 @@ const DashboardHR = () => {
                                     No pending approvals right now.
                                 </div>
                             )}
-                        </div>
-                    </Panel>
-
-                    <Panel title="Upcoming celebrations">
-                        <div className="space-y-3">
-                            {sortCelebrations(dashboardExtras.birthdays || []).slice(0, 3).map((item, idx) => {
-                                const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
-                                return (
-                                    <CelebrationDashboardCard
-                                        key={`${item.type || 'birthday'}_${item.employeeId || idx}`}
-                                        item={item}
-                                        isSelf={false}
-                                        event={celebrationEvents[itemKey]}
-                                        reacting={celebrationReacting}
-                                        onReact={handleCelebrationReact}
-                                        onWishes={handleOpenCelebrationWishes}
-                                    />
-                                );
-                            })}
-                            {(!dashboardExtras.birthdays || dashboardExtras.birthdays.length === 0) ? (
-                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
-                                    No upcoming celebrations.
-                                </div>
-                            ) : null}
-                            {upcomingEvents.filter((eventItem) => eventItem.tone !== 'birthday').map((eventItem) => (
-                                <div key={eventItem.id} className="flex items-start gap-2.5">
-                                    <div className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl ${getEventToneClasses(eventItem.tone)}`}>
-                                        <FiCalendar className="h-3.5 w-3.5" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold text-slate-900">{eventItem.title}</p>
-                                        <p className="text-xs text-slate-500">{eventItem.subtitle}</p>
-                                    </div>
-                                    <p className="shrink-0 text-[11px] font-medium text-slate-400">{eventItem.dateLabel}</p>
-                                </div>
-                            ))}
                         </div>
                     </Panel>
                 </div>
