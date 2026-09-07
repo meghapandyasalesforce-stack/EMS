@@ -28,6 +28,7 @@ import {
   fetchEmployeeDetails,
   updateEmployeeStatus,
   updateEmployeeWorkInfo,
+  updateEmployeePayrollSettings,
   clearEmployeeDetails,
 } from '../../context/employeeDetailsSlice';
 import { deleteEmployee } from '../../context/employeeSlice';
@@ -94,6 +95,7 @@ const EmployeeDetailsPage = () => {
   const [openTerminateDialog, setOpenTerminateDialog] = useState(false);
   const [openEditWorkDialog, setOpenEditWorkDialog] = useState(false);
   const [openEditPerformanceDialog, setOpenEditPerformanceDialog] = useState(false);
+  const [openEditPayrollSettingsDialog, setOpenEditPayrollSettingsDialog] = useState(false);
   const [terminatingEmployee, setTerminatingEmployee] = useState(false);
   const [terminateForm, setTerminateForm] = useState({
     terminationDate: '',
@@ -115,6 +117,10 @@ const EmployeeDetailsPage = () => {
     probationConfirmedAt: '',
   });
   const [editPerformanceForm, setEditPerformanceForm] = useState({ performanceScore: '' });
+  const [editPayrollSettingsForm, setEditPayrollSettingsForm] = useState({
+    deductPf: true,
+    deductEsi: true,
+  });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [deletingEmployee, setDeletingEmployee] = useState(false);
@@ -138,16 +144,25 @@ const EmployeeDetailsPage = () => {
     statusUpdateError,
     updatingWorkInfo,
     workInfoError,
+    updatingPayrollSettings,
   } = useSelector((state) => state.employeeDetails);
   const currentUser = useSelector((state) => state.auth?.user);
   const orgProfile = useSelector((state) => state.organization?.profile);
   const allowProbationAfterJoining = orgProfile?.settings?.allowProbationAfterJoining === true;
   const sessionEmployee = useSelector((state) => state.employeeDetails?.employee);
-  const { hasAnyPermission, isOrgOwner, isHrExecutive, isHrManager } = useAuthPermissions();
+  const { hasAnyPermission, hasPermission, isOrgOwner, isHrExecutive, isHrManager } = useAuthPermissions();
   const userIsHr = isHR(currentUser || sessionEmployee);
   const hidePayrollForHrExecutive = userIsHr && isHrExecutive && !isHrManager;
   const isManagerReadOnly =
     isManager(currentUser) && !isHR(currentUser) && currentUser?.role !== 'admin';
+  const isAdminUser = currentUser?.role === 'admin';
+  const canEditPayrollSettings =
+    !isManagerReadOnly &&
+    !hidePayrollForHrExecutive &&
+    (isOrgOwner ||
+      isHrManager ||
+      isAdminUser ||
+      hasPermission(PERMISSIONS.PAYROLL_EDIT));
   const canManageAccess =
     isOrgOwner ||
     hasAnyPermission([PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE]);
@@ -165,7 +180,6 @@ const EmployeeDetailsPage = () => {
       (!tab.hrOnly || userIsHr) &&
       !(hidePayrollForHrExecutive && tab.hideForHrExecutive)
   );
-  const isAdminUser = currentUser?.role === 'admin';
   const isHrManagerProfile =
     Boolean(employee?.functionalRoles?.includes('hr')) &&
     String(employee?.jobTitle || '').toLowerCase().includes('hr manager') &&
@@ -477,6 +491,38 @@ const EmployeeDetailsPage = () => {
     }
   };
 
+  const handleEditPayrollSettingsClick = () => {
+    setEditPayrollSettingsForm({
+      deductPf: employee.financialDetails?.deductPf !== false,
+      deductEsi: employee.financialDetails?.deductEsi !== false,
+    });
+    setOpenEditPayrollSettingsDialog(true);
+  };
+
+  const handleSavePayrollSettings = async () => {
+    const resultAction = await dispatch(
+      updateEmployeePayrollSettings({
+        employeeId,
+        deductPf: editPayrollSettingsForm.deductPf,
+        deductEsi: editPayrollSettingsForm.deductEsi,
+      })
+    );
+    if (updateEmployeePayrollSettings.fulfilled.match(resultAction)) {
+      setSnackbar({
+        open: true,
+        message: 'Payroll statutory settings updated.',
+        severity: 'success',
+      });
+      setOpenEditPayrollSettingsDialog(false);
+    } else {
+      setSnackbar({
+        open: true,
+        message: resultAction.payload || 'Failed to update payroll settings',
+        severity: 'error',
+      });
+    }
+  };
+
   const renderTabContent = () => {
     if (!employee) return null;
     switch (activeTab) {
@@ -507,7 +553,13 @@ const EmployeeDetailsPage = () => {
       case 'leave':
         return <LeaveTab employeeId={employee._id} />;
       case 'payroll':
-        return <PayrollTab employee={employee} />;
+        return (
+          <PayrollTab
+            employee={employee}
+            canEditPayrollSettings={canEditPayrollSettings}
+            onEditPayrollSettings={handleEditPayrollSettingsClick}
+          />
+        );
       case 'performance':
         return (
           <PerformanceTab
@@ -974,6 +1026,70 @@ const EmployeeDetailsPage = () => {
           </Button>
           <Button variant="contained" onClick={handleSavePerformanceScore} disabled={updatingWorkInfo}>
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openEditPayrollSettingsDialog}
+        onClose={() => setOpenEditPayrollSettingsDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle>Statutory deduction settings</DialogTitle>
+        <DialogContent>
+          <p className="mb-4 text-sm text-slate-600">
+            Control whether PF and ESI are deducted from this employee&apos;s future payroll runs.
+          </p>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <label className="flex items-start gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={editPayrollSettingsForm.deductPf}
+                onChange={(e) =>
+                  setEditPayrollSettingsForm((prev) => ({ ...prev, deductPf: e.target.checked }))
+                }
+              />
+              <span>
+                <strong>Deduct PF</strong>
+                <span className="block text-xs text-slate-500">
+                  12% employee + employer on capped basic wage (₹15,000 max)
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={editPayrollSettingsForm.deductEsi}
+                onChange={(e) =>
+                  setEditPayrollSettingsForm((prev) => ({ ...prev, deductEsi: e.target.checked }))
+                }
+              />
+              <span>
+                <strong>Deduct ESI</strong>
+                <span className="block text-xs text-slate-500">
+                  Applied when statutory wages are within ₹21,000 ceiling
+                </span>
+              </span>
+            </label>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setOpenEditPayrollSettingsDialog(false)}
+            disabled={updatingPayrollSettings}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSavePayrollSettings}
+            disabled={updatingPayrollSettings}
+          >
+            {updatingPayrollSettings ? 'Saving…' : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>

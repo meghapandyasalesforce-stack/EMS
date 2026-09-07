@@ -58,7 +58,19 @@ router.route('/:id/share')
 // Document version control
 router.route('/:id/versions')
     .get(requireHrDocumentAccess, readLimiter, getDocumentVersions)
-    .post(requireHrDocumentAccess, writeLimiter, uploadDocumentVersion);
+    .post(
+        requireHrDocumentAccess,
+        (req, res, next) => {
+            upload(req, res, (err) => {
+                if (err) {
+                    return res.status(400).json({ success: false, message: err.message });
+                }
+                next();
+            });
+        },
+        writeLimiter,
+        uploadDocumentVersion
+    );
 
 export default router;
 

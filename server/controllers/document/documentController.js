@@ -1,5 +1,5 @@
-import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { Document, DocumentRequest } from '../../models/document.model.js';
 import Employee from '../../models/employee.model.js';
 import { OffboardingWorkflow, OnboardingWorkflow } from '../../models/onboarding.model.js';
@@ -17,14 +17,8 @@ import asyncHandler from '../../middlewares/asyncHandler.js';
 import { createEmployeeJobOrGenericDocument, mimeToDocumentTypeEnum } from '../../helpers/employeeDocumentUploadHelper.js';
 import { canAccessHrDocumentManagement } from '../../helpers/functionalRolesHelper.js';
 import { resolveAuthContext } from '../../helpers/permissionService.js';
-import { resolveDocumentFilePath, relativeDocumentFileUrl } from '../../helpers/documentFilePathHelper.js';
-import {
-    requireUploadFileBuffer,
-    resolveDocumentFileContent,
-    sendDocumentFile,
-    backfillDocumentBinaryFromDisk,
-    persistDocumentBinary,
-} from '../../helpers/documentFileStorageHelper.js';
+import { uploadFile, deleteFile, buildS3Key } from '../../helpers/storageHelper.js';
+import { sendDocumentFile } from '../../helpers/documentFileStorageHelper.js';
 
 const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certificate',
   'Training', 'Compliance', 'Financial', 'Legal', 'Other'];
@@ -266,12 +260,13 @@ async function findLegacyEmbeddedDocument(req, documentId, { employeeIdOnly = nu
     };
 }
 
-function assertUploadedFileExists(file, fileUrl) {
-    const diskPath = file?.path || resolveDocumentFilePath(fileUrl);
-    if (!diskPath || !fs.existsSync(diskPath)) {
-        throw new Error('Uploaded file was not saved on the server. Please try uploading again.');
-    }
-    return diskPath;
+async function uploadDocumentFileToS3(file, organizationId) {
+    if (!file?.buffer?.length) throw new Error('Uploaded file buffer is empty. Please try uploading again.');
+    const ext = path.extname(file.originalname || '').toLowerCase() || '';
+    const safeBase = (file.originalname || 'document').replace(ext, '').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 60);
+    const filename = `${safeBase}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+    const s3Key = buildS3Key('document', organizationId, filename);
+    return uploadFile(file.buffer, s3Key, file.mimetype, false);
 }
 
 async function loadLegacyEmployeeDocumentsForHr(req, { searchTrim, category }) {
@@ -336,10 +331,6 @@ async function loadLegacyEmployeeDocumentsForHr(req, { searchTrim, category }) {
     return rows;
 }
 
-async function loadDocumentBinary(documentId) {
-    return Document.findById(documentId).select('+fileBinary').lean();
-}
-
 /**
  * Upload document (Admin/HR - auto-approved)
  */
@@ -372,9 +363,7 @@ export const uploadDocument = asyncHandler(async (req, res) => {
         ? req.body.type
         : mimeToDocumentTypeEnum(file.mimetype);
 
-    const relFileUrl = `/uploads/documents/${file.filename}`;
-    assertUploadedFileExists(file, relFileUrl);
-    const fileBinary = requireUploadFileBuffer(file);
+    const s3Url = await uploadDocumentFileToS3(file, organizationId);
 
     const validAccessLevels = ['Public', 'Department', 'Role', 'Specific', 'Private'];
     let accessLevel = 'Public';
@@ -419,11 +408,10 @@ export const uploadDocument = asyncHandler(async (req, res) => {
         type,
         organizationId,
         uploadedBy,
-        fileUrl: relFileUrl,
+        fileUrl: s3Url,
         fileName: file.originalname || file.name || name,
         fileSize: file.size,
         mimeType: file.mimetype,
-        fileBinary,
         relatedTo,
         ...(relatedId ? { relatedId, relatedToModel } : {}),
         accessLevel,
@@ -434,13 +422,7 @@ export const uploadDocument = asyncHandler(async (req, res) => {
     });
 
     await document.save();
-    await persistDocumentBinary(document._id, fileBinary?.length ? fileBinary : file);
-
-    res.status(201).json({
-        success: true,
-        message: 'Document uploaded successfully',
-        data: document
-    });
+    res.status(201).json({ success: true, message: 'Document uploaded successfully', data: document });
 });
 
 /**
@@ -474,9 +456,7 @@ export const uploadOffboardingExperienceLetter = asyncHandler(async (req, res) =
     }
 
     const employeeId = workflow.employeeId?._id || workflow.employeeId;
-    const relFileUrl = `/uploads/documents/${file.filename}`;
-    assertUploadedFileExists(file, relFileUrl);
-    const fileBinary = requireUploadFileBuffer(file);
+    const s3Url = await uploadDocumentFileToS3(file, organizationId);
 
     await Document.updateMany(
         {
@@ -498,11 +478,10 @@ export const uploadOffboardingExperienceLetter = asyncHandler(async (req, res) =
             : 'Experience letter issued during employee offboarding',
         category: 'Employee',
         type: mimeToDocumentTypeEnum(file.mimetype),
-        fileUrl: relFileUrl,
+        fileUrl: s3Url,
         fileName: file.originalname || file.name || 'experience-letter.pdf',
         fileSize: file.size,
         mimeType: file.mimetype,
-        fileBinary,
         relatedTo: 'Employee',
         relatedId: employeeId,
         relatedToModel: 'Employee',
@@ -520,7 +499,6 @@ export const uploadOffboardingExperienceLetter = asyncHandler(async (req, res) =
         },
     });
     await document.save();
-    await persistDocumentBinary(document._id, fileBinary?.length ? fileBinary : file);
 
     workflow.experienceLetter = {
         canonicalDocumentId: document._id,
@@ -600,17 +578,7 @@ export const uploadEmployeeDocument = asyncHandler(async (req, res) => {
             data: document
         });
     } catch (err) {
-        if (req.file?.path && fs.existsSync(req.file.path)) {
-            try {
-                fs.unlinkSync(req.file.path);
-            } catch {
-                /* ignore */
-            }
-        }
-        return res.status(400).json({
-            success: false,
-            message: err.message || 'Failed to save document'
-        });
+        return res.status(400).json({ success: false, message: err.message || 'Failed to save document' });
     }
 });
 
@@ -688,7 +656,7 @@ export const getDocuments = asyncHandler(async (req, res) => {
                 path: 'relatedId',
                 select: 'name lastName email employeeId department',
             })
-            .populate('approvedBy', 'name email')
+            .populate('approvedBy', 'name lastName email')
             .populate('allowedEmployees', 'name email employeeId')
             .populate('allowedRoles', 'name')
             .sort({ createdAt: -1 })
@@ -712,7 +680,7 @@ export const getDocuments = asyncHandler(async (req, res) => {
                 path: 'relatedId',
                 select: 'name lastName email employeeId department',
             })
-            .populate('approvedBy', 'name email')
+            .populate('approvedBy', 'name lastName email')
             .populate('allowedEmployees', 'name email employeeId')
             .populate('allowedRoles', 'name')
             .sort({ createdAt: -1 })
@@ -798,72 +766,19 @@ export const downloadDocumentById = asyncHandler(async (req, res) => {
         if (versionParam === document.version) {
             fileUrl = document.fileUrl;
             downloadName = document.fileName || downloadName;
+            mimeType = document.mimeType || mimeType;
         } else {
             const previous = (document.previousVersions || []).find((v) => v.version === versionParam);
-            if (!previous) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Document version not found',
-                });
-            }
+            if (!previous) return res.status(404).json({ success: false, message: 'Document version not found' });
             fileUrl = previous.fileUrl;
             downloadName = previous.fileName || downloadName;
+            mimeType = previous.mimeType || mimeType;
         }
     }
 
-    if (!mimeType && downloadName?.toLowerCase().endsWith('.pdf')) {
-        mimeType = 'application/pdf';
-    }
-    if (!mimeType && fileUrl?.toLowerCase().includes('.pdf')) {
-        mimeType = 'application/pdf';
-    }
+    if (!fileUrl) return res.status(404).json({ success: false, message: 'File not found' });
 
-    const resolved = await resolveDocumentFileContent({
-        document,
-        legacyDoc,
-        fileUrl,
-        loadBinary: loadDocumentBinary,
-    });
-
-    let fileBuffer = resolved?.buffer;
-    if (!fileBuffer?.length && document?._id && fileUrl) {
-        fileBuffer = await backfillDocumentBinaryFromDisk(document._id, fileUrl);
-    }
-    if (!fileBuffer?.length && document?._id && fileUrl) {
-        fileBuffer = await persistDocumentBinary(document._id, fileUrl);
-    }
-
-    if (!resolved && !fileBuffer) {
-        logger.warn('Document file missing on disk', {
-            documentId: id,
-            fileUrl,
-            organizationId,
-            version: versionParam,
-            legacy: !!legacyDoc,
-        });
-        return res.status(404).json({
-            success: false,
-            message: 'File not found',
-            fileUrl,
-        });
-    }
-
-    if (resolved?.filePath && document?._id) {
-        fs.readFile(resolved.filePath, (err, buf) => {
-            if (!err && buf?.length) {
-                Document.findByIdAndUpdate(document._id, { fileBinary: buf }).catch(() => {});
-            }
-        });
-    }
-
-    downloadName = downloadName || path.basename(fileUrl || resolved?.filePath || 'document');
-    sendDocumentFile(res, {
-        filePath: resolved?.filePath,
-        buffer: fileBuffer || resolved?.buffer,
-        downloadName,
-        mimeType,
-        inline,
-    });
+    return sendDocumentFile(res, { fileUrl, downloadName, mimeType, inline });
 });
 
 /**
@@ -932,7 +847,7 @@ export const approveDocument = asyncHandler(async (req, res) => {
 
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
-    const approvedBy = req.user?._id || req.employee?._id;
+    const approvedBy = req.employee?._id || req.user?._id;
 
     const document = await Document.findOne({
         _id: id,
@@ -981,7 +896,7 @@ export const rejectDocument = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
     const { rejectionReason } = req.body;
-    const rejectedBy = req.user?._id || req.employee?._id;
+    const rejectedBy = req.employee?._id || req.user?._id;
 
     const document = await Document.findOne({
         _id: id,
@@ -992,6 +907,23 @@ export const rejectDocument = asyncHandler(async (req, res) => {
         return res.status(404).json({
             success: false,
             message: 'Document not found'
+        });
+    }
+
+    // Employee-uploaded docs (requiresApproval: true) are hard-deleted on rejection —
+    // the employee sees the rejection reason via the notification and can re-upload fresh.
+    // HR-uploaded docs (requiresApproval: false) are soft-deleted so the audit trail is kept.
+    if (document.requiresApproval) {
+        synchronizeEmployeeOnboardingDocuments(document);
+        await notify({
+            type: 'lifecycle_document_rejected',
+            organizationId,
+            data: { document, employeeId: document.uploadedBy, rejectionReason },
+        }).catch(() => {});
+        await Document.deleteOne({ _id: document._id });
+        return res.json({
+            success: true,
+            message: 'Document rejected and removed successfully',
         });
     }
 
@@ -1107,12 +1039,14 @@ export const uploadDocumentVersion = asyncHandler(async (req, res) => {
         uploadedBy: document.uploadedBy
     });
 
-    // Update document with new version
-    document.fileUrl = relativeDocumentFileUrl(file.filename);
+    // Delete old file from S3 and upload new version
+    if (document.fileUrl) await deleteFile(document.fileUrl);
+    const newS3Url = await uploadDocumentFileToS3(file, organizationId);
+
+    document.fileUrl = newS3Url;
     document.fileName = file.originalname || file.name;
     document.fileSize = file.size;
     document.mimeType = file.mimetype;
-    document.fileBinary = requireUploadFileBuffer(file);
     document.version = (document.version || 1) + 1;
     document.uploadedBy = uploadedBy;
 
@@ -1457,11 +1391,11 @@ export const replaceMyDocumentFile = asyncHandler(async (req, res) => {
         });
     }
 
-    const relFileUrl = `/uploads/documents/${file.filename}`;
-    assertUploadedFileExists(file, relFileUrl);
-    const fileBinary = requireUploadFileBuffer(file);
+    const organizationId = getOrganizationId(req);
+    if (document.fileUrl) await deleteFile(document.fileUrl);
+    const replacedS3Url = await uploadDocumentFileToS3(file, organizationId);
 
-    document.fileUrl = relFileUrl;
+    document.fileUrl = replacedS3Url;
     document.fileName = file.originalname || file.name || document.fileName;
     document.fileSize = file.size;
     document.mimeType = file.mimetype;
@@ -1475,7 +1409,6 @@ export const replaceMyDocumentFile = asyncHandler(async (req, res) => {
     }
 
     await document.save();
-    await persistDocumentBinary(document._id, fileBinary);
     synchronizeEmployeeOnboardingDocuments(document);
 
     res.json({

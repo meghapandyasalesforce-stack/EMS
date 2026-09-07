@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiCreditCard, FiDownload, FiUser, FiCalendar, FiMapPin, FiBriefcase, FiTag, FiArrowLeft } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
-import { getUploadUrl } from '../utils/axios';
+import { useSignedProfilePhoto } from '../Hooks/useSignedProfilePhoto';
 
 const IdCardView = () => {
   const [idCard, setIdCard] = useState(null);
@@ -11,6 +11,12 @@ const IdCardView = () => {
   const [error, setError] = useState('');
   const cardRef = useRef(null);
   const navigate = useNavigate();
+
+  const employeeId = idCard?.employeeId?._id || null;
+  const { photoUrl: idCardPhotoUrl } = useSignedProfilePhoto(
+    idCard?.employeeId?.profilePhoto || idCard?.employeeId?.profilePicture,
+    { userType: 'employee', userId: employeeId },
+  );
 
   useEffect(() => {
     fetchIdCard();
@@ -192,9 +198,9 @@ const IdCardView = () => {
                   {/* Employee Photo */}
                   <div className="flex justify-center mb-4">
                     <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-                      {idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto ? (
+                      {idCardPhotoUrl ? (
                         <img
-                          src={getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}
+                          src={idCardPhotoUrl}
                           alt="Employee Photo"
                           className="w-20 h-20 rounded-full object-cover"
                           crossOrigin="anonymous"

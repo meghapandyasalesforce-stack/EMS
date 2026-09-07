@@ -15,9 +15,10 @@ import {
     attachWorkflowSummariesToLeaves,
     getLeaveApprovalStageLabel,
 } from "../../helpers/leaveWorkflowHelper.js";
-import path from "path";
 import { upload as leaveDocumentUpload } from "../fileUpload/uploadConfigController.js";
 import { sendLeaveRequestNotification } from "../../helpers/leaveEmailHelper.js";
+import { uploadLeaveAttachmentToS3, streamLeaveAttachment } from "../../helpers/leaveDocumentHelper.js";
+import { getOrganizationId } from "../../helpers/organizationHelper.js";
 
 
 /**
@@ -100,7 +101,7 @@ export const createLeave = async (req, res) => {
     logger.debug("Creating leave request", { employeeId: req.employee?._id });
 
     try {
-        const { startDate, endDate, leaveType, reason, isHalfDay, halfDayType, document } = req.body;
+        const { startDate, endDate, leaveType, reason, isHalfDay, halfDayType, document, documentFileName, documentMimeType } = req.body;
         const employeeId = req.employee?._id;
 
         // ✅ Ensure authentication was successful
@@ -221,6 +222,8 @@ export const createLeave = async (req, res) => {
             isHalfDay: halfDayRequested,
             halfDayType: halfDayRequested ? halfDayType : null,
             document: document || null,
+            documentFileName: documentFileName || null,
+            documentMimeType: documentMimeType || null,
             resumptionDate: new Date(endDate),
             year: new Date(startDate).getFullYear(),
             status: "pending"
@@ -510,11 +513,16 @@ export const uploadLeaveDocument = async (req, res) => {
             return sendError(res, 'Document file is required', 400, 'MISSING_DOCUMENT');
         }
 
-        const documentPath = `/uploads/documents/${path.basename(req.file.path)}`;
+        const organizationId = getOrganizationId(req) || req.employee?.organizationId;
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const documentRef = await uploadLeaveAttachmentToS3(req.file, organizationId);
         return sendSuccess(
             res,
             {
-                document: documentPath,
+                document: documentRef,
                 fileName: req.file.originalname,
                 mimeType: req.file.mimetype
             },
@@ -523,7 +531,42 @@ export const uploadLeaveDocument = async (req, res) => {
         );
     } catch (error) {
         logger.error('Upload Leave Document Error', { error: error.message, stack: error.stack });
-        return sendInternalError(res, 'Error uploading leave document', error);
+        return sendInternalError(res, error.message || 'Error uploading leave document', error);
+    }
+};
+
+export const downloadMyLeaveDocument = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        if (!employeeId) {
+            return sendUnauthorized(res, 'Unauthorized: Employee data missing');
+        }
+
+        const organizationId = getOrganizationId(req) || req.employee?.organizationId;
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const leave = await Leave.findOne({
+            _id: req.params.id,
+            organizationId,
+            employee: employeeId,
+        }).select('document documentFileName documentMimeType').lean();
+
+        if (!leave) {
+            return sendNotFound(res, 'Leave application');
+        }
+
+        const inline = req.query.inline === '1' || req.query.inline === 'true';
+        return streamLeaveAttachment(res, {
+            fileRef: leave.document,
+            fileName: leave.documentFileName,
+            mimeType: leave.documentMimeType,
+            inline,
+        });
+    } catch (error) {
+        logger.error('Download Leave Document Error', { error: error.message, leaveId: req.params.id });
+        return sendInternalError(res, 'Error downloading leave document', error);
     }
 };
 

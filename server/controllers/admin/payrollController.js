@@ -5,7 +5,7 @@ import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager, buildManagerMatchQuery } from "../../helpers/managerHelper.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
-import { computeEarningsFromGross, employeePfFromBasicWage } from "../../helpers/salaryCalculation.js";
+import { computeEarningsFromGross, employeePfFromBasicWage, applyStatutoryDeductionFlags } from "../../helpers/salaryCalculation.js";
 import {
     pickDisplayPayroll,
     buildGeneratedPayrollPayload,
@@ -227,6 +227,11 @@ export const updatePayroll = async (req, res) => {
         const earnings = updates.earnings || {};
         const deductions = updates.deductions || {};
         deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+
+        const empForFlags = await Employee.findById(
+            payrollBefore.employeeId?._id || payrollBefore.employeeId
+        ).select('financialDetails').lean();
+        applyStatutoryDeductionFlags(empForFlags, earnings, deductions);
 
         // Calculate total earnings
         const gratuityLegacyUpdate = Number(earnings.gratuity) || 0;
@@ -617,6 +622,9 @@ export const createPayroll = async (req, res) => {
         const earnings = payrollData.earnings || {};
         const deductions = payrollData.deductions || {};
         deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+        if (payrollEmployee) {
+            applyStatutoryDeductionFlags(payrollEmployee, earnings, deductions);
+        }
 
         // Legacy payrolls used to compute specialAllowance as:
         //   gross - basicWage - houseRentAllowance - gratuity
@@ -1013,15 +1021,29 @@ export const getAllEmployeesPayroll = async (req, res) => {
         // Build query with organization filter
         const query = addOrganizationFilter(req, { salary: { $exists: true } });
 
+        // Search by employee name
+        const search = (req.query.search || '').trim();
+        if (search) {
+            const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            query.$or = [
+                { name: searchRegex },
+                { lastName: searchRegex }
+            ];
+        }
+
         // If user is a manager (not admin or HR), filter by manager field
-        // Example: Manager "Arun Kumar" sees payrolls for employees with manager="Arun Kumar" or "Arun"
         const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
-                query.$or = managerQuery.$or;
+                if (query.$or) {
+                    query.$and = [{ $or: query.$or }, { $or: managerQuery.$or }];
+                    delete query.$or;
+                } else {
+                    query.$or = managerQuery.$or;
+                }
             }
-            query.status = 'active'; // Only active employees for managers
+            query.status = 'active';
             
             const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
             logger.info('Manager filtering employee payrolls by manager field', {
@@ -1033,7 +1055,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
         // Get employees with pagination
         const [employees, totalEmployees] = await Promise.all([
             Employee.find(query)
-                .select('name salary designation jobTitle department position _id')
+            .select('name lastName salary designation jobTitle department position _id')
                 .skip(skip)
                 .limit(limit)
                 .lean(),
@@ -1088,6 +1110,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
             return {
                 employeeId: employee._id,
                 name: employee.name,
+                lastName: employee.lastName || '',
                 designation: employee.designation,
                 jobTitle: employee.jobTitle,
                 department: employee.department,

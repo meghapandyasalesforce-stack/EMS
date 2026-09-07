@@ -8,6 +8,11 @@ function pfEmployeeFromBasicWage(basicWage) {
   return Math.round(pfWage * 0.12);
 }
 
+function resolvePfEmployee(basicWage, employee) {
+  if (employee?.financialDetails?.deductPf === false) return 0;
+  return pfEmployeeFromBasicWage(basicWage);
+}
+
 function computeEarningsFromGross(gross) {
   const g = Number(gross) || 0;
   const basicWage = Math.round(0.5 * g);
@@ -34,6 +39,7 @@ const UpdatePayroll = () => {
   const { updateEmployeePayroll } = useUpdatePayroll();
   const payrolls = useSelector(state => state.payroll.data);
   const { selectedPayroll } = useSelector(state => state.adminEmployeePayroll);
+  const { employees } = useSelector(state => state.employees);
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -85,6 +91,10 @@ const UpdatePayroll = () => {
   const [success, setSuccess] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
 
+  const payrollEmployee = (Array.isArray(employees) ? employees : []).find(
+    (emp) => String(emp._id) === String(formData.employeeId)
+  );
+
   const extractId = (value) => {
     if (!value) return '';
     if (typeof value === 'object') return value._id || value.id || '';
@@ -102,25 +112,26 @@ const UpdatePayroll = () => {
 
   const resolveGrossSalary = (payrollRecord) => {
     const direct = Number(payrollRecord?.basicSalary);
-    if (Number.isFinite(direct) && direct > 0) return direct;
-    const ctc = Number(payrollRecord?.ctc);
-    if (Number.isFinite(ctc) && ctc > 0) return ctc;
-    const totalEarnings = Number(payrollRecord?.earnings?.totalEarnings);
-    if (Number.isFinite(totalEarnings) && totalEarnings > 0) return totalEarnings;
     const e = payrollRecord?.earnings || {};
-    return (
+    const componentGross =
       (Number(e.basicWage) || 0) +
       (Number(e.houseRentAllowance) || 0) +
       (Number(e.transportAllowance) || 0) +
       (Number(e.medicalAllowance) || 0) +
-      (Number(e.overtime) || 0) +
-      (Number(e.specialAllowance) || 0) +
-      (Number(e.performanceBonus) || 0) +
-      (Number(e.projectBonus) || 0) +
-      (Number(e.attendanceBonus) || 0) +
-      (Number(e.pfEmployer) || 0) +
-      (Number(e.esiEmployer) || 0)
-    );
+      (Number(e.specialAllowance) || 0);
+    const isLegacyBasicStoredAsGross =
+      Number.isFinite(direct) &&
+      direct > 0 &&
+      direct === (Number(e.basicWage) || 0) &&
+      componentGross > direct;
+
+    if (Number.isFinite(direct) && direct > 0 && !isLegacyBasicStoredAsGross) return direct;
+    if (componentGross > 0) return componentGross;
+    const ctc = Number(payrollRecord?.ctc);
+    if (Number.isFinite(ctc) && ctc > 0) return ctc;
+    const totalEarnings = Number(payrollRecord?.earnings?.totalEarnings);
+    if (Number.isFinite(totalEarnings) && totalEarnings > 0) return totalEarnings;
+    return componentGross;
   };
 
   // Find payroll data for current employee/month/year
@@ -324,7 +335,7 @@ const UpdatePayroll = () => {
         },
         deductions: {
           ...prev.deductions,
-          pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
+          pfEmployee: resolvePfEmployee(formula.basicWage, payrollEmployee)
         }
       }));
       return;
@@ -352,7 +363,7 @@ const UpdatePayroll = () => {
     const earningsTotal = Object.entries(formData.earnings)
       .filter(([key]) => key !== 'totalEarnings' && key !== 'gratuity')
       .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
-    const pfEmployee = pfEmployeeFromBasicWage(formData.earnings.basicWage);
+    const pfEmployee = resolvePfEmployee(formData.earnings.basicWage, payrollEmployee);
     const deductionsTotal =
       Object.entries(formData.deductions)
         .filter(([key]) => key !== 'total' && key !== 'pfEmployee')

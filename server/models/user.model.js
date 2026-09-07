@@ -104,6 +104,19 @@ const userSchema = new mongoose.Schema({
     },
     lockUntil: {
         type: Date
+    },
+
+    // Profile photo (private S3 object, served through short-lived signed URLs)
+    profilePhoto: {
+        url: String,
+        thumbnailUrl: String,
+        s3Key: String,
+        thumbS3Key: String,
+        filename: String,
+        uploadedAt: { type: Date, default: Date.now },
+        optimized: { type: Boolean, default: false },
+        originalSize: Number,
+        optimizedSize: Number
     }
 
 },{ timestamps: true });

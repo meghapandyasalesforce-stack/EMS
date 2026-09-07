@@ -20,6 +20,7 @@ import {
 } from "../../helpers/leaveWorkflowHelper.js";
 import { sendLeaveApprovalNotification, sendLeaveRejectionNotification } from "../../helpers/leaveEmailHelper.js";
 import { assertApplicantApprovalAccess, resolveHrApplicantIds } from "../../helpers/functionalRolesHelper.js";
+import { streamLeaveAttachment } from "../../helpers/leaveDocumentHelper.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
@@ -571,5 +572,55 @@ export const getLeaveStatistics = async (req, res) => {
     } catch (error) {
         logger.error('Leave Statistics Error', { error: error.message, stack: error.stack });
         return res.status(500).json({ message: 'Error fetching leave statistics', error: error.message });
+    }
+};
+
+export const downloadLeaveDocument = async (req, res) => {
+    try {
+        if (!req.user && !req.employee) {
+            return res.status(403).json({ message: 'Access denied. Authentication required.' });
+        }
+
+        const { id } = req.params;
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.',
+            });
+        }
+
+        const leave = await Leave.findOne({ _id: id, organizationId })
+            .select('document documentFileName documentMimeType employee')
+            .lean();
+
+        if (!leave) {
+            return res.status(404).json({ message: 'Leave application not found' });
+        }
+
+        const isManager = shouldScopeDataToManagedTeam(req);
+        if (isManager && req.employee) {
+            const leaveEmployee = await Employee.findById(leave.employee).select('manager managerId').lean();
+            if (!leaveEmployee) {
+                return res.status(404).json({ success: false, message: 'Employee not found.' });
+            }
+            if (!isEmployeeLinkedToManager(leaveEmployee, req.employee)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'You can only view attachments for employees linked to you.',
+                });
+            }
+        }
+
+        const inline = req.query.inline === '1' || req.query.inline === 'true';
+        return streamLeaveAttachment(res, {
+            fileRef: leave.document,
+            fileName: leave.documentFileName,
+            mimeType: leave.documentMimeType,
+            inline,
+        });
+    } catch (error) {
+        logger.error('Download Leave Document Error', { error: error.message, leaveId: req.params.id });
+        return res.status(500).json({ message: 'Error downloading leave document', error: error.message });
     }
 };

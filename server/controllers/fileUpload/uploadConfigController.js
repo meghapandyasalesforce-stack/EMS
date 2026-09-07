@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import multer from 'multer';
 import logger from '../../helpers/logger.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
@@ -10,64 +7,26 @@ import {
     createEmployeeJobOrGenericDocument,
     JOB_DOCUMENT_TYPES,
 } from '../../helpers/employeeDocumentUploadHelper.js';
-import { DOCUMENTS_UPLOAD_DIR } from '../../helpers/documentFilePathHelper.js';
-import {
-    ensureDocumentsUploadDirs,
-    resolveDocumentFileContent,
-    sendDocumentFile,
-    backfillDocumentBinaryFromDisk,
-    persistDocumentBinary,
-} from '../../helpers/documentFileStorageHelper.js';
+import { resolveDocumentSignedUrl } from '../../helpers/documentFileStorageHelper.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Store under server/uploads/documents (also mirrored in MongoDB fileBinary)
-const UPLOADS_DOCUMENTS_DIR = DOCUMENTS_UPLOAD_DIR;
-ensureDocumentsUploadDirs();
-
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (!fs.existsSync(UPLOADS_DOCUMENTS_DIR)) {
-      fs.mkdirSync(UPLOADS_DOCUMENTS_DIR, { recursive: true });
-    }
-    cb(null, UPLOADS_DOCUMENTS_DIR);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-// File filter for multer
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 
-                       'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Only PDF, JPEG, PNG, and Word documents are allowed.'), false);
-  }
-};
-
-// Configure multer upload
-export const upload = multer({ 
-  storage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+export const upload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+        const allowed = ['application/pdf', 'image/jpeg', 'image/png',
+            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (allowed.includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Invalid file type. Only PDF, JPEG, PNG, and Word documents are allowed.'), false);
+    },
+    limits: { fileSize: 5 * 1024 * 1024 },
 }).single('document');
 
-// Legacy route: forwards to canonical Document collection (same as POST /both/documents/upload)
 export const addDocument = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
         const { documentType } = req.body;
 
         if (!documentType || !req.file) {
-            return res.status(400).json({
-                message: 'Document type and file are required',
-            });
+            return res.status(400).json({ message: 'Document type and file are required' });
         }
 
         if (!Object.values(JOB_DOCUMENT_TYPES).includes(documentType)) {
@@ -78,23 +37,8 @@ export const addDocument = async (req, res) => {
         }
 
         const organizationId = getOrganizationId(req);
-        if (!organizationId) {
-            try {
-                if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-            } catch {
-                /* ignore */
-            }
-            return res.status(400).json({ message: 'Organization ID is required' });
-        }
-
-        if (!employeeId) {
-            try {
-                if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-            } catch {
-                /* ignore */
-            }
-            return res.status(401).json({ message: 'Employee authentication required' });
-        }
+        if (!organizationId) return res.status(400).json({ message: 'Organization ID is required' });
+        if (!employeeId) return res.status(401).json({ message: 'Employee authentication required' });
 
         const document = await createEmployeeJobOrGenericDocument({
             organizationId,
@@ -109,129 +53,41 @@ export const addDocument = async (req, res) => {
             data: document,
         });
     } catch (error) {
-        logger.error('Error adding document', { error: error.message, stack: error.stack });
-
-        if (req.file?.path) {
-            try {
-                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-            } catch (err) {
-                logger.error('Error deleting uploaded file', { error: err.message, filePath: req.file?.path });
-            }
-        }
-
+        logger.error('Error adding document', { error: error.message });
         const status = error.message?.includes('Invalid JSON') ? 400 : 500;
-        res.status(status).json({
-            message: error.message || 'Failed to upload document',
-            ...(error.errors && { detailedErrors: error.errors }),
-        });
+        res.status(status).json({ message: error.message || 'Failed to upload document' });
     }
 };
 
-// HR-only download of employee document files
 export const downloadDocument = async (req, res) => {
     try {
         const { employeeId, documentId } = req.params;
-        const inline = req.query.inline === '1' || req.query.inline === 'true';
 
         const employee = await Employee.findById(employeeId).select('organizationId documents');
-        if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
-        }
+        if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
         const requesterOrgId = getOrganizationId(req);
-        if (
-            requesterOrgId &&
-            employee.organizationId &&
-            employee.organizationId.toString() !== requesterOrgId.toString()
-        ) {
+        if (requesterOrgId && employee.organizationId &&
+            employee.organizationId.toString() !== requesterOrgId.toString()) {
             return res.status(403).json({ message: 'Access denied.' });
         }
 
-        let fileUrl;
-        let downloadName;
-        let mimeType = null;
-        let document = null;
-        let legacyDoc = null;
+        // Try canonical Document collection first
+        const document = await Document.findOne({
+            _id: documentId,
+            uploadedBy: employeeId,
+            ...(employee.organizationId && { organizationId: employee.organizationId }),
+        }).lean();
 
-        const embedded = employee.documents?.id?.(documentId);
-        if (embedded) {
-            legacyDoc = {
-                fileUrl: embedded.filePath,
-                fileName: embedded.originalName || embedded.fileName || 'document',
-            };
-            fileUrl = legacyDoc.fileUrl;
-            downloadName = legacyDoc.fileName;
-        } else {
-            const canonQuery = {
-                _id: documentId,
-                uploadedBy: employeeId,
-            };
-            if (employee.organizationId) {
-                canonQuery.organizationId = employee.organizationId;
-            }
-            document = await Document.findOne(canonQuery).lean();
-            if (!document) {
-                return res.status(404).json({ message: 'Document not found' });
-            }
-            fileUrl = document.fileUrl;
-            downloadName = document.fileName || path.basename(document.fileUrl || '');
-            mimeType = document.mimeType || null;
-        }
+        const fileUrl = document?.fileUrl;
+        if (!fileUrl) return res.status(404).json({ message: 'Document not found' });
 
-        if (!fileUrl) {
-            return res.status(404).json({ message: 'File path not found for document' });
-        }
+        const signedUrl = await resolveDocumentSignedUrl(fileUrl);
+        if (!signedUrl) return res.status(404).json({ message: 'File not available' });
 
-        if (!mimeType && downloadName?.toLowerCase().endsWith('.pdf')) {
-            mimeType = 'application/pdf';
-        }
-
-        const loadBinary = (id) => Document.findById(id).select('+fileBinary').lean();
-        let resolved = await resolveDocumentFileContent({
-            document,
-            legacyDoc,
-            fileUrl,
-            loadBinary,
-        });
-
-        let fileBuffer = resolved?.buffer;
-        if (!fileBuffer?.length && document?._id && fileUrl) {
-            fileBuffer = await backfillDocumentBinaryFromDisk(document._id, fileUrl);
-            if (fileBuffer?.length) {
-                resolved = { buffer: fileBuffer, source: 'database-repair' };
-            }
-        }
-        if (!fileBuffer?.length && document?._id && fileUrl) {
-            fileBuffer = await persistDocumentBinary(document._id, fileUrl);
-            if (fileBuffer?.length) {
-                resolved = { buffer: fileBuffer, source: 'disk-repair' };
-            }
-        }
-
-        if (!resolved && !fileBuffer) {
-            return res.status(404).json({
-                success: false,
-                message: 'File not found',
-                fileUrl,
-            });
-        }
-
-        sendDocumentFile(res, {
-            filePath: resolved?.filePath,
-            buffer: fileBuffer || resolved?.buffer,
-            downloadName,
-            mimeType,
-            inline,
-        });
+        return res.redirect(302, signedUrl);
     } catch (error) {
-        logger.error('Error downloading document', {
-            error: error.message,
-            stack: error.stack,
-            documentId: req.params.documentId,
-        });
-        res.status(500).json({
-            message: 'Failed to download document',
-            error: error.message,
-        });
+        logger.error('Error downloading document', { error: error.message, documentId: req.params.documentId });
+        res.status(500).json({ message: 'Failed to download document', error: error.message });
     }
 };

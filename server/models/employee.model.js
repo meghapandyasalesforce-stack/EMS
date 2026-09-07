@@ -163,11 +163,17 @@ const employeeSchema = new mongoose.Schema({
         }
     },
     
-    // Profile photo
+    // Profile photo (private S3 object, served through short-lived signed URLs)
     profilePhoto: {
         url: { type: String },
+        thumbnailUrl: { type: String },
+        s3Key: { type: String },
+        thumbS3Key: { type: String },
         filename: { type: String },
-        uploadedAt: { type: Date, default: Date.now }
+        uploadedAt: { type: Date, default: Date.now },
+        optimized: { type: Boolean, default: false },
+        originalSize: { type: Number },
+        optimizedSize: { type: Number }
     },
     
     // Joining date
@@ -456,6 +462,10 @@ const employeeSchema = new mongoose.Schema({
         accountName: { type: String },
         panNumber: { type: String },
         epfUan: { type: String },
+        /** When false, PF (employee + employer) is not deducted in payroll runs. Default true. */
+        deductPf: { type: Boolean, default: true },
+        /** When false, ESI (employee + employer) is not deducted in payroll runs. Default true. */
+        deductEsi: { type: Boolean, default: true },
         taxRegime: { type: String },
         metroCity: { type: Boolean, default: false },
         taxDeclaration: {

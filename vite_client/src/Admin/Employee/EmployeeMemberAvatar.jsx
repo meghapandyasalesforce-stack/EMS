@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getProfilePhotoUrl } from '../../utils/axios';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 
 function getInitials(user) {
   const name = user?.name?.trim() || '';
@@ -12,7 +12,13 @@ function getInitials(user) {
 const EmployeeMemberAvatar = ({ user, sizeClassName = 'h-10 w-10' }) => {
   const [imageError, setImageError] = useState(false);
 
-  const imageUrl = getProfilePhotoUrl(user?.profilePhoto || user?.profilePicture);
+  const userType = user?.role === 'admin' ? 'admin' : 'employee';
+  const userId = user?._id || user?.id || null;
+  const { photoUrl } = useSignedProfilePhoto(
+    user?.profilePhoto || user?.profilePicture,
+    { userType, userId }
+  );
+  const imageUrl = photoUrl;
   const initials = getInitials(user);
 
   useEffect(() => {

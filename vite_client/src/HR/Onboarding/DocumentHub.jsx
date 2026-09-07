@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from '../../utils/axios';
+import axios, { fetchDocumentWithFallback, openDocumentPreview } from '../../utils/axios';
 import { toast } from 'react-toastify';
 import {
     FaCheck, FaClock, FaDownload, FaExclamationTriangle, FaFolderOpen, FaTimes,
@@ -665,13 +665,26 @@ function EmployeeActivityFeed({ documents }) {
 }
 
 function DocumentTable({ documents, selected, onToggle, onVerify, showSelect, showEmployeeColumn = true }) {
-    const openDoc = (doc) => {
-        const url = doc.fileUrl || doc.url || doc.documentUrl || doc.previewUrl;
-        if (!url) {
+    const [openingId, setOpeningId] = useState(null);
+
+    const openDoc = async (doc) => {
+        if (!doc?._id) {
             toast.error('No file available to preview');
             return;
         }
-        window.open(url, '_blank', 'noopener,noreferrer');
+        setOpeningId(doc._id);
+        try {
+            await openDocumentPreview(doc._id, {
+                scope: 'admin',
+                fileUrl: doc.fileUrl,
+                fileName: doc.fileName || doc.name,
+                mimeType: doc.mimeType,
+            });
+        } catch (error) {
+            toast.error(error?.message || 'Could not open document preview');
+        } finally {
+            setOpeningId(null);
+        }
     };
 
     if (!documents.length) {
@@ -719,8 +732,8 @@ function DocumentTable({ documents, selected, onToggle, onVerify, showSelect, sh
                                 <td className="text-sm">{doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : '—'}</td>
                                 <td>
                                     <div className="flex flex-wrap gap-3">
-                                        <button type="button" onClick={() => openDoc(doc)} className="cm-link flex items-center gap-1 text-xs">
-                                            <FaDownload /> View
+                                        <button type="button" onClick={() => openDoc(doc)} disabled={openingId === doc._id} className="cm-link flex items-center gap-1 text-xs disabled:opacity-50">
+                                            <FaDownload /> {openingId === doc._id ? 'Opening…' : 'View'}
                                         </button>
                                         {(doc.verificationStatus === 'Pending' || doc.approvalStatus === 'Pending') && (
                                             <>

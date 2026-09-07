@@ -15,6 +15,7 @@ import {
     FaFileWord,
     FaTimes,
     FaTrash,
+    FaSyncAlt,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios, { fetchDocumentWithFallback, getDocumentDownloadUrl, saveDocumentDownload } from '../../utils/axios';
@@ -190,6 +191,10 @@ function statusPill(doc) {
     if (doc.requiresApproval && doc.approvalStatus === 'Pending') {
         return { label: 'Pending approval', className: 'bg-amber-100 text-amber-900 ring-1 ring-inset ring-amber-200/80' };
     }
+    if (doc.approvalStatus === 'Withdrawn' &&
+        String(doc.rejectionReason || '').toLowerCase().includes('deleted by hr')) {
+        return { label: 'Deleted by HR', className: 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200' };
+    }
     const removedByEmployee =
         doc.approvalStatus === 'Withdrawn' ||
         (doc.approvalStatus === 'Rejected' &&
@@ -260,6 +265,10 @@ const DocumentsPage = () => {
     const [uploadCategory, setUploadCategory] = useState('Company');
     const [uploadDescription, setUploadDescription] = useState('');
     const [uploading, setUploading] = useState(false);
+
+    const [versionDoc, setVersionDoc] = useState(null);
+    const [versionFile, setVersionFile] = useState(null);
+    const [versionUploading, setVersionUploading] = useState(false);
 
     const PAGE_SIZE = 50;
 
@@ -491,6 +500,30 @@ const DocumentsPage = () => {
             toast.error(error?.message || 'Failed to download document');
         } finally {
             setDocActionLoading((prev) => ({ ...prev, [docId]: null }));
+        }
+    };
+
+    const handleUploadVersion = async (e) => {
+        e.preventDefault();
+        if (!versionFile || !versionDoc?._id) return;
+        const formData = new FormData();
+        formData.append('document', versionFile);
+        try {
+            setVersionUploading(true);
+            await axios.post(
+                `${ADMIN_DOCUMENTS_ENDPOINT}/${versionDoc._id}/versions`,
+                formData,
+                { withCredentials: true }
+            );
+            toast.success('New version uploaded successfully');
+            setVersionDoc(null);
+            setVersionFile(null);
+            await fetchDocuments();
+        } catch (error) {
+            logger.error('Error uploading version:', error);
+            toast.error(error.response?.data?.message || 'Failed to upload new version');
+        } finally {
+            setVersionUploading(false);
         }
     };
 
@@ -863,12 +896,26 @@ const DocumentsPage = () => {
                                             <td className="whitespace-nowrap px-4 py-3.5 font-medium text-slate-700 sm:px-5">
                                                 v{doc.version ?? 1}
                                             </td>
-                                            <td className="whitespace-nowrap px-4 py-3.5 sm:px-5">
+                                            <td className="px-4 py-3.5 sm:px-5">
                                                 <span
                                                     className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.className}`}
                                                 >
                                                     {st.label}
                                                 </span>
+                                                {doc.approvalStatus === 'Rejected' && doc.rejectionReason &&
+                                                    !String(doc.rejectionReason).toLowerCase().includes('removed by employee') && (
+                                                    <p className="mt-1 max-w-[180px] truncate text-[11px] text-red-600" title={doc.rejectionReason}>
+                                                        {doc.rejectionReason}
+                                                    </p>
+                                                )}
+                                                {doc.approvedBy && (doc.approvalStatus === 'Approved' || doc.approvalStatus === 'Rejected') && (
+                                                    <p className="mt-0.5 text-[10px] text-slate-400">
+                                                        by {doc.approvedBy.name
+                                                            ? `${doc.approvedBy.name}${doc.approvedBy.lastName ? ' ' + doc.approvedBy.lastName : ''}`
+                                                            : doc.approvedBy.email || 'HR'}
+                                                        {doc.approvedAt ? ` · ${formatRelativeTime(doc.approvedAt)}` : ''}
+                                                    </p>
+                                                )}
                                             </td>
                                             <td className="whitespace-nowrap px-4 py-3.5 text-slate-600 sm:px-5">
                                                 {formatDocumentTimestamp(doc.updatedAt || doc.createdAt)}
@@ -899,6 +946,16 @@ const DocumentsPage = () => {
                                                                 title="Copy link"
                                                             >
                                                                 <FaShareAlt className="w-3 h-3" />
+                                                            </button>
+                                                        )}
+                                                        {isHRUser && doc.category !== 'Employee' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setVersionDoc(doc); setVersionFile(null); }}
+                                                                className="p-2 rounded-lg text-gray-500 hover:bg-violet-50 hover:text-violet-600 transition"
+                                                                title="Upload new version"
+                                                            >
+                                                                <FaSyncAlt className="w-4 h-4" />
                                                             </button>
                                                         )}
                                                         {isHRUser && (
@@ -1076,6 +1133,52 @@ const DocumentsPage = () => {
                                     className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50"
                                 >
                                     {uploading ? 'Uploading…' : 'Upload'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Upload new version modal */}
+            {versionDoc && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]">
+                    <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+                        <h3 className="text-lg font-semibold text-slate-900">Upload new version</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                            <span className="font-medium text-slate-700">{versionDoc.name}</span>
+                            {' '}· currently v{versionDoc.version ?? 1}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                            The current file will be saved to version history. Employees will immediately see the new file.
+                        </p>
+                        <form onSubmit={handleUploadVersion} className="mt-4 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    New file <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="file"
+                                    required
+                                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,image/*"
+                                    className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-theme-secondary file:text-white"
+                                    onChange={(e) => setVersionFile(e.target.files?.[0] || null)}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => { setVersionDoc(null); setVersionFile(null); }}
+                                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={versionUploading || !versionFile}
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50 text-sm font-semibold"
+                                >
+                                    {versionUploading ? 'Uploading…' : `Upload as v${(versionDoc.version ?? 1) + 1}`}
                                 </button>
                             </div>
                         </form>

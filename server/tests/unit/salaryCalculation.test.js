@@ -4,6 +4,9 @@ import {
     computeSalaryStructureCoreEarnings,
     computeEsiStatutoryWages,
     isEsiEligibleByStatutoryWages,
+    applyStatutoryDeductionFlags,
+    employeeDeductsPf,
+    employeeDeductsEsi,
     ESI_GROSS_WAGE_LIMIT,
 } from '../../helpers/salaryCalculation.js';
 
@@ -118,6 +121,26 @@ describe('salaryCalculation', () => {
             expect(highGross.totalRemuneration).toBe(28000);
             expect(highGross.statutoryWages).toBe(18000);
             expect(isEsiEligibleByStatutoryWages(highGross.statutoryWages)).toBe(true);
+        });
+    });
+
+    describe('statutory deduction flags', () => {
+        it('defaults to deducting PF and ESI when flags are unset', () => {
+            expect(employeeDeductsPf({})).toBe(true);
+            expect(employeeDeductsEsi({ financialDetails: {} })).toBe(true);
+        });
+
+        it('zeros PF/ESI components when employee opts out', () => {
+            const earnings = { pfEmployer: 1800, esiEmployer: 500, basicWage: 15000 };
+            const deductions = { pfEmployee: 1800, esiEmployee: 200 };
+            const emp = { financialDetails: { deductPf: false, deductEsi: false } };
+
+            applyStatutoryDeductionFlags(emp, earnings, deductions);
+
+            expect(earnings.pfEmployer).toBe(0);
+            expect(earnings.esiEmployer).toBe(0);
+            expect(deductions.pfEmployee).toBe(0);
+            expect(deductions.esiEmployee).toBe(0);
         });
     });
 });

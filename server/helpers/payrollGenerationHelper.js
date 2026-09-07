@@ -13,6 +13,7 @@ import {
     employeePfFromBasicWage,
     employerPfFromBasicWage,
     pfWageFromBasicWage,
+    applyStatutoryDeductionFlags,
     isEsiEligibleByStatutoryWages,
     ESI_GROSS_WAGE_LIMIT,
     ESI_EMPLOYEE_RATE,
@@ -953,8 +954,10 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             pfEmployer: computeConfiguredComponent(salaryStructure?.earnings?.pfEmployer, effectiveGross),
             esiEmployer: computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, effectiveGross)
         };
-        basicSalary = earnings.basicWage;
-        const pfWageBase = pfWageFromBasicWage(basicSalary);
+        // Persist the actual payroll-period gross so edit screens can show
+        // the amount that was used to derive the salary breakdown.
+        basicSalary = effectiveGross;
+        const pfWageBase = pfWageFromBasicWage(earnings.basicWage);
         earnings.pfEmployer = computeConfiguredComponent(salaryStructure?.earnings?.pfEmployer, pfWageBase);
         const esiWageInfo = computeEsiStatutoryWages({
             basicWage: earnings.basicWage,
@@ -1009,7 +1012,8 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     } else {
         const formula = computeEarningsFromGross(effectiveGross);
         // PF/ESI/tax should be based on earned (prorated) wages, not full-month salary.
-        basicSalary = formula.basicWage;
+        // Persist the actual payroll-period gross; basic wage remains a component.
+        basicSalary = effectiveGross;
         const overtimeRatePerHour = (perDayRate / 8) * DEFAULT_OVERTIME_RATE;
         const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
 
@@ -1032,7 +1036,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             performanceBonus: 0,
             projectBonus: 0,
             attendanceBonus: 0,
-            pfEmployer: employerPfFromBasicWage(basicSalary),
+            pfEmployer: employerPfFromBasicWage(formula.basicWage),
             esiEmployer: esiEligibleFallback ? Math.round(esiWageBase * ESI_EMPLOYER_RATE) : 0
         };
         earnings.totalEarnings =
@@ -1044,7 +1048,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             (earnings.esiEmployer || 0);
 
         deductions = {
-            pfEmployee: employeePfFromBasicWage(basicSalary),
+            pfEmployee: employeePfFromBasicWage(formula.basicWage),
             esiEmployee: esiEligibleFallback ? Math.round(esiWageBase * ESI_EMPLOYEE_RATE) : 0,
             professionalTax: 0,
             incomeTax: 0,
@@ -1063,6 +1067,21 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         );
         esiStatutoryWages = esiEligibleFallback ? esiWageInfo : { ...esiWageInfo, statutoryWages: 0 };
     }
+
+    applyStatutoryDeductionFlags(emp, earnings, deductions);
+
+    earnings.totalEarnings =
+        (earnings.basicWage || 0) +
+        (earnings.houseRentAllowance || 0) +
+        (earnings.transportAllowance || 0) +
+        (earnings.medicalAllowance || 0) +
+        (earnings.overtime || 0) +
+        (earnings.specialAllowance || 0) +
+        (earnings.performanceBonus || 0) +
+        (earnings.projectBonus || 0) +
+        (earnings.attendanceBonus || 0) +
+        (earnings.pfEmployer || 0) +
+        (earnings.esiEmployer || 0);
 
     deductions.total =
         (deductions.pfEmployee || 0) +

@@ -7,6 +7,8 @@ export const submitLeave = createAsyncThunk(
   async (data, { rejectWithValue }) => {
     try {
       let documentPath = null;
+      let documentFileName = null;
+      let documentMimeType = null;
       if (data.document instanceof File) {
         const formData = new FormData();
         formData.append('document', data.document);
@@ -19,6 +21,8 @@ export const submitLeave = createAsyncThunk(
           }
         );
         documentPath = uploadResponse.data?.document || uploadResponse.data?.data?.document || null;
+        documentFileName = uploadResponse.data?.fileName || data.document.name || null;
+        documentMimeType = uploadResponse.data?.mimeType || data.document.type || null;
       } else if (typeof data.document === 'string' && data.document.trim()) {
         documentPath = data.document.trim();
       }
@@ -31,6 +35,8 @@ export const submitLeave = createAsyncThunk(
         isHalfDay: data.isHalfDay || false,
         halfDayType: data.isHalfDay ? data.halfDayType : null,
         document: documentPath,
+        documentFileName,
+        documentMimeType,
       };
 
       const response = await axios.post(

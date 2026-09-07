@@ -180,3 +180,30 @@ export function isEsiEligibleByStatutoryWages(statutoryWages) {
 export function isEsiEligibleByGross(wagesOrGross) {
     return isEsiEligibleByStatutoryWages(wagesOrGross);
 }
+
+/** True when employee PF should be deducted (default true for legacy rows). */
+export function employeeDeductsPf(emp) {
+    return emp?.financialDetails?.deductPf !== false;
+}
+
+/** True when employee ESI should be deducted (default true for legacy rows). */
+export function employeeDeductsEsi(emp) {
+    return emp?.financialDetails?.deductEsi !== false;
+}
+
+/**
+ * Zero PF/ESI employee and employer components when employee flags opt out.
+ * Mutates earnings and deductions in place.
+ */
+export function applyStatutoryDeductionFlags(emp, earnings, deductions) {
+    if (!earnings || !deductions) return { earnings, deductions };
+    if (!employeeDeductsPf(emp)) {
+        deductions.pfEmployee = 0;
+        earnings.pfEmployer = 0;
+    }
+    if (!employeeDeductsEsi(emp)) {
+        deductions.esiEmployee = 0;
+        earnings.esiEmployer = 0;
+    }
+    return { earnings, deductions };
+}

@@ -108,7 +108,11 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
             panNumber: fin.panNumber || emp.panNumber || '',
             epfUan: fin.epfUan || emp.epfUan || '',
             gender: emp.gender || '',
-            taxRegime: fin.taxRegime || emp.taxRegime || ''
+            taxRegime: fin.taxRegime || emp.taxRegime || '',
+            financialDetails: {
+                deductPf: fin.deductPf,
+                deductEsi: fin.deductEsi,
+            },
         };
 
         if (organizationId) {
