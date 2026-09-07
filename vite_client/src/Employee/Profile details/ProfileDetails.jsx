@@ -437,7 +437,16 @@ function ProfileDetails() {
             <div className="p-4">
               <ProfilePhotoUpload
                 userType="employee"
-                userId={user?.id}
+                userId={
+                  employeeDetails?._id ||
+                  employeeDetails?.id ||
+                  profileSource?._id ||
+                  profileSource?.id ||
+                  user?.employeeProfileId ||
+                  user?._id ||
+                  user?.id
+                }
+                profilePhoto={profileSource?.profilePhoto || profileSource?.profilePicture}
                 onPhotoUpdate={(photoData) => {
                   const profilePhoto = photoData?.profilePhoto || photoData;
                   dispatch(setEmployeeProfile({ ...employeeDetails, profilePhoto }));

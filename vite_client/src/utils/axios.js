@@ -230,18 +230,30 @@ export const getProfilePhotoUrl = (profilePhoto) => {
 // Profiles are private S3 objects; a fresh signed URL is fetched only when a photo is displayed.
 let _profilePhotoCache = {};
 
+/** True only for short-lived S3 pre-signed URLs (safe to display as-is). */
+function isPresignedS3Url(url) {
+  return (
+    typeof url === 'string' &&
+    /^https?:\/\//i.test(url) &&
+    /[?&]X-Amz-Signature=/i.test(url)
+  );
+}
+
 /**
  * Resolve a displayable, short-lived signed URL for a private profile photo.
  * Fetches via the authorization-aware GET /v1/both/profile-photo/:userType/:userId
  * endpoint and caches the result for 15 minutes. Returns null when the caller
  * lacks a stable userType/userId (components then fall back to initials).
+ *
+ * Stored https://…amazonaws.com/… object URLs are NOT reused — the bucket is
+ * private, so only freshly signed URLs (or cached ones) are returned.
  */
 export async function resolveProfileSignedUrl(profilePhoto, { userType, userId, preferFull = false } = {}) {
   if (!profilePhoto) return null;
   const photo = typeof profilePhoto === 'object' ? profilePhoto : { url: profilePhoto };
   const existing = photo.url || photo.s3Key || null;
-  // Already a full http(s) URL (e.g. a signed URL handed back by the resolver) — reuse it.
-  if (typeof existing === 'string' && /^https?:\/\//.test(existing)) return existing;
+  // Reuse only an already pre-signed URL (e.g. handed back by this resolver).
+  if (isPresignedS3Url(existing)) return existing;
   if (!userId || !userType) return null;
 
   const cacheId = `${userType}:${userId}`;

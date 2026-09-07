@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { FiCheck, FiChevronLeft, FiChevronRight, FiEye, FiHome, FiLoader, FiSearch, FiX } from 'react-icons/fi';
-import axios, { getUploadUrl } from '../../utils/axios';
+import axios from '../../utils/axios';
 import { formatStatusLabel, UI_BADGE_TEXT_CLASS } from '../../utils/textFormat.js';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 
 const PAGE_SIZE = 25;
 
@@ -58,15 +59,13 @@ function employeeInitials(employee) {
     .join('') || '?';
 }
 
-function profileSource(employee) {
-  const photo = employee?.profilePhoto?.url || employee?.profilePhoto;
-  if (!photo || typeof photo !== 'string') return null;
-  return getUploadUrl(photo.startsWith('/') ? photo : `/uploads/${photo}`);
-}
-
 function EmployeeAvatar({ employee }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const source = profileSource(employee);
+  const userId = employee?._id || employee?.id || null;
+  const { photoUrl: source } = useSignedProfilePhoto(
+    employee?.profilePhoto || employee?.profilePicture,
+    { userType: 'employee', userId }
+  );
 
   return (
     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#0a8f6c] to-[#14b887] text-xs font-bold text-white">

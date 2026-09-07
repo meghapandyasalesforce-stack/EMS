@@ -1,10 +1,40 @@
+import crypto from 'crypto';
+import path from 'path';
 import EmployeeDocumentRequest from '../models/employeeDocumentRequest.model.js';
 import Employee from '../models/employee.model.js';
 import { getOrganizationId } from '../helpers/organizationHelper.js';
-import { relativeDocumentFileUrl, resolveDocumentFilePath } from '../helpers/documentFilePathHelper.js';
-import { readUploadFileBuffer, sendDocumentFile } from '../helpers/documentFileStorageHelper.js';
+import { buildDocumentS3Key } from '../helpers/documentFilePathHelper.js';
+import { sendDocumentFile } from '../helpers/documentFileStorageHelper.js';
+import { uploadFile, deleteFile } from '../helpers/storageHelper.js';
 import { sendNotification } from '../helpers/notificationService.js';
 import logger from '../helpers/logger.js';
+
+const getUploadBuffer = (file) => {
+  if (file?.buffer?.length) return file.buffer;
+  return null;
+};
+
+const uploadRequestFileToS3 = async (buffer, organizationId, originalName, mimeType) => {
+  const ext = path.extname(originalName || '').toLowerCase() || '';
+  const safeBase = String(originalName || 'employee-document')
+    .replace(ext, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .slice(0, 60) || 'employee-document';
+  const filename = `employee-doc-request-${safeBase}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+  const s3Key = buildDocumentS3Key(organizationId, filename);
+  await uploadFile(buffer, s3Key, mimeType || 'application/octet-stream', false);
+  return { s3Key, filename };
+};
+
+const sendBinaryDocument = (res, { buffer, downloadName, mimeType }) => {
+  const safeName = String(downloadName || 'employee-document').replace(/[^\w.\- ]+/g, '_');
+  res.status(200);
+  res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+  res.setHeader('Content-Length', String(buffer.length));
+  return res.end(buffer);
+};
 
 /**
  * Send a document-request notification to the employee who raised the request.
@@ -147,10 +177,32 @@ export const uploadEmployeeDocumentRequestFile = async (req, res) => {
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
     if (!canManageUpload(req, request)) return res.status(403).json({ success: false, message: 'Access denied' });
     if (!['approved', 'uploaded', 'completed'].includes(request.status)) return res.status(400).json({ success: false, message: 'Request must be approved before upload' });
-    const file = req.file; if (!file) return res.status(400).json({ success: false, message: 'Document file is required' });
-    request.fileUrl = relativeDocumentFileUrl(file.filename); request.fileName = file.filename; request.originalName = file.originalname;
-    request.mimeType = file.mimetype; request.size = file.size; request.fileBinary = readUploadFileBuffer(file);
-    request.uploadedBy = actorId(req); request.uploadedByType = actorType(req); request.uploadedAt = new Date(); request.status = 'uploaded';
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, message: 'Document file is required' });
+    const buffer = getUploadBuffer(file);
+    if (!buffer) return res.status(400).json({ success: false, message: 'Uploaded file buffer is empty. Please try uploading again.' });
+
+    if (request.fileUrl) {
+      await deleteFile(request.fileUrl);
+    }
+
+    const { s3Key, filename } = await uploadRequestFileToS3(
+      buffer,
+      organizationId,
+      file.originalname,
+      file.mimetype
+    );
+
+    request.fileUrl = s3Key;
+    request.fileName = filename;
+    request.originalName = file.originalname;
+    request.mimeType = file.mimetype;
+    request.size = buffer.length;
+    request.fileBinary = undefined;
+    request.uploadedBy = actorId(req);
+    request.uploadedByType = actorType(req);
+    request.uploadedAt = new Date();
+    request.status = 'uploaded';
     if (req.body?.remarks) request.adminRemarks = req.body.remarks;
     await request.save();
     await notifyEmployee(request, 'uploaded', req);
@@ -168,8 +220,17 @@ export const generateEmployeeDocument = async (req, res) => {
     const targetEmployee = await Employee.findOne({ _id: targetEmployeeId, organizationId }).select('name lastName email department position jobTitle').lean();
     const generationDetails = { ...(req.body.generationDetails || {}), employeeName: req.body.generationDetails?.employeeName || `${targetEmployee?.name || ''} ${targetEmployee?.lastName || ''}`.trim() };
     const request = await EmployeeDocumentRequest.create({ organizationId, employeeId: targetEmployeeId, requestedBy: requester, requestMode: isAdmin(req) ? 'admin_direct' : 'generated', status: 'generated', approvalRequiredFrom: isAdmin(req) ? 'none' : resolveApprovalRequirement(req), documentType: String(req.body.documentType || 'Employment Letter').trim(), purpose: String(req.body.purpose || '').trim(), country: req.body.country || 'India', documentSize: req.body.documentSize || 'A4', documentFormat: req.body.documentFormat || 'PDF', templateKey: req.body.templateKey || '', signatureFormat: req.body.signatureFormat || '', generationDetails, generatedBy: requester, generatedByType: actorType(req), generatedAt: new Date() });
-    const buffer = Buffer.from(buildGeneratedText(request), 'utf8'); request.fileBinary = buffer; request.fileName = `${request.documentType.replace(/\s+/g, '-').toLowerCase()}-${request._id}.txt`; request.originalName = request.fileName; request.mimeType = 'text/plain'; request.size = buffer.length;
-    await request.save(); res.status(201).json({ success: true, data: request });
+    const buffer = Buffer.from(buildGeneratedText(request), 'utf8');
+    const fileName = `${request.documentType.replace(/\s+/g, '-').toLowerCase()}-${request._id}.txt`;
+    const { s3Key, filename } = await uploadRequestFileToS3(buffer, organizationId, fileName, 'text/plain');
+    request.fileUrl = s3Key;
+    request.fileName = filename;
+    request.originalName = fileName;
+    request.mimeType = 'text/plain';
+    request.size = buffer.length;
+    request.fileBinary = undefined;
+    await request.save();
+    res.status(201).json({ success: true, data: request });
   } catch (error) { res.status(500).json({ success: false, message: 'Failed to generate document', error: error.message }); }
 };
 
@@ -179,7 +240,29 @@ export const downloadEmployeeDocumentRequestFile = async (req, res) => {
     const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
     if (!isAdmin(req) && !isHrManager(req) && !isSelf(req, request.employeeId)) return res.status(403).json({ success: false, message: 'Access denied' });
-    return sendDocumentFile(res, { filePath: request.fileUrl ? resolveDocumentFilePath(request.fileUrl) : null, buffer: request.fileBinary, downloadName: request.originalName || request.fileName || 'employee-document', mimeType: request.mimeType || 'application/octet-stream', inline: false });
+
+    const downloadName = request.originalName || request.fileName || 'employee-document';
+    const mimeType = request.mimeType || 'application/octet-stream';
+
+    if (request.fileUrl) {
+      return sendDocumentFile(res, {
+        fileUrl: request.fileUrl,
+        downloadName,
+        mimeType,
+        inline: false,
+      });
+    }
+
+    // Legacy Mongo-stored binaries (pre-S3 migration)
+    if (request.fileBinary?.length) {
+      return sendBinaryDocument(res, {
+        buffer: Buffer.isBuffer(request.fileBinary) ? request.fileBinary : Buffer.from(request.fileBinary),
+        downloadName,
+        mimeType,
+      });
+    }
+
+    return res.status(404).json({ success: false, message: 'File not found' });
   } catch (error) { res.status(500).json({ success: false, message: 'Failed to download document', error: error.message }); }
 };
 
@@ -221,25 +304,20 @@ export const deleteEmployeeDocumentRequest = async (req, res) => {
     const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
 
-    // Admin can delete anything
-    if (isAdmin(req)) {
-      await EmployeeDocumentRequest.deleteOne({ _id: request._id });
-      return res.json({ success: true, message: 'Request deleted' });
+    const canDelete =
+      isAdmin(req) ||
+      (isHrManager(req) && request.approvalRequiredFrom === 'hr_or_admin') ||
+      isSelf(req, request.employeeId);
+
+    if (!canDelete) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // HR Manager can delete requests where approvalRequiredFrom is 'hr_or_admin'
-    if (isHrManager(req) && request.approvalRequiredFrom === 'hr_or_admin') {
-      await EmployeeDocumentRequest.deleteOne({ _id: request._id });
-      return res.json({ success: true, message: 'Request deleted' });
+    if (request.fileUrl) {
+      await deleteFile(request.fileUrl);
     }
-
-    // Employee can delete their own requests
-    if (isSelf(req, request.employeeId)) {
-      await EmployeeDocumentRequest.deleteOne({ _id: request._id });
-      return res.json({ success: true, message: 'Request deleted' });
-    }
-
-    return res.status(403).json({ success: false, message: 'Access denied' });
+    await EmployeeDocumentRequest.deleteOne({ _id: request._id });
+    return res.json({ success: true, message: 'Request deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to delete request', error: error.message });
   }

@@ -1,8 +1,5 @@
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
-import { DOCUMENTS_UPLOAD_DIR } from '../helpers/documentFilePathHelper.js';
-import { ensureDocumentsUploadDirs } from '../helpers/documentFileStorageHelper.js';
 import {
   createEmployeeDocumentRequest,
   listMyEmployeeDocumentRequests,
@@ -16,17 +13,11 @@ import {
   deleteEmployeeDocumentRequest,
 } from '../controllers/employeeDocumentRequestController.js';
 
-ensureDocumentsUploadDirs();
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, DOCUMENTS_UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || '');
-    cb(null, `employee-doc-request-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 const router = express.Router();
 
 router.post('/request', createEmployeeDocumentRequest);

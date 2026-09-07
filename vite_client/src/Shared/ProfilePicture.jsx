@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FiCamera } from 'react-icons/fi';
 import logger from '../utils/logger';
-// import { getProfilePhotoUrl } from '../utils/axios';
 import { useSignedProfilePhoto } from '../Hooks/useSignedProfilePhoto';
+import { resolveProfilePhotoOwner } from '../utils/profileUtils';
 
 const ProfilePicture = ({ 
   user, 
@@ -47,8 +47,7 @@ const ProfilePicture = ({
   };
 
   // Resolve a short-lived signed URL for the private profile photo (no timers).
-  const userType = user?.role === 'admin' ? 'admin' : 'employee';
-  const userId = user?._id || user?.id || null;
+  const { userType, userId } = resolveProfilePhotoOwner(user);
   const { photoUrl } = useSignedProfilePhoto(
     user?.profilePhoto || user?.profilePicture,
     { userType, userId }
@@ -71,7 +70,12 @@ const ProfilePicture = ({
   // Reset error state when profile photo changes
   useEffect(() => {
     setImageError(false);
-  }, [user?.profilePhoto?.url, user?.profilePhoto?.filename, imageUrl]);
+  }, [
+    user?.profilePhoto?.url,
+    user?.profilePhoto?.filename,
+    typeof user?.profilePhoto === 'string' ? user.profilePhoto : null,
+    imageUrl,
+  ]);
 
   const circleClasses = showWhiteRing
     ? 'border-4 border-white shadow-md'

@@ -27,9 +27,10 @@ import {
   ReferenceLine,
   Legend,
 } from 'recharts';
-import axios, { getUploadUrl } from '../../utils/axios';
+import axios from '../../utils/axios';
 import { BOTH_ATTENDANCE_ENDPOINT } from '../../utils/constant';
 import { toast } from 'react-toastify';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 import {
   fetchTeamAttendanceHistory,
   fetchEmployeeAttendanceDetails,
@@ -123,18 +124,13 @@ function initials(emp) {
   );
 }
 
-function profileSrc(emp) {
-  const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
-  if (!photoRef) return null;
-  if (typeof photoRef === 'string') {
-    return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
-  }
-  return getUploadUrl(photoRef.url || photoRef);
-}
-
 function RowAvatar({ employee, sizeClass = 'h-10 w-10' }) {
   const [broken, setBroken] = useState(false);
-  const url = profileSrc(employee);
+  const userId = employee?._id || employee?.id || null;
+  const { photoUrl: url } = useSignedProfilePhoto(
+    employee?.profilePhoto || employee?.profilePicture,
+    { userType: 'employee', userId }
+  );
   const letter = initials(employee);
 
   return (

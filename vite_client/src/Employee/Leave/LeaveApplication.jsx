@@ -12,6 +12,27 @@ import useAuthPermissions from '../../Hooks/useAuthPermissions';
 const SICK_DOC_MESSAGE =
   'Medical certificate is required when Sick Leave exceeds 1 day in a calendar month.';
 
+/** Rolling window: apply leave from today through today + N calendar days (inclusive). */
+const FUTURE_LEAVE_APPLICATION_WINDOW_DAYS = 5;
+
+function toDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getLeaveApplicationDateBounds() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDate = new Date(today);
+  maxDate.setDate(maxDate.getDate() + FUTURE_LEAVE_APPLICATION_WINDOW_DAYS);
+  return {
+    todayStr: toDateInputValue(today),
+    maxDateStr: toDateInputValue(maxDate),
+  };
+}
+
 /** Days of an existing leave that fall in a given calendar month. */
 function getLeaveDaysInMonth(leave, year, monthIndex) {
   const monthStart = new Date(year, monthIndex, 1);
@@ -76,6 +97,7 @@ const LeaveApplication = () => {
   const [errors, setErrors] = useState({});
   const [myLeaves, setMyLeaves] = useState([]);
   const leaveTypeOptions = useMemo(() => getAllLeaveTypeOptions(), []);
+  const { todayStr, maxDateStr } = getLeaveApplicationDateBounds();
 
   useEffect(() => {
     if (user) {
@@ -213,6 +235,12 @@ const LeaveApplication = () => {
       if (leaveForm.isHalfDay && leaveForm.endDate !== leaveForm.startDate) {
         formErrors.endDate =
           'Half-day leave must be on a single day (end date matches start date).';
+      }
+      if (leaveForm.startDate < todayStr || leaveForm.startDate > maxDateStr) {
+        formErrors.startDate = `Leave can only be applied from today up to ${FUTURE_LEAVE_APPLICATION_WINDOW_DAYS} days ahead (until ${maxDateStr}).`;
+      }
+      if (leaveForm.endDate < todayStr || leaveForm.endDate > maxDateStr) {
+        formErrors.endDate = `Leave can only be applied from today up to ${FUTURE_LEAVE_APPLICATION_WINDOW_DAYS} days ahead (until ${maxDateStr}).`;
       }
     }
 
@@ -355,12 +383,19 @@ const LeaveApplication = () => {
                   disabled={
                     submitting || (field === 'endDate' && leaveForm.isHalfDay)
                   }
-                  min={field === 'endDate' ? leaveForm.startDate : new Date().toISOString().split('T')[0]}
+                  min={field === 'endDate' ? leaveForm.startDate || todayStr : todayStr}
+                  max={maxDateStr}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base disabled:bg-gray-100"
                 />
                 {field === 'endDate' && leaveForm.isHalfDay && (
                   <p className="text-xs text-gray-500 mt-1">
                     Same as start date for half-day leave (0.5 day).
+                  </p>
+                )}
+                {field === 'startDate' && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    You can apply leave from today up to {FUTURE_LEAVE_APPLICATION_WINDOW_DAYS} days ahead
+                    (until {maxDateStr}).
                   </p>
                 )}
                 {errors[field] && <p className="text-red-500 text-xs md:text-sm mt-1">{errors[field]}</p>}

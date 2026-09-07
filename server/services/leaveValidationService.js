@@ -31,6 +31,9 @@ import {
     selectApplicableLeavePolicy,
 } from '../helpers/leavePolicyApplicabilityHelper.js';
 
+/** Rolling window: employee may apply leave from today through today + N calendar days (inclusive). */
+const FUTURE_LEAVE_APPLICATION_WINDOW_DAYS = 5;
+
 class LeaveValidationService {
     /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
     parseLeaveDate(dateInput) {
@@ -48,6 +51,43 @@ class LeaveValidationService {
             return null;
         }
         return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+
+    /** Local calendar today (midnight). */
+    getTodayLocal() {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    /**
+     * Employees may only apply for leave from today up to the next N calendar days
+     * (full-day and half-day). Example: today = 5th → allowed through 10th.
+     */
+    checkFutureApplicationWindow(startDate, endDate, maxDaysAhead = FUTURE_LEAVE_APPLICATION_WINDOW_DAYS) {
+        const today = this.getTodayLocal();
+        const maxDate = new Date(today);
+        maxDate.setDate(maxDate.getDate() + maxDaysAhead);
+
+        if (startDate < today) {
+            return {
+                allowed: false,
+                reason: 'Leave cannot start before today.',
+            };
+        }
+
+        if (startDate > maxDate || endDate > maxDate) {
+            const maxLabel = maxDate.toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+            });
+            return {
+                allowed: false,
+                reason: `Leave can only be applied from today up to ${maxDaysAhead} days ahead (until ${maxLabel}).`,
+            };
+        }
+
+        return { allowed: true };
     }
 
     /**
@@ -96,6 +136,12 @@ class LeaveValidationService {
                         'Half-day leave must be on a single day. Use the same start and end date.'
                     );
                 }
+            }
+
+            // Future application window (today through today + 5 calendar days; full-day and half-day)
+            const futureWindowCheck = this.checkFutureApplicationWindow(startDate, endDate);
+            if (!futureWindowCheck.allowed) {
+                errors.push(futureWindowCheck.reason);
             }
 
             // 1. Check notice period restrictions

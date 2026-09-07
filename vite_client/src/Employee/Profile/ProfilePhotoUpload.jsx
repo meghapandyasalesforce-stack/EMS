@@ -5,9 +5,12 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
 import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
+import { resolveProfilePhotoOwner } from '../../utils/profileUtils';
 
 const OUTPUT_SIZE = 400;
 const VIEWPORT_SIZE = 280;
+/** Stable sentinel so the update modal always requests a signed URL when an owner id is known. */
+const FETCH_CURRENT_PHOTO = { url: '__fetch__' };
 
 function cropToBlob({ image, offsetX, offsetY, zoom, viewportSize }) {
   return new Promise((resolve, reject) => {
@@ -41,7 +44,7 @@ function cropToBlob({ image, offsetX, offsetY, zoom, viewportSize }) {
   });
 }
 
-const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) => {
+const ProfilePhotoUpload = ({ userType = 'employee', userId, profilePhoto: profilePhotoProp, onPhotoUpdate }) => {
   const [sourceUrl, setSourceUrl] = useState(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -58,14 +61,26 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
   const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
 
   const user = useSelector((state) => state.auth.user);
+  const employeeDetails = useSelector((state) => state.employeeDetails.employee);
   const { isPermissionGranted, isPermissionDenied, requestCameraPermission } = usePermissions();
 
-  const photoUserId = userId || (user && (user._id || user.id)) || null;
-  const photoUserType = userType || (user?.role === 'admin' ? 'admin' : 'employee');
-  const { photoUrl: currentPhotoUrl } = useSignedProfilePhoto(
-    user?.profilePhoto || user?.profilePicture,
-    { userType: photoUserType, userId: photoUserId, preferFull: true }
-  );
+  const fallbackOwner = resolveProfilePhotoOwner(user);
+  const photoUserId = userId || fallbackOwner.userId;
+  const photoUserType = userType || fallbackOwner.userType;
+  // Prefer explicit prop / employee record — auth.user often lacks profilePhoto metadata
+  const photoMeta =
+    profilePhotoProp ||
+    employeeDetails?.profilePhoto ||
+    employeeDetails?.profilePicture ||
+    user?.profilePhoto ||
+    user?.profilePicture ||
+    (photoUserId ? FETCH_CURRENT_PHOTO : null);
+  const { photoUrl: currentPhotoUrl } = useSignedProfilePhoto(photoMeta, {
+    userType: photoUserType,
+    userId: photoUserId,
+    preferFull: true,
+  });
+  const hasExistingPhoto = Boolean(currentPhotoUrl);
 
   const minZoomForCover = (w, h) => {
     if (!w || !h) return 1;
@@ -244,7 +259,9 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
         }
       );
 
-      toast.success('Profile photo uploaded successfully!');
+      toast.success(
+        hasExistingPhoto ? 'Profile photo updated successfully!' : 'Profile photo uploaded successfully!'
+      );
       if (onPhotoUpdate) {
         // Server response structure: { success: true, profilePhoto: {...}, fileSize: ... }
         const profilePhotoData = response.data?.profilePhoto || response.data?.data?.profilePhoto || response.data;
@@ -253,7 +270,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
 
       resetEditor();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to upload photo');
+      toast.error(error.response?.data?.message || 'Failed to update photo');
     } finally {
       setUploading(false);
     }
@@ -266,7 +283,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
     <div className="bg-white rounded-xl p-6 border-2 border-gray-200">
       <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
         <FiCamera className="mr-2" />
-        Profile Photo
+        {hasExistingPhoto ? 'Update Profile Photo' : 'Profile Photo'}
       </h3>
 
       {/* Adjust / preview viewport */}
@@ -314,9 +331,8 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
           ) : currentPhotoUrl ? (
             <img
               src={currentPhotoUrl}
-              alt="Current Profile"
+              alt="Previous profile photo"
               className="absolute inset-0 h-full w-full object-cover object-center"
-              crossOrigin="anonymous"
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -335,7 +351,11 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
           )}
         </div>
         <p className="text-sm text-gray-600 mt-2">
-          {sourceUrl ? 'Drag to reposition · zoom to fit' : 'Current profile photo'}
+          {sourceUrl
+            ? 'Drag to reposition · zoom to fit'
+            : hasExistingPhoto
+              ? 'Previous profile photo'
+              : 'No photo yet — choose one below'}
         </p>
       </div>
 
@@ -400,7 +420,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
               className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center"
             >
               <FiUpload className="mr-2" />
-              Choose from Files
+              {hasExistingPhoto ? 'Choose new photo' : 'Choose from Files'}
             </button>
           </div>
 
@@ -409,7 +429,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
             className="w-full bg-theme-secondary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center"
           >
             <FiCamera className="mr-2" />
-            Take Photo
+            {hasExistingPhoto ? 'Take new photo' : 'Take Photo'}
           </button>
         </div>
       )}
@@ -423,7 +443,13 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
             className="w-full bg-theme-primary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
           >
             <FiUpload className="mr-2" />
-            {uploading ? 'Uploading...' : 'Save Photo'}
+            {uploading
+              ? hasExistingPhoto
+                ? 'Updating...'
+                : 'Uploading...'
+              : hasExistingPhoto
+                ? 'Update Photo'
+                : 'Save Photo'}
           </button>
         </div>
       )}

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import axios, { getUploadUrl } from '../../utils/axios';
+import axios from '../../utils/axios';
 import { isHR as checkIsHR } from '../../utils/managerHelper';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
@@ -21,6 +21,7 @@ import {
 import LoadingSpinner from '../../components/LoadingSpinner';
 import TeamWfhRequestsPanel from './TeamWfhRequestsPanel';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 import {
   formatAuditTimelineEvent,
   formatCapitalRequestStatus,
@@ -64,18 +65,13 @@ function initialsEmp(emp) {
     .join('') || '?';
 }
 
-function profileSrc(emp) {
-  const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
-  if (!photoRef) return null;
-  if (typeof photoRef === 'string') {
-    return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
-  }
-  return getUploadUrl(photoRef.url || photoRef);
-}
-
 function RowAvatar({ employee, sizeClass = 'h-10 w-10' }) {
   const [broken, setBroken] = useState(false);
-  const url = profileSrc(employee);
+  const userId = employee?._id || employee?.id || null;
+  const { photoUrl: url } = useSignedProfilePhoto(
+    employee?.profilePhoto || employee?.profilePicture,
+    { userType: 'employee', userId }
+  );
   const letter = initialsEmp(employee);
   return (
     <div

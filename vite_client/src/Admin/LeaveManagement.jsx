@@ -15,9 +15,10 @@ import {
 } from 'react-icons/fi';
 import { getAllLeaves, updateLeave } from '../context/leaveSlice';
 import { toast } from 'react-toastify';
-import axios, { getUploadUrl } from '../utils/axios';
+import axios from '../utils/axios';
 import { ADMIN_LEAVE_ENDPOINT } from '../utils/constant';
 import useAuthPermissions from '../Hooks/useAuthPermissions';
+import { useSignedProfilePhoto } from '../Hooks/useSignedProfilePhoto';
 import { isHR } from '../utils/managerHelper';
 import RegularizationRequests from '../Manager/AttendanceRegularization/RegularizationRequests';
 import {
@@ -149,19 +150,14 @@ function managerDisplayName(leave) {
   return '—';
 }
 
-function profilePhotoSrc(leave) {
-  const emp = leave?.employee;
-  const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
-  if (!photoRef) return null;
-  if (typeof photoRef === 'string') {
-    return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
-  }
-  return getUploadUrl(photoRef.url || photoRef);
-}
-
 function RowAvatar({ leave, sizeClass = 'h-10 w-10 text-xs', roundedClass = 'rounded-full' }) {
   const [broken, setBroken] = useState(false);
-  const url = profilePhotoSrc(leave);
+  const emp = leave?.employee;
+  const userId = emp?._id || emp?.id || null;
+  const { photoUrl: url } = useSignedProfilePhoto(emp?.profilePhoto || emp?.profilePicture, {
+    userType: 'employee',
+    userId,
+  });
   const initials = initialsFromLeave(leave);
 
   return (

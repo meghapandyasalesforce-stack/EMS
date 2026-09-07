@@ -11,7 +11,7 @@ import {
   FiBarChart2,
 } from 'react-icons/fi';
 import { fetchTodayStatus } from '../../context/attendanceSlice';
-import { getUploadUrl } from '../../utils/axios';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 import { formatAttendanceStatusLabel, UI_BADGE_TEXT_CLASS } from '../../utils/textFormat.js';
 
 const TEAL = '#0a8f6c';
@@ -30,18 +30,13 @@ function initials(emp) {
   );
 }
 
-function profileSrc(emp) {
-  const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
-  if (!photoRef) return null;
-  if (typeof photoRef === 'string') {
-    return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
-  }
-  return getUploadUrl(photoRef.url || photoRef);
-}
-
 function RowAvatar({ employee, sizeClass = 'h-10 w-10' }) {
   const [broken, setBroken] = useState(false);
-  const url = profileSrc(employee);
+  const userId = employee?._id || employee?.id || null;
+  const { photoUrl: url } = useSignedProfilePhoto(
+    employee?.profilePhoto || employee?.profilePicture,
+    { userType: 'employee', userId }
+  );
   const letter = initials(employee);
 
   return (
