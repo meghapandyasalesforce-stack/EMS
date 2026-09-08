@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { FaBell, FaTimes, FaCheck, FaTrash } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -17,6 +17,29 @@ import {
     receiveSocketNotification
 } from '../context/notificationSlice';
 
+/** Hide org announcements sent before this employee was added to EMS. */
+function getAnnouncementAudienceCutoff(employee, authUser) {
+    // Prefer EMS createdAt over joiningDate (joiningDate is often backdated)
+    for (const value of [employee?.createdAt, authUser?.createdAt, employee?.joiningDate]) {
+        if (!value) continue;
+        const t = new Date(value).getTime();
+        if (!Number.isNaN(t)) return new Date(t);
+    }
+    return null;
+}
+
+function isVisibleAnnouncementForHire(notification, cutoff) {
+    if (!notification) return false;
+    const isAnnouncement =
+        notification.type === 'announcement' ||
+        (notification.isBroadcast === true && notification.type === 'announcement');
+    if (!isAnnouncement || !notification.isBroadcast) return true;
+    if (!cutoff) return true;
+    const created = new Date(notification.createdAt).getTime();
+    if (Number.isNaN(created)) return true;
+    return created >= cutoff.getTime();
+}
+
 const NotificationDropdown = () => {
     const dispatch = useDispatch();
     const [isOpen, setIsOpen] = useState(false);
@@ -24,7 +47,6 @@ const NotificationDropdown = () => {
     useHrmsPopupDismiss(closeDropdown, isOpen);
     
     const notifications = useSelector((state) => state.notifications.notifications || []);
-    const unreadCount = useSelector((state) => state.notifications.unreadCount || 0);
     const loading = useSelector((state) => state.notifications.loading || false);
 
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, maxHeight: 512, width: 320 });
@@ -34,6 +56,27 @@ const NotificationDropdown = () => {
     const authUser = useSelector((state) => state?.auth?.user);
     const employeeUser = useSelector((state) => state?.employeeDetails?.employee);
     const sessionUser = authUser || employeeUser;
+
+    const announcementCutoff = useMemo(
+        () => getAnnouncementAudienceCutoff(employeeUser, authUser),
+        [employeeUser, authUser]
+    );
+
+    const visibleNotifications = useMemo(
+        () =>
+            (Array.isArray(notifications) ? notifications : []).filter((n) =>
+                isVisibleAnnouncementForHire(n, announcementCutoff)
+            ),
+        [notifications, announcementCutoff]
+    );
+
+    const visibleUnreadCount = useMemo(
+        () =>
+            visibleNotifications.filter(
+                (n) => n?.isRead === false || n?.read === false
+            ).length,
+        [visibleNotifications]
+    );
 
     useEffect(() => {
         // Only fetch when a user is available (authenticated) and password reset is not required
@@ -99,6 +142,8 @@ const NotificationDropdown = () => {
         const onNotification = (payload) => {
             const notification = payload?.data || payload;
             if (!notification) return;
+            // Do not surface pre-hire announcements to newly added employees
+            if (!isVisibleAnnouncementForHire(notification, announcementCutoff)) return;
 
             dispatch(receiveSocketNotification(notification));
             const message = notification.message || notification.title || 'New notification';
@@ -111,7 +156,7 @@ const NotificationDropdown = () => {
             socket.off('notification', onNotification);
             socket.disconnect();
         };
-    }, [sessionUser, dispatch]);
+    }, [sessionUser, dispatch, announcementCutoff]);
 
     // Calculate dropdown position when opening – panel opens to the right of the button, stays in viewport
     const DROPDOWN_MAX_HEIGHT_PX = 512;
@@ -267,9 +312,9 @@ const NotificationDropdown = () => {
                 data-hrms-popup-trigger
             >
                 <FaBell className="text-xl" />
-                {unreadCount > 0 && (
+                {visibleUnreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
+                        {visibleUnreadCount > 9 ? '9+' : visibleUnreadCount}
                     </span>
                 )}
             </button>
@@ -299,7 +344,7 @@ const NotificationDropdown = () => {
                         <div className="flex items-center justify-between gap-2">
                             <h3 className="text-base sm:text-lg font-semibold text-gray-900">Notifications</h3>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                                {unreadCount > 0 && (
+                                {visibleUnreadCount > 0 && (
                                     <button
                                         onClick={markAllAsRead}
                                         className="text-xs whitespace-nowrap font-medium text-theme-secondary hover:opacity-80"
@@ -324,12 +369,12 @@ const NotificationDropdown = () => {
                             <div className="p-4 text-center">
                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-theme-primary mx-auto"></div>
                             </div>
-                        ) : (Array.isArray(notifications) ? notifications : []).length === 0 ? (
+                        ) : visibleNotifications.length === 0 ? (
                             <div className="p-4 text-center text-gray-500">
                                 No notifications yet
                             </div>
                         ) : (
-                            (Array.isArray(notifications) ? notifications : []).map((notification) => (
+                            visibleNotifications.map((notification) => (
                                 <div
                                     key={notification?._id || Math.random()}
                                     className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
@@ -378,7 +423,7 @@ const NotificationDropdown = () => {
                         )}
                     </div>
 
-                    {(Array.isArray(notifications) ? notifications : []).length > 0 && (
+                    {visibleNotifications.length > 0 && (
                         <div className="p-3 border-t border-gray-200 text-center flex-shrink-0 bg-gray-50">
                             <button
                                 onClick={() => {

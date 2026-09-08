@@ -808,7 +808,7 @@ canvas {
    * Legacy tables without .cm-table-wrap — do not target .cm-table (onboarding HR tables).
    * Those scroll inside .cm-table-wrap; forcing display:block on the table breaks columns.
    */
-  .main-scroll-area table:not(.cm-table):not(.leave-requests-table):not(.hr-docs-table):not(.learning-enrollments-table) {
+  .main-scroll-area table:not(.cm-table):not(.leave-requests-table):not(.hr-docs-table):not(.learning-enrollments-table):not(.wf-table) {
     display: block;
     width: 100%;
     max-width: 100%;
@@ -1326,4 +1326,142 @@ canvas {
     filter: none;
     opacity: 0.55;
   }
+}
+
+/* Workforce Planning — thin horizontal scrollbars (all tabs / sections)
+ * Do NOT set scrollbar-width: thin — Chromium keeps a thick native bar if you do. */
+.wf-ui .wf-table-scroll,
+.wf-ui .hrms-tabs-scroll,
+.wf-ui .wf-tabs-bar,
+.wf-ui .overflow-x-auto {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+
+.wf-ui .wf-table-scroll {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
+/* Laptop / desktop: stretch tables to full card width */
+.wf-ui .wf-table-scroll > .wf-table {
+  display: table !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Mobile only: keep readable column widths + section horizontal scroll */
+@media (max-width: 767px) {
+  .wf-ui .wf-table-scroll > .wf-table {
+    width: max-content !important;
+    min-width: var(--wf-table-min, 640px) !important;
+  }
+}
+
+.wf-ui .wf-table-scroll::-webkit-scrollbar,
+.wf-ui .hrms-tabs-scroll::-webkit-scrollbar,
+.wf-ui .wf-tabs-bar::-webkit-scrollbar,
+.wf-ui .overflow-x-auto::-webkit-scrollbar {
+  height: 2px;
+  width: 2px;
+}
+
+.wf-ui .wf-table-scroll::-webkit-scrollbar-track,
+.wf-ui .hrms-tabs-scroll::-webkit-scrollbar-track,
+.wf-ui .wf-tabs-bar::-webkit-scrollbar-track,
+.wf-ui .overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wf-ui .wf-table-scroll::-webkit-scrollbar-thumb,
+.wf-ui .hrms-tabs-scroll::-webkit-scrollbar-thumb,
+.wf-ui .wf-tabs-bar::-webkit-scrollbar-thumb,
+.wf-ui .overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.4);
+  border-radius: 999px;
+}
+
+.wf-ui .wf-table-scroll::-webkit-scrollbar-thumb:hover,
+.wf-ui .hrms-tabs-scroll::-webkit-scrollbar-thumb:hover,
+.wf-ui .wf-tabs-bar::-webkit-scrollbar-thumb:hover,
+.wf-ui .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.6);
+}
+
+/* Laptop: tighter section stacking so KPIs + tables fit without excess scroll */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .wf-ui .hrms-stack {
+    gap: 0.875rem;
+  }
+
+  .wf-ui .page-shell {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .wf-ui .hrms-stack {
+    gap: 1rem;
+  }
+}
+
+/* Thin vertical page scrollbar on Workforce pages (main canvas).
+ * Avoid scrollbar-width on Chromium — it overrides ::-webkit-scrollbar width. */
+.main-scroll-area:has(.wf-ui)::-webkit-scrollbar {
+  width: 4px;
+}
+
+.main-scroll-area:has(.wf-ui)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.main-scroll-area:has(.wf-ui)::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.35);
+  border-radius: 999px;
+}
+
+.main-scroll-area:has(.wf-ui)::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.55);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .main-scroll-area:has(.wf-ui) {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.35) transparent;
+  }
+}
+
+/* Leave & Attendance panel tabs — thin horizontal scrollbar (mobile only) */
+.leave-attendance-hub .la-panel-tabs {
+  min-width: 0;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.leave-attendance-hub .la-panel-tabs::-webkit-scrollbar {
+  height: 2px;
+  width: 2px;
+}
+
+.leave-attendance-hub .la-panel-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.leave-attendance-hub .la-panel-tabs::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.4);
+  border-radius: 999px;
 }

@@ -55,6 +55,8 @@ const EMPTY = {
     education: '',
     certifications: '',
     screeningTemplateId: '',
+    workforcePlanId: '',
+    workforceHiringIndex: '',
 };
 
 const selectClass = 'cm-select w-full';
@@ -134,6 +136,26 @@ const CreateJobPage = () => {
         positions: FALLBACK_POSITIONS,
         locations: FALLBACK_LOCATIONS,
     });
+    const [workforceRequirements, setWorkforceRequirements] = useState([]);
+    const [selectedWorkforceKey, setSelectedWorkforceKey] = useState('');
+
+    useEffect(() => {
+        if (isEdit) return undefined;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axios.get('/v1/admin/workforce/open-hiring-requirements', {
+                    withCredentials: true,
+                });
+                if (!cancelled) {
+                    setWorkforceRequirements(data?.data || []);
+                }
+            } catch {
+                /* optional integration */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [isEdit]);
 
     useEffect(() => {
         axios.get('/v1/admin/recruitment/screening/templates', {
@@ -285,6 +307,52 @@ const CreateJobPage = () => {
 
     const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+    const applyWorkforceRequirement = (key) => {
+        setSelectedWorkforceKey(key);
+        if (!key) {
+            setForm((prev) => ({
+                ...prev,
+                workforcePlanId: '',
+                workforceHiringIndex: '',
+            }));
+            return;
+        }
+        const req = workforceRequirements.find(
+            (r) => `${r.planId}:${r.hiringIndex}` === key
+        );
+        if (!req) return;
+
+        const titlePick = pickSelect(req.jobTitle, options.jobTitles);
+        const deptPick = pickSelect(req.department, options.departments);
+        setSelects((prev) => ({
+            ...prev,
+            jobTitle: titlePick.select,
+            department: deptPick.select,
+        }));
+        setCustoms((prev) => ({
+            ...prev,
+            jobTitle: titlePick.custom,
+            department: deptPick.custom,
+        }));
+        setOptions((prev) => ({
+            ...prev,
+            departments: [...new Set([...prev.departments, req.department].filter(Boolean))].sort(),
+            jobTitles: [...new Set([...prev.jobTitles, req.jobTitle].filter(Boolean))],
+        }));
+        setForm((prev) => ({
+            ...prev,
+            numberOfPositions: Math.max(req.remainingHiringNeed || req.hiringRequired || 1, 1),
+            priority: req.priority || prev.priority,
+            jobDescription:
+                prev.jobDescription ||
+                `Workforce planning requirement from plan "${req.planName}".` +
+                    (req.reason ? ` Reason: ${req.reason}.` : '') +
+                    ` Required headcount: ${req.requiredHeadcount}. Current: ${req.currentHeadcount}. Remaining to hire: ${req.remainingHiringNeed}.`,
+            workforcePlanId: req.planId,
+            workforceHiringIndex: req.hiringIndex,
+        }));
+    };
+
     const resolved = (key) => (
         selects[key] === OTHER ? String(customs[key] || '').trim() : selects[key]
     );
@@ -331,6 +399,12 @@ const CreateJobPage = () => {
                     currency: form.currency || 'INR',
                 },
                 closingDate: form.closingDate || undefined,
+                ...(form.workforcePlanId
+                    ? {
+                        workforcePlanId: form.workforcePlanId,
+                        workforceHiringIndex: form.workforceHiringIndex,
+                    }
+                    : {}),
                 screeningCriteria: {
                     enabled: form.screeningEnabled !== false,
                     requiredKeywords: normalizeKeywordList(form.requiredKeywords),
@@ -386,6 +460,26 @@ const CreateJobPage = () => {
             />
 
             <form onSubmit={(e) => e.preventDefault()} className="cm-card space-y-5">
+                {!isEdit && workforceRequirements.length > 0 && (
+                    <label className="block text-sm">
+                        <span className="ats-form-label">From Workforce Planning (optional)</span>
+                        <select
+                            className={selectClass}
+                            value={selectedWorkforceKey}
+                            onChange={(e) => applyWorkforceRequirement(e.target.value)}
+                        >
+                            <option value="">Create job without linking a plan</option>
+                            {workforceRequirements.map((r) => (
+                                <option key={`${r.planId}:${r.hiringIndex}`} value={`${r.planId}:${r.hiringIndex}`}>
+                                    {r.department} · {r.jobTitle} — need {r.remainingHiringNeed} (current {r.currentHeadcount}/{r.requiredHeadcount}) · {r.planName}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="mt-1 text-xs text-slate-500">
+                            Prefills department, role, and remaining hiring need from Workforce Planning. Does not duplicate headcount.
+                        </p>
+                    </label>
+                )}
                 <div className="grid gap-4 sm:grid-cols-2">
                     <SelectWithOther
                         label="Job Title"

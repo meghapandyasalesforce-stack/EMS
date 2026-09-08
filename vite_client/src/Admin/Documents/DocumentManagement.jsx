@@ -121,39 +121,31 @@
 import React, { useState } from 'react';
 import DocumentTemplateManager from './DocumentTemplateManager';
 import AdminEmployeeDocumentRequests from './AdminEmployeeDocumentRequests';
+import HREmployeeDocumentRequests from '../../HR/Documents/HREmployeeDocumentRequests';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
 
 /**
- * Document Management
- *
- * Directly opens Document Requests / Document Templates.
- *
- * The old Document Management landing page with two cards
- * has been removed.
- *
- * Requests and Templates remain available through the
- * top toggle.
+ * Document Management — Requests queue + Templates.
+ * HR sees the HR approval queue; org owners/admins see the admin queue.
  */
 const DocumentManagement = () => {
     const [activeSection, setActiveSection] = useState('requests');
+    const { isOrgOwner } = useAuthPermissions();
+    const useAdminQueue = Boolean(isOrgOwner);
 
     return (
         <div className="min-h-screen bg-slate-50">
-            {/* Header + Toggle */}
             <div className="border-b border-slate-200 bg-white">
                 <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                    
-                    {/* Page Title */}
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                             Document Management
                         </h1>
-
                         <p className="mt-1 text-sm text-slate-500">
-                            Manage employee document requests and templates
+                            Review employee document requests and manage templates
                         </p>
                     </div>
 
-                    {/* Requests / Templates Toggle */}
                     <div className="flex w-full items-center rounded-lg bg-slate-100 p-1 sm:w-auto">
                         <button
                             type="button"
@@ -182,15 +174,11 @@ const DocumentManagement = () => {
                 </div>
             </div>
 
-            {/* Direct Page Content */}
             <div>
                 {activeSection === 'requests' && (
-                    <AdminEmployeeDocumentRequests />
+                    useAdminQueue ? <AdminEmployeeDocumentRequests /> : <HREmployeeDocumentRequests />
                 )}
-
-                {activeSection === 'templates' && (
-                    <DocumentTemplateManager />
-                )}
+                {activeSection === 'templates' && <DocumentTemplateManager />}
             </div>
         </div>
     );

@@ -108,6 +108,17 @@ const recruitmentSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    /** Optional link back to Workforce Planning hiring requirement (source of truth for need). */
+    workforcePlanId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'WorkforcePlan',
+        default: null,
+        index: true
+    },
+    workforceHiringIndex: {
+        type: Number,
+        default: null
+    },
     currentApplications: {
         type: Number,
         default: 0

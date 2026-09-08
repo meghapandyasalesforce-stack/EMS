@@ -23,6 +23,8 @@ import {
     wfInputClass,
     wfInputReadonlyClass,
     gapTone,
+    formatGapValue,
+    gapToneFromStatus,
     PLAN_STATUS_OPTIONS,
     formatPlanStatus,
 } from './components/workforceUi';
@@ -342,13 +344,19 @@ const WorkforcePage = () => {
         return <LoadingSpinner message="Loading workforce planning data..." />;
     }
 
-    const planGapPreview = (planFormData.targetHeadcount || 0) - (planFormData.currentHeadcount || 0);
+    const planGapPreview = Math.abs((planFormData.targetHeadcount || 0) - (planFormData.currentHeadcount || 0));
+    const planGapStatus =
+        (planFormData.currentHeadcount || 0) < (planFormData.targetHeadcount || 0)
+            ? 'Shortage'
+            : (planFormData.currentHeadcount || 0) > (planFormData.targetHeadcount || 0)
+              ? 'Surplus'
+              : 'Balanced';
 
     return (
-        <div className="min-h-screen transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
-            <div className="page-shell">
-            <div className="page-shell-inner">
-            <div className="hrms-stack">
+        <div className="wf-ui min-h-screen min-w-0 overflow-x-hidden transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
+            <div className="page-shell min-w-0">
+            <div className="page-shell-inner min-w-0">
+            <div className="hrms-stack min-w-0">
                 <WfPageHeader
                     eyebrow="Workforce Planning"
                     title="Workforce Planning"
@@ -395,24 +403,46 @@ const WorkforcePage = () => {
 
                 {/* Dashboard */}
                 {activeTab === 'dashboard' && dashboard && (
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="min-w-0 max-w-full space-y-3 sm:space-y-4 lg:space-y-5">
+                        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-3">
                             <WfKpiCard title="Total Employees" value={dashboard.totalEmployees} icon={FaUsers} tone="teal" />
                             <WfKpiCard title="Planned Workforce" value={dashboard.plannedWorkforce} icon={FaBriefcase} tone="violet" />
                             <WfKpiCard
                                 title="Workforce Gap"
-                                value={`${dashboard.workforceGap > 0 ? '+' : ''}${dashboard.workforceGap}`}
+                                value={formatGapValue(dashboard.workforceGap)}
                                 icon={FaBalanceScale}
-                                tone={dashboard.workforceGap > 0 ? 'rose' : dashboard.workforceGap < 0 ? 'amber' : 'emerald'}
-                                valueClass={gapTone(dashboard.workforceGap)}
+                                tone={
+                                    dashboard.workforceGapStatus === 'Shortage' || dashboard.workforceSignedGap > 0
+                                        ? 'rose'
+                                        : dashboard.workforceGapStatus === 'Surplus' || dashboard.workforceSignedGap < 0
+                                          ? 'amber'
+                                          : 'emerald'
+                                }
+                                valueClass={gapToneFromStatus(
+                                    dashboard.workforceGapStatus,
+                                    dashboard.workforceSignedGap ?? dashboard.workforceGap
+                                )}
                             />
                             <WfKpiCard title="Open Positions" value={dashboard.openPositions} icon={FaUserPlus} tone="sky" />
+                            <WfKpiCard
+                                title="Hiring In Progress"
+                                value={dashboard.hiringInProgress ?? 0}
+                                icon={FaClipboardList}
+                                tone="amber"
+                            />
+                            <WfKpiCard
+                                title="Remaining Hiring Need"
+                                value={dashboard.remainingHiringNeed ?? dashboard.openPositions ?? 0}
+                                icon={FaBriefcase}
+                                tone="violet"
+                            />
                             <WfKpiCard title="Upcoming Hiring" value={dashboard.upcomingHiringCount} icon={FaCalendar} tone="amber" />
                             <WfKpiCard title="Active Plans" value={dashboard.activePlansCount} icon={FaChartLine} tone="emerald" />
                         </div>
 
                         <WfPanel title="Department-wise Workforce" bodyClassName="p-0 sm:p-0">
                             <WfTable
+                                minWidth="720px"
                                 columns={[
                                     { key: 'department', label: 'Department', render: (row) => <span className="font-medium text-slate-800">{row.department}</span> },
                                     { key: 'current', label: 'Current' },
@@ -421,8 +451,8 @@ const WorkforcePage = () => {
                                         key: 'gap',
                                         label: 'Gap',
                                         render: (row) => (
-                                            <span className={`font-semibold ${gapTone(row.gap)}`}>
-                                                {row.gap > 0 ? '+' : ''}{row.gap}
+                                            <span className={`font-semibold ${gapToneFromStatus(row.status, row.gap)}`}>
+                                                {formatGapValue(row.gap)}
                                             </span>
                                         ),
                                     },
@@ -440,7 +470,7 @@ const WorkforcePage = () => {
                         {(dashboard.upcomingHiring || []).length > 0 && (
                             <WfPanel title="Upcoming Hiring" bodyClassName="p-0 sm:p-0">
                                 <WfTable
-                                    minWidth="720px"
+                                    minWidth="960px"
                                     columns={[
                                         {
                                             key: 'position',
@@ -450,7 +480,7 @@ const WorkforcePage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => navigate(`/workforce/${h.planId}`)}
-                                                        className="font-medium text-teal-700 hover:underline"
+                                                        className="h-auto p-0 font-medium text-teal-700 hover:underline"
                                                     >
                                                         {h.position || h.jobTitle || 'Position'}
                                                     </button>
@@ -459,7 +489,14 @@ const WorkforcePage = () => {
                                             ),
                                         },
                                         { key: 'department', label: 'Department', render: (h) => h.department || '—' },
+                                        { key: 'numberOfPositions', label: 'Required' },
+                                        { key: 'filledPositions', label: 'Filled' },
                                         { key: 'remainingPositions', label: 'Remaining' },
+                                        {
+                                            key: 'hiringInProgress',
+                                            label: 'Pipeline',
+                                            render: (h) => (h.hiringInProgress ? 'In progress' : 'Not started'),
+                                        },
                                         { key: 'priority', label: 'Priority', render: (h) => h.priority || '—' },
                                         {
                                             key: 'expectedStartDate',
@@ -482,7 +519,7 @@ const WorkforcePage = () => {
 
                 {/* Gap Analysis */}
                 {activeTab === 'gap' && (
-                    <div className="space-y-4">
+                    <div className="min-w-0 max-w-full space-y-4">
                         <WfPanel
                             title="Gap Analysis"
                     
@@ -499,16 +536,16 @@ const WorkforcePage = () => {
                             bodyClassName="p-0"
                         >
                             {gapAnalysis?.summary && (
-                                <div className="grid grid-cols-1 gap-4 border-b border-slate-100 px-5 py-5 sm:grid-cols-3 sm:px-6 md:px-7">
+                                <div className="grid grid-cols-1 gap-2.5 border-b border-slate-100 px-3 py-3 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5 md:px-7">
                                     <WfKpiCard
                                         title="Total Shortage"
-                                        value={`+${gapAnalysis.summary.totalShortage}`}
+                                        value={formatGapValue(gapAnalysis.summary.totalShortage)}
                                         tone="rose"
                                         valueClass="text-rose-600"
                                     />
                                     <WfKpiCard
                                         title="Total Surplus"
-                                        value={gapAnalysis.summary.totalSurplus}
+                                        value={formatGapValue(gapAnalysis.summary.totalSurplus)}
                                         tone="amber"
                                         valueClass="text-amber-600"
                                     />
@@ -521,7 +558,7 @@ const WorkforcePage = () => {
                                 </div>
                             )}
                             <WfTable
-                                minWidth="720px"
+                                minWidth="780px"
                                 columns={[
                                     {
                                         key: 'department',
@@ -541,8 +578,8 @@ const WorkforcePage = () => {
                                         key: 'gap',
                                         label: 'Gap',
                                         render: (row) => (
-                                            <span className={`font-semibold ${gapTone(row.gap)}`}>
-                                                {row.gap > 0 ? '+' : ''}{row.gap}
+                                            <span className={`font-semibold ${gapToneFromStatus(row.status, row.gap)}`}>
+                                                {formatGapValue(row.gap)}
                                             </span>
                                         ),
                                     },
@@ -564,7 +601,7 @@ const WorkforcePage = () => {
 
                 {/* Reports */}
                 {activeTab === 'reports' && reports && (
-                    <div className="space-y-6">
+                    <div className="min-w-0 max-w-full space-y-4 sm:space-y-6">
                         <WfPanel
                             title="Current vs Required"
                             subtitle="Overall workforce position"
@@ -582,25 +619,24 @@ const WorkforcePage = () => {
                                 </WfButton>
                             }
                         >
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                                <div className="rounded-xl bg-slate-50 p-4 text-center ring-1 ring-slate-100">
+                            <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-4">
+                                <div className="rounded-xl bg-slate-50 p-3 text-center ring-1 ring-slate-100 sm:p-4">
                                     <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Current</p>
-                                    <p className="mt-2 text-2xl font-bold text-slate-900">{reports.currentVsRequired?.currentHeadcount}</p>
+                                    <p className="mt-1.5 text-xl font-bold text-slate-900 sm:mt-2 sm:text-2xl">{reports.currentVsRequired?.currentHeadcount}</p>
                                 </div>
-                                <div className="rounded-xl bg-teal-50 p-4 text-center ring-1 ring-teal-100">
+                                <div className="rounded-xl bg-teal-50 p-3 text-center ring-1 ring-teal-100 sm:p-4">
                                     <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Required</p>
-                                    <p className="mt-2 text-2xl font-bold text-teal-700">{reports.currentVsRequired?.requiredHeadcount}</p>
+                                    <p className="mt-1.5 text-xl font-bold text-teal-700 sm:mt-2 sm:text-2xl">{reports.currentVsRequired?.requiredHeadcount}</p>
                                 </div>
-                                <div className="rounded-xl bg-slate-50 p-4 text-center ring-1 ring-slate-100">
+                                <div className="rounded-xl bg-slate-50 p-3 text-center ring-1 ring-slate-100 sm:p-4">
                                     <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Gap</p>
-                                    <p className={`mt-2 text-2xl font-bold ${gapTone(reports.currentVsRequired?.gap || 0)}`}>
-                                        {reports.currentVsRequired?.gap > 0 ? '+' : ''}
-                                        {reports.currentVsRequired?.gap}
+                                    <p className={`mt-1.5 text-xl font-bold sm:mt-2 sm:text-2xl ${gapToneFromStatus(reports.currentVsRequired?.status, reports.currentVsRequired?.gap)}`}>
+                                        {formatGapValue(reports.currentVsRequired?.gap)}
                                     </p>
                                 </div>
-                                <div className="rounded-xl bg-slate-50 p-4 text-center ring-1 ring-slate-100">
+                                <div className="rounded-xl bg-slate-50 p-3 text-center ring-1 ring-slate-100 sm:p-4">
                                     <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Status</p>
-                                    <div className="mt-2 flex justify-center">
+                                    <div className="mt-1.5 flex justify-center sm:mt-2">
                                         <WfBadge status={reports.currentVsRequired?.status}>
                                             {reports.currentVsRequired?.status}
                                         </WfBadge>
@@ -628,6 +664,7 @@ const WorkforcePage = () => {
                             bodyClassName="p-0 sm:p-0"
                         >
                             <WfTable
+                                minWidth="720px"
                                 columns={[
                                     { key: 'department', label: 'Department' },
                                     { key: 'currentHeadcount', label: 'Current' },
@@ -636,8 +673,8 @@ const WorkforcePage = () => {
                                         key: 'gap',
                                         label: 'Gap',
                                         render: (row) => (
-                                            <span className={gapTone(row.gap)}>
-                                                {row.gap > 0 ? '+' : ''}{row.gap}
+                                            <span className={gapToneFromStatus(row.status, row.gap)}>
+                                                {formatGapValue(row.gap)}
                                             </span>
                                         ),
                                     },
@@ -680,8 +717,8 @@ const WorkforcePage = () => {
                                         key: 'gap',
                                         label: 'Gap',
                                         render: (row) => (
-                                            <span className={gapTone(row.gap)}>
-                                                {row.gap > 0 ? '+' : ''}{row.gap}
+                                            <span className={gapToneFromStatus(row.status, row.gap)}>
+                                                {formatGapValue(row.gap)}
                                             </span>
                                         ),
                                     },
@@ -702,7 +739,7 @@ const WorkforcePage = () => {
 
                 {/* Filters for plans / forecasts */}
                 {(activeTab === 'plans' || activeTab === 'forecasts') && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+                <div className="flex min-w-0 max-w-full flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
                     <div className="relative flex-1">
                         <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
@@ -758,13 +795,16 @@ const WorkforcePage = () => {
                 )}
 
                 {activeTab === 'plans' && (
-                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid min-w-0 max-w-full grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
                         {filteredPlans.map((plan) => {
                             const current = plan.liveCurrentHeadcount ?? plan.currentHeadcount;
-                            const gap = plan.gap != null ? plan.gap : (plan.targetHeadcount - current);
-                            const gapPercent = current > 0 
-                                ? Math.round((gap / current) * 100) 
-                                : 0;
+                            const gapStatus = plan.gapStatus || (
+                                current < plan.targetHeadcount ? 'Shortage'
+                                    : current > plan.targetHeadcount ? 'Surplus' : 'Balanced'
+                            );
+                            const gap = plan.gap != null
+                                ? formatGapValue(plan.gap)
+                                : formatGapValue((plan.targetHeadcount || 0) - (current || 0));
                             const fillRequired = plan.fillTracking?.required || 0;
                             const fillFilled = plan.fillTracking?.filled || 0;
                             const fillPct = fillRequired > 0
@@ -828,13 +868,11 @@ const WorkforcePage = () => {
 
                                         {gap !== 0 && (
                                             <div className={`rounded-xl px-3 py-2 text-center text-sm font-semibold ${
-                                                gap > 0
+                                                gapStatus === 'Shortage'
                                                     ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100'
                                                     : 'bg-amber-50 text-amber-700 ring-1 ring-amber-100'
                                             }`}>
-                                                {gap > 0 ? 'Shortage ' : 'Surplus '}
-                                                {gap > 0 ? '+' : ''}{gap}
-                                                {gapPercent !== 0 && ` (${gapPercent > 0 ? '+' : ''}${gapPercent}%)`}
+                                                {gapStatus} {gap}
                                             </div>
                                         )}
 
@@ -937,6 +975,7 @@ const WorkforcePage = () => {
                 )}
 
                 {activeTab === 'forecasts' && (
+                    <div className="min-w-0 max-w-full">
                     <WfPanel title="Headcount Forecasts" bodyClassName="p-0 sm:p-0">
                         <WfTable
                             minWidth="720px"
@@ -1008,6 +1047,7 @@ const WorkforcePage = () => {
                             }
                         />
                     </WfPanel>
+                    </div>
                 )}
             </div>
 
@@ -1135,7 +1175,7 @@ const WorkforcePage = () => {
                             <WfField
                                 label="Required / Target Headcount"
                                 required
-                                hint={`Gap: ${planGapPreview > 0 ? '+' : ''}${planGapPreview}`}
+                                hint={`Gap: ${planGapPreview} (${planGapStatus})`}
                             >
                                 <input
                                     type="number"

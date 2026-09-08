@@ -61,16 +61,25 @@ export const getHeadcountByDepartmentAndJobTitle = async (organizationId) => {
 };
 
 /**
- * Gap = required - current. Positive = shortage, negative = surplus.
+ * Gap display = |required - current|.
+ * Status from comparison: Current < Required → Shortage, > → Surplus, = → Balanced.
+ * signedGap kept for internal math (required - current).
  */
 export const computeGap = (required, current) => {
     const requiredNum = Number(required) || 0;
     const currentNum = Number(current) || 0;
-    const gap = requiredNum - currentNum;
+    const signedGap = requiredNum - currentNum;
+    const gap = Math.abs(signedGap);
     let status = 'Balanced';
-    if (gap > 0) status = 'Shortage';
-    else if (gap < 0) status = 'Surplus';
-    return { gap, status, required: requiredNum, current: currentNum };
+    if (currentNum < requiredNum) status = 'Shortage';
+    else if (currentNum > requiredNum) status = 'Surplus';
+    return {
+        gap,
+        signedGap,
+        status,
+        required: requiredNum,
+        current: currentNum,
+    };
 };
 
 /**

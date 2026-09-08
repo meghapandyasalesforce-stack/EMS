@@ -19,6 +19,7 @@ import {
     getLiveHeadcountEndpoint,
     getWorkforceDashboard,
     getGapAnalysis,
+    getOpenHiringRequirements,
     createRecruitmentFromHiring,
     updateHiringFill,
     getWorkforceReports
@@ -37,6 +38,9 @@ router.route('/dashboard')
 
 router.route('/gap-analysis')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getGapAnalysis);
+
+router.route('/open-hiring-requirements')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getOpenHiringRequirements);
 
 router.route('/reports')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getWorkforceReports);

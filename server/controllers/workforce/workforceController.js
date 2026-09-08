@@ -558,9 +558,13 @@ export const getWorkforceDashboard = asyncHandler(async (req, res) => {
 
     // Prefer sum of plan targets when plans exist; else planned = current
     const planned = activePlans.length > 0 ? plannedWorkforce : totalEmployees;
-    const workforceGap = planned - totalEmployees;
+    const { gap: workforceGap, status: workforceGapStatus, signedGap: workforceSignedGap } = computeGap(
+        planned,
+        totalEmployees
+    );
 
     let openPositions = 0;
+    let hiringInProgress = 0;
     let upcomingHiring = [];
     const now = new Date();
     const in90Days = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
@@ -572,6 +576,9 @@ export const getWorkforceDashboard = asyncHandler(async (req, res) => {
             const filled = Number(hiring.filledPositions) || 0;
             const remaining = Math.max(required - filled, 0);
             openPositions += remaining;
+            if (hiring.recruitmentJobId || hiring.status === 'In Progress') {
+                hiringInProgress += remaining;
+            }
 
             const start = hiring.expectedStartDate ? new Date(hiring.expectedStartDate) : null;
             if (remaining > 0 && (!start || (start >= now && start <= in90Days) || start <= in90Days)) {
@@ -584,6 +591,8 @@ export const getWorkforceDashboard = asyncHandler(async (req, res) => {
                     numberOfPositions: required,
                     filledPositions: filled,
                     remainingPositions: remaining,
+                    hiringInProgress: Boolean(hiring.recruitmentJobId) || hiring.status === 'In Progress',
+                    recruitmentJobId: hiring.recruitmentJobId || null,
                     priority: hiring.priority,
                     expectedStartDate: hiring.expectedStartDate || null,
                     status: hiring.status
@@ -623,6 +632,8 @@ export const getWorkforceDashboard = asyncHandler(async (req, res) => {
         }
     }
 
+    const remainingHiringNeed = Math.max(openPositions, 0);
+
     res.json({
         success: true,
         data: {
@@ -630,7 +641,11 @@ export const getWorkforceDashboard = asyncHandler(async (req, res) => {
             currentWorkforce: totalEmployees,
             plannedWorkforce: planned,
             workforceGap,
+            workforceGapStatus,
+            workforceSignedGap,
             openPositions,
+            hiringInProgress,
+            remainingHiringNeed,
             upcomingHiringCount: upcomingHiring.length,
             upcomingHiring,
             departmentWise: departmentSummary,
@@ -719,14 +734,74 @@ export const getGapAnalysis = asyncHandler(async (req, res) => {
     rows.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
 
     const summary = {
-        totalShortage: rows.filter((r) => r.gap > 0).reduce((s, r) => s + r.gap, 0),
-        totalSurplus: rows.filter((r) => r.gap < 0).reduce((s, r) => s + Math.abs(r.gap), 0),
-        balanced: rows.filter((r) => r.gap === 0).length
+        totalShortage: rows.filter((r) => r.status === 'Shortage').reduce((s, r) => s + r.gap, 0),
+        totalSurplus: rows.filter((r) => r.status === 'Surplus').reduce((s, r) => s + r.gap, 0),
+        balanced: rows.filter((r) => r.status === 'Balanced').length
     };
 
     res.json({
         success: true,
         data: { groupBy, rows, summary }
+    });
+});
+
+/**
+ * Open workforce hiring requirements available for Recruitment to consume.
+ * Source of truth remains WorkforcePlan.hiringPlan (not duplicated headcount).
+ */
+export const getOpenHiringRequirements = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const query = addOrganizationFilter(req, {});
+
+    const plans = await WorkforcePlan.find({
+        ...query,
+        status: { $in: ['Draft', 'Pending Approval', 'Approved', 'In Progress'] },
+        'hiringPlan.0': { $exists: true },
+    }).lean();
+
+    const rows = [];
+    for (const plan of plans) {
+        const liveCurrent = await getLiveHeadcount(organizationId, {
+            department: plan.department || undefined,
+            jobTitle: plan.jobTitle || undefined,
+        });
+        const { gap, status } = computeGap(plan.targetHeadcount, liveCurrent);
+
+        (plan.hiringPlan || []).forEach((hiring, hiringIndex) => {
+            if (hiring.status === 'Filled' || hiring.status === 'Cancelled') return;
+            const required = Number(hiring.numberOfPositions) || 0;
+            const filled = Number(hiring.filledPositions) || 0;
+            const remaining = Math.max(required - filled, 0);
+            if (remaining <= 0 && hiring.recruitmentJobId) return;
+
+            rows.push({
+                planId: plan._id,
+                planName: plan.planName,
+                hiringIndex,
+                department: hiring.department || plan.department || 'Unassigned',
+                jobTitle: hiring.jobTitle || hiring.position || plan.jobTitle || 'Open Position',
+                position: hiring.position || hiring.jobTitle || plan.jobTitle || 'Open Position',
+                priority: hiring.priority || plan.priority || 'Medium',
+                reason: hiring.reason || plan.reason || '',
+                requiredHeadcount: Number(plan.targetHeadcount) || 0,
+                currentHeadcount: liveCurrent,
+                gap,
+                gapStatus: status,
+                hiringRequired: required,
+                hiredOrFilled: filled,
+                remainingHiringNeed: remaining,
+                hiringInProgress: Boolean(hiring.recruitmentJobId) || hiring.status === 'In Progress',
+                recruitmentJobId: hiring.recruitmentJobId || null,
+                hiringStatus: hiring.status,
+            });
+        });
+    }
+
+    rows.sort((a, b) => b.remainingHiringNeed - a.remainingHiringNeed);
+
+    res.json({
+        success: true,
+        data: rows,
     });
 });
 
@@ -768,6 +843,8 @@ export const createRecruitmentFromHiring = asyncHandler(async (req, res) => {
     const jobPosting = new Recruitment({
         organizationId,
         createdBy,
+        workforcePlanId: plan._id,
+        workforceHiringIndex: index,
         jobTitle: hiring.jobTitle || hiring.position || plan.jobTitle || 'Open Position',
         department: hiring.department || plan.department || 'Administration',
         position: req.body.position || 'Mid-Level',

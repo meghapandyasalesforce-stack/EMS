@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import path from 'path';
 import EmployeeDocumentRequest from '../models/employeeDocumentRequest.model.js';
 import Employee from '../models/employee.model.js';
+import User from '../models/user.model.js';
 import { getOrganizationId } from '../helpers/organizationHelper.js';
 import { buildDocumentS3Key } from '../helpers/documentFilePathHelper.js';
 import { sendDocumentFile } from '../helpers/documentFileStorageHelper.js';
@@ -34,6 +35,107 @@ const sendBinaryDocument = (res, { buffer, downloadName, mimeType }) => {
   res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
   res.setHeader('Content-Length', String(buffer.length));
   return res.end(buffer);
+};
+
+const formatEmployeeName = (employee) => {
+  const name = [employee?.name, employee?.lastName].filter(Boolean).join(' ').trim();
+  return name || 'An employee';
+};
+
+/**
+ * HR / Admin recipients who should see new employee document requests.
+ */
+const getDocumentRequestApproverRecipients = async (organizationId) => {
+  const recipientIds = new Set();
+
+  const admins = await User.find({
+    role: 'admin',
+    organizationId,
+    isActive: true,
+  }).select('_id').lean();
+  admins.forEach((admin) => recipientIds.add(admin._id.toString()));
+
+  const platformHrUsers = await User.find({
+    organizationId,
+    isActive: true,
+    roles: { $in: ['hr_admin', 'hr_executive', 'org_owner'] },
+  }).select('_id').lean();
+  platformHrUsers.forEach((user) => recipientIds.add(user._id.toString()));
+
+  const hrEmployees = await Employee.find({
+    organizationId,
+    status: 'active',
+    $or: [
+      { functionalRoles: { $in: ['hr', 'HR'] } },
+      { department: { $regex: /hr/i } },
+      { jobTitle: { $regex: /hr/i } },
+      { position: { $regex: /hr/i } },
+    ],
+  }).select('_id').lean();
+  hrEmployees.forEach((hr) => recipientIds.add(hr._id.toString()));
+
+  return [...recipientIds];
+};
+
+/**
+ * Notify HR/Admin that an employee submitted a document request.
+ */
+const notifyHrOfNewDocumentRequest = async (request, employee, senderReq) => {
+  try {
+    const recipients = await getDocumentRequestApproverRecipients(request.organizationId);
+    const employeeName = formatEmployeeName(employee);
+    const excludeIds = new Set(
+      [request.employeeId, request.requestedBy, actorId(senderReq)]
+        .filter(Boolean)
+        .map((id) => String(id))
+    );
+
+    const targetRecipients = recipients.filter((userId) => !excludeIds.has(String(userId)));
+    if (targetRecipients.length === 0) {
+      logger.warn('No HR/Admin recipients found for document request notification', {
+        requestId: request._id,
+        organizationId: request.organizationId,
+        recipientCountBeforeExclude: recipients.length,
+      });
+      return;
+    }
+
+    const purposeSuffix = request.purpose ? ` Purpose: ${request.purpose}` : '';
+    const results = await Promise.allSettled(
+      targetRecipients.map((userId) =>
+        sendNotification({
+          userId,
+          organizationId: request.organizationId,
+          title: 'New Document Request',
+          message: `${employeeName} requested a ${request.documentType}.${purposeSuffix}`,
+          type: 'document_request',
+          priority: 'high',
+          metadata: {
+            requestId: String(request._id),
+            documentType: request.documentType,
+            employeeId: String(request.employeeId),
+            employeeName,
+            action: 'requested',
+            link: '/admin/document-management',
+          },
+          senderId: actorId(senderReq),
+          senderType: actorType(senderReq),
+        })
+      )
+    );
+
+    const failed = results.filter((r) => r.status === 'rejected');
+    logger.info('Document request HR notifications dispatched', {
+      requestId: request._id,
+      recipientCount: targetRecipients.length,
+      failedCount: failed.length,
+    });
+  } catch (err) {
+    logger.error('Failed to notify HR of new document request', {
+      error: err.message,
+      requestId: request._id,
+    });
+  }
 };
 
 /**
@@ -69,7 +171,13 @@ const notifyEmployee = async (request, action, senderReq) => {
 
 const isAdmin = (req) => Boolean(req.authContext?.isOrgOwner || req.user?.role === 'admin');
 const isHrManager = (req) => Boolean(req.authContext?.isHrManager);
-const isHrOrAdmin = (req) => isAdmin(req) || isHrManager(req) || req.authContext?.isHrExecutive;
+const isHrExecutive = (req) => Boolean(req.authContext?.isHrExecutive);
+const hasHrFunctionalRole = (req) => {
+  const roles = req.employee?.functionalRoles || [];
+  return roles.some((role) => String(role).toLowerCase() === 'hr');
+};
+const isHrStaff = (req) => isHrManager(req) || isHrExecutive(req) || hasHrFunctionalRole(req);
+const isHrOrAdmin = (req) => isAdmin(req) || isHrStaff(req);
 const actorId = (req) => req.employee?._id || req.user?._id;
 const actorType = (req) => req.employee?._id ? 'Employee' : 'User';
 const isSelf = (req, employeeId) => String(req.employee?._id || '') === String(employeeId || '');
@@ -82,12 +190,14 @@ const resolveApprovalRequirement = (req) => {
 
 const canApproveRequest = (req, request) => {
   if (isAdmin(req)) return true;
-  return request.approvalRequiredFrom === 'hr_or_admin' && isHrManager(req);
+  if (request.approvalRequiredFrom === 'hr_or_admin' && isHrStaff(req)) return true;
+  return false;
 };
 
 const canManageUpload = (req, request) => {
   if (isAdmin(req)) return true;
-  return request.approvalRequiredFrom === 'hr_or_admin' && isHrManager(req);
+  if (request.approvalRequiredFrom === 'hr_or_admin' && isHrStaff(req)) return true;
+  return false;
 };
 
 const buildGeneratedText = (request) => {
@@ -117,6 +227,13 @@ export const createEmployeeDocumentRequest = async (req, res) => {
       requestDetails: req.body.requestDetails || {}, approvalRequiredFrom, status,
       ...(status === 'approved' ? { approvedBy: requester, approvedByType: actorType(req), approvedAt: new Date() } : {}),
     });
+
+    // Notify HR/Admin when an employee raises a request that needs approval
+    if (status === 'pending') {
+      const employee = await Employee.findById(targetEmployeeId).select('name lastName email').lean();
+      await notifyHrOfNewDocumentRequest(request, employee, req);
+    }
+
     res.status(201).json({ success: true, data: request });
   } catch (error) { res.status(500).json({ success: false, message: 'Failed to create document request', error: error.message }); }
 };
@@ -137,7 +254,11 @@ export const listApprovalEmployeeDocumentRequests = async (req, res) => {
     if (!organizationId || !isHrOrAdmin(req)) return res.status(403).json({ success: false, message: 'Access denied' });
     const filter = { organizationId };
     if (!isAdmin(req)) filter.approvalRequiredFrom = 'hr_or_admin';
-    const data = await EmployeeDocumentRequest.find(filter).sort({ createdAt: -1 }).lean();
+    const data = await EmployeeDocumentRequest.find(filter)
+      .populate('employeeId', 'name lastName email employeeId')
+      .populate('requestedBy', 'name lastName email')
+      .sort({ createdAt: -1 })
+      .lean();
     res.json({ success: true, data });
   } catch (error) { res.status(500).json({ success: false, message: 'Failed to load approval requests', error: error.message }); }
 };

@@ -77,18 +77,18 @@ export const WfKpiCard = ({
     const t = tones[tone] || tones.teal;
 
     return (
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-            <div className="flex items-start justify-between gap-3">
+        <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm transition hover:shadow-md sm:rounded-xl sm:p-4 xl:rounded-2xl xl:p-5">
+            <div className="flex items-start justify-between gap-2 sm:gap-3">
                 <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{title}</p>
-                    <p className={`mt-2 text-3xl font-bold tracking-tight text-slate-900 ${valueClass}`}>{value}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-[11px]">{title}</p>
+                    <p className={`mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:mt-1.5 sm:text-2xl xl:mt-2 xl:text-3xl ${valueClass}`}>{value}</p>
                     {subtitle != null && subtitle !== '' && (
-                        <p className="mt-1.5 text-xs text-slate-500">{subtitle}</p>
+                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">{subtitle}</p>
                     )}
                 </div>
                 {Icon && (
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.bg} ring-1 ${t.ring}`}>
-                        <Icon className={`h-5 w-5 ${t.icon}`} />
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl xl:h-11 xl:w-11 ${t.bg} ring-1 ${t.ring}`}>
+                        <Icon className={`h-4 w-4 sm:h-[18px] sm:w-[18px] xl:h-5 xl:w-5 ${t.icon}`} />
                     </div>
                 )}
             </div>
@@ -96,34 +96,34 @@ export const WfKpiCard = ({
     );
 };
 
-export const WfPanel = ({ title, subtitle, action, children, className = '', bodyClassName = 'p-5 sm:p-6' }) => (
-    <section className={`overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm ${className}`}>
+export const WfPanel = ({ title, subtitle, action, children, className = '', bodyClassName = 'p-4 sm:p-6' }) => (
+    <section className={`min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm sm:rounded-2xl ${className}`}>
         {(title || action) && (
-            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 md:px-7">
+            <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-6 sm:py-4">
                 <div className="min-w-0">
-                    {title && <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{title}</h2>}
-                    {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+                    {title && <h2 className="text-sm font-semibold text-slate-900 sm:text-lg">{title}</h2>}
+                    {subtitle && <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">{subtitle}</p>}
                 </div>
                 {action && <div className="shrink-0">{action}</div>}
             </div>
         )}
-        <div className={bodyClassName}>{children}</div>
+        <div className={`min-w-0 max-w-full ${bodyClassName}`}>{children}</div>
     </section>
 );
 
 export const WfPageHeader = ({ title, subtitle, actions, eyebrow }) => (
-    <div className="relative overflow-hidden rounded-2xl border border-teal-100/80 bg-gradient-to-br from-teal-50 via-white to-slate-50 p-5 sm:p-6 shadow-sm">
+    <div className="relative overflow-hidden rounded-xl border border-teal-100/80 bg-gradient-to-br from-teal-50 via-white to-slate-50 p-4 shadow-sm sm:rounded-2xl sm:p-4 lg:p-5 xl:p-6">
         <div className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full bg-teal-200/30 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-10 left-1/3 h-28 w-28 rounded-full bg-emerald-200/20 blur-2xl" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="min-w-0">
                 {eyebrow && (
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-700">
+                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-700 sm:mb-1 sm:text-[11px]">
                         {eyebrow}
                     </p>
                 )}
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
-                {subtitle && <p className="mt-1 max-w-2xl text-sm text-slate-600 sm:text-base">{subtitle}</p>}
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl xl:text-3xl">{title}</h1>
+                {subtitle && <p className="mt-0.5 max-w-2xl text-xs text-slate-600 sm:mt-1 sm:text-sm xl:text-base">{subtitle}</p>}
             </div>
             {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
@@ -170,8 +170,8 @@ export const WfButton = ({
 };
 
 export const WfTabs = ({ tabs, activeId, onChange }) => (
-    <div className="rounded-2xl border border-slate-100 bg-white p-1.5 shadow-sm">
-        <div className="hrms-tabs-scroll flex gap-1">
+    <div className="min-w-0 rounded-xl border border-slate-100 bg-white p-1 shadow-sm sm:rounded-xl sm:p-1 lg:rounded-2xl lg:p-1.5">
+        <div className="wf-tabs-bar flex w-full gap-1 overflow-x-auto sm:overflow-x-visible">
             {tabs.map((tab) => {
                 const active = activeId === tab.id;
                 const Icon = tab.icon;
@@ -180,17 +180,17 @@ export const WfTabs = ({ tabs, activeId, onChange }) => (
                         key={tab.id}
                         type="button"
                         onClick={() => onChange(tab.id)}
-                        className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                        className={`flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition sm:min-w-0 sm:flex-1 sm:shrink sm:gap-2 sm:rounded-xl sm:px-2 sm:py-2 sm:text-sm lg:px-3 lg:py-2.5 ${
                             active
                                 ? 'bg-teal-600 text-white shadow-sm shadow-teal-600/25'
                                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                         }`}
                     >
-                        {Icon && <Icon className={`h-3.5 w-3.5 ${active ? 'opacity-95' : 'opacity-70'}`} />}
-                        <span className="whitespace-nowrap">{tab.label}</span>
+                        {Icon && <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'opacity-95' : 'opacity-70'}`} />}
+                        <span className="truncate whitespace-nowrap">{tab.label}</span>
                         {tab.count != null && (
                             <span
-                                className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                                     active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
                                 }`}
                             >
@@ -205,14 +205,14 @@ export const WfTabs = ({ tabs, activeId, onChange }) => (
 );
 
 export const WfTable = ({ columns, rows, empty, footer, minWidth = '640px' }) => (
-    <div className="w-full overflow-x-auto">
-        <table className="w-full divide-y divide-slate-100" style={{ minWidth }}>
+    <div className="wf-table-scroll" style={{ ['--wf-table-min']: minWidth }}>
+        <table className="wf-table w-full divide-y divide-slate-100">
             <thead>
                 <tr className="bg-slate-50/80">
                     {columns.map((col) => (
                         <th
                             key={col.key}
-                            className="px-6 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 sm:px-7"
+                            className="whitespace-nowrap px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:px-4 sm:py-3 sm:text-[11px] lg:px-5 xl:px-6"
                         >
                             {col.label}
                         </th>
@@ -222,7 +222,7 @@ export const WfTable = ({ columns, rows, empty, footer, minWidth = '640px' }) =>
             <tbody className="divide-y divide-slate-100 bg-white">
                 {rows.length === 0 ? (
                     <tr>
-                        <td colSpan={columns.length} className="px-6 py-12 text-center text-sm text-slate-500 sm:px-7">
+                        <td colSpan={columns.length} className="px-3 py-8 text-center text-sm text-slate-500 sm:px-4 sm:py-10 lg:px-5 xl:px-6">
                             {empty || 'No data available'}
                         </td>
                     </tr>
@@ -232,7 +232,7 @@ export const WfTable = ({ columns, rows, empty, footer, minWidth = '640px' }) =>
                             {columns.map((col) => (
                                 <td
                                     key={col.key}
-                                    className="px-6 py-3.5 text-sm text-slate-700 sm:px-7"
+                                    className="whitespace-nowrap px-3 py-2 text-sm text-slate-700 sm:px-4 sm:py-3 lg:px-5 xl:px-6"
                                 >
                                     {col.render ? col.render(row, idx) : row[col.key]}
                                 </td>
@@ -243,7 +243,7 @@ export const WfTable = ({ columns, rows, empty, footer, minWidth = '640px' }) =>
             </tbody>
         </table>
         {footer && (
-            <div className="border-t border-slate-100 px-6 py-3 text-xs text-slate-500 sm:px-7">{footer}</div>
+            <div className="border-t border-slate-100 px-3 py-2.5 text-xs text-slate-500 sm:px-4 sm:py-3 lg:px-5 xl:px-6">{footer}</div>
         )}
     </div>
 );
@@ -306,8 +306,23 @@ export const wfInputClass =
 export const wfInputReadonlyClass =
     'w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none';
 
-export const gapTone = (gap) => {
+/** Tone from gap status (preferred) or signed/absolute gap value. */
+export const gapTone = (gapOrStatus) => {
+    if (gapOrStatus === 'Shortage') return 'text-rose-600';
+    if (gapOrStatus === 'Surplus') return 'text-amber-600';
+    if (gapOrStatus === 'Balanced') return 'text-emerald-600';
+    const gap = Number(gapOrStatus) || 0;
     if (gap > 0) return 'text-rose-600';
     if (gap < 0) return 'text-amber-600';
     return 'text-emerald-600';
+};
+
+/** Absolute gap for display (never negative). */
+export const formatGapValue = (gap) => Math.abs(Number(gap) || 0);
+
+export const gapToneFromStatus = (status, signedGap) => {
+    if (status === 'Shortage' || status === 'Surplus' || status === 'Balanced') {
+        return gapTone(status);
+    }
+    return gapTone(signedGap);
 };

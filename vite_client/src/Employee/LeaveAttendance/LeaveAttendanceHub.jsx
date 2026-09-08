@@ -929,8 +929,8 @@ const LeaveAttendanceHub = () => {
           </div>
         </div>
 
-        <section className="hrms-mobile-full min-w-0 rounded-2xl border border-[#E2E8F0] bg-[#FFFFFF] p-3 shadow-sm md:p-4">
-          <div className="hrms-tabs-scroll mb-4">
+        <section className="leave-attendance-hub hrms-mobile-full min-w-0 rounded-2xl border border-[#E2E8F0] bg-[#FFFFFF] p-3 shadow-sm md:p-4">
+          <div className="la-panel-tabs mb-4 flex w-full gap-2 overflow-x-auto sm:flex-wrap sm:overflow-x-visible">
             {[
               { id: 'attendance-log', label: 'Attendance log' },
               { id: 'leave-summary', label: 'Leave summary' },
@@ -940,7 +940,7 @@ const LeaveAttendanceHub = () => {
               <button
                 key={tab.id}
                 onClick={() => setPanelTab(tab.id)}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                className={`inline-flex shrink-0 items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-semibold transition sm:min-w-0 sm:flex-1 sm:shrink ${
                   panelTab === tab.id
                     ? 'border-[#20C997] bg-[#ECFDF5] text-[#0F766E]'
                     : 'border-[#CBD5E1] text-[#475569] hover:bg-[#F8FAFC]'

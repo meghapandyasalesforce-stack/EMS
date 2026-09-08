@@ -31,8 +31,12 @@ import {
     selectApplicableLeavePolicy,
 } from '../helpers/leavePolicyApplicabilityHelper.js';
 
-/** Rolling window: employee may apply leave from today through today + N calendar days (inclusive). */
-const FUTURE_LEAVE_APPLICATION_WINDOW_DAYS = 5;
+/**
+ * Submission window is based on the selected leave start date (not a rolling today range).
+ * Leave Date + 4 calendar days = last valid submission day (5 days inclusive through 23:59).
+ * Example: leave on 8 Sep → can submit on 8–12 Sep; from 13 Sep the application is rejected.
+ */
+const LEAVE_APPLICATION_WINDOW_DAYS = 5;
 
 class LeaveValidationService {
     /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
@@ -60,30 +64,39 @@ class LeaveValidationService {
     }
 
     /**
-     * Employees may only apply for leave from today up to the next N calendar days
-     * (full-day and half-day). Example: today = 5th → allowed through 10th.
+     * Leave start must be today or in the past.
+     * Application day must be on or before (leave start + 4 calendar days).
+     * End date is not constrained by this window (must still be on/after start elsewhere).
      */
-    checkFutureApplicationWindow(startDate, endDate, maxDaysAhead = FUTURE_LEAVE_APPLICATION_WINDOW_DAYS) {
-        const today = this.getTodayLocal();
-        const maxDate = new Date(today);
-        maxDate.setDate(maxDate.getDate() + maxDaysAhead);
+    checkLeaveApplicationWindow(startDate, endDate, applicationDate = this.getTodayLocal()) {
+        const today = applicationDate;
 
-        if (startDate < today) {
+        if (startDate > today) {
             return {
                 allowed: false,
-                reason: 'Leave cannot start before today.',
+                reason: 'Leave start date cannot be in the future.',
             };
         }
 
-        if (startDate > maxDate || endDate > maxDate) {
-            const maxLabel = maxDate.toLocaleDateString('en-GB', {
+        const lastSubmissionDate = new Date(startDate);
+        lastSubmissionDate.setDate(
+            lastSubmissionDate.getDate() + (LEAVE_APPLICATION_WINDOW_DAYS - 1)
+        );
+
+        if (today > lastSubmissionDate) {
+            const leaveLabel = startDate.toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+            });
+            const lastLabel = lastSubmissionDate.toLocaleDateString('en-GB', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric',
             });
             return {
                 allowed: false,
-                reason: `Leave can only be applied from today up to ${maxDaysAhead} days ahead (until ${maxLabel}).`,
+                reason: `Leave for ${leaveLabel} can only be submitted until ${lastLabel} (within ${LEAVE_APPLICATION_WINDOW_DAYS} days of the leave date).`,
             };
         }
 
@@ -138,10 +151,10 @@ class LeaveValidationService {
                 }
             }
 
-            // Future application window (today through today + 5 calendar days; full-day and half-day)
-            const futureWindowCheck = this.checkFutureApplicationWindow(startDate, endDate);
-            if (!futureWindowCheck.allowed) {
-                errors.push(futureWindowCheck.reason);
+            // Submission window: leave start + 4 calendar days from that leave date
+            const applicationWindowCheck = this.checkLeaveApplicationWindow(startDate, endDate);
+            if (!applicationWindowCheck.allowed) {
+                errors.push(applicationWindowCheck.reason);
             }
 
             // 1. Check notice period restrictions

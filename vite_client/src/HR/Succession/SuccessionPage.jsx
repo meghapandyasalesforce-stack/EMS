@@ -523,7 +523,16 @@ const SuccessionPage = () => {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Incumbent</label>
                                 <select
                                     value={planFormData.currentIncumbent}
-                                    onChange={(e) => setPlanFormData({ ...planFormData, currentIncumbent: e.target.value })}
+                                    onChange={(e) => {
+                                        const currentIncumbent = e.target.value;
+                                        const emp = employees.find((x) => String(x._id) === String(currentIncumbent));
+                                        setPlanFormData({
+                                            ...planFormData,
+                                            currentIncumbent,
+                                            department: emp?.department || planFormData.department,
+                                            positionName: planFormData.positionName || emp?.jobTitle || '',
+                                        });
+                                    }}
                                     className="w-full p-3 border rounded-lg"
                                 >
                                     <option value="">Select Employee</option>
@@ -620,7 +629,21 @@ const SuccessionPage = () => {
                                 </label>
                                 <select
                                     value={talentFormData.employeeId}
-                                    onChange={(e) => setTalentFormData({ ...talentFormData, employeeId: e.target.value })}
+                                    onChange={(e) => {
+                                        const employeeId = e.target.value;
+                                        const emp = employees.find((x) => String(x._id) === String(employeeId));
+                                        setTalentFormData({
+                                            ...talentFormData,
+                                            employeeId,
+                                            currentRole: emp
+                                                ? [emp.jobTitle, emp.department].filter(Boolean).join(' · ') || talentFormData.currentRole
+                                                : talentFormData.currentRole,
+                                            performanceRating:
+                                                emp?.performanceScore != null
+                                                    ? Number(emp.performanceScore) || talentFormData.performanceRating
+                                                    : talentFormData.performanceRating,
+                                        });
+                                    }}
                                     className="w-full p-3 border rounded-lg"
                                     required
                                 >

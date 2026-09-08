@@ -20,6 +20,8 @@ import {
     WfField,
     wfInputClass,
     gapTone,
+    formatGapValue,
+    gapToneFromStatus,
     formatPlanStatus,
 } from './components/workforceUi';
 
@@ -252,13 +254,14 @@ const WorkforceDetailPage = () => {
         return null;
     }
 
-    const gap = (plan.gap != null)
-        ? plan.gap
-        : plan.targetHeadcount - (plan.liveCurrentHeadcount ?? plan.currentHeadcount);
     const currentHeadcount = plan.liveCurrentHeadcount ?? plan.currentHeadcount;
-    const gapPercent = currentHeadcount > 0
-        ? Math.round((gap / currentHeadcount) * 100)
-        : 0;
+    const gapStatus = plan.gapStatus || (
+        currentHeadcount < plan.targetHeadcount ? 'Shortage'
+            : currentHeadcount > plan.targetHeadcount ? 'Surplus' : 'Balanced'
+    );
+    const gap = plan.gap != null
+        ? formatGapValue(plan.gap)
+        : formatGapValue(plan.targetHeadcount - currentHeadcount);
     const totalHiringBudget = plan.hiringPlan?.reduce((sum, h) => sum + (h.budget || 0), 0) || 0;
     const filledPositions = plan.fillTracking?.filled
         ?? plan.hiringPlan?.reduce((sum, h) => sum + (h.filledPositions || 0), 0)
@@ -365,9 +368,9 @@ const WorkforceDetailPage = () => {
     );
 
     return (
-        <div className="min-h-screen transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
-            <div className="page-shell">
-            <div className="page-shell-inner hrms-stack">
+        <div className="wf-ui min-h-screen min-w-0 overflow-x-hidden transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
+            <div className="page-shell min-w-0">
+            <div className="page-shell-inner hrms-stack min-w-0">
                 <WfButton
                     variant="ghost"
                     size="sm"
@@ -426,14 +429,11 @@ const WorkforceDetailPage = () => {
 
                             {gap !== 0 && (
                                 <div className={`rounded-xl px-4 py-3 text-center text-sm font-semibold ${
-                                    gap > 0
+                                    gapStatus === 'Shortage'
                                         ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100'
                                         : 'bg-amber-50 text-amber-700 ring-1 ring-amber-100'
                                 }`}>
-                                    {gap > 0 ? 'Shortage ' : 'Surplus '}
-                                    {gap > 0 ? '+' : ''}{gap}
-                                    {gapPercent !== 0 && ` (${gapPercent > 0 ? '+' : ''}${gapPercent}%)`}
-                                    {plan.gapStatus && ` · ${plan.gapStatus}`}
+                                    {gapStatus} {gap}
                                 </div>
                             )}
 
@@ -593,13 +593,20 @@ const WorkforceDetailPage = () => {
                                                         disabled={updatingFillIndex === index}
                                                     />
                                                     {position.recruitmentJobId ? (
-                                                        <WfButton
-                                                            variant="soft"
-                                                            size="sm"
-                                                            onClick={() => navigate(`/recruitment/jobs/${position.recruitmentJobId}`)}
-                                                        >
-                                                            <FaLink /> View Job
-                                                        </WfButton>
+                                                        <>
+                                                            {position.recruitmentStatus && (
+                                                                <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
+                                                                    Job: {position.recruitmentStatus}
+                                                                </span>
+                                                            )}
+                                                            <WfButton
+                                                                variant="soft"
+                                                                size="sm"
+                                                                onClick={() => navigate(`/recruitment/jobs/${position.recruitmentJobId}`)}
+                                                            >
+                                                                <FaLink /> View Job
+                                                            </WfButton>
+                                                        </>
                                                     ) : position.status !== 'Cancelled' && position.status !== 'Filled' ? (
                                                         <WfButton
                                                             size="sm"
@@ -724,18 +731,18 @@ const WorkforceDetailPage = () => {
 
                         {gap !== 0 && (
                             <div className={`rounded-2xl border p-5 shadow-sm ${
-                                gap > 0
+                                gapStatus === 'Shortage'
                                     ? 'border-rose-100 bg-rose-50/60'
                                     : 'border-amber-100 bg-amber-50/60'
                             }`}>
                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                                     Workforce Gap
                                 </p>
-                                <p className={`mt-1 text-3xl font-bold ${gapTone(gap)}`}>
-                                    {gap > 0 ? '+' : ''}{gap}
+                                <p className={`mt-1 text-3xl font-bold ${gapToneFromStatus(gapStatus, gap)}`}>
+                                    {gap}
                                 </p>
                                 <p className="mt-1 text-sm text-slate-600">
-                                    {gap > 0
+                                    {gapStatus === 'Shortage'
                                         ? 'Additional headcount needed to reach target'
                                         : 'Current headcount exceeds planned target'}
                                 </p>
