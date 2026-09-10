@@ -311,13 +311,12 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
     <div className="space-y-5">
       {/* Header — HR/Admin mode */}
       {isApproval && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Employee Document Requests</h2>
-            <p className="text-xs text-slate-500">
-              Incoming requests from employees. Open Pending to review new requests.
-            </p>
-          </div>
+        <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#20C997]">Approvals</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-900">Employee Document Requests</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Incoming requests from employees. Open Pending to review new requests.
+          </p>
         </div>
       )}
 
@@ -325,34 +324,44 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
       {(!isApproval || isAdmin) && (
         <div>
           {!showForm ? (
-            <button
-              onClick={() => setShowForm(true)}
-              className="rounded-lg bg-[#20C997] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1bae83]"
-            >
-              + New Request
-            </button>
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Raise a request</h3>
+                <p className="mt-0.5 text-xs text-slate-500">Ask HR for an official document with purpose and format details.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="shrink-0 rounded-xl bg-[#20C997] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1bae83]"
+              >
+                + New Request
+              </button>
+            </div>
           ) : (
-            <form onSubmit={submitRequest} className="rounded-xl border border-slate-200 bg-white p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">New Document Request</h3>
-                <button type="button" onClick={() => setShowForm(false)} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+            <form onSubmit={submitRequest} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#20C997]">New request</p>
+                  <h3 className="mt-0.5 text-sm font-semibold text-slate-800">Document Request</h3>
+                </div>
+                <button type="button" onClick={() => setShowForm(false)} className="text-xs font-medium text-slate-400 hover:text-slate-600">Cancel</button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-slate-500">Document Type</label>
-                  <select value={form.documentType} onChange={(e) => update('documentType', e.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none">
+                  <select value={form.documentType} onChange={(e) => update('documentType', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#20C997]/15">
                     {DOCUMENT_TYPES.map(x => <option key={x}>{x}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-slate-500">Country</label>
-                  <select value={form.country} onChange={(e) => update('country', e.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none">
+                  <select value={form.country} onChange={(e) => update('country', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#20C997]/15">
                     {COUNTRIES.map(x => <option key={x}>{x}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-slate-500">Format</label>
-                  <select value={form.documentFormat} onChange={(e) => update('documentFormat', e.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none">
+                  <select value={form.documentFormat} onChange={(e) => update('documentFormat', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#20C997]/15">
                     {FORMATS.map(x => <option key={x}>{x}</option>)}
                   </select>
                 </div>
@@ -362,16 +371,16 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
                     value={form.purpose}
                     onChange={(e) => update('purpose', e.target.value)}
                     placeholder="Why do you need this document?"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm focus:border-[#20C997] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#20C997]/15"
                     required
                   />
                 </div>
               </div>
-              <div className="mt-4 flex gap-2">
-                <button type="submit" disabled={submitting} className="rounded-lg bg-[#20C997] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1bae83] disabled:opacity-50">
+              <div className="mt-4 flex gap-2 border-t border-slate-100 pt-4">
+                <button type="submit" disabled={submitting} className="rounded-xl bg-[#20C997] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1bae83] disabled:opacity-50">
                   {submitting ? 'Submitting...' : 'Submit Request'}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                <button type="button" onClick={() => setShowForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">
                   Cancel
                 </button>
               </div>
@@ -381,8 +390,9 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
       )}
 
       {/* Filter Pills */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
         <button
+          type="button"
           onClick={() => setStatusFilter('all')}
           className={`rounded-full px-3 py-1 text-xs font-medium transition ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
         >
@@ -393,6 +403,7 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
           if (count === 0) return null;
           return (
             <button
+              type="button"
               key={key}
               onClick={() => setStatusFilter(key)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${statusFilter === key ? 'bg-slate-900 text-white' : `${cfg.bg} ${cfg.text} hover:opacity-80`}`}
@@ -405,12 +416,12 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
 
       {/* Request List */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-14">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-white py-14 shadow-sm">
           <div className="h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-[#20C997]" />
           <p className="mt-3 text-xs text-slate-400">Loading requests...</p>
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
           <p className="text-sm text-slate-500">
             {items.length === 0
               ? (isApproval ? 'No employee document requests yet.' : 'No document requests yet.')
@@ -429,7 +440,7 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
       ) : (
         <div className="space-y-2">
           {filteredItems.map((item) => (
-            <div key={item._id} className="rounded-xl border border-slate-100 bg-white p-4 transition hover:shadow-sm">
+            <div key={item._id} className="rounded-2xl border border-slate-200/80 bg-white p-4 transition hover:border-[#20C997]/20 hover:shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {/* Left: Info */}
                 <div className="min-w-0 flex-1">

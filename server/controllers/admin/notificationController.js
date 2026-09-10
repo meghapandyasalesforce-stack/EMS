@@ -12,8 +12,23 @@ import Notification from "../../models/notification.model.js";
 import User from "../../models/user.model.js";
 import Employee from "../../models/employee.model.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import logger from "../../helpers/logger.js";
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError, sendUnauthorized } from "../../helpers/responseHelper.js";
+
+/** Mix ObjectId + string forms so recipient / hiddenBy queries match either storage style. */
+const toQueryIdVariants = (ids = []) => {
+  const variants = [];
+  for (const id of ids) {
+    if (!id) continue;
+    const str = id.toString();
+    variants.push(str);
+    if (mongoose.Types.ObjectId.isValid(str)) {
+      variants.push(new mongoose.Types.ObjectId(str));
+    }
+  }
+  return variants;
+};
 
 /** Resolve all IDs that may own notifications for the current session (User and/or Employee). */
 const resolveNotificationRecipientIds = async (req) => {
@@ -666,13 +681,13 @@ export const deleteNotification = async (req, res) => {
 
     const organizationId = await resolveOrganizationId(req);
     const { primaryId, userType } = resolveActorIdentity(req);
+    const recipientIdVariants = toQueryIdVariants(recipientIds);
 
     const query = {
       _id: notificationId,
       $or: [
-        { recipient: { $in: recipientIds }, isBroadcast: { $ne: true } },
+        { recipient: { $in: recipientIdVariants }, isBroadcast: { $ne: true } },
         { isBroadcast: true },
-        { sender: { $in: recipientIds } },
       ],
     };
     if (organizationId) query.organizationId = organizationId;
@@ -703,9 +718,9 @@ export const deleteNotification = async (req, res) => {
       return sendSuccess(res, null, "Notification deleted successfully");
     }
 
+    // Access already verified above; delete by id so string/ObjectId recipient quirks can't block it
     const deleted = await Notification.findOneAndDelete({
-      _id: notificationId,
-      recipient: { $in: recipientIds },
+      _id: notification._id,
       isBroadcast: { $ne: true },
     });
 
@@ -717,6 +732,57 @@ export const deleteNotification = async (req, res) => {
   } catch (error) {
     logger.error('Error deleting notification', { error: error.message, stack: error.stack });
     return sendInternalError(res, 'Failed to delete notification', error);
+  }
+};
+
+// Delete / hide all notifications visible to the current user
+export const deleteAllNotifications = async (req, res) => {
+  try {
+    const recipientIds = await resolveNotificationRecipientIds(req);
+    if (!recipientIds.length) {
+      return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
+    }
+
+    const organizationId = await resolveOrganizationId(req);
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const { primaryId, userType } = resolveActorIdentity(req);
+    const recipientIdVariants = toQueryIdVariants(recipientIds);
+
+    const personalResult = await Notification.deleteMany({
+      organizationId,
+      recipient: { $in: recipientIdVariants },
+      isBroadcast: { $ne: true },
+    });
+
+    const hideReceipt = {
+      userId: primaryId || recipientIds[0],
+      userType,
+      hiddenAt: new Date(),
+    };
+
+    const broadcastResult = await Notification.updateMany(
+      {
+        organizationId,
+        isBroadcast: true,
+        'hiddenBy.userId': { $nin: recipientIdVariants },
+      },
+      { $push: { hiddenBy: hideReceipt } }
+    );
+
+    return sendSuccess(
+      res,
+      {
+        deletedPersonal: personalResult.deletedCount || 0,
+        hiddenBroadcasts: broadcastResult.modifiedCount || 0,
+      },
+      'All notifications deleted successfully'
+    );
+  } catch (error) {
+    logger.error('Error deleting all notifications', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to delete all notifications', error);
   }
 };
 

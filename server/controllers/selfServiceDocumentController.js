@@ -10,7 +10,9 @@ import DocumentTemplate from '../models/documentTemplate.model.js';
 import Employee from '../models/employee.model.js';
 import Organization from '../models/organization.model.js';
 import { getOrganizationId } from '../helpers/organizationHelper.js';
+import { getDocumentModeSettings } from '../helpers/documentModeSettings.js';
 import { generateDocumentPdf, generatePreviewHtml, buildPlaceholderValues } from '../helpers/documentPdfGenerator.js';
+import { isSignatureOrStampPlaceholder } from '../helpers/templateFieldDetector.js';
 import logger from '../helpers/logger.js';
 import fs from 'fs';
 import path from 'path';
@@ -83,11 +85,15 @@ async function validateTemplateAccess(template, employee) {
 }
 
 /**
- * Validate dynamic field values against template requirements
+ * Validate dynamic field values against template requirements.
+ * Signature/stamp placeholders are filled from template Signature settings — never required from the employee.
  */
 function validateDynamicFields(template, dynamicFieldValues) {
   const errors = [];
   for (const field of (template.dynamicFields || [])) {
+    if (isSignatureOrStampPlaceholder(field.key) || isSignatureOrStampPlaceholder(field.label)) {
+      continue;
+    }
     if (field.required && (!dynamicFieldValues[field.key] || !String(dynamicFieldValues[field.key]).trim())) {
       errors.push(`${field.label || field.key} is required`);
     }
@@ -133,6 +139,11 @@ export const previewDocument = async (req, res) => {
     const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
     const employeeId = req.employee?._id;
     if (!organizationId || !employeeId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const mode = await getDocumentModeSettings(organizationId);
+    if (!mode.enableSelfServiceDocuments) {
+      return res.status(403).json({ success: false, message: 'Self-service documents are disabled for this organization' });
+    }
 
     const { templateId, dynamicFieldValues } = req.body;
     if (!templateId) return res.status(400).json({ success: false, message: 'templateId is required' });
@@ -212,6 +223,11 @@ export const generateDocument = async (req, res) => {
     const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
     const employeeId = req.employee?._id;
     if (!organizationId || !employeeId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const mode = await getDocumentModeSettings(organizationId);
+    if (!mode.enableSelfServiceDocuments) {
+      return res.status(403).json({ success: false, message: 'Self-service documents are disabled for this organization' });
+    }
 
     const { templateId, dynamicFieldValues } = req.body;
     if (!templateId) return res.status(400).json({ success: false, message: 'templateId is required' });

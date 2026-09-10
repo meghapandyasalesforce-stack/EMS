@@ -3,7 +3,9 @@ import {
     getBenefitPlans,
     getBenefitPlan,
     enrollInBenefit,
-    getEmployeeBenefits
+    getEmployeeBenefits,
+    cancelOwnEnrollment,
+    updateOwnEnrollmentDependents
 } from '../../controllers/benefits/benefitsController.js';
 import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
@@ -24,5 +26,10 @@ router.route('/benefits/enroll')
 router.route('/benefits')
     .get(isAuthenticatedBoth, readLimiter, getEmployeeBenefits);
 
-export default router;
+router.route('/benefits/:id/cancel')
+    .put(isAuthenticatedBoth, writeLimiter, cancelOwnEnrollment);
 
+router.route('/benefits/:id/dependents')
+    .put(isAuthenticatedBoth, writeLimiter, updateOwnEnrollmentDependents);
+
+export default router;

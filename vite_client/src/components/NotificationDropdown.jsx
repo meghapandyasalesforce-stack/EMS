@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { FaBell, FaTimes, FaCheck, FaTrash } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { io } from 'socket.io-client';
 import { getTokenFromCookie } from '../utils/authHelper';
@@ -14,6 +14,7 @@ import {
     markOneNotificationRead,
     markAllNotificationsRead,
     deleteNotificationById,
+    deleteAllNotifications,
     receiveSocketNotification
 } from '../context/notificationSlice';
 
@@ -53,9 +54,24 @@ const NotificationDropdown = () => {
     const buttonRef = useRef(null);
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
+    const location = useLocation();
     const authUser = useSelector((state) => state?.auth?.user);
     const employeeUser = useSelector((state) => state?.employeeDetails?.employee);
     const sessionUser = authUser || employeeUser;
+
+    // Prevent stuck notification backdrop from blocking navbar after navigation
+    useEffect(() => {
+        setIsOpen(false);
+    }, [location.pathname]);
+
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') setIsOpen(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isOpen]);
 
     const announcementCutoff = useMemo(
         () => getAnnouncementAudienceCutoff(employeeUser, authUser),
@@ -170,15 +186,15 @@ const NotificationDropdown = () => {
                 const spacing = 8;
                 const dropdownWidth = Math.min(320, viewportWidth - spacing * 2);
 
-                // Horizontal: prefer under/near button, never overflow viewport
-                let left = buttonRect.right + spacing;
+                // Keep panel to the right of the desktop sidebar so it never steals nav clicks
+                const sidebarOffset =
+                    window.matchMedia('(min-width: 1024px)').matches ? 256 + spacing : spacing;
+
+                // Horizontal: prefer just right of the bell; never cover the sidebar
+                let left = Math.max(buttonRect.right + spacing, sidebarOffset);
                 if (left + dropdownWidth > viewportWidth - spacing) {
-                    left = Math.max(spacing, buttonRect.right - dropdownWidth);
+                    left = Math.max(sidebarOffset, viewportWidth - dropdownWidth - spacing);
                 }
-                if (left + dropdownWidth > viewportWidth - spacing) {
-                    left = Math.max(spacing, viewportWidth - dropdownWidth - spacing);
-                }
-                if (left < spacing) left = spacing;
 
                 // Vertical: prefer below button, keep within viewport
                 const spaceBelow = viewportHeight - buttonRect.bottom - spacing;
@@ -206,7 +222,7 @@ const NotificationDropdown = () => {
         try {
             await dispatch(markOneNotificationRead(notificationId)).unwrap();
         } catch (error) {
-            // Silently handle error
+            toast.error(typeof error === 'string' ? error : 'Failed to mark as read');
         }
     };
 
@@ -215,7 +231,7 @@ const NotificationDropdown = () => {
             await dispatch(markAllNotificationsRead()).unwrap();
             toast.success('All notifications marked as read');
         } catch (error) {
-            // Silently handle error
+            toast.error(typeof error === 'string' ? error : 'Failed to mark all as read');
         }
     };
 
@@ -223,7 +239,19 @@ const NotificationDropdown = () => {
         try {
             await dispatch(deleteNotificationById(notificationId)).unwrap();
         } catch (error) {
-            // Silently handle error
+            toast.error(typeof error === 'string' ? error : 'Failed to delete notification');
+        }
+    };
+
+    const deleteAll = async () => {
+        if (!visibleNotifications.length) return;
+        try {
+            await dispatch(deleteAllNotifications()).unwrap();
+            toast.success('All notifications deleted');
+            dispatch(fetchUserNotifications({ limit: 50, page: 1 }));
+            dispatch(fetchUnreadCount());
+        } catch (error) {
+            toast.error(typeof error === 'string' ? error : 'Failed to delete all notifications');
         }
     };
 
@@ -323,7 +351,7 @@ const NotificationDropdown = () => {
                 <>
                     {/* Backdrop to close on click outside */}
                     <div 
-                        className="fixed inset-0 z-[9998] bg-black/20"
+                        className="fixed inset-0 z-[9998] bg-black/20 lg:left-64"
                         onClick={() => setIsOpen(false)}
                         aria-hidden="true"
                     />
@@ -351,6 +379,14 @@ const NotificationDropdown = () => {
             style={{ color: 'var(--color-secondary)' }}
                                     >
                                         Mark all read
+                                    </button>
+                                )}
+                                {visibleNotifications.length > 0 && (
+                                    <button
+                                        onClick={deleteAll}
+                                        className="text-xs whitespace-nowrap font-medium text-red-600 hover:opacity-80"
+                                    >
+                                        Delete all
                                     </button>
                                 )}
                                 <button

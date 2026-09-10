@@ -19,7 +19,6 @@ const TRIGGER_SELECTOR = [
   '[data-hrms-popup-trigger]',
   '[aria-haspopup="menu"]',
   'button[aria-expanded="true"]',
-  '[aria-expanded="true"]',
 ].join(', ');
 
 /** True when the click/touch target is inside an open popup, modal, or its trigger. */

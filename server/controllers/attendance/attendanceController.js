@@ -2822,12 +2822,39 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
       dayContext.timezone
     );
 
+    // Expose office hours for UI half-day split only (no attendance calc change).
+    // Fallback: Attendance Rules → Calendar workingHours → 09:00–17:00
+    let calendarWorkingHours = null;
+    try {
+      const year = Number(String(dayContext.attendanceDateKey || '').slice(0, 4));
+      if (Number.isFinite(year)) {
+        const calendar = await Calendar.findOne({ organizationId, year })
+          .select('workingHours')
+          .lean();
+        calendarWorkingHours = calendar?.workingHours || null;
+      }
+    } catch {
+      calendarWorkingHours = null;
+    }
+
+    const officeHours = {
+      startTime:
+        activeRule?.officeHours?.startTime ||
+        calendarWorkingHours?.startTime ||
+        '09:00',
+      endTime:
+        activeRule?.officeHours?.endTime ||
+        calendarWorkingHours?.endTime ||
+        '17:00',
+    };
+
     const workingDayFields = {
       allowWorkFromHome,
       allowNonWorkingDayPunch,
       isWorkingDay: workingDayStatus.isWorkingDay,
       nonWorkingReason: workingDayStatus.isWorkingDay ? null : workingDayStatus.reason,
       holidayName: workingDayStatus.holidayName,
+      officeHours,
     };
 
     if (!activeRule) {

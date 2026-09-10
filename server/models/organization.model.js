@@ -359,6 +359,18 @@ const organizationSchema = new mongoose.Schema({
             type: Boolean,
             default: true
         },
+        /**
+         * Employee Documents modes (org-scoped).
+         * Defaults true so existing orgs keep both Raise-a-Request and Self-Service.
+         */
+        enableDocumentRequests: {
+            type: Boolean,
+            default: true
+        },
+        enableSelfServiceDocuments: {
+            type: Boolean,
+            default: true
+        },
         employeeIdPrefix: {
             type: String,
             trim: true,

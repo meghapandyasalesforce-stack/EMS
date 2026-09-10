@@ -312,23 +312,31 @@ export async function generateDocumentPdf(template, employee, organization, dyna
   /* Document container */
   .document, .document-body {
     line-height: 1.7;
+    width: 100%;
   }
+  .document-body > *:first-child { margin-top: 0; }
+  .document-body img { max-width: 100%; height: auto; }
+
+  /* Logo */
+  .document-logo-header { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+  .document-org-logo { display: block; max-width: 100px; max-height: 60px; object-fit: contain; }
 
   /* Typography */
-  h1, h2, h3 { color: #0f172a; margin: 16px 0 8px; }
-  h1 { font-size: 18pt; font-weight: 700; }
-  h2 { font-size: 14pt; font-weight: 700; }
-  h3 { font-size: 12pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-  p { margin: 0 0 10px; text-align: justify; }
+  h1, h2, h3, .document-heading { color: #0f172a; margin: 16px 0 8px; text-align: left; font-weight: 700; }
+  h1 { font-size: 18pt; }
+  h2 { font-size: 14pt; }
+  h3, .document-heading { font-size: 12pt; }
+  p { margin: 0 0 10px; text-align: left; }
   strong, b { font-weight: 700; }
+  .document-closing { margin: 20px 0 8px; text-align: left; }
 
   /* Document classes used by admin templates */
-  .document-header { text-align: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1a1a1a; }
-  .company-name { font-size: 16pt; font-weight: 700; color: #0f172a; }
-  .company-address { font-size: 9pt; color: #475569; margin-top: 4px; }
-  .document-title { text-align: center; font-size: 15pt; font-weight: 700; margin: 20px 0 16px; text-transform: uppercase; letter-spacing: 0.04em; color: #0f172a; }
-  .document-date { font-size: 10pt; color: #475569; margin: 8px 0; }
-  .document-ref { font-size: 9pt; color: #64748b; margin-bottom: 16px; }
+  .document-header { text-align: left; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1a1a1a; }
+  .company-name { font-size: 16pt; font-weight: 700; color: #0f172a; text-align: left; }
+  .company-address { font-size: 9pt; color: #475569; margin-top: 4px; text-align: left; }
+  .document-title { text-align: center; font-size: 15pt; font-weight: 700; margin: 8px 0 16px; text-transform: uppercase; letter-spacing: 0.04em; color: #0f172a; }
+  .document-date { font-size: 10pt; color: #475569; margin: 8px 0; text-align: left; }
+  .document-ref { font-size: 9pt; color: #64748b; margin-bottom: 16px; text-align: left; }
 
   /* Tables */
   table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
@@ -336,20 +344,28 @@ export async function generateDocumentPdf(template, employee, organization, dyna
   th { background: #f8fafc; font-weight: 700; font-size: 9pt; text-transform: uppercase; }
 
   /* Signature */
-  .signature-section, .document-signature { margin-top: 48px; page-break-inside: avoid; }
-  .signature-line { border-top: 1px solid #1a1a1a; width: 200px; margin-top: 36px; padding-top: 8px; }
-  .signatory-name { font-weight: 700; margin: 0; font-size: 11pt; }
-  .signatory-designation { color: #475569; font-size: 9.5pt; margin: 2px 0 0; }
+  .signature-section, .document-signature { margin-top: 36px; page-break-inside: avoid; text-align: left; }
+  .signature-line { border-top: 1px solid #1a1a1a; width: 220px; max-width: 100%; margin-top: 36px; padding-top: 8px; text-align: left; }
+  .signatory-name { font-weight: 700; margin: 0 0 2px; font-size: 11pt; text-align: left; }
+  .signatory-designation, .signatory-company { color: #475569; font-size: 9.5pt; margin: 0 0 2px; text-align: left; }
 
   /* Stamp */
-  .stamp-section { margin-top: 16px; }
-  .company-stamp { max-width: 140px; max-height: 100px; object-fit: contain; }
+  .stamp-section { margin: 12px 0 10px; text-align: left; }
+  .company-stamp {
+    display: block;
+    max-width: 100px;
+    max-height: 70px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    margin: 0;
+  }
 
   /* Footer */
-  .document-footer { margin-top: 40px; text-align: center; font-size: 8pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+  .document-footer { margin-top: 36px; text-align: center; font-size: 8pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
 
   /* Horizontal rules */
-  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+  hr, .document-divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
 </style>
 </head>
 <body>
@@ -551,142 +567,197 @@ function renderSignature(doc, signature, options, marginLeft, pageWidth, pageHei
 }
 
 /**
- * Generate a preview HTML string (for frontend preview without PDF download)
+ * Generate a preview HTML string (for frontend preview without PDF download).
+ * Supports plain text, markdown (**bold** / newlines), and HTML template bodies.
  */
 export function generatePreviewHtml(template, employee, organization, dynamicFieldValues = {}, options = {}) {
   const placeholderValues = buildPlaceholderValues(template, employee, organization, dynamicFieldValues);
 
   const sig = template.signature || {};
+  const stampEnabled = Boolean(sig.stampEnabled && options.stampImageBase64);
+  const STAMP_MARKER = '[[[COMPANY_STAMP_IMAGE]]]';
+  const stampImg = stampEnabled
+    ? `<img src="${options.stampImageBase64}" alt="Company Stamp" class="company-stamp" />`
+    : '';
 
-  // ─── Inject companyStamp as a special placeholder value ────────────────
-  // This handles {{companyStamp}} in stored templates (backward compatibility)
-  if (sig.stampEnabled && options.stampImageBase64) {
-    placeholderValues.companyStamp = `<img src="${options.stampImageBase64}" alt="Company Stamp" class="company-stamp" style="max-width:160px;max-height:80px;width:auto;height:auto;object-fit:contain;display:block;margin:8px 0;" />`;
-  } else {
-    // Stamp disabled or unavailable — resolve to empty (removes {{companyStamp}} cleanly)
-    placeholderValues.companyStamp = '';
-  }
+  placeholderValues.companyStamp = stampEnabled ? STAMP_MARKER : '';
 
-  // ─── Inject signature config fields as placeholders ────────────────────
-  // These allow templates to use [Authorized Person Name], [Authorized Person Designation], etc.
   if (sig.signatoryName) placeholderValues.authorizedPersonName = sig.signatoryName;
   if (sig.signatoryDesignation) placeholderValues.authorizedPersonDesignation = sig.signatoryDesignation;
   if (sig.signatoryDepartment) placeholderValues.authorizedPersonDepartment = sig.signatoryDepartment;
 
   const resolvedBody = resolvePlaceholders(template.bodyContent, placeholderValues);
-
-  // Decode HTML entities that may have been accidentally stored
+  // Decode entities first so escaped HTML templates (&lt;div&gt;) become real tags before format detection
   const decodedBody = decodeHtmlEntities(resolvedBody);
 
-  // ─── Handle [Company Stamp] special placeholder ────────────────────────
-  // Replace [Company Stamp] with actual stamp image or remove it cleanly
   let processedBody = decodedBody;
   const stampPlaceholderRegex = /\*{0,2}\[Company\s*Stamp\]\*{0,2}/gi;
+  const bodyHadStampPlaceholder = /\[Company\s*Stamp\]/i.test(decodedBody)
+    || /\{\{\s*companyStamp\s*\}\}/i.test(template.bodyContent || '');
 
-  if (sig.stampEnabled && options.stampImageBase64) {
-    // Replace [Company Stamp] with actual stamp image
-    const stampImg = `<img src="${options.stampImageBase64}" alt="Company Stamp" class="company-stamp" style="max-width:160px;max-height:80px;width:auto;height:auto;object-fit:contain;display:block;margin:8px 0;" />`;
-    processedBody = processedBody.replace(stampPlaceholderRegex, stampImg);
-  } else {
-    // Stamp disabled or unavailable — remove the placeholder text cleanly
-    processedBody = processedBody.replace(stampPlaceholderRegex, '');
-  }
+  processedBody = processedBody.replace(
+    stampPlaceholderRegex,
+    stampEnabled ? STAMP_MARKER : ''
+  );
 
-  // Track whether template body originally had [Company Stamp] placeholder
-  const bodyHadStampPlaceholder = /\[Company\s*Stamp\]/i.test(decodedBody);
-
-  // Check if the body contains HTML tags
-  const containsHtml = /<[a-z/][^>]*>/i.test(processedBody);
-
-  // Check if template body already has its own signature section
-  const bodyHasSignature = /signature[-_]?section|authorized\s*sign/i.test(processedBody);
+  const originalBody = template.bodyContent || '';
+  // Detect HTML on original + decoded body (covers both raw and entity-escaped templates)
+  const structuredHtml = isStructuredHtmlBody(originalBody) || isStructuredHtmlBody(decodedBody);
+  const bodyHasSignature = bodyLooksLikeItHasSignature(originalBody, bodyHadStampPlaceholder)
+    || bodyLooksLikeItHasSignature(decodedBody, bodyHadStampPlaceholder);
 
   let html = '';
-
-  // Add company logo at top-right if available
   if (options.orgLogoBase64) {
-    html += `<div style="display:flex;justify-content:flex-end;margin-bottom:12px;"><img src="${options.orgLogoBase64}" style="max-width:100px;max-height:60px;object-fit:contain;" /></div>`;
+    html += `<div class="document-logo-header"><img src="${options.orgLogoBase64}" alt="Organization Logo" class="document-org-logo" /></div>`;
   }
 
-  if (containsHtml) {
-    // Body is already HTML — pass through directly
-    html += processedBody;
-
-    // Inject stamp into existing markers if not already handled by [Company Stamp]
-    if (sig.stampEnabled && options.stampImageBase64 && !bodyHadStampPlaceholder) {
-      const stampImg = `<img src="${options.stampImageBase64}" alt="Company Stamp" class="company-stamp" style="max-width:160px;max-height:80px;object-fit:contain;" />`;
-      if (html.includes('<!-- Company stamp')) {
-        html = html.replace(/<!--\s*Company stamp[^>]*-->/i, stampImg);
-      } else if (html.includes('stamp-section')) {
-        html = html.replace(/(<div[^>]*class="[^"]*stamp-section[^"]*"[^>]*>)\s*(<\/div>)/i, `$1${stampImg}$2`);
-      }
-      // No fallback append — stamp was already handled or template doesn't have a stamp location
-    }
+  let bodyHtml = '';
+  if (structuredHtml) {
+    bodyHtml = formatStructuredHtmlBody(processedBody, {
+      stampEnabled,
+      bodyHadStampPlaceholder,
+      STAMP_MARKER,
+    });
   } else {
-    // Plain-text body — convert to structured HTML
-    const paragraphs = processedBody.split(/\n\n+/);
-    for (const p of paragraphs) {
-      const trimmed = p.trim();
-      if (!trimmed) continue;
-
-      const lines = trimmed.split('\n');
-      let blockHtml = '';
-
-      for (const line of lines) {
-        const ln = line.trim();
-        if (!ln) continue;
-
-        // Heading: # markdown
-        if (/^#{1,3}\s/.test(ln)) {
-          const level = (ln.match(/^(#{1,3})/)?.[1] || '#').length;
-          const text = ln.replace(/^#{1,3}\s*/, '');
-          blockHtml += `<h${level}>${convertInlineFormatting(escapeHtml(text))}</h${level}>`;
-          continue;
-        }
-
-        // ALL CAPS = heading
-        if (ln.length < 70 && ln === ln.toUpperCase() && /[A-Z]/.test(ln) && !/[a-z]/.test(ln)) {
-          blockHtml += `<h3 class="document-title">${convertInlineFormatting(escapeHtml(ln))}</h3>`;
-          continue;
-        }
-
-        // **Bold line**
-        if (ln.startsWith('**') && ln.endsWith('**') && ln.length < 80) {
-          blockHtml += `<p><strong>${escapeHtml(ln.slice(2, -2))}</strong></p>`;
-          continue;
-        }
-
-        // Horizontal rule
-        if (/^[-_=]{3,}$/.test(ln)) {
-          blockHtml += `<hr>`;
-          continue;
-        }
-
-        // Normal line
-        blockHtml += `<p>${convertInlineFormatting(escapeHtml(ln))}</p>`;
-      }
-
-      html += blockHtml;
-    }
+    bodyHtml = formatPlainOrMarkdownBody(processedBody, STAMP_MARKER);
   }
 
-  // ─── System Signature Section ──────────────────────────────────────────
-  // Only append if template body does NOT already contain its own signature section
+  html += `<div class="document-body">${bodyHtml}</div>`;
+
   if (sig.enabled && !bodyHasSignature) {
     html += `<div class="document-signature">`;
+    if (stampEnabled && !bodyHadStampPlaceholder && !html.includes(STAMP_MARKER)) {
+      html += `<div class="stamp-section">${STAMP_MARKER}</div>`;
+    }
     html += `<div class="signature-line">`;
     if (sig.signatoryName) html += `<p class="signatory-name">${escapeHtml(sig.signatoryName)}</p>`;
     if (sig.signatoryDesignation) html += `<p class="signatory-designation">${escapeHtml(sig.signatoryDesignation)}</p>`;
-    if (sig.companyName) html += `<p class="signatory-designation">${escapeHtml(sig.companyName)}</p>`;
-    html += `</div>`;
-    // Add stamp in system signature if not already in body
-    if (sig.stampEnabled && options.stampImageBase64 && !bodyHadStampPlaceholder) {
-      html += `<img src="${options.stampImageBase64}" alt="Company Stamp" class="company-stamp" style="max-width:160px;max-height:80px;object-fit:contain;" />`;
-    }
-    html += `</div>`;
+    if (sig.companyName) html += `<p class="signatory-company">${escapeHtml(sig.companyName)}</p>`;
+    html += `</div></div>`;
+  }
+
+  if (stampEnabled) {
+    html = html.split(STAMP_MARKER).join(stampImg);
+  } else {
+    html = html.split(STAMP_MARKER).join('');
   }
 
   return html;
+}
+
+/** True when body contains HTML markup (raw or entity-escaped). */
+function isStructuredHtmlBody(bodyContent) {
+  if (!bodyContent) return false;
+  // Entity-escaped HTML stored in DB (e.g. &lt;div class="document-title"&gt;)
+  if (/&lt;\/?[a-z][\s\S]*?&gt;/i.test(bodyContent)) return true;
+
+  const decoded = decodeHtmlEntities(bodyContent);
+  // Any real HTML tag → use HTML renderer (don't escape tags as visible text)
+  if (/<\/?[a-z][^>]*>/i.test(decoded)) return true;
+
+  return false;
+}
+
+function bodyLooksLikeItHasSignature(originalBody, bodyHadStampPlaceholder) {
+  return /signature[-_]?section/i.test(originalBody)
+    || /authorized\s*signatory/i.test(originalBody)
+    || /\bsincerely\b/i.test(originalBody)
+    || /\byours\s+(truly|faithfully|sincerely)\b/i.test(originalBody)
+    || /\bregards\b/i.test(originalBody)
+    || /\[Authorized\s*Person[^\]]*\]/i.test(originalBody)
+    || /\{\{\s*authorizedPerson(Name|Designation|Department)\s*\}\}/i.test(originalBody)
+    || (bodyHadStampPlaceholder && /\bfor\b/i.test(originalBody));
+}
+
+function formatPlainOrMarkdownBody(processedBody, STAMP_MARKER) {
+  let html = '';
+  const normalized = String(processedBody || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const paragraphs = normalized.split(/\n\n+/);
+
+  for (const p of paragraphs) {
+    const trimmed = p.trim();
+    if (!trimmed) continue;
+
+    const lines = trimmed.split('\n');
+    let blockHtml = '';
+
+    for (const line of lines) {
+      const ln = line.trim();
+      if (!ln) continue;
+
+      if (ln === STAMP_MARKER || ln.includes(STAMP_MARKER)) {
+        blockHtml += `<div class="stamp-section">${STAMP_MARKER}</div>`;
+        continue;
+      }
+
+      if (/^#{1,3}\s/.test(ln)) {
+        const level = (ln.match(/^(#{1,3})/)?.[1] || '#').length;
+        const text = ln.replace(/^#{1,3}\s*/, '');
+        blockHtml += `<h${level} class="document-heading">${convertInlineFormatting(escapeHtml(text))}</h${level}>`;
+        continue;
+      }
+
+      const plainCaps = ln.replace(/\*/g, '').trim();
+      if (
+        plainCaps.length >= 10
+        && plainCaps.length < 70
+        && plainCaps === plainCaps.toUpperCase()
+        && /[A-Z]/.test(plainCaps)
+        && !/[a-z]/.test(plainCaps)
+      ) {
+        blockHtml += `<h3 class="document-title">${convertInlineFormatting(escapeHtml(ln))}</h3>`;
+        continue;
+      }
+
+      if (/^[-_=*]{3,}$/.test(ln)) {
+        blockHtml += '<hr class="document-divider" />';
+        continue;
+      }
+
+      if (/^(sincerely|regards|yours truly|yours faithfully|best regards|thank you)[,.]?$/i.test(ln.replace(/\*/g, '').trim())) {
+        blockHtml += `<p class="document-closing">${convertInlineFormatting(escapeHtml(ln))}</p>`;
+        continue;
+      }
+
+      blockHtml += `<p>${convertInlineFormatting(escapeHtml(ln))}</p>`;
+    }
+
+    html += blockHtml;
+  }
+
+  return html;
+}
+
+function formatStructuredHtmlBody(processedBody, { stampEnabled, bodyHadStampPlaceholder, STAMP_MARKER }) {
+  // Ensure entity-escaped snippets are real tags before rendering
+  let html = decodeHtmlEntities(processedBody);
+  html = applyMarkdownOutsideHtmlTags(html);
+
+  if (stampEnabled && !bodyHadStampPlaceholder && !html.includes(STAMP_MARKER)) {
+    if (html.includes('<!-- Company stamp')) {
+      html = html.replace(/<!--\s*Company stamp[^>]*-->/i, STAMP_MARKER);
+    } else if (html.includes('stamp-section')) {
+      const withStampSection = html.replace(
+        /(<div[^>]*class="[^"]*stamp-section[^"]*"[^>]*>)\s*(<\/div>)/i,
+        `$1${STAMP_MARKER}$2`
+      );
+      html = withStampSection !== html
+        ? withStampSection
+        : `${html}<div class="stamp-section">${STAMP_MARKER}</div>`;
+    }
+  }
+
+  return html;
+}
+
+function applyMarkdownOutsideHtmlTags(html) {
+  return String(html || '')
+    .split(/(<[^>]+>)/g)
+    .map((part) => {
+      if (!part || part.startsWith('<')) return part;
+      return convertInlineFormatting(part);
+    })
+    .join('');
 }
 
 /**
@@ -694,9 +765,10 @@ export function generatePreviewHtml(template, employee, organization, dynamicFie
  * Handles: **bold**, *italic*, __underline__
  */
 function convertInlineFormatting(text) {
-  return text
+  return String(text || '')
+    .replace(/\*\*\*\*/g, '')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>')
     .replace(/__([^_]+)__/g, '<u>$1</u>');
 }
 

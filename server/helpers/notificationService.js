@@ -584,12 +584,19 @@ export const isAnnouncementReadByViewer = (notification, recipientIds = []) => {
 };
 
 /**
- * Filter SSE/live payloads: drop already-read or pre-join announcements only.
+ * Filter SSE/live payloads: drop hidden broadcasts, and already-read or pre-join announcements.
  * All other notification types pass through unchanged.
  */
 export const filterAnnouncementPayloadForViewer = (notifications, viewerCtx = {}) => {
   const list = Array.isArray(notifications) ? notifications : [];
+  const idSet = new Set((viewerCtx.recipientIds || []).map((id) => String(id)));
   return list.filter((n) => {
+    if (
+      n?.isBroadcast &&
+      (n.hiddenBy || []).some((h) => idSet.has(String(h.userId)))
+    ) {
+      return false;
+    }
     if (!n?.isBroadcast || n.type !== 'announcement') return true;
     if (!isAnnouncementInAudienceForViewer(n, viewerCtx)) return false;
     if (isAnnouncementReadByViewer(n, viewerCtx.recipientIds)) return false;

@@ -258,7 +258,7 @@ function DashboardAdmin() {
     () =>
       [
         hasAnyPermission(permissions, [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM], rbacOpts) && {
-          label: "Mark Attendance",
+          label: "Today's Live Attendance",
           icon: <FiCheckCircle />,
           action: () => navigate("/today-attendance"),
         },
@@ -444,7 +444,7 @@ function DashboardAdmin() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
             >
               <FiCheckCircle className="h-4 w-4" />
-              Mark Attendance
+              Today's Live Attendance
             </button>
             <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
               <button

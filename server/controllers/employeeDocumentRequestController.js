@@ -4,6 +4,7 @@ import EmployeeDocumentRequest from '../models/employeeDocumentRequest.model.js'
 import Employee from '../models/employee.model.js';
 import User from '../models/user.model.js';
 import { getOrganizationId } from '../helpers/organizationHelper.js';
+import { getDocumentModeSettings } from '../helpers/documentModeSettings.js';
 import { buildDocumentS3Key } from '../helpers/documentFilePathHelper.js';
 import { sendDocumentFile } from '../helpers/documentFileStorageHelper.js';
 import { uploadFile, deleteFile } from '../helpers/storageHelper.js';
@@ -213,6 +214,12 @@ export const createEmployeeDocumentRequest = async (req, res) => {
     const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
     const requester = actorId(req);
     if (!organizationId || !requester) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const mode = await getDocumentModeSettings(organizationId);
+    if (!mode.enableDocumentRequests) {
+      return res.status(403).json({ success: false, message: 'Document requests are disabled for this organization' });
+    }
+
     const targetEmployeeId = isAdmin(req) && req.body.employeeId ? req.body.employeeId : req.employee?._id;
     if (!targetEmployeeId) return res.status(400).json({ success: false, message: 'employeeId is required' });
     const approvalRequiredFrom = resolveApprovalRequirement(req);

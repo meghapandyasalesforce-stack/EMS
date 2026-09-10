@@ -1,6 +1,6 @@
 /**
  * Professional Document Preview Styles
- * Renders document previews in an A4 page-like format
+ * Works for plain text, markdown, and HTML template bodies (public / multi-tenant use).
  */
 
 /* ─── Preview Container ──────────────────────────────────────────────────── */
@@ -8,15 +8,29 @@
   display: flex;
   justify-content: center;
   padding: 16px;
-  background: #f1f5f9;
+  background:
+    radial-gradient(ellipse at top, rgba(32, 201, 151, 0.06), transparent 55%),
+    linear-gradient(180deg, #eef2f7 0%, #f1f5f9 100%);
   border-radius: 12px;
   overflow-x: auto;
+  border: 1px solid #e2e8f0;
+}
+
+.document-preview-wrapper--framed {
+  max-height: min(78vh, 920px);
+  overflow-y: auto;
+  padding: 20px 16px 28px;
 }
 
 @media (max-width: 640px) {
   .document-preview-wrapper {
     padding: 8px;
     border-radius: 8px;
+  }
+
+  .document-preview-wrapper--framed {
+    max-height: 70vh;
+    padding: 12px 8px 20px;
   }
 }
 
@@ -26,14 +40,19 @@
   min-height: 297mm;
   max-width: 100%;
   background: #ffffff;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
-  border-radius: 4px;
-  padding: 60px 56px;
-  font-family: 'Georgia', 'Times New Roman', serif;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+  border-radius: 2px;
+  padding: 56px 52px;
+  font-family: 'Georgia', 'Times New Roman', Times, serif;
   font-size: 11.5pt;
-  line-height: 1.75;
+  line-height: 1.7;
   color: #1a1a1a;
   position: relative;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 800px) {
@@ -54,10 +73,41 @@
   }
 }
 
+/* ─── Logo header ────────────────────────────────────────────────────────── */
+.document-page .document-logo-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.document-page .document-org-logo {
+  display: block;
+  max-width: 100px;
+  max-height: 60px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* ─── Body container (all formats) ───────────────────────────────────────── */
+.document-page .document-body {
+  display: block;
+  width: 100%;
+}
+
+.document-page .document-body > *:first-child {
+  margin-top: 0;
+}
+
+.document-page .document-body img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* ─── Document Header / Letterhead ───────────────────────────────────────── */
 .document-page .document-header {
-  margin-bottom: 32px;
-  padding-bottom: 16px;
+  margin-bottom: 28px;
+  padding-bottom: 14px;
   border-bottom: 2px solid #1a1a1a;
 }
 
@@ -68,6 +118,7 @@
   font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.01em;
+  text-align: left;
 }
 
 .document-page .document-header p {
@@ -75,37 +126,40 @@
   font-size: 9pt;
   color: #475569;
   line-height: 1.5;
+  text-align: left;
 }
 
-/* ─── Typography ─────────────────────────────────────────────────────────── */
+/* ─── Typography (shared across formats) ─────────────────────────────────── */
+.document-page h1,
+.document-page h2,
+.document-page h3,
+.document-page .document-heading {
+  color: #0f172a;
+  font-weight: 700;
+  text-align: left;
+  line-height: 1.35;
+}
+
 .document-page h1 {
   font-size: 16pt;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 24px 0 12px;
-  letter-spacing: -0.01em;
+  margin: 20px 0 12px;
 }
 
 .document-page h2 {
   font-size: 14pt;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 20px 0 10px;
+  margin: 18px 0 10px;
 }
 
-.document-page h3 {
+.document-page h3,
+.document-page .document-heading {
   font-size: 12pt;
-  font-weight: 700;
-  color: #1e293b;
   margin: 16px 0 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 .document-page p {
-  margin: 0 0 12px;
-  text-align: justify;
-  hyphens: auto;
+  margin: 0 0 10px;
+  text-align: left;
+  text-indent: 0;
 }
 
 .document-page strong,
@@ -121,36 +175,43 @@
 
 .document-page ul,
 .document-page ol {
-  margin: 8px 0 12px 24px;
+  margin: 8px 0 12px 22px;
   padding: 0;
 }
 
 .document-page li {
   margin-bottom: 4px;
+  text-align: left;
 }
 
-/* ─── Document Title (centered) ──────────────────────────────────────────── */
+/* ─── Document Title (letter title only) ─────────────────────────────────── */
 .document-page .document-title {
   text-align: center;
   font-size: 14pt;
   font-weight: 700;
   color: #0f172a;
-  margin: 24px 0 20px;
+  margin: 8px 0 20px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+}
+
+/* Closing lines (Sincerely, etc.) */
+.document-page .document-closing {
+  margin: 20px 0 8px;
+  text-align: left;
 }
 
 /* ─── Tables ─────────────────────────────────────────────────────────────── */
 .document-page table {
   width: 100%;
   border-collapse: collapse;
-  margin: 16px 0;
+  margin: 14px 0;
   font-size: 10pt;
 }
 
 .document-page table th,
 .document-page table td {
-  padding: 8px 12px;
+  padding: 8px 10px;
   border: 1px solid #e2e8f0;
   text-align: left;
   vertical-align: top;
@@ -169,45 +230,59 @@
   background: #fafafa;
 }
 
-/* ─── Signature Section ──────────────────────────────────────────────────── */
-.document-page .document-signature {
-  margin-top: 48px;
-  padding-top: 0;
+/* ─── Signature / Stamp ──────────────────────────────────────────────────── */
+.document-page .document-signature,
+.document-page .signature-section {
+  margin-top: 36px;
+  page-break-inside: avoid;
+  text-align: left;
 }
 
-.document-page .document-signature .signature-line {
-  width: 200px;
+.document-page .document-signature .signature-line,
+.document-page .signature-line {
+  width: 220px;
+  max-width: 100%;
   border-top: 1px solid #1a1a1a;
-  margin-top: 40px;
+  margin-top: 36px;
   padding-top: 8px;
+  text-align: left;
 }
 
-.document-page .document-signature .signatory-name {
+.document-page .signatory-name {
   font-weight: 700;
   color: #0f172a;
-  margin: 0;
+  margin: 0 0 2px;
   font-size: 11pt;
+  text-align: left;
 }
 
-.document-page .document-signature .signatory-designation {
+.document-page .signatory-designation,
+.document-page .signatory-company {
   color: #475569;
   font-size: 9.5pt;
-  margin: 2px 0 0;
+  margin: 0 0 2px;
+  text-align: left;
 }
 
-.document-page .document-signature .company-stamp {
-  margin-top: 16px;
-  max-width: 120px;
-  max-height: 120px;
+.document-page .stamp-section {
+  margin: 12px 0 10px;
+  text-align: left;
+}
+
+.document-page .stamp-section .company-stamp,
+.document-page .company-stamp {
+  display: block;
+  max-width: 100px;
+  max-height: 70px;
+  width: auto;
+  height: auto;
   object-fit: contain;
+  margin: 0;
 }
 
 /* ─── Footer ─────────────────────────────────────────────────────────────── */
 .document-page .document-footer {
-  position: absolute;
-  bottom: 32px;
-  left: 56px;
-  right: 56px;
+  margin-top: 36px;
   text-align: center;
   font-size: 8pt;
   color: #94a3b8;
@@ -215,83 +290,49 @@
   padding-top: 8px;
 }
 
-@media (max-width: 800px) {
-  .document-page .document-footer {
-    position: static;
-    margin-top: 32px;
-    left: auto;
-    right: auto;
-  }
-}
-
-/* ─── Date and Reference ─────────────────────────────────────────────────── */
+/* ─── Date / Reference ───────────────────────────────────────────────────── */
 .document-page .document-date {
   font-size: 10pt;
   color: #475569;
-  margin-bottom: 4px;
+  margin: 8px 0 4px;
+  text-align: left;
 }
 
 .document-page .document-ref {
   font-size: 9pt;
   color: #64748b;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  text-align: left;
 }
 
-/* ─── Horizontal Rule ────────────────────────────────────────────────────── */
-.document-page hr {
+/* ─── Dividers ───────────────────────────────────────────────────────────── */
+.document-page hr,
+.document-page .document-divider {
   border: none;
   border-top: 1px solid #e2e8f0;
-  margin: 20px 0;
+  margin: 18px 0;
 }
 
-/* ─── Admin Template HTML Classes ────────────────────────────────────────── */
-/* These classes are used by admins when writing HTML templates directly */
-
+/* ─── Common admin HTML helper classes ───────────────────────────────────── */
 .document-page .document {
   line-height: 1.7;
 }
 
 .document-page .company-name {
-  font-size: 18pt;
+  font-size: 16pt;
   font-weight: 700;
   color: #0f172a;
+  text-align: left;
 }
 
 .document-page .company-address {
   font-size: 9pt;
   color: #475569;
   margin-top: 4px;
+  text-align: left;
 }
 
-.document-page .document-date {
-  font-size: 10pt;
-  color: #475569;
-  margin: 12px 0;
-}
-
-.document-page .signature-section {
-  margin-top: 48px;
-}
-
-.document-page .stamp-section {
-  margin-top: 16px;
-}
-
-.document-page .stamp-section .company-stamp,
-.document-page .company-stamp {
-  max-width: 140px;
-  max-height: 100px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-}
-
-/* ─── Company Logo in Header (from generatePreviewHtml) ──────────────────── */
-.document-page > div:first-child img[style*="object-fit"] {
-  display: block;
-}
-
-/* Ensure inline flex for logo header works inside document-page */
+/* Legacy inline logo wrappers */
 .document-page > div[style*="flex-end"] {
   display: flex !important;
   justify-content: flex-end !important;

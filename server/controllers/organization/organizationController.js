@@ -247,6 +247,8 @@ export const updateOrganizationSettings = async (req, res) => {
             allowEmployeeRegistration,
             requireEmailVerification,
             allowSelfService,
+            enableDocumentRequests,
+            enableSelfServiceDocuments,
             employeeIdPrefix,
             employeeIdStartNumber,
             employeeIdMinDigits,
@@ -306,6 +308,14 @@ export const updateOrganizationSettings = async (req, res) => {
         }
         if (allowSelfService !== undefined) {
             organization.settings.allowSelfService = allowSelfService;
+        }
+        if (enableDocumentRequests !== undefined) {
+            if (!organization.settings) organization.settings = {};
+            organization.settings.enableDocumentRequests = !!enableDocumentRequests;
+        }
+        if (enableSelfServiceDocuments !== undefined) {
+            if (!organization.settings) organization.settings = {};
+            organization.settings.enableSelfServiceDocuments = !!enableSelfServiceDocuments;
         }
         if (employeeIdPrefix !== undefined) {
             organization.settings.employeeIdPrefix = newPrefix;

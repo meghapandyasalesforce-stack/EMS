@@ -28,6 +28,7 @@ import {
     isExternalCourse
 } from '../../HR/Learning/learningUtils';
 import { formatStatusLabel, UI_BADGE_TEXT_CLASS, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
+import { format } from 'date-fns';
 
 const LEARNING_STATUS_RANK = { 'In Progress': 0, Enrolled: 1, Completed: 2, Available: 3 };
 
@@ -121,6 +122,9 @@ const BenefitsLearningHub = () => {
 
     const [loading, setLoading] = useState(true);
     const [benefits, setBenefits] = useState([]);
+    const [myBenefitEnrollments, setMyBenefitEnrollments] = useState([]);
+    const [benefitActionId, setBenefitActionId] = useState(null);
+    const [dependentDraft, setDependentDraft] = useState({ enrollmentId: null, name: '', relationship: 'Spouse' });
     const [teamLearning, setTeamLearning] = useState([]);
     const [courses, setCourses] = useState([]);
     const [enrollments, setEnrollments] = useState([]);
@@ -142,8 +146,9 @@ const BenefitsLearningHub = () => {
                 const currentUserId =
                     employee?._id || user?.employeeProfileId || user?._id || user?.id;
 
-                const [benefitsRes, teamRes, coursesRes, enrollmentsRes] = await Promise.allSettled([
+                const [benefitsRes, myBenefitsRes, teamRes, coursesRes, enrollmentsRes] = await Promise.allSettled([
                     axios.get('/v1/both/benefits/benefit-plans', { withCredentials: true }),
+                    axios.get('/v1/both/benefits/benefits', { withCredentials: true }),
                     axios.get('/v1/both/team-learning', { withCredentials: true }),
                     axios.get('/v1/both/learning/courses', { withCredentials: true }),
                     axios.get('/v1/both/learning/enrollments', { withCredentials: true })
@@ -151,6 +156,9 @@ const BenefitsLearningHub = () => {
 
                 if (benefitsRes.status === 'fulfilled') {
                     setBenefits(benefitsRes.value.data?.data || []);
+                }
+                if (myBenefitsRes.status === 'fulfilled') {
+                    setMyBenefitEnrollments(myBenefitsRes.value.data?.data || []);
                 }
                 if (teamRes.status === 'fulfilled') {
                     const allTeamLearning = teamRes.value.data?.data || [];
@@ -185,6 +193,71 @@ const BenefitsLearningHub = () => {
             return text.includes(search.toLowerCase());
         });
     }, [benefits, search]);
+
+    const enrollmentByPlanId = useMemo(() => {
+        const map = {};
+        myBenefitEnrollments.forEach((item) => {
+            const planId = String(item.benefitPlanId?._id || item.benefitPlanId || '');
+            if (!planId) return;
+            if (['Pending', 'Active', 'Enrolled'].includes(item.status)) {
+                map[planId] = item;
+            }
+        });
+        return map;
+    }, [myBenefitEnrollments]);
+
+    const refreshMyBenefits = async () => {
+        const response = await axios.get('/v1/both/benefits/benefits', { withCredentials: true });
+        setMyBenefitEnrollments(response.data?.data || []);
+    };
+
+    const handleCancelMyEnrollment = async (enrollmentId) => {
+        if (!window.confirm('Withdraw this pending enrollment request?')) return;
+        try {
+            setBenefitActionId(enrollmentId);
+            await axios.put(`/v1/both/benefits/benefits/${enrollmentId}/cancel`, {}, { withCredentials: true });
+            toast.success('Enrollment request withdrawn');
+            await refreshMyBenefits();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to cancel enrollment');
+        } finally {
+            setBenefitActionId(null);
+        }
+    };
+
+    const handleAddMyDependent = async (enrollment) => {
+        if (!dependentDraft.name.trim()) {
+            toast.error('Dependent name is required');
+            return;
+        }
+        const next = [
+            ...(enrollment.dependents || []),
+            {
+                name: dependentDraft.name.trim(),
+                relationship: dependentDraft.relationship
+            }
+        ];
+        try {
+            setBenefitActionId(enrollment._id);
+            await axios.put(
+                `/v1/both/benefits/benefits/${enrollment._id}/dependents`,
+                { dependents: next },
+                { withCredentials: true }
+            );
+            toast.success('Dependent added');
+            setDependentDraft({ enrollmentId: null, name: '', relationship: 'Spouse' });
+            await refreshMyBenefits();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to add dependent');
+        } finally {
+            setBenefitActionId(null);
+        }
+    };
+
+    const myActiveOrPendingBenefits = useMemo(
+        () => myBenefitEnrollments.filter((item) => ['Pending', 'Active', 'Enrolled'].includes(item.status)),
+        [myBenefitEnrollments]
+    );
 
     const learningCards = useMemo(() => {
         // Assignments drive this list: the catalog response is paginated and only covers published courses.
@@ -388,30 +461,6 @@ const BenefitsLearningHub = () => {
                     </div>
                 </header>
 
-                {!isLearningTab && (
-                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2">
-                        <div className="space-y-4 bg-[#d9f5ef] p-4 sm:p-6 md:p-6">
-                            <span className={`inline-flex rounded-full bg-[#20C997]/20 text-[#006D4E] ${UI_BADGE_TEXT_CLASS}`}>
-                                Enrollment open
-                            </span>
-                            <h2 className="text-4xl font-semibold leading-tight text-slate-900">Your Benefits Package</h2>
-                            <p className="max-w-md text-sm text-slate-700">
-                                A curated collection of resources designed to support your growth, health, and holistic well-being.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('benefits')}
-                                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#20C997] to-[#0a8f6c] px-4 py-2 text-sm font-semibold text-white"
-                            >
-                                Explore Perks <FaArrowRight className="text-xs" />
-                            </button>
-                        </div>
-                        <div className="hidden bg-[linear-gradient(120deg,#d9f5ef,#b8ede2)] md:block" />
-                    </div>
-                </section>
-                )}
-
                 <section className="flex items-center gap-2 lg:hidden">
                     <label className="relative min-w-0 flex-1">
                         <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -433,6 +482,121 @@ const BenefitsLearningHub = () => {
                 </section>
 
                 {activeTab === 'benefits' ? (
+                    <>
+                    <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                        <div>
+                            <h3 className="text-2xl font-semibold text-slate-900">My Benefits</h3>
+                            <p className="text-sm text-slate-500">Your enrollments, pending requests, and dependents.</p>
+                        </div>
+                        {myActiveOrPendingBenefits.length === 0 ? (
+                            <p className="py-6 text-center text-sm text-slate-500">
+                                You have no active or pending benefit enrollments yet.
+                            </p>
+                        ) : (
+                            <div className="space-y-3">
+                                {myActiveOrPendingBenefits.map((enrollment) => {
+                                    const plan = enrollment.benefitPlanId || {};
+                                    const supportsDependents = plan.planType === 'Family' || plan.planType === 'Both';
+                                    return (
+                                        <div key={enrollment._id} className="rounded-xl border border-slate-100 p-4">
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                                <div>
+                                                    <h4 className="font-semibold text-slate-900">{plan.name || 'Benefit'}</h4>
+                                                    <p className="text-xs text-slate-500">{plan.category || 'Benefit Plan'}</p>
+                                                    <p className="mt-1 text-sm text-slate-600">
+                                                        Coverage: {enrollment.coverageType || '—'} · Employer ₹{Number(enrollment.companyContribution || 0).toLocaleString('en-IN')} · Employee ₹{Number(enrollment.employeeContribution || 0).toLocaleString('en-IN')}
+                                                    </p>
+                                                </div>
+                                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                    enrollment.status === 'Pending'
+                                                        ? 'bg-amber-100 text-amber-700'
+                                                        : 'bg-[#20C997]/15 text-[#0a8f6c]'
+                                                }`}>
+                                                    {enrollment.status}
+                                                </span>
+                                            </div>
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(`/benefits/${plan._id || enrollment.benefitPlanId}`)}
+                                                    className="text-sm font-semibold text-[#0a8f6c]"
+                                                >
+                                                    View plan
+                                                </button>
+                                                {enrollment.status === 'Pending' && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={benefitActionId === enrollment._id}
+                                                        onClick={() => handleCancelMyEnrollment(enrollment._id)}
+                                                        className="text-sm font-semibold text-red-600"
+                                                    >
+                                                        {benefitActionId === enrollment._id ? 'Working...' : 'Withdraw'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {supportsDependents && ['Active', 'Enrolled', 'Pending'].includes(enrollment.status) && (
+                                                <div className="mt-3 border-t border-slate-100 pt-3 space-y-2">
+                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dependents</p>
+                                                    {(enrollment.dependents || []).length === 0 && (
+                                                        <p className="text-sm text-slate-500">No dependents added.</p>
+                                                    )}
+                                                    {(enrollment.dependents || []).map((dep, idx) => (
+                                                        <p key={`${dep.name}-${idx}`} className="text-sm text-slate-700">
+                                                            {dep.relationship}: {dep.name}
+                                                        </p>
+                                                    ))}
+                                                    {dependentDraft.enrollmentId === enrollment._id ? (
+                                                        <div className="flex flex-col sm:flex-row gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={dependentDraft.name}
+                                                                onChange={(e) => setDependentDraft({ ...dependentDraft, name: e.target.value })}
+                                                                placeholder="Dependent name"
+                                                                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                                            />
+                                                            <select
+                                                                value={dependentDraft.relationship}
+                                                                onChange={(e) => setDependentDraft({ ...dependentDraft, relationship: e.target.value })}
+                                                                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                                            >
+                                                                <option value="Spouse">Spouse</option>
+                                                                <option value="Child">Child</option>
+                                                                <option value="Parent">Parent</option>
+                                                                <option value="Other">Other</option>
+                                                            </select>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleAddMyDependent(enrollment)}
+                                                                className="rounded-lg bg-[#0a8f6c] px-3 py-2 text-sm font-semibold text-white"
+                                                            >
+                                                                Save
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setDependentDraft({ enrollmentId: null, name: '', relationship: 'Spouse' })}
+                                                                className="rounded-lg px-3 py-2 text-sm text-slate-600"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDependentDraft({ enrollmentId: enrollment._id, name: '', relationship: 'Spouse' })}
+                                                            className="text-sm font-semibold text-[#0a8f6c]"
+                                                        >
+                                                            + Add Dependent
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </section>
+
                     <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
@@ -452,49 +616,75 @@ const BenefitsLearningHub = () => {
                             <p className="py-8 text-center text-sm text-slate-500">No benefits matched your search.</p>
                         ) : (
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                {filteredBenefits.slice(0, 6).map((plan) => (
+                                {filteredBenefits.slice(0, 6).map((plan) => {
+                                    const myEnrollment = enrollmentByPlanId[String(plan._id)];
+                                    const statusLabel = myEnrollment?.status || (plan.enrollmentType === 'Automatic' ? 'HR Assigned' : 'Available');
+                                    const statusClass = myEnrollment?.status === 'Pending'
+                                        ? 'bg-amber-100 text-amber-700'
+                                        : myEnrollment
+                                            ? 'bg-[#20C997]/15 text-[#0a8f6c]'
+                                            : 'bg-slate-100 text-slate-600';
+                                    return (
                                     <article key={plan._id} className="rounded-xl border border-slate-100 bg-white p-4 transition hover:shadow-md">
                                         <div className="mb-3 flex items-center justify-between">
                                             <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#20C997]/15 text-[#0a8f6c]">
                                                 <FaHeart />
                                             </span>
-                                            <span className={`rounded-full bg-[#20C997]/15 text-[#0a8f6c] ${UI_BADGE_TEXT_CLASS}`}>
-                                                Active
+                                            <span className={`rounded-full ${statusClass} ${UI_BADGE_TEXT_CLASS}`}>
+                                                {statusLabel}
                                             </span>
                                         </div>
                                         <h4 className="text-lg font-semibold text-slate-900">{plan.name}</h4>
                                         <p className="text-xs text-slate-500">{plan.category || 'Benefit Plan'}</p>
                                         <p className="mt-2 line-clamp-2 text-sm text-slate-600">{plan.description || 'Benefit details available.'}</p>
-                                        <button
-                                            type="button"
-                                            onClick={() => navigate(`/benefits/${plan._id}`)}
-                                            className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#0a8f6c]"
-                                        >
-                                            View Details <FaArrowRight className="text-xs" />
-                                        </button>
+                                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate(`/benefits/${plan._id}`)}
+                                                className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#20C997] to-[#0a8f6c] px-3 py-1.5 text-sm font-semibold text-white"
+                                            >
+                                                {myEnrollment
+                                                    ? 'View Status'
+                                                    : plan.enrollmentType === 'Automatic'
+                                                        ? 'View Details'
+                                                        : 'Enroll'}
+                                                <FaArrowRight className="text-xs" />
+                                            </button>
+                                            {!myEnrollment && plan.enrollmentType !== 'Automatic' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(`/benefits/${plan._id}`)}
+                                                    className="text-sm font-semibold text-[#0a8f6c]"
+                                                >
+                                                    Details
+                                                </button>
+                                            )}
+                                        </div>
                                     </article>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </section>
+                    </>
                 ) : (
                     <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-3">
                             <div>
                                 <h3 className="text-xl font-bold text-slate-900">My Learning</h3>
                                 <p className="text-sm text-slate-500">Assigned courses, catalog, and completion progress.</p>
                             </div>
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-                                {learningCards.length} courses
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600 whitespace-nowrap">
+                                {learningStats.total} assigned
                             </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                             {[
-                                { label: 'Assigned', value: learningStats.assigned, tone: 'text-slate-900' },
+                                { label: 'Total Assigned', value: learningStats.total, tone: 'text-slate-900' },
+                                { label: 'Not Started', value: learningStats.assigned, tone: 'text-amber-700' },
                                 { label: 'In Progress', value: learningStats.inProgress, tone: 'text-[#0a8f6c]' },
-                                { label: 'Completed', value: learningStats.completed, tone: 'text-emerald-600' },
-                                { label: 'Overdue', value: learningStats.overdue, tone: 'text-red-600' }
+                                { label: 'Completed', value: learningStats.completed, tone: 'text-emerald-600' }
                             ].map((stat) => (
                                 <div key={stat.label} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
                                     <p className={UI_FORM_LABEL_CLASS}>{stat.label}</p>
@@ -511,19 +701,29 @@ const BenefitsLearningHub = () => {
                                     </p>
                                     <p className="text-sm font-semibold text-[#0a8f6c]">{learningStats.completionRate}%</p>
                                 </div>
-                                <div className="mt-2 h-2 w-full rounded-full bg-slate-200">
+                                <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
                                     <div
-                                        className="h-2 rounded-full bg-gradient-to-r from-[#20C997] to-[#0a8f6c] transition-all"
+                                        className="h-full rounded-full bg-gradient-to-r from-[#20C997] to-[#0a8f6c] transition-all"
                                         style={{ width: `${learningStats.completionRate}%` }}
                                     />
                                 </div>
-                                <p className="mt-2 text-xs text-slate-500">
-                                    {learningStats.pending === 0
-                                        ? 'Everything assigned to you is complete.'
-                                        : `${learningStats.pending} still to finish${
-                                              learningStats.overdue > 0 ? ` • ${learningStats.overdue} overdue` : ''
-                                          }`}
-                                </p>
+                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                    <span>
+                                        {learningStats.pending === 0
+                                            ? 'Everything assigned to you is complete.'
+                                            : `${learningStats.pending} still to finish`}
+                                    </span>
+                                    {learningStats.overdue > 0 && (
+                                        <span className="inline-flex items-center gap-1 font-semibold text-red-600">
+                                            <FaClock /> {learningStats.overdue} overdue
+                                        </span>
+                                    )}
+                                    {learningStats.inProgress > 0 && (
+                                        <span className="text-[#0a8f6c] font-medium">
+                                            {learningStats.inProgress} in progress
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -538,8 +738,11 @@ const BenefitsLearningHub = () => {
                         ) : (
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                                 {learningCards.map((course) => (
-                                    <article key={course._id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-theme-primary/30 hover:shadow-md">
-                                        <div className="mb-3 flex items-center justify-between">
+                                    <article
+                                        key={course._id}
+                                        className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-theme-primary/30 hover:shadow-md"
+                                    >
+                                        <div className="mb-3 flex items-center justify-between gap-2">
                                             <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#20C997]/15 text-[#0a8f6c]">
                                                 <FaBook />
                                             </span>
@@ -552,7 +755,9 @@ const BenefitsLearningHub = () => {
                                             </span>
                                         </div>
                                         <h4 className="line-clamp-2 text-lg font-semibold text-slate-900">{course.title}</h4>
-                                        <p className="mt-2 line-clamp-2 text-sm text-slate-600">{course.description || 'Learning content available.'}</p>
+                                        <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-sm text-slate-600">
+                                            {course.description || 'Learning content available.'}
+                                        </p>
                                         {isExternalCourse(course) && (
                                             <p className="mt-2 text-xs font-semibold text-[#0a8f6c]">
                                                 {course.provider || externalResourceLabel(course.resourceType)}
@@ -563,19 +768,19 @@ const BenefitsLearningHub = () => {
                                             <p className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold ${isEnrollmentOverdue(course.enrollment) ? 'text-red-600' : 'text-slate-500'}`}>
                                                 <FaClock />
                                                 {isEnrollmentOverdue(course.enrollment) ? 'Overdue' : 'Due'}{' '}
-                                                {new Date(course.enrollment.dueDate).toLocaleDateString()}
+                                                {format(new Date(course.enrollment.dueDate), 'dd MMM yyyy')}
                                             </p>
                                         )}
 
                                         <div className="mt-3">
-                                            <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
+                                            <div className="mb-1.5 flex items-center justify-between text-xs text-slate-500">
                                                 <span>Progress</span>
-                                                <span>{course.progress}% complete</span>
+                                                <span className="font-semibold text-slate-700">{course.progress}% complete</span>
                                             </div>
-                                            <div className="h-2 w-full rounded-full bg-slate-100">
+                                            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                                                 <div
-                                                    className="h-2 rounded-full bg-gradient-to-r from-[#20C997] to-[#0a8f6c]"
-                                                    style={{ width: `${course.progress}%` }}
+                                                    className="h-full rounded-full bg-gradient-to-r from-[#20C997] to-[#0a8f6c] transition-all"
+                                                    style={{ width: `${Math.min(100, Math.max(0, Number(course.progress) || 0))}%` }}
                                                 />
                                             </div>
                                         </div>
@@ -583,7 +788,7 @@ const BenefitsLearningHub = () => {
                                         <button
                                             type="button"
                                             onClick={() => navigate(`/learning/courses/${course._id}`)}
-                                            className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl bg-theme-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-theme-primary"
+                                            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-theme-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
                                         >
                                             {course.status === 'Completed' && course.certificate?.enabled ? (
                                                 <>
