@@ -11,6 +11,7 @@
   "INVALID_TOKEN": "Invalid authentication token",
   "INTERNAL_ERROR": "Internal server error",
   "MISSING_ORGANIZATION_ID": "Organization ID is required",
+  "MISSING_TENANT_CONTEXT": "Organization context is required. Please sign in again.",
   "FILE_TOO_LARGE": "File size exceeds the maximum allowed limit",
   "INVALID_ID": "Invalid ID format",
   "INVALID_PAYROLL_ID": "Invalid payroll ID",

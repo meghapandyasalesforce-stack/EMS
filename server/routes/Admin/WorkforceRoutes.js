@@ -25,12 +25,14 @@ import {
     getWorkforceReports
 } from '../../controllers/workforce/workforceController.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import { attachAuthContext } from '../../middlewares/requirePermission.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 import { requireFeature } from '../../middlewares/tenantMiddleware.js';
 import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 
 const router = express.Router();
 
+router.use(attachAuthContext);
 router.use(requireFeature(SAAS_FEATURES.WORKFORCE_PLANNING));
 // Live headcount + dashboard + gap + reports
 router.route('/live-headcount')

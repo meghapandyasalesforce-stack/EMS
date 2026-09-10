@@ -71,6 +71,7 @@ import {
     deleteScreeningTemplate,
 } from '../../controllers/recruitment/resumeScreeningTemplateController.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import { attachAuthContext } from '../../middlewares/requirePermission.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 import { blockFailedScreeningActions } from '../../middlewares/blockFailedScreening.js';
 import { requireFeature } from '../../middlewares/tenantMiddleware.js';
@@ -78,6 +79,7 @@ import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 
 const router = express.Router();
 
+router.use(attachAuthContext);
 router.use(requireFeature(SAAS_FEATURES.RECRUITMENT));
 router.route('/screening/settings')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getScreeningSettings)

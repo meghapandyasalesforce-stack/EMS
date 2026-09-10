@@ -22,6 +22,7 @@ import { exportPayrollPDF } from "../../controllers/admin/pdfExportController.js
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isCEOAuthenticated from "../../middlewares/isCEOAuthenticated.js";
 import {
+  attachAuthContext,
   composeMiddleware,
   requireAnyPermission,
   requirePayrollPublish,
@@ -36,6 +37,7 @@ import { SAAS_FEATURES } from "../../constants/saasFeatures.js";
 
 const router = express.Router();
 
+router.use(attachAuthContext);
 router.use(requireFeature(SAAS_FEATURES.PAYROLL));
 
 const viewPayrollAll = composeMiddleware(
