@@ -15,6 +15,7 @@ import OrgWorkMode from '../models/orgMasters/workMode.model.js';
 import {
     DEFAULT_ORG_DEPARTMENTS,
     DEFAULT_ORG_DESIGNATIONS,
+    DEFAULT_ORG_JOB_ROLES,
     DEFAULT_EMPLOYMENT_TYPES,
 } from '../constants/onboardingDefaults.js';
 import logger from '../helpers/logger.js';
@@ -37,19 +38,42 @@ const DEFAULT_WORK_MODES = [
     { name: 'Field', code: 'FIELD' },
 ];
 
-const LEGACY_DESIGNATIONS = [
-    'Intern', 'Trainee', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor',
-    'Manager', 'Senior Manager', 'Director', 'VP', 'Executive', 'CEO', 'CTO', 'CFO',
-    'Software Engineer', 'Senior Software Engineer',
-];
+/** Normalized set of allowed designation (level) names */
+const LEVEL_DESIGNATION_KEYS = new Set(
+    DEFAULT_ORG_DESIGNATIONS.map((name) => String(name).toLowerCase().trim())
+);
 
-const LEGACY_JOB_ROLES = [
-    'Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer',
-    'HR Manager', 'HR Executive', 'Financial Analyst', 'Marketing Executive',
-    'Sales Representative', 'Product Manager', 'QA Tester', 'Customer Support Specialist',
-    'UX/UI Designer', 'Project Manager', 'Legal Advisor', 'Operations Coordinator',
-    'Full Stack Developer',
-];
+/** Role/function titles that were historically seeded as designations */
+const MISPLACED_DESIGNATION_KEYS = new Set(
+    [
+        ...DEFAULT_ORG_JOB_ROLES,
+        'Software Engineer',
+        'Senior Software Engineer',
+        'HR Manager',
+        'Finance Manager',
+        'Sales Executive',
+        'Marketing Manager',
+        'Operations Manager',
+        'Project Manager',
+        'Product Manager',
+        'Backend Developer',
+        'Frontend Developer',
+        'Full Stack Developer',
+        'DevOps Engineer',
+        'QA Tester',
+        'UX/UI Designer',
+        'Financial Analyst',
+        'Marketing Executive',
+        'Sales Representative',
+        'HR Executive',
+        'Operations Coordinator',
+        'Customer Support Specialist',
+        'Legal Advisor',
+        'Accountant',
+        'Recruiter',
+        'Data Analyst',
+    ].map((name) => String(name).toLowerCase().trim())
+);
 
 const slugCode = (name, index = 0) => {
     const base = String(name || 'ITEM')
@@ -59,6 +83,137 @@ const slugCode = (name, index = 0) => {
         .replace(/^_|_$/g, '')
         .slice(0, 24);
     return base || `ITEM_${index}`;
+};
+
+const isLevelDesignationName = (name) =>
+    LEVEL_DESIGNATION_KEYS.has(String(name || '').toLowerCase().trim());
+
+const isMisplacedDesignationName = (name) =>
+    MISPLACED_DESIGNATION_KEYS.has(String(name || '').toLowerCase().trim());
+
+const guessJobRoleDepartmentIds = (name, deptIdByName) => {
+    const engDeptId = deptIdByName.get('engineering') || [...deptIdByName.values()][0];
+    let departmentIds = engDeptId ? [engDeptId] : [];
+    const lower = String(name || '').toLowerCase();
+    if (lower.includes('hr')) {
+        const hrId = deptIdByName.get('hr') || deptIdByName.get('human resources');
+        if (hrId) departmentIds = [hrId];
+    } else if (lower.includes('financ') || lower.includes('account')) {
+        const finId = deptIdByName.get('finance');
+        if (finId) departmentIds = [finId];
+    } else if (lower.includes('sales')) {
+        const sId = deptIdByName.get('sales');
+        if (sId) departmentIds = [sId];
+    } else if (lower.includes('marketing')) {
+        const mId = deptIdByName.get('marketing');
+        if (mId) departmentIds = [mId];
+    } else if (lower.includes('operation')) {
+        const oId = deptIdByName.get('operations');
+        if (oId) departmentIds = [oId];
+    }
+    return departmentIds;
+};
+
+async function ensureJobRoleExists(organizationId, name, deptIdByName) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return null;
+    const existing = await OrgJobRole.findOne({
+        organizationId,
+        name: { $regex: `^${trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+    });
+    if (existing) {
+        if (existing.status !== 'active') {
+            existing.status = 'active';
+            await existing.save();
+        }
+        return existing;
+    }
+    return OrgJobRole.create({
+        organizationId,
+        name: trimmed,
+        code: slugCode(trimmed),
+        departmentIds: guessJobRoleDepartmentIds(trimmed, deptIdByName),
+        status: 'active',
+    });
+}
+
+/**
+ * Ensure designations are seniority levels only.
+ * Role-like designations are soft-deactivated and recreated as job roles.
+ */
+export const normalizeOrgDesignationCatalog = async (organizationId) => {
+    const departments = await OrgDepartment.find({ organizationId, status: 'active' })
+        .select('_id name')
+        .lean();
+    const deptIdByName = new Map(
+        departments.map((d) => [String(d.name || '').toLowerCase().trim(), d._id])
+    );
+
+    let createdLevels = 0;
+    let reactivatedLevels = 0;
+    for (let i = 0; i < DEFAULT_ORG_DESIGNATIONS.length; i += 1) {
+        const title = DEFAULT_ORG_DESIGNATIONS[i];
+        const existing = await OrgDesignation.findOne({
+            organizationId,
+            name: { $regex: `^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+        });
+        if (!existing) {
+            await OrgDesignation.create({
+                organizationId,
+                name: title,
+                code: slugCode(title, i),
+                levelOrder: i + 1,
+                status: 'active',
+            });
+            createdLevels += 1;
+            continue;
+        }
+        let dirty = false;
+        if (existing.status !== 'active') {
+            existing.status = 'active';
+            dirty = true;
+            reactivatedLevels += 1;
+        }
+        if (existing.name !== title) {
+            existing.name = title;
+            dirty = true;
+        }
+        if (existing.levelOrder !== i + 1) {
+            existing.levelOrder = i + 1;
+            dirty = true;
+        }
+        if (dirty) await existing.save();
+    }
+
+    // Default job roles always available
+    for (const roleName of DEFAULT_ORG_JOB_ROLES) {
+        await ensureJobRoleExists(organizationId, roleName, deptIdByName);
+    }
+
+    const activeDesignations = await OrgDesignation.find({ organizationId, status: 'active' });
+    let deactivated = 0;
+    let movedToJobRoles = 0;
+    for (const desig of activeDesignations) {
+        if (isLevelDesignationName(desig.name)) continue;
+        if (!isMisplacedDesignationName(desig.name)) continue;
+        await ensureJobRoleExists(organizationId, desig.name, deptIdByName);
+        movedToJobRoles += 1;
+        desig.status = 'inactive';
+        await desig.save();
+        deactivated += 1;
+    }
+
+    if (createdLevels || reactivatedLevels || deactivated) {
+        logger.info('Normalized org designations to levels-only', {
+            organizationId: String(organizationId),
+            createdLevels,
+            reactivatedLevels,
+            deactivated,
+            movedToJobRoles,
+        });
+    }
+
+    return { createdLevels, reactivatedLevels, deactivated, movedToJobRoles };
 };
 
 export const seedOrgStructureFromOrganization = async (organizationId) => {
@@ -71,6 +226,8 @@ export const seedOrgStructureFromOrganization = async (organizationId) => {
 
     const existingDepts = await OrgDepartment.countDocuments({ organizationId });
     if (existingDepts > 0) {
+        // Already initialized — still keep designations level-only for existing tenants
+        await normalizeOrgDesignationCatalog(organizationId);
         return { seeded: false, reason: 'already_initialized' };
     }
 
@@ -93,10 +250,18 @@ export const seedOrgStructureFromOrganization = async (organizationId) => {
         deptIdByName.set(name.toLowerCase(), doc._id);
     }
 
-    const desigSources = (org.orgDesignations?.length
+    // Prefer level designations from org onboarding only when they are actual levels;
+    // otherwise seed the canonical level list.
+    const desigSourcesRaw = (org.orgDesignations?.length
         ? org.orgDesignations
         : DEFAULT_ORG_DESIGNATIONS.map((title) => ({ title }))
     ).filter((d) => d?.title);
+
+    const levelFromOrg = desigSourcesRaw.filter((d) => isLevelDesignationName(d.title));
+    const roleLikeFromOrg = desigSourcesRaw.filter((d) => !isLevelDesignationName(d.title));
+    const desigSources = levelFromOrg.length
+        ? levelFromOrg
+        : DEFAULT_ORG_DESIGNATIONS.map((title) => ({ title }));
 
     const seenDesig = new Set();
     for (let i = 0; i < desigSources.length; i += 1) {
@@ -112,8 +277,8 @@ export const seedOrgStructureFromOrganization = async (organizationId) => {
             status: 'active',
         });
     }
-    for (let i = 0; i < LEGACY_DESIGNATIONS.length; i += 1) {
-        const title = LEGACY_DESIGNATIONS[i];
+    for (let i = 0; i < DEFAULT_ORG_DESIGNATIONS.length; i += 1) {
+        const title = DEFAULT_ORG_DESIGNATIONS[i];
         const key = title.toLowerCase();
         if (seenDesig.has(key)) continue;
         seenDesig.add(key);
@@ -152,29 +317,21 @@ export const seedOrgStructureFromOrganization = async (organizationId) => {
         });
     }
 
-    const engDeptId = deptIdByName.get('engineering') || [...deptIdByName.values()][0];
-    for (let i = 0; i < LEGACY_JOB_ROLES.length; i += 1) {
-        const name = LEGACY_JOB_ROLES[i];
-        let departmentIds = engDeptId ? [engDeptId] : [];
-        const lower = name.toLowerCase();
-        if (lower.includes('hr')) {
-            const hrId = deptIdByName.get('hr') || deptIdByName.get('human resources');
-            if (hrId) departmentIds = [hrId];
-        } else if (lower.includes('financial') || lower.includes('account')) {
-            const finId = deptIdByName.get('finance');
-            if (finId) departmentIds = [finId];
-        } else if (lower.includes('sales')) {
-            const sId = deptIdByName.get('sales');
-            if (sId) departmentIds = [sId];
-        } else if (lower.includes('marketing')) {
-            const mId = deptIdByName.get('marketing');
-            if (mId) departmentIds = [mId];
-        }
+    const jobRoleNames = [
+        ...DEFAULT_ORG_JOB_ROLES,
+        ...roleLikeFromOrg.map((d) => String(d.title).trim()),
+    ];
+    const seenRoles = new Set();
+    for (let i = 0; i < jobRoleNames.length; i += 1) {
+        const name = jobRoleNames[i];
+        const key = String(name || '').toLowerCase().trim();
+        if (!key || seenRoles.has(key)) continue;
+        seenRoles.add(key);
         await OrgJobRole.create({
             organizationId,
             name,
             code: slugCode(name, i),
-            departmentIds,
+            departmentIds: guessJobRoleDepartmentIds(name, deptIdByName),
             status: 'active',
         });
     }
@@ -211,7 +368,8 @@ export const listMasterRecords = async (organizationId, resource, filters = {}) 
     if (filters.departmentId && resource === 'jobRoles') {
         query.departmentIds = filters.departmentId;
     }
-    return Model.find(query).sort({ name: 1 }).lean();
+    const sort = resource === 'designations' ? { levelOrder: 1, name: 1 } : { name: 1 };
+    return Model.find(query).sort(sort).lean();
 };
 
 export const getStructureCatalog = async (organizationId, { departmentId } = {}) => {
@@ -325,12 +483,18 @@ export const deleteMasterRecord = async (organizationId, resource, id) => {
     return doc;
 };
 
+/** Treat "", null, and invalid ids as unset so Mongoose never sees "". */
+const normalizeOptionalObjectId = (value) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const s = String(value).trim();
+    if (!s || !mongoose.Types.ObjectId.isValid(s)) return undefined;
+    return s;
+};
+
 const loadMasterById = async (Model, organizationId, id, label) => {
-    if (!id) return null;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-        throw new Error(`Invalid ${label} id`);
-    }
-    const doc = await Model.findOne({ _id: id, organizationId, status: 'active' }).lean();
+    const normalizedId = normalizeOptionalObjectId(id);
+    if (!normalizedId) return null;
+    const doc = await Model.findOne({ _id: normalizedId, organizationId, status: 'active' }).lean();
     if (!doc) {
         throw new Error(`${label} not found in this organization`);
     }
@@ -343,10 +507,27 @@ const loadMasterById = async (Model, organizationId, id, label) => {
 export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
     const out = { ...input };
 
+    // Drop empty-string ObjectId fields from the client (e.g. teamId: "")
+    const idKeys = [
+        'departmentId',
+        'teamId',
+        'jobRoleId',
+        'designationId',
+        'locationId',
+        'employmentTypeId',
+        'workModeId',
+        'jobFamilyId',
+    ];
+    for (const key of idKeys) {
+        const normalized = normalizeOptionalObjectId(out[key]);
+        if (normalized) out[key] = normalized;
+        else delete out[key];
+    }
+
     const department = await loadMasterById(
         OrgDepartment,
         organizationId,
-        input.departmentId,
+        out.departmentId,
         'Department'
     );
     if (department) {
@@ -354,7 +535,7 @@ export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
         out.department = department.name;
     }
 
-    const team = await loadMasterById(OrgTeam, organizationId, input.teamId, 'Team');
+    const team = await loadMasterById(OrgTeam, organizationId, out.teamId, 'Team');
     if (team) {
         out.teamId = team._id;
         if (team.departmentId && !out.departmentId) {
@@ -366,7 +547,7 @@ export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
         }
     }
 
-    const jobRole = await loadMasterById(OrgJobRole, organizationId, input.jobRoleId, 'Job role');
+    const jobRole = await loadMasterById(OrgJobRole, organizationId, out.jobRoleId, 'Job role');
     if (jobRole) {
         out.jobRoleId = jobRole._id;
         out.jobTitle = jobRole.name;
@@ -382,7 +563,7 @@ export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
     const designation = await loadMasterById(
         OrgDesignation,
         organizationId,
-        input.designationId,
+        out.designationId,
         'Designation'
     );
     if (designation) {
@@ -390,7 +571,7 @@ export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
         out.position = designation.name;
     }
 
-    const location = await loadMasterById(OrgLocation, organizationId, input.locationId, 'Location');
+    const location = await loadMasterById(OrgLocation, organizationId, out.locationId, 'Location');
     if (location) {
         out.locationId = location._id;
         if (location.address?.city) {
@@ -401,7 +582,7 @@ export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
     const employmentType = await loadMasterById(
         OrgEmploymentType,
         organizationId,
-        input.employmentTypeId,
+        out.employmentTypeId,
         'Employment type'
     );
     if (employmentType) {
@@ -409,7 +590,7 @@ export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
         out.employmentType = employmentType.name;
     }
 
-    const workMode = await loadMasterById(OrgWorkMode, organizationId, input.workModeId, 'Work mode');
+    const workMode = await loadMasterById(OrgWorkMode, organizationId, out.workModeId, 'Work mode');
     if (workMode) {
         out.workModeId = workMode._id;
         out.workMode = workMode.name;
@@ -420,6 +601,7 @@ export const resolveEmployeeOrgFields = async (organizationId, input = {}) => {
 
 export default {
     seedOrgStructureFromOrganization,
+    normalizeOrgDesignationCatalog,
     getStructureCatalog,
     listMasterRecords,
     createMasterRecord,

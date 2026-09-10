@@ -6,7 +6,7 @@ import { FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
 
 const RESOURCES = [
     { key: 'departments', label: 'Departments', nameField: 'name' },
-    { key: 'teams', label: 'Teams', nameField: 'name', extra: { departmentId: '' } },
+    { key: 'teams', label: 'Teams', nameField: 'name' },
     { key: 'jobRoles', label: 'Job Roles', nameField: 'name' },
     { key: 'designations', label: 'Designations', nameField: 'name' },
     { key: 'locations', label: 'Locations', nameField: 'name' },
@@ -17,11 +17,18 @@ const RESOURCES = [
 const inputClass =
     'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20';
 
+function deptNameById(departments, id) {
+    if (!id) return null;
+    const d = (departments || []).find((x) => String(x._id) === String(id));
+    return d?.name || null;
+}
+
 export default function OrgStructurePage() {
     const [activeTab, setActiveTab] = useState('departments');
     const [newName, setNewName] = useState('');
     const [newCode, setNewCode] = useState('');
     const [teamDepartmentId, setTeamDepartmentId] = useState('');
+    const [jobRoleDepartmentId, setJobRoleDepartmentId] = useState('');
     const [saving, setSaving] = useState(false);
     const { catalog, loading, reload } = useOrgStructureCatalog();
 
@@ -56,6 +63,9 @@ export default function OrgStructurePage() {
             if (activeTab === 'teams') {
                 payload.departmentId = teamDepartmentId;
             }
+            if (activeTab === 'jobRoles' && jobRoleDepartmentId) {
+                payload.departmentId = jobRoleDepartmentId;
+            }
             await axios.post(`/v1/admin/org-structure/${activeTab}`, payload, { withCredentials: true });
             toast.success('Created');
             setNewName('');
@@ -88,8 +98,10 @@ export default function OrgStructurePage() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Organization Structure</h1>
-                            <p className="text-sm text-gray-600">
-                                Manage departments, job roles, designations, and other masters for your company.
+                            <p className="mt-1 text-sm text-gray-600 max-w-2xl">
+                                Build your company catalog: departments, teams, job roles, and designations.
+                                These are labels for hiring and org chart — they do not choose login dashboards.
+                                Access &amp; home screen is set with System Role when you add an employee.
                             </p>
                         </div>
                         <div className="flex gap-2">
@@ -101,6 +113,13 @@ export default function OrgStructurePage() {
                                 <FiRefreshCw /> Initialize defaults
                             </button>
                         </div>
+                    </div>
+
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                        <strong className="font-semibold">Tip:</strong> Create a department first, then teams under it,
+                        then job roles for the work people do (e.g. Backend Developer, Finance Manager). Designations are
+                        seniority levels only (e.g. Junior, Senior, Manager) — not job titles. Access &amp; home is
+                        separate when you add an employee.
                     </div>
 
                     <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
@@ -132,7 +151,19 @@ export default function OrgStructurePage() {
                                     onChange={(e) => setTeamDepartmentId(e.target.value)}
                                     required
                                 >
-                                    <option value="">Department</option>
+                                    <option value="">Department (required)</option>
+                                    {(catalog.departments || []).map((d) => (
+                                        <option key={d._id} value={d._id}>{d.name}</option>
+                                    ))}
+                                </select>
+                            ) : null}
+                            {activeTab === 'jobRoles' ? (
+                                <select
+                                    className={`${inputClass} mb-3`}
+                                    value={jobRoleDepartmentId}
+                                    onChange={(e) => setJobRoleDepartmentId(e.target.value)}
+                                >
+                                    <option value="">Department (optional — all depts if empty)</option>
                                     {(catalog.departments || []).map((d) => (
                                         <option key={d._id} value={d._id}>{d.name}</option>
                                     ))}
@@ -172,24 +203,39 @@ export default function OrgStructurePage() {
                                 </p>
                             ) : (
                                 <ul className="divide-y divide-slate-100">
-                                    {items.map((item) => (
-                                        <li key={item._id} className="flex items-center justify-between py-3">
-                                            <div>
-                                                <p className="font-medium text-slate-900">{item.name}</p>
-                                                {item.code ? (
-                                                    <p className="text-xs text-slate-500">{item.code}</p>
-                                                ) : null}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDelete(item._id)}
-                                                className="rounded p-2 text-red-500 hover:bg-red-50"
-                                                title="Deactivate"
-                                            >
-                                                <FiTrash2 />
-                                            </button>
-                                        </li>
-                                    ))}
+                                    {items.map((item) => {
+                                        let subtitle = item.code || '';
+                                        if (activeTab === 'teams' && item.departmentId) {
+                                            const dn = deptNameById(catalog.departments, item.departmentId);
+                                            subtitle = [subtitle, dn ? `Dept: ${dn}` : null].filter(Boolean).join(' · ');
+                                        }
+                                        if (activeTab === 'jobRoles' && Array.isArray(item.departmentIds) && item.departmentIds.length) {
+                                            const names = item.departmentIds
+                                                .map((id) => deptNameById(catalog.departments, id))
+                                                .filter(Boolean);
+                                            if (names.length) {
+                                                subtitle = [subtitle, `Dept: ${names.join(', ')}`].filter(Boolean).join(' · ');
+                                            }
+                                        }
+                                        return (
+                                            <li key={item._id} className="flex items-center justify-between py-3">
+                                                <div>
+                                                    <p className="font-medium text-slate-900">{item.name}</p>
+                                                    {subtitle ? (
+                                                        <p className="text-xs text-slate-500">{subtitle}</p>
+                                                    ) : null}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(item._id)}
+                                                    className="rounded p-2 text-red-500 hover:bg-red-50"
+                                                    title="Deactivate"
+                                                >
+                                                    <FiTrash2 />
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>

@@ -53,7 +53,7 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
     if (decoded.employeeProfileId && !employee) {
       employee = await Employee.findById(decoded.employeeProfileId)
         .select(
-          'name lastName email employeeId functionalRoles department position jobTitle organizationId status active isManager isHR manager userId'
+          'name lastName email employeeId functionalRoles department departmentId position jobTitle organizationId status active isManager isHR manager managerId userId accessDataScope accessDepartmentIds'
         )
         .lean();
     }
@@ -61,7 +61,7 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
     if (!employee) {
       employee = await Employee.findById(decoded.userId)
         .select(
-          'name lastName email employeeId functionalRoles department position jobTitle organizationId status active isManager isHR manager userId'
+          'name lastName email employeeId functionalRoles department departmentId position jobTitle organizationId status active isManager isHR manager managerId userId accessDataScope accessDepartmentIds'
         )
         .lean();
     }
@@ -217,8 +217,19 @@ export const shouldScopeDataToManagedTeam = (req) => {
   return Boolean(req.employee?.isManager && !req.employee?.isHR);
 };
 
-/** Data scope for list endpoints */
+/** Data scope for list endpoints — role default, overridable via employee.accessDataScope */
 export const getDataScope = (authContext) => {
+  const override = String(authContext?.employee?.accessDataScope || 'default').toLowerCase();
+  if (
+    override === 'organization' ||
+    override === 'department' ||
+    override === 'departments' ||
+    override === 'team' ||
+    override === 'self'
+  ) {
+    return override;
+  }
+
   if (authContext?.isOrgOwner || authContext?.isHrManager || authContext?.isHrExecutive) {
     if (hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_ALL)) {
       return 'organization';

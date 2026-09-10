@@ -197,21 +197,22 @@ export const employeeValidations = {
         body('linkAsOrgOwnerMe')
             .optional()
             .isBoolean().withMessage('linkAsOrgOwnerMe must be a boolean'),
+        // SaaS: department / job title / designation come from Org Structure masters (free text labels).
         body('position')
+            .trim()
             .notEmpty().withMessage('Position is required')
-            .isIn(['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO', 'Developer'])
-            .withMessage('Invalid position'),
+            .isLength({ min: 1, max: 120 }).withMessage('Position must be between 1 and 120 characters'),
         body('department')
+            .trim()
             .notEmpty().withMessage('Department is required')
-            .isIn(['Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations', 'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration'])
-            .withMessage('Invalid department'),
+            .isLength({ min: 1, max: 120 }).withMessage('Department must be between 1 and 120 characters'),
         body('manager')
             .optional()
             .trim(),
         body('jobTitle')
+            .trim()
             .notEmpty().withMessage('Job title is required')
-            .isIn(['Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager', 'HR Executive', 'Financial Analyst', 'Marketing Executive', 'Sales Representative', 'Product Manager', 'QA Tester', 'Customer Support Specialist', 'UX/UI Designer', 'Project Manager', 'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer'])
-            .withMessage('Invalid job title'),
+            .isLength({ min: 1, max: 120 }).withMessage('Job title must be between 1 and 120 characters'),
         body('jobCategory')
             .notEmpty().withMessage('Job category is required')
             .isIn(['Information Technology', 'Human Resources', 'Finance', 'Marketing', 'Sales', 'Operations', 'Customer Service', 'Research and Development', 'Engineering', 'Legal', 'Administration', 'Management', 'Design', 'Product Management'])
@@ -219,6 +220,28 @@ export const employeeValidations = {
         body('salary')
             .notEmpty().withMessage('Salary is required')
             .isFloat({ min: 0 }).withMessage('Salary must be a positive number'),
+        // Optional Org Structure ObjectIds — empty string must not fail or cast
+        body('departmentId')
+            .optional({ values: 'falsy' })
+            .isMongoId().withMessage('Invalid departmentId'),
+        body('teamId')
+            .optional({ values: 'falsy' })
+            .isMongoId().withMessage('Invalid teamId'),
+        body('jobRoleId')
+            .optional({ values: 'falsy' })
+            .isMongoId().withMessage('Invalid jobRoleId'),
+        body('designationId')
+            .optional({ values: 'falsy' })
+            .isMongoId().withMessage('Invalid designationId'),
+        body('locationId')
+            .optional({ values: 'falsy' })
+            .isMongoId().withMessage('Invalid locationId'),
+        body('employmentTypeId')
+            .optional({ values: 'falsy' })
+            .isMongoId().withMessage('Invalid employmentTypeId'),
+        body('workModeId')
+            .optional({ values: 'falsy' })
+            .isMongoId().withMessage('Invalid workModeId'),
         handleValidationErrors
     ],
 

@@ -149,6 +149,21 @@ const employeeSchema = new mongoose.Schema({
         }],
         default: []
     },
+
+    /**
+     * SaaS data visibility override (Zoho-style scope separate from System Role).
+     * default = derive from role (org for HR/payroll, team for managers, self for employees)
+     */
+    accessDataScope: {
+        type: String,
+        enum: ['default', 'organization', 'department', 'departments', 'team', 'self'],
+        default: 'default',
+    },
+    /** Used when accessDataScope === 'departments' — OrgDepartment ids in this tenant */
+    accessDepartmentIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgDepartment',
+    }],
     
     // Employee ID/Code generation — unique per organization (see compound index), not globally
     employeeId: { 

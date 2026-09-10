@@ -12,8 +12,7 @@ import { sendSuccess, sendError, sendNotFound, sendForbidden, sendValidationErro
 import { addOrganizationFilter, getOrganizationId } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
-import { buildManagerMatchQuery } from '../../helpers/managerHelper.js';
-import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
+import { applyEmployeeListDataScope } from '../../helpers/employeeListScopeHelper.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
 import { canManageEmployeeLifecycle } from '../../helpers/employeeLifecycleHelper.js';
 import {
@@ -117,19 +116,11 @@ export const getAllEmployees = async (req, res) => {
         const query = addOrganizationFilter(req, {});
         const organizationId = getOrganizationId(req);
 
-        // Line managers see only direct reports. HR / org owner / pure project managers keep org lists.
-        if (shouldScopeDataToManagedTeam(req)) {
-            const managerQuery = buildManagerMatchQuery(req.employee);
-            if (managerQuery && managerQuery.$or) {
-                query.$or = managerQuery.$or;
-            }
-            query.status = 'active'; // Only active employees for managers
-
-            const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
-            logger.info('Manager filtering employees by manager field', {
-                managerId: req.employee._id,
-                managerName: managerName,
-                matchingCriteria: 'Employees where managerId/manager field matches this manager'
+        const { scope } = applyEmployeeListDataScope(req, query);
+        if (scope === 'team') {
+            logger.info('Employee list scoped to managed team', {
+                managerId: req.employee?._id,
+                scope,
             });
         }
 
