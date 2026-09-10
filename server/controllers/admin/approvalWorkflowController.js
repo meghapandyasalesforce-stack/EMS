@@ -17,6 +17,44 @@ import asyncHandler from '../../middlewares/asyncHandler.js';
 import AttendanceRegularization from '../../models/attendanceRegularization.model.js';
 import { applyRegularizationApproval } from '../../services/attendanceRegularizationWorkflowService.js';
 import { isHrEmployee } from '../../helpers/regularizationWorkflowActionHelper.js';
+import {
+    HR_ROLE_SELECT,
+    applicantRequiresOrgAdminApproval,
+    resolveHrApplicantIds,
+} from '../../helpers/functionalRolesHelper.js';
+import Employee from '../../models/employee.model.js';
+
+const ADMIN_ONLY_APPROVAL_TYPES = new Set(['Leave', 'AttendanceRegularization']);
+
+/**
+ * Flag leave / regularization raised by HR staff — only the org admin may decide those.
+ * Resolved in one query so the pending list stays a single round trip.
+ */
+const decorateAdminOnlyApprovals = async (approvals) => {
+    const applicantIds = [
+        ...new Set(
+            approvals
+                .filter((a) => ADMIN_ONLY_APPROVAL_TYPES.has(a.entityType))
+                .map((a) => String(a.requestedBy?._id || a.requestedBy || ''))
+                .filter(Boolean)
+        ),
+    ];
+    if (!applicantIds.length) {
+        return approvals.map((a) => ({ ...a, requiresAdminApproval: false }));
+    }
+
+    const applicants = await Employee.find({ _id: { $in: applicantIds } })
+        .select(HR_ROLE_SELECT)
+        .lean();
+    const hrApplicantIds = await resolveHrApplicantIds(applicants);
+
+    return approvals.map((a) => ({
+        ...a,
+        requiresAdminApproval:
+            ADMIN_ONLY_APPROVAL_TYPES.has(a.entityType) &&
+            hrApplicantIds.has(String(a.requestedBy?._id || a.requestedBy || '')),
+    }));
+};
 
 /**
  * Create approval workflow
@@ -229,8 +267,12 @@ export const getMyPendingApprovals = asyncHandler(async (req, res) => {
     const approvals = await getPendingApprovals(approverId, organizationId, {
         includeHrOverrides: isHrEmployee(req),
     });
+    const decorated = await decorateAdminOnlyApprovals(approvals);
+    const visibleApprovals = req.authContext?.isOrgOwner
+        ? decorated
+        : decorated.filter((approval) => !approval.requiresAdminApproval);
 
-    return sendSuccess(res, approvals, 'Pending approvals retrieved successfully');
+    return sendSuccess(res, visibleApprovals, 'Pending approvals retrieved successfully');
 });
 
 /**
@@ -259,6 +301,24 @@ export const processApproval = asyncHandler(async (req, res) => {
 
     if (!['Approve', 'Reject', 'Request Changes'].includes(action)) {
         return sendError(res, 'Invalid action', 400);
+    }
+
+    const protectedInstance = await ApprovalInstance.findById(id)
+        .select('entityType organizationId requestedBy')
+        .lean();
+    if (!protectedInstance) {
+        return sendError(res, 'Approval instance not found', 404);
+    }
+    if (
+        ADMIN_ONLY_APPROVAL_TYPES.has(protectedInstance.entityType) &&
+        !req.authContext?.isOrgOwner &&
+        (await applicantRequiresOrgAdminApproval(protectedInstance.requestedBy))
+    ) {
+        return sendError(
+            res,
+            'This request was raised by HR staff and can only be approved or rejected by an organization admin',
+            403
+        );
     }
 
     // Additive HR override path: finalize without waiting for manager

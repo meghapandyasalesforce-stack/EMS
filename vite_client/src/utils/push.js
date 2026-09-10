@@ -87,6 +87,41 @@ export async function saveSubscriptionToServer(subscription) {
 }
 
 /**
+ * Safely obtain a ServiceWorkerRegistration without hanging indefinitely
+ */
+export async function getServiceWorkerRegistration(timeoutMs = 3000) {
+  if (!('serviceWorker' in navigator)) {
+    return null;
+  }
+
+  try {
+    let reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      try {
+        reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      } catch (err) {
+        // Ignored if service worker cannot be registered (e.g. dev mode or missing sw.js)
+      }
+    }
+
+    if (reg && reg.active) {
+      return reg;
+    }
+
+    // Wait for ready with a timeout so it never hangs forever
+    const readyPromise = navigator.serviceWorker.ready;
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve(null), timeoutMs)
+    );
+
+    const readyReg = await Promise.race([readyPromise, timeoutPromise]);
+    return readyReg || reg || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
  * Subscribe user to push notifications
  */
 export async function subscribeUser() {
@@ -100,11 +135,15 @@ export async function subscribeUser() {
   }
 
   const { data: keyData } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
-  if (!keyData.success || !keyData.publicKey) {
+  if (!keyData?.success || !keyData?.publicKey) {
     throw new Error('Push notifications not configured on server');
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await getServiceWorkerRegistration(4000);
+  if (!registration) {
+    throw new Error('Service worker is not active or available in this browser');
+  }
+
   const subscription = await ensurePushSubscription(registration, keyData.publicKey);
   await saveSubscriptionToServer(subscription);
 
@@ -124,14 +163,20 @@ export async function syncPushSubscriptionIfGranted() {
   }
 
   try {
-    const { data: keyData } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
-    if (!keyData.success || !keyData.publicKey) {
+    const registration = await getServiceWorkerRegistration(2500);
+    if (!registration || !registration.pushManager) {
       return null;
     }
 
-    const registration = await navigator.serviceWorker.ready;
+    const { data: keyData } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
+    if (!keyData?.success || !keyData?.publicKey) {
+      return null;
+    }
+
     const subscription = await ensurePushSubscription(registration, keyData.publicKey);
-    await saveSubscriptionToServer(subscription);
+    if (subscription) {
+      await saveSubscriptionToServer(subscription).catch(() => {});
+    }
     return subscription;
   } catch {
     return null;
@@ -148,3 +193,4 @@ export function getNotificationPermission() {
   }
   return Notification.permission;
 }
+

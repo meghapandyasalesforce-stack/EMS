@@ -7,6 +7,7 @@ import {
     getNextWorkflowInstanceStep,
     isTimeoutNextStepAssignee,
 } from '../services/approvalWorkflowService.js';
+import { assertApplicantApprovalAccess } from './functionalRolesHelper.js';
 
 export const EARLY_APPROVAL_CONFIRM_CODE = 'EARLY_APPROVAL_CONFIRM_REQUIRED';
 
@@ -254,6 +255,12 @@ export const resolveRegularizationWorkflowAction = async ({
     employeeLinked = true,
     confirmEarlyApproval = false,
 }) => {
+    await assertApplicantApprovalAccess(
+        req,
+        approvalInstance?.requestedBy,
+        'This regularization request'
+    );
+
     const reviewerEmployeeId = getReviewerEmployeeId(req);
     const workflowStep = await loadWorkflowStepDefinition(approvalInstance, currentStep);
     const approverType = workflowStep?.approverType || null;

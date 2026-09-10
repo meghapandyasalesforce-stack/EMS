@@ -106,6 +106,14 @@ function formatRelativeTime(iso) {
     return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** Absolute date, with a relative hint appended only while it still adds information. */
+function formatDocumentTimestamp(iso) {
+    if (!iso) return '—';
+    const absolute = new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const relative = formatRelativeTime(iso);
+    return relative === absolute ? absolute : `${absolute} (${relative})`;
+}
+
 /** Full name from populated employee (matches org standard: first + last). */
 function formatEmployeeFullName(person) {
     if (!person) return 'Unknown';
@@ -163,14 +171,14 @@ function documentDisplayTitle(doc) {
     return doc.name || doc.fileName || 'Untitled document';
 }
 
-/** PAN / Aadhar / other ID from job-details upload (new + legacy JSON description) */
+/** PAN / Aadhaar / other ID from job-details upload (new + legacy JSON description) */
 function documentDisplayNumber(doc) {
     const fromMeta = doc?.metadata?.documentNumber;
     if (fromMeta && String(fromMeta).trim()) return String(fromMeta).trim();
 
     const info = doc?.metadata?.additionalInfo;
     if (info && typeof info === 'object') {
-        const n = info.panNumber || info.aadharNumber || info.documentNumber || info.effectiveDate;
+        const n = info.panNumber || info.aadhaarNumber || info.aadharNumber || info.passportNumber || info.documentNumber || info.effectiveDate;
         if (n && String(n).trim()) return String(n).trim();
     }
 
@@ -178,14 +186,14 @@ function documentDisplayNumber(doc) {
     if (!desc || typeof desc !== 'string') return '';
 
     // Human-readable: "PAN Number: ABCDE1234F"
-    const labelMatch = desc.match(/^(?:PAN Number|Aadhar Number|Effective Date):\s*(.+)$/i);
+    const labelMatch = desc.match(/^(?:PAN Number|Aadhaar Number|Aadhar Number|Passport Number|Effective Date):\s*(.+)$/i);
     if (labelMatch?.[1]) return labelMatch[1].trim();
 
     // Legacy JSON description
     if (desc.trim().startsWith('{')) {
         try {
             const parsed = JSON.parse(desc);
-            const n = parsed.panNumber || parsed.aadharNumber || parsed.documentNumber || parsed.effectiveDate;
+            const n = parsed.panNumber || parsed.aadhaarNumber || parsed.aadharNumber || parsed.passportNumber || parsed.documentNumber || parsed.effectiveDate;
             if (n) return String(n).trim();
         } catch {
             /* ignore */
@@ -1067,7 +1075,7 @@ const DocumentsPage = () => {
                                     <th className="px-4 py-3 sm:px-5">Version</th>
                                     <th className="px-4 py-3 sm:px-5">Status</th>
                                     <th className="px-4 py-3 sm:px-5">Last modified</th>
-                                    <th className="px-4 py-3 text-right sm:px-5">Actions</th>
+                                    <th className="hr-docs-actions-col px-4 py-3 text-right sm:px-5">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -1146,36 +1154,34 @@ const DocumentsPage = () => {
                                                 )}
                                             </td>
                                             <td className="whitespace-nowrap px-4 py-3.5 text-slate-600 sm:px-5">
-                                                {doc.updatedAt
-                                                    ? `${new Date(doc.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} (${formatRelativeTime(doc.updatedAt)})`
-                                                    : formatRelativeTime(doc.createdAt)}
+                                                {formatDocumentTimestamp(doc.updatedAt || doc.createdAt)}
                                             </td>
-                                            <td className="whitespace-nowrap px-4 py-3.5 text-right sm:px-5">
+                                            <td className="hr-docs-actions-col whitespace-nowrap px-4 py-3.5 text-right sm:px-5">
                                                 <div className="inline-flex items-center justify-end gap-0.5 opacity-90 transition group-hover:opacity-100">
                                                         <button
                                                             type="button"
                                                             onClick={() => handlePreviewDocument(doc)}
-                                                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
+                                                            className="shrink-0 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
                                                             title="View"
                                                         >
-                                                            <FaEye className="w-4 h-4" />
+                                                            <FaEye className="w-3 h-3" />
                                                         </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleDownloadDocument(doc)}
-                                                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
+                                                            className="shrink-0 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
                                                             title="Download"
                                                         >
-                                                            <FaDownload className="w-4 h-4" />
+                                                            <FaDownload className="w-3 h-3" />
                                                         </button>
                                                         {isHRUser && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => copyShareLink(doc)}
-                                                                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
+                                                                className="shrink-0 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
                                                                 title="Copy link"
                                                             >
-                                                                <FaShareAlt className="w-4 h-4" />
+                                                                <FaShareAlt className="w-3 h-3" />
                                                             </button>
                                                         )}
                                                         {isHRUser && doc.category !== 'Employee' && (
@@ -1193,20 +1199,20 @@ const DocumentsPage = () => {
                                                                 type="button"
                                                                 onClick={() => setDeleteDoc(doc)}
                                                                 disabled={docActionLoading[doc._id] === 'delete'}
-                                                                className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition"
+                                                                className="shrink-0 p-1.5 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition"
                                                                 title="Delete"
                                                             >
-                                                                <FaTrash className="w-4 h-4" />
+                                                                <FaTrash className="w-3 h-3" />
                                                             </button>
                                                         )}
                                                         {doc.version > 1 && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => navigate(`/documents/${doc._id}/versions`)}
-                                                                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-violet-600 transition"
+                                                                className="shrink-0 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-violet-600 transition"
                                                                 title="Version history"
                                                             >
-                                                                <FaHistory className="w-4 h-4" />
+                                                                <FaHistory className="w-3 h-3" />
                                                             </button>
                                                         )}
                                                     </div>
@@ -1569,20 +1575,17 @@ const DocumentsPage = () => {
             {/* In-page document preview (same tab) */}
             {previewDoc && (
                 <div className="fixed inset-0 z-[110] flex flex-col bg-slate-900/90">
-                    <div className="flex items-center justify-between gap-4 px-4 py-3 bg-white border-b border-gray-200 shrink-0">
-                        <h3 className="font-semibold text-gray-800 truncate">{previewDoc.title}</h3>
-                        <button
-                            type="button"
-                            onClick={closePreview}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
-                        >
-                            <FaTimes className="w-3.5 h-3.5" />
-                            Close
-                        </button>
-                    </div>
-                    <div className="flex-1 min-h-0 bg-gray-100">
+                    <button
+                        type="button"
+                        onClick={closePreview}
+                        className="absolute top-[7px] right-[10px] z-10 inline-flex items-center gap-1.5 px-3 py-[7px] text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition shadow-lg"
+                    >
+                        <FaTimes className="w-3 h-3" />
+                        Close
+                    </button>
+                    <div className="flex-1 min-h-0 overflow-hidden">
                         {previewDoc.mimeType?.startsWith('image/') ? (
-                            <div className="flex items-center justify-center w-full h-full p-4">
+                            <div className="flex items-center justify-center w-full h-full p-4 bg-gray-100">
                                 <img
                                     src={previewDoc.url}
                                     alt={previewDoc.title}
@@ -1593,7 +1596,7 @@ const DocumentsPage = () => {
                             <iframe
                                 src={previewDoc.url}
                                 title={previewDoc.title}
-                                className="w-full h-full border-0 bg-white"
+                                className="w-full h-full border-0"
                             />
                         )}
                     </div>

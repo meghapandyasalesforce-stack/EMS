@@ -5,6 +5,8 @@ import {
     getAdminCourseById,
     updateCourse,
     getAllLearningEnrollments,
+    assignCourse,
+    getLearningAssignmentTeams,
     createLearningPath,
     getLearningPaths,
     generateCertificate,
@@ -28,6 +30,12 @@ router.route('/courses/:id')
 
 router.route('/enrollments')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAllLearningEnrollments);
+
+router.route('/assignments')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, assignCourse);
+
+router.route('/assignment-teams')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getLearningAssignmentTeams);
 
 // Learning Paths
 router.route('/learning-paths')

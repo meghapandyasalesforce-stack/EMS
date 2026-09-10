@@ -5,7 +5,6 @@ import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'react-toastify';
 import CourseFormShell from './CourseFormShell';
-import { MINT_GRADIENT } from '../Reports/constants';
 
 const EditCourse = () => {
     const { courseId } = useParams();
@@ -19,8 +18,18 @@ const EditCourse = () => {
         category: 'Technical',
         level: 'Beginner',
         duration: 0,
+        provider: '',
+        resourceType: '',
+        externalUrl: '',
+        thumbnail: '',
+        isMandatory: false,
         status: 'Draft',
-        content: []
+        content: [],
+        certificate: {
+            enabled: false,
+            template: '',
+            validityPeriod: ''
+        }
     });
     const [newModule, setNewModule] = useState({
         moduleTitle: '',
@@ -48,8 +57,18 @@ const EditCourse = () => {
                     category: course.category || 'Technical',
                     level: course.level || 'Beginner',
                     duration: Number(course.duration || 0),
+                    provider: course.provider || '',
+                    resourceType: course.resourceType || '',
+                    externalUrl: course.externalUrl || '',
+                    thumbnail: course.thumbnail || '',
+                    isMandatory: Boolean(course.isMandatory),
                     status: course.status || 'Draft',
-                    content: Array.isArray(course.content) ? course.content : []
+                    content: Array.isArray(course.content) ? course.content : [],
+                    certificate: {
+                        enabled: Boolean(course.certificate?.enabled),
+                        template: course.certificate?.template || '',
+                        validityPeriod: course.certificate?.validityPeriod || ''
+                    }
                 });
             } catch (error) {
                 toast.error(error.response?.data?.message || 'Failed to load course');
@@ -62,10 +81,21 @@ const EditCourse = () => {
     }, [courseId, navigate]);
 
     const handleInputChange = (e) => {
-        const { name, value, type } = e.target;
+        const { name, value, type, checked } = e.target;
+        if (name.includes('.')) {
+            const [parent, child] = name.split('.');
+            setFormData((prev) => ({
+                ...prev,
+                [parent]: {
+                    ...prev[parent],
+                    [child]: type === 'checkbox' ? checked : value
+                }
+            }));
+            return;
+        }
         setFormData((prev) => ({
             ...prev,
-            [name]: type === 'number' ? parseFloat(value) || 0 : value
+            [name]: type === 'checkbox' ? checked : (type === 'number' ? parseFloat(value) || 0 : value)
         }));
     };
 
@@ -114,7 +144,17 @@ const EditCourse = () => {
                 `/v1/admin/learning/courses/${courseId}`,
                 {
                     ...formData,
+                    resourceType: formData.resourceType || null,
+                    provider: formData.provider.trim() || null,
+                    externalUrl: formData.externalUrl.trim() || null,
+                    thumbnail: formData.thumbnail.trim() || null,
                     duration: Number(formData.duration || 0),
+                    certificate: {
+                        ...formData.certificate,
+                        validityPeriod: formData.certificate.validityPeriod
+                            ? Number(formData.certificate.validityPeriod)
+                            : undefined
+                    },
                     content: formData.content.map((module, idx) => ({
                         ...module,
                         order: idx + 1
@@ -189,13 +229,60 @@ const EditCourse = () => {
                         </div>
                     </div>
 
-                    <div>
+                    <div className="space-y-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                        <h2 className="text-lg font-semibold text-gray-800">Learning Resource</h2>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Resource Type</label>
+                                <select name="resourceType" value={formData.resourceType} onChange={handleInputChange} className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                                    <option value="">Course Modules (existing LMS)</option>
+                                    <option value="YOUTUBE">YouTube Video</option>
+                                    <option value="YOUTUBE_PLAYLIST">YouTube Playlist</option>
+                                    <option value="EXTERNAL_LINK">External Course Link</option>
+                                </select>
+                            </div>
+                            {formData.resourceType && (
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Provider</label>
+                                    <input name="provider" value={formData.provider} onChange={handleInputChange} placeholder="YouTube, Coursera, Udemy..." className="w-full rounded-lg border border-gray-300 px-3 py-2" />
+                                </div>
+                            )}
+                        </div>
+                        {formData.resourceType && (
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">External URL</label>
+                                    <input type="url" name="externalUrl" value={formData.externalUrl} onChange={handleInputChange} required className="w-full rounded-lg border border-gray-300 px-3 py-2" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Thumbnail URL</label>
+                                    <input type="url" name="thumbnail" value={formData.thumbnail} onChange={handleInputChange} className="w-full rounded-lg border border-gray-300 px-3 py-2" />
+                                </div>
+                            </div>
+                        )}
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <input type="checkbox" name="isMandatory" checked={formData.isMandatory} onChange={handleInputChange} className="h-4 w-4" />
+                            Mandatory training
+                        </label>
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <input type="checkbox" name="certificate.enabled" checked={formData.certificate.enabled} onChange={handleInputChange} className="h-4 w-4" />
+                            Enable Certificate (optional)
+                        </label>
+                        {formData.certificate.enabled && (
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Certificate validity (months)</label>
+                                <input type="number" min="1" name="certificate.validityPeriod" value={formData.certificate.validityPeriod} onChange={handleInputChange} className="w-full rounded-lg border border-gray-300 px-3 py-2 md:w-1/2" />
+                            </div>
+                        )}
+                    </div>
+
+                    {!formData.resourceType && <div>
                         <div className="mb-3 flex items-center justify-between">
                             <h2 className="text-lg font-semibold text-gray-800">Modules</h2>
                             <button
                                 type="button"
                                 onClick={addModule}
-                                className="inline-flex items-center gap-2 rounded-lg bg-theme-secondary px-3 py-2 text-sm text-white hover:bg-theme-primary"
+                                className="inline-flex items-center gap-2 rounded-lg bg-theme-primary px-3 py-2 text-sm text-white hover:bg-theme-primary"
                             >
                                 <FaPlus /> Add Module
                             </button>
@@ -262,14 +349,13 @@ const EditCourse = () => {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </div>}
 
                     <div className="flex justify-end">
                         <button
                             type="submit"
                             disabled={saving}
-                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
-                            style={{ background: MINT_GRADIENT }}
+                            className="inline-flex items-center gap-2 rounded-xl bg-theme-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-theme-primary disabled:opacity-60"
                         >
                             <FaSave /> {saving ? 'Saving...' : 'Save Course'}
                         </button>

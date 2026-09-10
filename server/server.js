@@ -45,7 +45,9 @@ import logger from "./helpers/logger.js";
 
 // Initialize centralized notification event registry
 import './helpers/notificationEventRegistry.js';
-
+// Isolated Birthday & Anniversary v2 event registry
+import './helpers/celebrationEventRegistry.js';
+import { startCelebrationNotificationScheduler } from './helpers/celebrationNotificationScheduler.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

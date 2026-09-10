@@ -15,16 +15,18 @@ import {
 } from 'react-icons/fi';
 import { getAllLeaves, updateLeave } from '../context/leaveSlice';
 import { toast } from 'react-toastify';
-import axios, { getUploadUrl } from '../utils/axios';
+import axios from '../utils/axios';
 import { ADMIN_LEAVE_ENDPOINT } from '../utils/constant';
 import useAuthPermissions from '../Hooks/useAuthPermissions';
+import { useSignedProfilePhoto } from '../Hooks/useSignedProfilePhoto';
 import { isHR } from '../utils/managerHelper';
+import RegularizationRequests from '../Manager/AttendanceRegularization/RegularizationRequests';
 import {
   formatAuditTimelineEvent,
-  formatCapitalRequestStatus,
   formatLeaveApprovalStageDisplay,
   getWorkflowWaitingLabel,
 } from '../utils/approvalStatusDisplay';
+import { formatStatusLabel, formatUiLabel, UI_BADGE_TEXT_CLASS } from '../utils/textFormat.js';
 import 'react-toastify/dist/ReactToastify.css';
 
 const TEAL = '#20C997';
@@ -148,19 +150,14 @@ function managerDisplayName(leave) {
   return '—';
 }
 
-function profilePhotoSrc(leave) {
-  const emp = leave?.employee;
-  const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
-  if (!photoRef) return null;
-  if (typeof photoRef === 'string') {
-    return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
-  }
-  return getUploadUrl(photoRef.url || photoRef);
-}
-
 function RowAvatar({ leave, sizeClass = 'h-10 w-10 text-xs', roundedClass = 'rounded-full' }) {
   const [broken, setBroken] = useState(false);
-  const url = profilePhotoSrc(leave);
+  const emp = leave?.employee;
+  const userId = emp?._id || emp?.id || null;
+  const { photoUrl: url } = useSignedProfilePhoto(emp?.profilePhoto || emp?.profilePicture, {
+    userType: 'employee',
+    userId,
+  });
   const initials = initialsFromLeave(leave);
 
   return (
@@ -195,10 +192,13 @@ const LeaveManagement = () => {
   const { leaves, loading, error } = useSelector((state) => state.leave);
   const currentUser = useSelector((state) => state.auth?.user);
   const sessionEmployee = useSelector((state) => state.employeeDetails?.employee);
-  const { isHrManager, isHrExecutive } = useAuthPermissions();
+  const { isOrgOwner, isHrManager, isHrExecutive } = useAuthPermissions();
+  /** Leave raised by HR staff is admin-only; everything else keeps the manager → HR flow. */
+  const canDecide = (leave) => isOrgOwner || !leave?.requiresAdminApproval;
   const showManagerColumn =
     isHrManager || isHrExecutive || isHR(currentUser) || isHR(sessionEmployee);
 
+  const [activeView, setActiveView] = useState('leave');
   const [selectedId, setSelectedId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -408,17 +408,17 @@ const LeaveManagement = () => {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-amber-100 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-700 shadow-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-amber-100 bg-white px-3 py-1.5 text-xs font-semibold tracking-wide text-slate-700 shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                {statusCounts.pending} Pending
+                {statusCounts.pending} {formatStatusLabel('pending')}
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-700 shadow-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-white px-3 py-1.5 text-xs font-semibold tracking-wide text-slate-700 shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-[#20C997]" />
-                {statusCounts.approved} Approved
+                {statusCounts.approved} {formatStatusLabel('approved')}
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold tracking-wide text-slate-600 shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-slate-400" />
-                {statusCounts.rejected} Rejected
+                {statusCounts.rejected} {formatStatusLabel('rejected')}
               </span>
               <p className="w-full text-[11px] text-slate-400 sm:w-auto sm:pl-1">
                 Counts: first 100 in {filterYear}
@@ -426,6 +426,34 @@ const LeaveManagement = () => {
             </div>
           </header>
 
+          {isOrgOwner && (
+            <div className="flex w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex sm:w-fit">
+              {[
+                { key: 'leave', label: 'Leave Requests', icon: FiCalendar },
+                { key: 'regularization', label: 'Regularization', icon: FiClock },
+              ].map(({ key, label, icon: Icon }) => {
+                const active = activeView === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActiveView(key)}
+                    className={`inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-4 ${
+                      active ? 'bg-[#0a8f6c] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {activeView === 'regularization' ? (
+            <RegularizationRequests embedded />
+          ) : (
+          <>
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               {typeof error === 'string' ? error : error?.message || 'An error occurred'}
@@ -502,16 +530,16 @@ const LeaveManagement = () => {
 
             <div className="flex gap-2 border-b border-slate-100 pb-0 overflow-x-auto">
               {[
-                { key: 'all', label: 'ALL' },
-                { key: 'pending', label: 'PENDING REVIEW' },
-                { key: 'approved', label: 'APPROVED' },
-                { key: 'rejected', label: 'REJECTED' },
+                { key: 'all', label: formatUiLabel('all') },
+                { key: 'pending', label: formatUiLabel('pending review') },
+                { key: 'approved', label: formatStatusLabel('approved') },
+                { key: 'rejected', label: formatStatusLabel('rejected') },
               ].map((t) => (
                 <button
                   key={t.key}
                   type="button"
                   onClick={() => handleTab(t.key)}
-                  className={`relative shrink-0 pb-3 whitespace-nowrap text-xs font-bold uppercase tracking-wide transition sm:text-sm ${
+                  className={`relative shrink-0 pb-3 whitespace-nowrap text-xs font-bold tracking-wide transition sm:text-sm ${
                     filterStatus === t.key ? 'text-[#0a8f6c]' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
@@ -624,7 +652,7 @@ const LeaveManagement = () => {
                             <td className="px-3 py-3">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span
-                                  className={`inline-flex items-center gap-1.5 font-semibold capitalize ${statusBg}`}
+                                  className={`inline-flex items-center gap-1.5 font-semibold ${statusBg}`}
                                 >
                                   <span className={`h-2 w-2 rounded-full ${statusDot}`} />
                                   {formatLeaveApprovalStageDisplay(leave)}
@@ -643,7 +671,7 @@ const LeaveManagement = () => {
                                 className="inline-flex items-center justify-end gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {st === 'pending' && (
+                                {st === 'pending' && canDecide(leave) && (
                                   <>
                                     <button
                                       type="button"
@@ -726,6 +754,8 @@ const LeaveManagement = () => {
           >
             + New Request
           </button>
+          </>
+          )}
         </div>
       </div>
 
@@ -752,10 +782,10 @@ const LeaveManagement = () => {
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Leave request</p>
                   <div className="mt-2">
                     <span
-                      className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                      className={UI_BADGE_TEXT_CLASS}
                       style={leaveStatusPillStyle(selectedLeave.status)}
                     >
-                      {formatCapitalRequestStatus(selectedLeave.status)}
+                      {formatStatusLabel(selectedLeave.status)}
                     </span>
                   </div>
                   {(selectedLeave.status || '').toLowerCase() === 'pending' ? (
@@ -962,7 +992,7 @@ const LeaveManagement = () => {
                   </ul>
                 </div>
 
-                {(selectedLeave.status || '').toLowerCase() === 'pending' && (
+                {(selectedLeave.status || '').toLowerCase() === 'pending' && canDecide(selectedLeave) && (
                   <div className="mt-5">
                     <label
                       htmlFor="lm-reject-reason"
@@ -982,7 +1012,7 @@ const LeaveManagement = () => {
                 )}
               </div>
 
-              {(selectedLeave.status || '').toLowerCase() === 'pending' && (
+              {(selectedLeave.status || '').toLowerCase() === 'pending' && canDecide(selectedLeave) && (
                 <div className="flex gap-2 border-t border-slate-100 bg-white px-5 py-4 sm:px-6">
                   <button
                     type="button"

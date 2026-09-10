@@ -24,6 +24,7 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
     'Personal Details',
     'Contact Details',
     'Education Qualifications',
+    'Professional Experience',
     'Family Details',
     'Documents',
     'Financial Details',
@@ -43,6 +44,9 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
         break;
       case 'Education Qualifications':
         navigate('/education-qualifications');
+        break;
+      case 'Professional Experience':
+        navigate('/professional-experience');
         break;
       case 'Family Details':
         navigate('/family-details');

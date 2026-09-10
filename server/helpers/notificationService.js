@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Notification from '../models/notification.model.js';
 import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
@@ -384,27 +385,69 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
  * Build Mongo filter for notifications visible to a user (personal + broadcasts, excluding hidden).
  * @param {ObjectId|string} organizationId
  * @param {string[]} recipientIds - User and/or Employee IDs for the session
- * @param {{ unreadOnly?: boolean }} options
+ * @param {{ unreadOnly?: boolean, announcementJoinedAt?: Date|null }} options
+ *   announcementJoinedAt — announcements created before this date are hidden (new-hire cutoff).
+ *   Other notification types are unchanged.
  */
 export const buildUserNotificationFilter = (organizationId, recipientIds, options = {}) => {
-  const ids = (recipientIds || []).map((id) => id.toString());
+  const rawIds = recipientIds || [];
+  const objectIds = [];
+  const stringIds = [];
+
+  for (const id of rawIds) {
+    if (!id) continue;
+    const str = id.toString();
+    stringIds.push(str);
+    if (mongoose.Types.ObjectId.isValid(str)) {
+      objectIds.push(new mongoose.Types.ObjectId(str));
+    }
+  }
+
+  const allIds = [...new Set([...objectIds, ...stringIds])];
+
+  const orgFilter = organizationId && mongoose.Types.ObjectId.isValid(organizationId.toString())
+    ? { $in: [new mongoose.Types.ObjectId(organizationId.toString()), organizationId.toString()] }
+    : organizationId;
+
   const notHidden = {
     $or: [
       { isBroadcast: { $ne: true } },
-      { 'hiddenBy.userId': { $nin: ids } },
+      { 'hiddenBy.userId': { $nin: allIds } },
     ],
+  };
+
+  const announcementAudience =
+    options.announcementJoinedAt instanceof Date && !Number.isNaN(options.announcementJoinedAt.getTime())
+      ? { createdAt: { $gte: options.announcementJoinedAt } }
+      : {};
+
+  /** Non-announcement broadcasts keep prior behavior. */
+  const otherBroadcastBase = {
+    isBroadcast: true,
+    type: { $ne: 'announcement' },
+  };
+
+  /** Announcement broadcasts — optional join-date audience cutoff. */
+  const announcementBroadcastBase = {
+    isBroadcast: true,
+    type: 'announcement',
+    ...announcementAudience,
   };
 
   if (options.unreadOnly) {
     return {
-      organizationId,
+      organizationId: orgFilter,
       $and: [
         {
           $or: [
-            { recipient: { $in: ids }, isBroadcast: { $ne: true }, isRead: false },
+            { recipient: { $in: allIds }, isBroadcast: { $ne: true }, isRead: false },
             {
-              isBroadcast: true,
-              'readReceipts.userId': { $nin: ids },
+              ...otherBroadcastBase,
+              'readReceipts.userId': { $nin: allIds },
+            },
+            {
+              ...announcementBroadcastBase,
+              'readReceipts.userId': { $nin: allIds },
             },
           ],
         },
@@ -414,17 +457,144 @@ export const buildUserNotificationFilter = (organizationId, recipientIds, option
   }
 
   return {
-    organizationId,
+    organizationId: orgFilter,
     $and: [
       {
         $or: [
-          { recipient: { $in: ids }, isBroadcast: { $ne: true } },
-          { isBroadcast: true },
+          { recipient: { $in: allIds }, isBroadcast: { $ne: true } },
+          otherBroadcastBase,
+          announcementBroadcastBase,
         ],
       },
       notHidden,
     ],
   };
+};
+
+/**
+ * Audience cutoff for announcements = when the person was added to EMS.
+ * Prefer createdAt (record created in system) over joiningDate (often backdated).
+ */
+export const toAnnouncementJoinedAt = (...dateCandidatesInPriorityOrder) => {
+  for (const value of dateCandidatesInPriorityOrder) {
+    if (!value) continue;
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+};
+
+/**
+ * Resolve announcement viewer context from a JWT userId (User or Employee id).
+ * Used only for announcement broadcast filtering — other notification types ignore this.
+ */
+export const resolveAnnouncementViewerContext = async (userId) => {
+  if (!userId) {
+    return { organizationId: null, recipientIds: [], joinedAt: null };
+  }
+
+  const recipientIds = new Set([userId.toString()]);
+  let organizationId = null;
+  let joinedAt = null;
+
+  try {
+    const UserModel = (await import('../models/user.model.js')).default;
+    const EmployeeModel = (await import('../models/employee.model.js')).default;
+
+    const user = await UserModel.findById(userId).select('organizationId createdAt').lean();
+    if (user) {
+      organizationId = user.organizationId || null;
+      const linked = await EmployeeModel.findOne({ userId })
+        .select('_id joiningDate createdAt organizationId')
+        .lean();
+      if (linked) {
+        recipientIds.add(linked._id.toString());
+        organizationId = organizationId || linked.organizationId || null;
+        // createdAt = added to EMS; joiningDate may be backdated
+        joinedAt = toAnnouncementJoinedAt(linked.createdAt, linked.joiningDate, user.createdAt);
+      } else {
+        joinedAt = toAnnouncementJoinedAt(user.createdAt);
+      }
+    } else {
+      const employee = await EmployeeModel.findById(userId)
+        .select('_id userId joiningDate createdAt organizationId')
+        .lean();
+      if (employee) {
+        organizationId = employee.organizationId || null;
+        joinedAt = toAnnouncementJoinedAt(employee.createdAt, employee.joiningDate);
+        if (employee.userId) {
+          recipientIds.add(employee.userId.toString());
+          const linkedUser = await UserModel.findById(employee.userId).select('createdAt').lean();
+          if (linkedUser?.createdAt) {
+            joinedAt = toAnnouncementJoinedAt(employee.createdAt, employee.joiningDate, linkedUser.createdAt);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to resolve announcement viewer context', {
+      userId: userId?.toString?.() || userId,
+      error: error.message,
+    });
+  }
+
+  return {
+    organizationId,
+    recipientIds: [...recipientIds],
+    joinedAt,
+  };
+};
+
+/**
+ * Announcement-broadcast only: visible to this viewer (org + joined-on-or-before send).
+ * Non-announcement notifications always return true (unchanged).
+ */
+export const isAnnouncementInAudienceForViewer = (
+  notification,
+  { organizationId = null, joinedAt = null } = {}
+) => {
+  if (!notification?.isBroadcast || notification.type !== 'announcement') {
+    return true;
+  }
+  if (
+    organizationId &&
+    notification.organizationId &&
+    String(notification.organizationId) !== String(organizationId)
+  ) {
+    return false;
+  }
+  if (joinedAt) {
+    const created = new Date(notification.createdAt);
+    if (!Number.isNaN(created.getTime()) && created < joinedAt) {
+      return false;
+    }
+  }
+  return true;
+};
+
+/**
+ * Announcement-broadcast only: already read by any of the viewer's IDs.
+ */
+export const isAnnouncementReadByViewer = (notification, recipientIds = []) => {
+  if (!notification?.isBroadcast || notification.type !== 'announcement') {
+    return false;
+  }
+  const idSet = new Set((recipientIds || []).map((id) => String(id)));
+  return (notification.readReceipts || []).some((r) => idSet.has(String(r.userId)));
+};
+
+/**
+ * Filter SSE/live payloads: drop already-read or pre-join announcements only.
+ * All other notification types pass through unchanged.
+ */
+export const filterAnnouncementPayloadForViewer = (notifications, viewerCtx = {}) => {
+  const list = Array.isArray(notifications) ? notifications : [];
+  return list.filter((n) => {
+    if (!n?.isBroadcast || n.type !== 'announcement') return true;
+    if (!isAnnouncementInAudienceForViewer(n, viewerCtx)) return false;
+    if (isAnnouncementReadByViewer(n, viewerCtx.recipientIds)) return false;
+    return true;
+  });
 };
 
 /**
@@ -525,7 +695,7 @@ export const markNotificationAsRead = async (
  * @param {String} organizationId - Organization ID
  * @returns {Number} Unread count
  */
-export const getUnreadNotificationCount = async (userIdOrIds, organizationId) => {
+export const getUnreadNotificationCount = async (userIdOrIds, organizationId, options = {}) => {
   try {
     if (!organizationId) {
       logger.error('OrganizationId is required for getUnreadNotificationCount', { userIdOrIds });
@@ -533,7 +703,10 @@ export const getUnreadNotificationCount = async (userIdOrIds, organizationId) =>
     }
 
     const ids = Array.isArray(userIdOrIds) ? userIdOrIds : [userIdOrIds];
-    const filter = buildUserNotificationFilter(organizationId, ids, { unreadOnly: true });
+    const filter = buildUserNotificationFilter(organizationId, ids, {
+      unreadOnly: true,
+      announcementJoinedAt: options.announcementJoinedAt || null,
+    });
     return await Notification.countDocuments(filter);
   } catch (error) {
     logger.error('Error getting unread notification count', {

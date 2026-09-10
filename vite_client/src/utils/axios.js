@@ -124,7 +124,7 @@ export const getBackendBaseURL = () => {
 export const getUploadUrl = (relativePath) => {
   // Handle null, undefined, or empty values
   if (!relativePath) return null;
-  
+
   // Convert to string if it's not already (handles objects, numbers, etc.)
   let path = relativePath;
   if (typeof relativePath !== 'string') {
@@ -141,17 +141,17 @@ export const getUploadUrl = (relativePath) => {
       path = String(relativePath);
     }
   }
-  
+
   // Ensure it's a string at this point
   if (typeof path !== 'string' || !path) {
     return null;
   }
-  
+
   // If already a full URL, return as is
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-  
+
   if (path.startsWith('/uploads')) {
     const base = getBackendBaseURL();
     if (base) {
@@ -162,14 +162,41 @@ export const getUploadUrl = (relativePath) => {
     }
     return path;
   }
-  
+
   // If it's just a filename or path without leading slash, add /uploads
   if (path.startsWith('uploads')) {
     return `${getBackendBaseURL()}/${path}`;
   }
-  
+
   // Default: assume it's a relative path
   return `${getBackendBaseURL()}/uploads/${path}`;
+};
+
+// Safe wrapper that normalizes file input before calling getUploadUrl
+export const normalizeUploadInput = (file) => {
+  if (!file) return '';
+
+  if (typeof file === 'string') {
+    return file;
+  }
+
+  if (typeof file === 'object') {
+    return (
+      file.url ||
+      file.path ||
+      file.filename ||
+      file.fileName ||
+      file.secure_url ||
+      ''
+    );
+  }
+
+  return '';
+};
+
+export const getSafeUploadUrl = (file) => {
+  const normalized = normalizeUploadInput(file);
+  return normalized ? getUploadUrl(normalized) : '';
 };
 
 /** Resolve profile photo to a full URL (localhost proxy + production backend). */
@@ -203,18 +230,30 @@ export const getProfilePhotoUrl = (profilePhoto) => {
 // Profiles are private S3 objects; a fresh signed URL is fetched only when a photo is displayed.
 let _profilePhotoCache = {};
 
+/** True only for short-lived S3 pre-signed URLs (safe to display as-is). */
+function isPresignedS3Url(url) {
+  return (
+    typeof url === 'string' &&
+    /^https?:\/\//i.test(url) &&
+    /[?&]X-Amz-Signature=/i.test(url)
+  );
+}
+
 /**
  * Resolve a displayable, short-lived signed URL for a private profile photo.
  * Fetches via the authorization-aware GET /v1/both/profile-photo/:userType/:userId
  * endpoint and caches the result for 15 minutes. Returns null when the caller
  * lacks a stable userType/userId (components then fall back to initials).
+ *
+ * Stored https://…amazonaws.com/… object URLs are NOT reused — the bucket is
+ * private, so only freshly signed URLs (or cached ones) are returned.
  */
 export async function resolveProfileSignedUrl(profilePhoto, { userType, userId, preferFull = false } = {}) {
   if (!profilePhoto) return null;
   const photo = typeof profilePhoto === 'object' ? profilePhoto : { url: profilePhoto };
   const existing = photo.url || photo.s3Key || null;
-  // Already a full http(s) URL (e.g. a signed URL handed back by the resolver) — reuse it.
-  if (typeof existing === 'string' && /^https?:\/\//.test(existing)) return existing;
+  // Reuse only an already pre-signed URL (e.g. handed back by this resolver).
+  if (isPresignedS3Url(existing)) return existing;
   if (!userId || !userType) return null;
 
   const cacheId = `${userType}:${userId}`;

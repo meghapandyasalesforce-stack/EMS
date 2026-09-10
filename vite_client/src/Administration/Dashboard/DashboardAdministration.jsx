@@ -14,6 +14,7 @@ import {
   FiDownload,
   FiLayers,
   FiBell,
+  FiHeadphones,
   FiSearch,
   FiTarget,
   FiTrendingUp,
@@ -42,6 +43,7 @@ import AttendanceBox from "../../Employee/Attendance/AttendanceBox";
 import { handleApiError } from "../../utils/errorHandler";
 import AnnouncementBanner from '../../components/AnnouncementBanner';
 import { mergeSessionProfile } from "../../utils/profileUtils";
+import { formatStatusLabel, formatUiLabel, UI_FORM_LABEL_CLASS } from "../../utils/textFormat.js";
 
 const DashboardAdministration = () => {
   const navigate = useNavigate();
@@ -138,11 +140,7 @@ const DashboardAdministration = () => {
     (ex) => String(ex?.status || "").toLowerCase() === "pending"
   ).length;
 
-  const formatProjectStatusLabel = (status) => {
-    const s = String(status || "").replace(/[-_]/g, " ");
-    if (!s.trim()) return "Unspecified";
-    return s.replace(/\b\w/g, (c) => c.toUpperCase());
-  };
+  const formatProjectStatusLabel = (status) => formatStatusLabel(status || 'unspecified');
 
   const formatCurrency = (amount) => {
     if (!amount || Number.isNaN(amount)) return "₹0";
@@ -283,10 +281,10 @@ const DashboardAdministration = () => {
       <div className="page-shell">
       <div className="page-shell-inner">
       <div className="hrms-stack gap-4">
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:px-5">
+        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4 md:px-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">
                 {greeting} 👋
               </h1>
               <p className="text-xs text-slate-500">{format(new Date(), "dd MMM yyyy")}</p>
@@ -301,6 +299,14 @@ const DashboardAdministration = () => {
                   className="w-full bg-transparent text-xs outline-none placeholder:text-slate-400"
                 />
               </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                onClick={() => navigate("/helpdesk")}
+                title="HR Helpdesk"
+              >
+                <FiHeadphones className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 className="relative rounded-full border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
@@ -327,13 +333,13 @@ const DashboardAdministration = () => {
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold tracking-wide transition ${
                     selectedPeriod === period
                       ? "bg-emerald-600 text-white"
                       : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                   }`}
                 >
-                  {period}
+                  {formatUiLabel(period)}
                 </button>
               ))}
             </div>
@@ -377,7 +383,7 @@ const DashboardAdministration = () => {
 
         {isCEO && (
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <h3 className={`mb-2 ${UI_FORM_LABEL_CLASS}`}>
               Punch in / punch out
             </h3>
             <AttendanceBox variant="dashboard" />
@@ -388,7 +394,7 @@ const DashboardAdministration = () => {
           {kpiCards.map((card) => (
             <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{card.label}</p>
+                <p className={UI_FORM_LABEL_CLASS}>{card.label}</p>
                 <span className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600">{card.icon}</span>
               </div>
               <p className="text-xl font-bold text-slate-900">{card.value}</p>

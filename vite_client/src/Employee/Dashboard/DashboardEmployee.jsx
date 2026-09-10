@@ -35,10 +35,12 @@ import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { mergeSessionProfile, getProfileDisplayName } from '../../utils/profileUtils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday } from 'date-fns';
 import axios from '../../utils/axios';
+import { toast } from 'react-toastify';
 
 import {
     BOTH_ATTENDANCE_ENDPOINT,
     BOTH_TASK_ENDPOINT,
+    BOTH_CELEBRATION_ENDPOINT,
     EMPLOYEE_LEAVE_ENDPOINT,
 } from '../../utils/constant';
 import {
@@ -115,6 +117,156 @@ function MiniCalendar({ viewDate, onPrevMonth, onNextMonth }) {
     );
 }
 
+const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
+
+function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes }) {
+    const isToday = item.daysUntil === 0;
+    const isMarriage = item.type === 'marriage_anniversary';
+    const isWorkAnniversary = item.type === 'anniversary';
+
+    const icon = isMarriage ? '💍' : isWorkAnniversary ? '🎉' : '🎂';
+    const typeLabel = isMarriage ? 'Marriage Anniversary' : isWorkAnniversary ? 'Work Anniversary' : 'Birthday';
+    const counts = event?.reactionCounts || {};
+    const whenLabel = item.daysUntil === 0
+        ? 'Today'
+        : item.daysUntil === 1
+            ? 'Tomorrow'
+            : `in ${item.daysUntil} days`;
+
+    const dateLabel = item.birthday || item.anniversaryDate || item.date || '';
+
+    const selfHeader = isToday && isSelf ? (
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+            {isMarriage ? 'Your marriage anniversary' : isWorkAnniversary ? 'Your work anniversary' : "It's your birthday"}
+        </p>
+    ) : null;
+
+    return (
+        <li
+            className={`min-w-0 overflow-hidden rounded-xl border p-2.5 ${
+                isToday
+                    ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm'
+                    : 'border-slate-100 bg-[#F8F9FB]'
+            }`}
+        >
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                    {selfHeader}
+                    <p className="truncate text-sm font-semibold text-slate-800">
+                        {icon} {isSelf ? 'You' : item.name}
+                    </p>
+                    <p className="break-words text-[11px] leading-snug text-slate-500">
+                        {isMarriage && item.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
+                        {isWorkAnniversary && item.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
+                        {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => onWishes(item)}
+                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
+                >
+                    {isToday ? (isSelf ? 'View' : 'Wishes') : 'Upcoming'}
+                </button>
+            </div>
+
+            {isToday ? (
+                <div className="mt-2.5 flex flex-wrap gap-2.5">
+                    {CELEBRATION_REACTIONS.map((emoji) => {
+                        const count = counts[emoji] || 0;
+                        return (
+                            <button
+                                key={emoji}
+                                type="button"
+                                disabled={reacting}
+                                onClick={() => onReact(item, emoji)}
+                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
+                                    count > 0 ? 'border-emerald-200' : 'border-slate-200'
+                                }`}
+                                aria-label={`React ${emoji}`}
+                            >
+                                <span>{emoji}</span>
+                                {count > 0 ? (
+                                    <span className="text-[10px] font-semibold text-slate-600">{count}</span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </li>
+    );
+}
+
+function AnniversaryRailCard({ item, isSelf, event, reacting, onReact, onWishes }) {
+    const isTodayAnniversary = item.daysUntil === 0;
+    const counts = event?.reactionCounts || {};
+    const whenLabel = item.daysUntil === 0
+        ? 'Today'
+        : item.daysUntil === 1
+            ? 'Tomorrow'
+            : `in ${item.daysUntil} days`;
+
+    return (
+        <li
+            className={`min-w-0 overflow-hidden rounded-2xl border p-3 sm:p-3.5 ${
+                isTodayAnniversary
+                    ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm'
+                    : 'border-slate-100 bg-[#F8F9FB]'
+            }`}
+        >
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                    {isTodayAnniversary && isSelf ? (
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">
+                            Your work anniversary
+                        </p>
+                    ) : null}
+                    <p className="truncate font-semibold text-slate-800">
+                        {isTodayAnniversary ? '🎉 ' : ''}
+                        {isSelf ? 'You' : item.name}
+                    </p>
+                    <p className="break-words text-xs text-slate-500">
+                        {item.completedYears} {item.completedYears === 1 ? 'year' : 'years'} · {item.anniversaryDate} · {whenLabel}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => onWishes(item)}
+                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
+                >
+                    {isTodayAnniversary ? (isSelf ? 'View' : 'Wishes') : 'Upcoming'}
+                </button>
+            </div>
+
+            {isTodayAnniversary ? (
+                <div className="mt-3 flex flex-wrap gap-2.5">
+                    {BIRTHDAY_REACTIONS.map((emoji) => {
+                        const count = counts[emoji] || 0;
+                        return (
+                            <button
+                                key={emoji}
+                                type="button"
+                                disabled={reacting}
+                                onClick={() => onReact(item, emoji)}
+                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${
+                                    count > 0 ? 'border-emerald-200' : 'border-slate-200'
+                                }`}
+                                aria-label={`React ${emoji}`}
+                            >
+                                <span>{emoji}</span>
+                                {count > 0 ? (
+                                    <span className="text-xs font-semibold text-slate-600">{count}</span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </li>
+    );
+}
+
 function DashboardEmployee() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -129,6 +281,9 @@ function DashboardEmployee() {
         leaveDaysRemaining: '0',
         monthlyCapSummary: null,
         birthdays: null,
+        marriageAnniversaries: null,
+        celebrations: null,
+        anniversaries: null,
         projects: [],
         monthHours: 0,
         attendanceRate: 0,
@@ -137,6 +292,10 @@ function DashboardEmployee() {
         overtimeHours: 0,
     });
     const [statsLoading, setStatsLoading] = useState(true);
+    const [birthdayEvents, setBirthdayEvents] = useState({});
+    const [birthdayReacting, setBirthdayReacting] = useState(false);
+    const [anniversaryEvents, setAnniversaryEvents] = useState({});
+    const [anniversaryReacting, setAnniversaryReacting] = useState(false);
 
     const navigate = useNavigate();
     const user = useSelector((state) => state.auth.user);
@@ -160,6 +319,130 @@ function DashboardEmployee() {
     }, [profile?.department]);
 
     const handleEditProfile = () => navigate('/profile-details');
+    const selfEmployeeId = String(employee?._id || profile?._id || '');
+
+    const getCelebrationItemKey = (item) => `${item.type || 'birthday'}_${item.employeeId}`;
+
+    const loadTodayBirthdayEvent = async (item) => {
+        const { data } = await axios.post(
+            `${BOTH_CELEBRATION_ENDPOINT}/events/open`,
+            { employeeId: item.employeeId, type: item.type || 'birthday' },
+            { withCredentials: true }
+        );
+        const event = data?.data;
+        if (event?._id) {
+            const itemKey = getCelebrationItemKey(item);
+            setBirthdayEvents((prev) => ({
+                ...prev,
+                [itemKey]: event,
+            }));
+        }
+        return event;
+    };
+
+    const handleOpenBirthdayWishes = async (item) => {
+        if (!item?.employeeId) return;
+        if (item.daysUntil !== 0) {
+            const label = item.type === 'marriage_anniversary' ? 'marriage anniversary' : 'birthday';
+            toast.info(`Wishes and reactions open on their ${label}.`);
+            return;
+        }
+        try {
+            const itemKey = getCelebrationItemKey(item);
+            const event = birthdayEvents[itemKey] || await loadTodayBirthdayEvent(item);
+            const eventId = event?._id;
+            navigate(eventId ? `/celebrations/${eventId}` : '/celebrations');
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not open wishes');
+        }
+    };
+
+    const handleBirthdayReact = async (item, emoji) => {
+        if (item.daysUntil !== 0) return;
+        setBirthdayReacting(true);
+        try {
+            const itemKey = getCelebrationItemKey(item);
+            const opened = birthdayEvents[itemKey] || await loadTodayBirthdayEvent(item);
+            if (!opened?._id) return;
+            const { data } = await axios.post(
+                `${BOTH_CELEBRATION_ENDPOINT}/events/${opened._id}/react`,
+                { emoji },
+                { withCredentials: true }
+            );
+            const eventStateKey = (data?.data?.type && data?.data?.employeeId)
+                ? `${data.data.type}_${data.data.employeeId}`
+                : itemKey;
+
+            setBirthdayEvents((prev) => ({
+                ...prev,
+                [eventStateKey]: {
+                    ...opened,
+                    ...(prev[eventStateKey] || {}),
+                    reactions: data?.data?.reactions || [],
+                    reactionCounts: data?.data?.reactionCounts || {},
+                },
+            }));
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not add reaction');
+        } finally {
+            setBirthdayReacting(false);
+        }
+    };
+
+    const loadTodayAnniversaryEvent = async (item) => {
+        const { data } = await axios.post(
+            `${BOTH_CELEBRATION_ENDPOINT}/events/open`,
+            { employeeId: item.employeeId, type: 'anniversary' },
+            { withCredentials: true }
+        );
+        const event = data?.data;
+        if (event?._id) {
+            setAnniversaryEvents((prev) => ({ ...prev, [String(item.employeeId)]: event }));
+        }
+        return event;
+    };
+
+    const handleOpenAnniversaryWishes = async (item) => {
+        if (!item?.employeeId) return;
+        if (item.daysUntil !== 0) {
+            toast.info('Wishes and reactions open on their work anniversary.');
+            return;
+        }
+        try {
+            const event = anniversaryEvents[String(item.employeeId)] || await loadTodayAnniversaryEvent(item);
+            const eventId = event?._id;
+            navigate(eventId ? `/celebrations/${eventId}` : '/celebrations');
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not open anniversary wishes');
+        }
+    };
+
+    const handleAnniversaryReact = async (item, emoji) => {
+        if (item.daysUntil !== 0) return;
+        setAnniversaryReacting(true);
+        try {
+            const opened = anniversaryEvents[String(item.employeeId)] || await loadTodayAnniversaryEvent(item);
+            if (!opened?._id) return;
+            const { data } = await axios.post(
+                `${BOTH_CELEBRATION_ENDPOINT}/events/${opened._id}/react`,
+                { emoji },
+                { withCredentials: true }
+            );
+            setAnniversaryEvents((prev) => ({
+                ...prev,
+                [String(item.employeeId)]: {
+                    ...opened,
+                    ...(prev[String(item.employeeId)] || {}),
+                    reactionCounts: data?.data?.reactionCounts || {},
+                    reactions: data?.data?.reactions || [],
+                },
+            }));
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not add reaction');
+        } finally {
+            setAnniversaryReacting(false);
+        }
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -258,13 +541,38 @@ function DashboardEmployee() {
                     /* optional */
                 }
 
+                let celebrations = null;
                 let birthdays = [];
+                let marriageAnniversaries = [];
                 try {
                     const birthdaysRes = await axios.get('/v1/both/profile-details/upcoming-birthdays', {
                         withCredentials: true,
                     });
-                    if (birthdaysRes.data?.birthdays) {
-                        birthdays = birthdaysRes.data.birthdays;
+                    birthdays = birthdaysRes.data?.birthdays || [];
+                    marriageAnniversaries = birthdaysRes.data?.marriageAnniversaries || [];
+                    celebrations = birthdaysRes.data?.celebrations || [
+                        ...birthdays.map((item) => ({ ...item, type: item.type || 'birthday' })),
+                        ...marriageAnniversaries.map((item) => ({ ...item, type: 'marriage_anniversary' })),
+                    ];
+                    celebrations.sort((a, b) => {
+                        const aDays = Number.isFinite(Number(a.daysUntil)) ? Number(a.daysUntil) : 9999;
+                        const bDays = Number.isFinite(Number(b.daysUntil)) ? Number(b.daysUntil) : 9999;
+                        if (aDays !== bDays) return aDays - bDays;
+                        const order = { birthday: 1, marriage_anniversary: 2, anniversary: 3 };
+                        return (order[a.type] || 99) - (order[b.type] || 99);
+                    });
+                } catch {
+                    /* optional */
+                    celebrations = [];
+                }
+
+                let anniversaries = [];
+                try {
+                    const anniversariesRes = await axios.get('/v1/both/profile-details/upcoming-anniversaries', {
+                        withCredentials: true,
+                    });
+                    if (anniversariesRes.data?.anniversaries) {
+                        anniversaries = anniversariesRes.data.anniversaries;
                     }
                 } catch {
                     /* optional */
@@ -329,6 +637,9 @@ function DashboardEmployee() {
                     leaveDaysRemaining: leaveBalance.toString(),
                     monthlyCapSummary,
                     birthdays,
+                    marriageAnniversaries,
+                    celebrations,
+                    anniversaries,
                     projects,
                     monthHours,
                     attendanceRate,
@@ -336,6 +647,49 @@ function DashboardEmployee() {
                     avgDayHours,
                     overtimeHours,
                 });
+
+                const todayCelebrations = (celebrations || []).filter((item) => item.daysUntil === 0 && item.employeeId);
+                if (todayCelebrations.length > 0) {
+                    const opened = await Promise.all(todayCelebrations.map(async (item) => {
+                        try {
+                            const { data } = await axios.post(
+                                `${BOTH_CELEBRATION_ENDPOINT}/events/open`,
+                                { employeeId: item.employeeId, type: item.type || 'birthday' },
+                                { withCredentials: true }
+                            );
+                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                            return data?.data?._id ? [itemKey, data.data] : null;
+                        } catch {
+                            return null;
+                        }
+                    }));
+                    const nextEvents = {};
+                    opened.filter(Boolean).forEach(([key, event]) => {
+                        nextEvents[key] = event;
+                    });
+                    setBirthdayEvents(nextEvents);
+                }
+
+                const todayAnniversaries = (anniversaries || []).filter((item) => item.daysUntil === 0 && item.employeeId);
+                if (todayAnniversaries.length > 0) {
+                    const openedAnniv = await Promise.all(todayAnniversaries.map(async (item) => {
+                        try {
+                            const { data } = await axios.post(
+                                `${BOTH_CELEBRATION_ENDPOINT}/events/open`,
+                                { employeeId: item.employeeId, type: 'anniversary' },
+                                { withCredentials: true }
+                            );
+                            return data?.data?._id ? [String(item.employeeId), data.data] : null;
+                        } catch {
+                            return null;
+                        }
+                    }));
+                    const nextAnnivEvents = {};
+                    openedAnniv.filter(Boolean).forEach(([id, event]) => {
+                        nextAnnivEvents[id] = event;
+                    });
+                    setAnniversaryEvents(nextAnnivEvents);
+                }
             } catch {
                 /* keep defaults */
             } finally {
@@ -412,7 +766,7 @@ function DashboardEmployee() {
 
     const kpiCard = (label, value, sub, icon) => (
         <div
-            className="rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+            className="rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-5"
             style={{ borderColor: WS.border }}
         >
             <div className="flex items-start justify-between gap-3">
@@ -455,7 +809,7 @@ function DashboardEmployee() {
                     <div className="min-w-0 space-y-4 sm:space-y-6">
                         {/* Top bar */}
                         <header
-                            className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between md:p-6"
+                            className="flex flex-col gap-3 rounded-2xl border bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5 md:p-6"
                             style={{ borderColor: WS.border }}
                         >
                             <div className="flex min-w-0 items-center gap-4">
@@ -497,6 +851,45 @@ function DashboardEmployee() {
                         </header>
 
                         <AttendanceBox variant="dashboard" />
+
+                        {/* Mobile only: celebrations directly under punch-in */}
+                        <div className="rounded-xl border bg-white shadow-sm lg:hidden" style={{ borderColor: WS.border }}>
+                            <div
+                                className="rounded-t-xl px-3 py-2"
+                                style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
+                            >
+                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                                    <FaBirthdayCake className="h-3 w-3" />
+                                    Upcoming celebrations
+                                </h3>
+                            </div>
+                            <div className="p-3">
+                                {dashboardStats.celebrations == null ? (
+                                    <div className="flex justify-center py-4">
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
+                                    </div>
+                                ) : dashboardStats.celebrations.length === 0 ? (
+                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations</p>
+                                ) : (
+                                    <ul className="space-y-2">
+                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
+                                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                            return (
+                                                <CelebrationRailCard
+                                                    key={`mobile-${item.type || 'birthday'}-${item.employeeId || idx}`}
+                                                    item={item}
+                                                    isSelf={Boolean(selfEmployeeId) && String(item.employeeId) === selfEmployeeId}
+                                                    event={birthdayEvents[itemKey]}
+                                                    reacting={birthdayReacting}
+                                                    onReact={handleBirthdayReact}
+                                                    onWishes={handleOpenBirthdayWishes}
+                                                />
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
 
                         {/* KPI row */}
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -543,10 +936,10 @@ function DashboardEmployee() {
 
                         {/* Attendance summary */}
                         <section
-                            className="rounded-2xl border bg-white p-5 shadow-sm md:p-6"
+                            className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5 md:p-6"
                             style={{ borderColor: WS.border }}
                         >
-                            <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900">
+                            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900 sm:mb-4">
                                 <FaChartLine className="text-[#20C997]" />
                                 Attendance summary
                             </h2>
@@ -600,7 +993,7 @@ function DashboardEmployee() {
                                 className="rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
                             >
-                                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
                                     <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                                         <FaProjectDiagram className="text-[#20C997]" />
                                         Projects
@@ -612,7 +1005,7 @@ function DashboardEmployee() {
                                         View all
                                     </Link>
                                 </div>
-                                <div className="p-5">
+                                <div className="p-3 sm:p-5">
                                     {statsLoading ? (
                                         <div className="flex justify-center py-10">
                                             <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
@@ -650,13 +1043,13 @@ function DashboardEmployee() {
                                 className="rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
                             >
-                                <div className="border-b border-slate-100 px-5 py-4">
+                                <div className="border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
                                     <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                                         <FaTasks className="text-[#20C997]" />
                                         My tasks
                                     </h3>
                                 </div>
-                                <div className="p-5">
+                                <div className="p-3 sm:p-5">
                                     <Todo variant="workspace" />
                                 </div>
                             </section>
@@ -668,60 +1061,86 @@ function DashboardEmployee() {
                             style={{ borderColor: WS.border }}
                         >
                             <div
-                                className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"
+                                className="flex items-center gap-2 border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4"
                                 style={{ background: `linear-gradient(90deg, ${WS.forest} 0%, #0a5c45 100%)` }}
                             >
                                 <FaBell className="text-white" />
                                 <h3 className="text-base font-semibold text-white">Announcements</h3>
                             </div>
-                            <div className="min-h-[160px] p-4">
+                            <div className="min-h-[140px] p-3 sm:min-h-[160px] sm:p-4">
                                 <NotificationFeed />
                             </div>
                         </section>
                     </div>
 
-                    {/* Right rail */}
-                    <aside className="w-full min-w-0 space-y-5">
-                        <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
+                    {/* Right rail — celebrations first so they stay above the fold */}
+                    <aside className="w-full min-w-0 space-y-5 lg:sticky lg:top-4 lg:self-start">
+                        <div className="hidden rounded-xl border bg-white shadow-sm lg:block" style={{ borderColor: WS.border }}>
                             <div
-                                className="rounded-t-2xl px-5 py-3"
+                                className="rounded-t-xl px-3 py-2"
                                 style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
                             >
-                                <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
-                                    <FaBirthdayCake />
-                                    Upcoming birthdays
+                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                                    <FaBirthdayCake className="h-3 w-3" />
+                                    Upcoming celebrations
                                 </h3>
                             </div>
-                            <div className="p-5">
-                                {dashboardStats.birthdays == null ? (
-                                    <div className="flex justify-center py-6">
-                                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
+                            <div className="p-3">
+                                {dashboardStats.celebrations == null ? (
+                                    <div className="flex justify-center py-4">
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
                                     </div>
-                                ) : dashboardStats.birthdays.length === 0 ? (
-                                    <p className="py-4 text-center text-sm text-slate-500">No upcoming birthdays</p>
+                                ) : dashboardStats.celebrations.length === 0 ? (
+                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations</p>
                                 ) : (
-                                    <ul className="space-y-3">
-                                        {dashboardStats.birthdays.map((item, idx) => (
-                                            <li
-                                                key={idx}
-                                                className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-[#F8F9FB] p-3"
-                                            >
-                                                <div className="min-w-0">
-                                                    <p className="truncate font-medium text-slate-800">{item.name}</p>
-                                                    <p className="text-xs text-slate-500">{item.birthday}</p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    className="shrink-0 rounded-full bg-[#20C997] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#1ab589] sm:px-3 sm:text-xs"
-                                                >
-                                                    Wishes
-                                                </button>
-                                            </li>
-                                        ))}
+                                    <ul className="space-y-2">
+                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
+                                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                            return (
+                                                <CelebrationRailCard
+                                                    key={`${item.type || 'birthday'}-${item.employeeId || idx}`}
+                                                    item={item}
+                                                    isSelf={Boolean(selfEmployeeId) && String(item.employeeId) === selfEmployeeId}
+                                                    event={birthdayEvents[itemKey]}
+                                                    reacting={birthdayReacting}
+                                                    onReact={handleBirthdayReact}
+                                                    onWishes={handleOpenBirthdayWishes}
+                                                />
+                                            );
+                                        })}
                                     </ul>
                                 )}
                             </div>
                         </div>
+
+                        {dashboardStats.anniversaries && dashboardStats.anniversaries.length > 0 ? (
+                            <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
+                                <div
+                                    className="rounded-t-2xl px-3 py-2 sm:px-5 sm:py-3"
+                                    style={{ background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)' }}
+                                >
+                                    <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+                                        <FaGift />
+                                        Work anniversaries
+                                    </h3>
+                                </div>
+                                <div className="p-3 sm:p-5">
+                                    <ul className="space-y-2 sm:space-y-3">
+                                        {dashboardStats.anniversaries.map((item, idx) => (
+                                            <AnniversaryRailCard
+                                                key={item.employeeId || idx}
+                                                item={item}
+                                                isSelf={Boolean(selfEmployeeId) && String(item.employeeId) === selfEmployeeId}
+                                                event={anniversaryEvents[String(item.employeeId)]}
+                                                reacting={anniversaryReacting}
+                                                onReact={handleAnniversaryReact}
+                                                onWishes={handleOpenAnniversaryWishes}
+                                            />
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        ) : null}
 
                         <MiniCalendar
                             viewDate={calendarViewDate}
@@ -729,7 +1148,7 @@ function DashboardEmployee() {
                             onNextMonth={() => setCalendarViewDate((d) => addMonths(d, 1))}
                         />
 
-                        <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
+                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Leave balance</h3>
                             {statsLoading ? (
                                 <p className="mt-3 text-3xl font-bold text-[#006D4E]">…</p>
@@ -841,7 +1260,7 @@ function DashboardEmployee() {
                             </div>
                         </div>
 
-                        <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
+                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
                             <div className="mt-3 flex flex-col gap-2 text-sm">
                                 <button
@@ -862,7 +1281,7 @@ function DashboardEmployee() {
                         </div>
 
                         {/* Compact links: manager + HR */}
-                        <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
+                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Shortcuts</p>
                             <div className="mt-3 grid grid-cols-1 gap-2">
                                 <button

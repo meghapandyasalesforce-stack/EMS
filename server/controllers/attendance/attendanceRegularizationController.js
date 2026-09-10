@@ -24,6 +24,7 @@ import {
 } from '../../helpers/regularizationWorkflowActionHelper.js';
 import { getRegularizationLimitSummary, isRegularizationInCurrentMonth } from '../../helpers/regularizationLimitHelper.js';
 import { sendRegularizationRequestNotification, sendRegularizationApprovalNotification, sendRegularizationRejectionNotification } from '../../helpers/attendanceRegularizationEmailHelper.js';
+import { assertApplicantApprovalAccess, resolveHrApplicantIds } from '../../helpers/functionalRolesHelper.js';
 import { notify } from '../../helpers/notificationManager.js';
 import '../../helpers/notificationEventRegistry.js';
 
@@ -556,7 +557,7 @@ export const getRegularizationRequestsForManager = async (req, res) => {
         const total = await AttendanceRegularization.countDocuments(query);
 
         const requestsRaw = await AttendanceRegularization.find(query)
-            .populate('employeeId', 'name lastName email employeeId department profilePhoto position')
+            .populate('employeeId', 'name lastName email employeeId department profilePhoto position jobTitle functionalRoles userId')
             .populate('managerId', 'name lastName email employeeId')
             .populate('reviewedBy', 'name lastName email employeeId')
             .sort({ createdAt: -1 })
@@ -564,7 +565,14 @@ export const getRegularizationRequestsForManager = async (req, res) => {
             .limit(parsedLimit)
             .lean();
 
-        const requests = await attachWorkflowSummariesToRequests(requestsRaw);
+        const requestsWithWorkflow = await attachWorkflowSummariesToRequests(requestsRaw);
+        const hrApplicantIds = await resolveHrApplicantIds(
+            requestsWithWorkflow.map((request) => request.employeeId).filter(Boolean)
+        );
+        const requests = requestsWithWorkflow.map((request) => ({
+            ...request,
+            requiresAdminApproval: hrApplicantIds.has(String(request.employeeId?._id || '')),
+        }));
 
         return res.status(200).json({
             success: true,
@@ -611,6 +619,20 @@ export const approveRegularization = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied'
+            });
+        }
+
+        // Raised by HR staff bypasses the manager → HR chain: org admin decides.
+        try {
+            await assertApplicantApprovalAccess(
+                req,
+                regularizationRequest.employeeId?._id || regularizationRequest.employeeId,
+                'This regularization request'
+            );
+        } catch (accessError) {
+            return res.status(accessError.statusCode || 403).json({
+                success: false,
+                message: accessError.message
             });
         }
 
@@ -867,6 +889,20 @@ export const rejectRegularization = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied'
+            });
+        }
+
+        // Raised by HR staff bypasses the manager → HR chain: org admin decides.
+        try {
+            await assertApplicantApprovalAccess(
+                req,
+                regularizationRequest.employeeId?._id || regularizationRequest.employeeId,
+                'This regularization request'
+            );
+        } catch (accessError) {
+            return res.status(accessError.statusCode || 403).json({
+                success: false,
+                message: accessError.message
             });
         }
 

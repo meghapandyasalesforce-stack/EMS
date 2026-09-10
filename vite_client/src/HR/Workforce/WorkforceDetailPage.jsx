@@ -1,13 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-    FaArrowLeft, FaChartLine, FaUsers, FaDollarSign, FaCalendar,
-    FaCheckCircle, FaExclamationTriangle, FaPlus, FaTrash, FaSpinner
+import {
+    FaArrowLeft, FaUsers, FaDollarSign,
+    FaExclamationTriangle, FaPlus, FaBriefcase, FaLink,
+    FaPaperPlane, FaCheck, FaTimes, FaPlay, FaFlagCheckered
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
+import {
+    WfBadge,
+    WfKpiCard,
+    WfPanel,
+    WfPageHeader,
+    WfButton,
+    WfEmpty,
+    WfModal,
+    WfField,
+    wfInputClass,
+    gapTone,
+    formatGapValue,
+    gapToneFromStatus,
+    formatPlanStatus,
+} from './components/workforceUi';
 
 const WorkforceDetailPage = () => {
     const { id } = useParams();
@@ -15,17 +31,24 @@ const WorkforceDetailPage = () => {
     const [plan, setPlan] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [workflowBusy, setWorkflowBusy] = useState(false);
+    const [creatingJobIndex, setCreatingJobIndex] = useState(null);
+    const [updatingFillIndex, setUpdatingFillIndex] = useState(null);
     const [showAddHiringModal, setShowAddHiringModal] = useState(false);
     const [showAddRiskModal, setShowAddRiskModal] = useState(false);
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState('');
 
     const [hiringForm, setHiringForm] = useState({
         position: '',
         department: '',
         jobTitle: '',
         numberOfPositions: 1,
+        filledPositions: 0,
         priority: 'Medium',
         expectedStartDate: '',
         budget: 0,
+        reason: '',
         status: 'Planned'
     });
 
@@ -57,9 +80,61 @@ const WorkforceDetailPage = () => {
         }
     };
 
+    const runWorkflowAction = async (action, body = {}) => {
+        try {
+            setWorkflowBusy(true);
+            const response = await axios.post(
+                `/v1/admin/workforce/workforce-plans/${id}/${action}`,
+                body,
+                { withCredentials: true }
+            );
+            if (response.data?.data) {
+                setPlan(response.data.data);
+            } else {
+                await fetchPlan();
+            }
+            toast.success(response.data?.message || 'Status updated');
+            return true;
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to update plan status');
+            return false;
+        } finally {
+            setWorkflowBusy(false);
+        }
+    };
+
+    const handleReject = async (e) => {
+        e.preventDefault();
+        const reason = rejectionReason.trim();
+        if (!reason) {
+            toast.error('Rejection reason is required');
+            return;
+        }
+        const ok = await runWorkflowAction('reject', { reason });
+        if (ok) {
+            setShowRejectModal(false);
+            setRejectionReason('');
+        }
+    };
+
+    const resetHiringForm = () => {
+        setHiringForm({
+            position: '',
+            department: plan?.department || '',
+            jobTitle: plan?.jobTitle || '',
+            numberOfPositions: 1,
+            filledPositions: 0,
+            priority: plan?.priority || 'Medium',
+            expectedStartDate: '',
+            budget: 0,
+            reason: '',
+            status: 'Planned'
+        });
+    };
+
     const addHiringPosition = async (e) => {
         e.preventDefault();
-        
+
         if (!hiringForm.position || !hiringForm.department) {
             toast.error('Please fill in required fields');
             return;
@@ -71,25 +146,16 @@ const WorkforceDetailPage = () => {
                 ...(plan.hiringPlan || []),
                 hiringForm
             ];
-            
+
             await axios.put(
                 `/v1/admin/workforce/workforce-plans/${id}`,
                 { hiringPlan: updatedHiringPlan },
                 { withCredentials: true }
             );
-            
+
             toast.success('Hiring position added successfully');
             setShowAddHiringModal(false);
-            setHiringForm({
-                position: '',
-                department: '',
-                jobTitle: '',
-                numberOfPositions: 1,
-                priority: 'Medium',
-                expectedStartDate: '',
-                budget: 0,
-                status: 'Planned'
-            });
+            resetHiringForm();
             fetchPlan();
         } catch (error) {
             toast.error('Failed to add hiring position');
@@ -98,9 +164,55 @@ const WorkforceDetailPage = () => {
         }
     };
 
+    const createRecruitmentJob = async (hiringIndex) => {
+        try {
+            setCreatingJobIndex(hiringIndex);
+            const response = await axios.post(
+                `/v1/admin/workforce/workforce-plans/${id}/hiring/${hiringIndex}/create-job`,
+                {},
+                { withCredentials: true }
+            );
+            if (response.data?.data?.plan) {
+                setPlan(response.data.data.plan);
+            } else {
+                await fetchPlan();
+            }
+            const jobId = response.data?.data?.jobPosting?._id;
+            toast.success(response.data?.message || 'Recruitment job created');
+            if (jobId) {
+                navigate(`/recruitment/jobs/${jobId}`);
+            }
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to create recruitment job');
+        } finally {
+            setCreatingJobIndex(null);
+        }
+    };
+
+    const updateFillCount = async (hiringIndex, filledPositions) => {
+        try {
+            setUpdatingFillIndex(hiringIndex);
+            const response = await axios.put(
+                `/v1/admin/workforce/workforce-plans/${id}/hiring/${hiringIndex}/fill`,
+                { filledPositions: Math.max(0, parseInt(filledPositions, 10) || 0) },
+                { withCredentials: true }
+            );
+            if (response.data?.data) {
+                setPlan(response.data.data);
+            } else {
+                await fetchPlan();
+            }
+            toast.success('Fill tracking updated');
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to update fill tracking');
+        } finally {
+            setUpdatingFillIndex(null);
+        }
+    };
+
     const addRisk = async (e) => {
         e.preventDefault();
-        
+
         if (!riskForm.risk || !riskForm.mitigation) {
             toast.error('Please fill in required fields');
             return;
@@ -112,13 +224,13 @@ const WorkforceDetailPage = () => {
                 ...(plan.risks || []),
                 riskForm
             ];
-            
+
             await axios.put(
                 `/v1/admin/workforce/workforce-plans/${id}`,
                 { risks: updatedRisks },
                 { withCredentials: true }
             );
-            
+
             toast.success('Risk added successfully');
             setShowAddRiskModal(false);
             setRiskForm({
@@ -134,44 +246,6 @@ const WorkforceDetailPage = () => {
         }
     };
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'Approved':
-            case 'Filled':
-                return 'bg-theme-primary/10 text-theme-primary';
-            case 'In Progress':
-                return 'bg-theme-secondary/10 text-theme-secondary';
-            case 'Planned':
-                return 'bg-yellow-100 text-yellow-800';
-            default:
-                return 'bg-gray-100 text-gray-800';
-        }
-    };
-
-    const getPriorityColor = (priority) => {
-        switch (priority) {
-            case 'Critical':
-                return 'bg-red-100 text-red-800';
-            case 'High':
-                return 'bg-orange-100 text-orange-800';
-            case 'Medium':
-                return 'bg-yellow-100 text-yellow-800';
-            default:
-                return 'bg-theme-primary/10 text-theme-primary';
-        }
-    };
-
-    const getImpactColor = (impact) => {
-        switch (impact) {
-            case 'High':
-                return 'bg-red-100 text-red-800';
-            case 'Medium':
-                return 'bg-yellow-100 text-yellow-800';
-            default:
-                return 'bg-theme-primary/10 text-theme-primary';
-        }
-    };
-
     if (loading) {
         return <LoadingSpinner message="Loading workforce plan..." />;
     }
@@ -180,499 +254,746 @@ const WorkforceDetailPage = () => {
         return null;
     }
 
-    const gap = plan.targetHeadcount - plan.currentHeadcount;
-    const gapPercent = plan.currentHeadcount > 0 
-        ? Math.round((gap / plan.currentHeadcount) * 100) 
-        : 0;
+    const currentHeadcount = plan.liveCurrentHeadcount ?? plan.currentHeadcount;
+    const gapStatus = plan.gapStatus || (
+        currentHeadcount < plan.targetHeadcount ? 'Shortage'
+            : currentHeadcount > plan.targetHeadcount ? 'Surplus' : 'Balanced'
+    );
+    const gap = plan.gap != null
+        ? formatGapValue(plan.gap)
+        : formatGapValue(plan.targetHeadcount - currentHeadcount);
     const totalHiringBudget = plan.hiringPlan?.reduce((sum, h) => sum + (h.budget || 0), 0) || 0;
-    const filledPositions = plan.hiringPlan?.filter(h => h.status === 'Filled').length || 0;
+    const filledPositions = plan.fillTracking?.filled
+        ?? plan.hiringPlan?.reduce((sum, h) => sum + (h.filledPositions || 0), 0)
+        ?? 0;
+    const requiredPositions = plan.fillTracking?.required
+        ?? plan.hiringPlan?.reduce((sum, h) => sum + (h.numberOfPositions || 0), 0)
+        ?? 0;
+    const remainingPositions = plan.fillTracking?.remaining
+        ?? Math.max(requiredPositions - filledPositions, 0);
+    const fillPct = requiredPositions > 0
+        ? Math.min((filledPositions / requiredPositions) * 100, 100)
+        : 0;
+    const maxHead = Math.max(currentHeadcount || 0, plan.targetHeadcount || 0, 1);
+    const budgetPct = plan.budget?.allocated > 0
+        ? Math.min(((plan.budget.spent || 0) / plan.budget.allocated) * 100, 100)
+        : 0;
+
+    const infoRows = [
+        { label: 'Status', value: formatPlanStatus(plan.status), badge: true, badgeStatus: plan.status },
+        { label: 'Year', value: plan.planYear },
+        { label: 'Quarter', value: `Q${plan.quarter}` },
+        plan.department && { label: 'Department', value: plan.department },
+        (plan.jobTitle || plan.designation) && {
+            label: 'Designation',
+            value: plan.jobTitle || plan.designation,
+        },
+        plan.priority && { label: 'Priority', value: plan.priority, badge: true, badgeStatus: plan.priority },
+        plan.reason && { label: 'Reason', value: plan.reason },
+        plan.createdBy && { label: 'Created By', value: plan.createdBy.name || 'N/A' },
+        plan.submittedAt && {
+            label: 'Submitted At',
+            value: format(new Date(plan.submittedAt), 'MMM dd, yyyy'),
+        },
+        plan.approvedBy && { label: 'Approved By', value: plan.approvedBy.name || 'N/A' },
+        plan.approvedAt && {
+            label: 'Approved At',
+            value: format(new Date(plan.approvedAt), 'MMM dd, yyyy'),
+        },
+        plan.status === 'Rejected' && plan.rejectedBy && {
+            label: 'Rejected By',
+            value: plan.rejectedBy.name || 'N/A',
+        },
+        plan.status === 'Rejected' && plan.rejectedAt && {
+            label: 'Rejected At',
+            value: format(new Date(plan.rejectedAt), 'MMM dd, yyyy'),
+        },
+    ].filter(Boolean);
+
+    const workflowActions = (
+        <div className="flex flex-wrap items-center gap-2">
+            <WfBadge status={plan.status} className="px-3 py-1 text-sm">
+                {formatPlanStatus(plan.status)}
+            </WfBadge>
+            {['Draft', 'Rejected'].includes(plan.status) && (
+                <WfButton
+                    size="sm"
+                    loading={workflowBusy}
+                    onClick={() => runWorkflowAction('submit')}
+                >
+                    <FaPaperPlane /> Submit for Approval
+                </WfButton>
+            )}
+            {plan.status === 'Pending Approval' && (
+                <>
+                    <WfButton
+                        size="sm"
+                        loading={workflowBusy}
+                        onClick={() => runWorkflowAction('approve')}
+                    >
+                        <FaCheck /> Approve
+                    </WfButton>
+                    <WfButton
+                        variant="danger"
+                        size="sm"
+                        disabled={workflowBusy}
+                        onClick={() => {
+                            setRejectionReason('');
+                            setShowRejectModal(true);
+                        }}
+                    >
+                        <FaTimes /> Reject
+                    </WfButton>
+                </>
+            )}
+            {plan.status === 'Approved' && (
+                <WfButton
+                    size="sm"
+                    loading={workflowBusy}
+                    onClick={() => runWorkflowAction('start')}
+                >
+                    <FaPlay /> Start (In Progress)
+                </WfButton>
+            )}
+            {plan.status === 'In Progress' && (
+                <WfButton
+                    size="sm"
+                    loading={workflowBusy}
+                    onClick={() => runWorkflowAction('complete')}
+                >
+                    <FaFlagCheckered /> Mark Completed
+                </WfButton>
+            )}
+        </div>
+    );
 
     return (
-        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
-            <div className="page-shell-inner hrms-stack">
-                {/* Header */}
-                <div>
-                    <button
-                        onClick={() => navigate('/workforce')}
-                        className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-800"
-                    >
-                        <FaArrowLeft /> Back to Workforce Planning
-                    </button>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-800">{plan.planName}</h1>
-                            <p className="text-gray-600">
-                                {plan.planYear} Q{plan.quarter} {plan.department ? `• ${plan.department}` : ''}
-                            </p>
-                        </div>
-                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(plan.status)}`}>
-                            {plan.status}
-                        </span>
+        <div className="wf-ui min-h-screen min-w-0 overflow-x-hidden transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
+            <div className="page-shell min-w-0">
+            <div className="page-shell-inner hrms-stack min-w-0">
+                <WfButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate('/workforce')}
+                    className="-mb-2 w-fit"
+                >
+                    <FaArrowLeft /> Back to Workforce Planning
+                </WfButton>
+
+                <WfPageHeader
+                    eyebrow="Workforce Plan"
+                    title={plan.planName}
+                    subtitle={`${plan.planYear} Q${plan.quarter}${plan.department ? ` · ${plan.department}` : ''}${plan.jobTitle ? ` · ${plan.jobTitle}` : ''}`}
+                    actions={workflowActions}
+                />
+
+                {plan.status === 'Rejected' && plan.rejectionReason && (
+                    <div className="rounded-2xl border border-rose-100 bg-rose-50/80 px-5 py-4 ring-1 ring-rose-100">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-600">
+                            Rejection Reason
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-rose-900">{plan.rejectionReason}</p>
                     </div>
-                </div>
+                )}
 
                 <div className="hrms-main-rail">
-                    {/* Main Content */}
-                    <div className="min-w-0 space-y-6">
-                        {/* Headcount Overview */}
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <h2 className="text-xl font-semibold mb-4">Headcount Overview</h2>
-                            <div className="grid grid-cols-2 gap-6 mb-4">
-                                <div className="bg-gray-50 p-4 rounded-lg text-center">
-                                    <p className="text-sm text-gray-600 mb-1">Current</p>
-                                    <p className="text-3xl font-bold text-gray-800">{plan.currentHeadcount}</p>
+                    <div className="min-w-0 space-y-5">
+                        <WfPanel title="Headcount Overview" subtitle="Live current vs required target">
+                            <div className="mb-5 grid grid-cols-2 gap-4">
+                                <div className="rounded-2xl bg-slate-50 p-5 text-center ring-1 ring-slate-100">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Current (Live)</p>
+                                    <p className="mt-2 text-3xl font-bold text-slate-900">{currentHeadcount}</p>
                                 </div>
-                                <div className="bg-theme-secondary/10 p-4 rounded-lg text-center">
-                                    <p className="text-sm text-gray-600 mb-1">Target</p>
-                                    <p className="text-3xl font-bold text-theme-secondary">{plan.targetHeadcount}</p>
+                                <div className="rounded-2xl bg-teal-50 p-5 text-center ring-1 ring-teal-100">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Required / Target</p>
+                                    <p className="mt-2 text-3xl font-bold text-teal-700">{plan.targetHeadcount}</p>
                                 </div>
                             </div>
+
+                            <div className="mb-4">
+                                <div className="mb-1.5 flex justify-between text-xs text-slate-500">
+                                    <span>Coverage</span>
+                                    <span>{currentHeadcount} of {plan.targetHeadcount}</span>
+                                </div>
+                                <div className="flex h-3 gap-1 overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                        className="rounded-full bg-slate-400"
+                                        style={{ width: `${(currentHeadcount / maxHead) * 100}%` }}
+                                    />
+                                    <div
+                                        className="rounded-full bg-teal-500"
+                                        style={{ width: `${(plan.targetHeadcount / maxHead) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+
                             {gap !== 0 && (
-                                <div className={`p-3 rounded text-center ${
-                                    gap > 0 ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'
+                                <div className={`rounded-xl px-4 py-3 text-center text-sm font-semibold ${
+                                    gapStatus === 'Shortage'
+                                        ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100'
+                                        : 'bg-amber-50 text-amber-700 ring-1 ring-amber-100'
                                 }`}>
-                                    <span className="font-semibold">
-                                        {gap > 0 ? '+' : ''}{gap} ({gapPercent > 0 ? '+' : ''}{gapPercent}%)
-                                    </span>
+                                    {gapStatus} {gap}
                                 </div>
                             )}
-                        </div>
 
-                        {/* Budget */}
+                            {requiredPositions > 0 && (
+                                <div className="mt-5">
+                                    <div className="mb-3 grid grid-cols-3 gap-3">
+                                        <WfKpiCard title="Required" value={requiredPositions} tone="slate" />
+                                        <WfKpiCard title="Filled" value={filledPositions} tone="emerald" valueClass="text-emerald-600" />
+                                        <WfKpiCard title="Remaining" value={remainingPositions} tone="amber" />
+                                    </div>
+                                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                                        <div
+                                            className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-400"
+                                            style={{ width: `${fillPct}%` }}
+                                        />
+                                    </div>
+                                    <p className="mt-1.5 text-xs text-slate-500">{Math.round(fillPct)}% of hiring positions filled</p>
+                                </div>
+                            )}
+                        </WfPanel>
+
                         {plan.budget && plan.budget.allocated > 0 && (
-                            <div className="bg-white rounded-lg shadow-md p-6">
-                                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                                    <FaDollarSign className="text-green-500" />
-                                    Budget
-                                </h2>
+                            <WfPanel
+                                title="Budget"
+                                subtitle="Allocated vs spent"
+                                action={<FaDollarSign className="text-emerald-500" />}
+                            >
                                 <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Allocated:</span>
-                                        <span className="font-semibold">${plan.budget.allocated?.toLocaleString() || 0}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Spent:</span>
-                                        <span className="font-semibold">${plan.budget.spent?.toLocaleString() || 0}</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-3">
-                                        <div 
-                                            className="bg-theme-primary h-3 rounded-full"
-                                            style={{ width: `${plan.budget.allocated > 0 ? Math.min((plan.budget.spent / plan.budget.allocated) * 100, 100) : 0}%` }}
-                                        ></div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500">Allocated</span>
+                                        <span className="font-semibold text-slate-800">
+                                            ${plan.budget.allocated?.toLocaleString() || 0}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">Remaining:</span>
-                                        <span className="font-semibold text-theme-primary">
+                                        <span className="text-slate-500">Spent</span>
+                                        <span className="font-semibold text-slate-800">
+                                            ${plan.budget.spent?.toLocaleString() || 0}
+                                        </span>
+                                    </div>
+                                    <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                                        <div
+                                            className="h-full rounded-full bg-teal-500"
+                                            style={{ width: `${budgetPct}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500">Remaining</span>
+                                        <span className="font-semibold text-emerald-600">
                                             ${plan.budget.remaining?.toLocaleString() || 0}
                                         </span>
                                     </div>
                                 </div>
-                            </div>
+                            </WfPanel>
                         )}
 
-                        {/* Hiring Plan */}
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-xl font-semibold">
-                                    Hiring Plan ({plan.hiringPlan?.length || 0})
-                                </h2>
-                                <button
-                                    onClick={() => setShowAddHiringModal(true)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition text-sm"
+                        <WfPanel
+                            title={`Hiring Plan (${plan.hiringPlan?.length || 0})`}
+                            subtitle="Requirements, fill tracking, and recruitment handoff"
+                            action={
+                                <WfButton
+                                    size="sm"
+                                    onClick={() => {
+                                        resetHiringForm();
+                                        setShowAddHiringModal(true);
+                                    }}
                                 >
                                     <FaPlus /> Add Position
-                                </button>
-                            </div>
-                            
+                                </WfButton>
+                            }
+                        >
                             {plan.hiringPlan && plan.hiringPlan.length > 0 ? (
                                 <div className="space-y-4">
-                                    {plan.hiringPlan.map((position, index) => (
-                                        <div key={index} className="border rounded-lg p-4">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <h3 className="font-semibold text-gray-800">{position.position}</h3>
-                                                    <p className="text-sm text-gray-600">
-                                                        {position.department} • {position.jobTitle || 'N/A'}
-                                                    </p>
+                                    {plan.hiringPlan.map((position, index) => {
+                                        const required = Number(position.numberOfPositions) || 0;
+                                        const filled = Number(position.filledPositions) || 0;
+                                        const remaining = position.remainingPositions != null
+                                            ? position.remainingPositions
+                                            : Math.max(required - filled, 0);
+                                        const lineFillPct = required > 0
+                                            ? Math.min((filled / required) * 100, 100)
+                                            : 0;
+
+                                        return (
+                                            <div
+                                                key={position._id || index}
+                                                className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 ring-1 ring-slate-50 transition hover:border-teal-100 hover:bg-white"
+                                            >
+                                                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                                                    <div>
+                                                        <h3 className="font-semibold text-slate-900">{position.position}</h3>
+                                                        <p className="mt-0.5 text-sm text-slate-500">
+                                                            {position.department} · {position.jobTitle || 'N/A'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <WfBadge status={position.priority}>{position.priority}</WfBadge>
+                                                        <WfBadge status={position.status}>{position.status}</WfBadge>
+                                                    </div>
                                                 </div>
-                                                <div className="flex gap-2">
-                                                    <span className={`px-2 py-1 rounded text-xs font-medium ${getPriorityColor(position.priority)}`}>
-                                                        {position.priority}
-                                                    </span>
-                                                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(position.status)}`}>
-                                                        {position.status}
-                                                    </span>
+
+                                                <div className="mb-3 grid grid-cols-2 gap-2 text-sm text-slate-600 md:grid-cols-4">
+                                                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+                                                        <p className="text-[10px] uppercase tracking-wider text-slate-400">Required</p>
+                                                        <p className="font-semibold text-slate-800">{required}</p>
+                                                    </div>
+                                                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+                                                        <p className="text-[10px] uppercase tracking-wider text-slate-400">Filled</p>
+                                                        <p className="font-semibold text-emerald-600">{filled}</p>
+                                                    </div>
+                                                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+                                                        <p className="text-[10px] uppercase tracking-wider text-slate-400">Remaining</p>
+                                                        <p className="font-semibold text-slate-800">{remaining}</p>
+                                                    </div>
+                                                    {position.expectedStartDate ? (
+                                                        <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+                                                            <p className="text-[10px] uppercase tracking-wider text-slate-400">Start</p>
+                                                            <p className="font-semibold text-slate-800">
+                                                                {format(new Date(position.expectedStartDate), 'MMM dd, yyyy')}
+                                                            </p>
+                                                        </div>
+                                                    ) : position.budget > 0 ? (
+                                                        <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+                                                            <p className="text-[10px] uppercase tracking-wider text-slate-400">Budget</p>
+                                                            <p className="font-semibold text-slate-800">
+                                                                ${position.budget.toLocaleString()}
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+                                                            <p className="text-[10px] uppercase tracking-wider text-slate-400">Progress</p>
+                                                            <p className="font-semibold text-teal-700">{Math.round(lineFillPct)}%</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="mb-3 h-2 overflow-hidden rounded-full bg-white ring-1 ring-slate-100">
+                                                    <div
+                                                        className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-400"
+                                                        style={{ width: `${lineFillPct}%` }}
+                                                    />
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <label className="text-xs font-medium text-slate-500">Update filled</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max={required || 999}
+                                                        defaultValue={filled}
+                                                        key={`fill-${index}-${filled}`}
+                                                        onBlur={(e) => {
+                                                            const val = parseInt(e.target.value, 10) || 0;
+                                                            if (val !== filled) updateFillCount(index, val);
+                                                        }}
+                                                        className={`${wfInputClass} w-20 py-1.5`}
+                                                        disabled={updatingFillIndex === index}
+                                                    />
+                                                    {position.recruitmentJobId ? (
+                                                        <>
+                                                            {position.recruitmentStatus && (
+                                                                <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
+                                                                    Job: {position.recruitmentStatus}
+                                                                </span>
+                                                            )}
+                                                            <WfButton
+                                                                variant="soft"
+                                                                size="sm"
+                                                                onClick={() => navigate(`/recruitment/jobs/${position.recruitmentJobId}`)}
+                                                            >
+                                                                <FaLink /> View Job
+                                                            </WfButton>
+                                                        </>
+                                                    ) : position.status !== 'Cancelled' && position.status !== 'Filled' ? (
+                                                        <WfButton
+                                                            size="sm"
+                                                            loading={creatingJobIndex === index}
+                                                            onClick={() => createRecruitmentJob(index)}
+                                                        >
+                                                            <FaBriefcase /> Create Job Opening
+                                                        </WfButton>
+                                                    ) : null}
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600">
-                                                <div>
-                                                    <span className="font-medium">Positions:</span> {position.numberOfPositions}
-                                                </div>
-                                                {position.expectedStartDate && (
-                                                    <div>
-                                                        <span className="font-medium">Start:</span> {format(new Date(position.expectedStartDate), 'MMM dd, yyyy')}
-                                                    </div>
-                                                )}
-                                                {position.budget > 0 && (
-                                                    <div>
-                                                        <span className="font-medium">Budget:</span> ${position.budget.toLocaleString()}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <div className="mt-4 p-3 bg-theme-secondary/10 rounded-lg text-sm">
+                                        );
+                                    })}
+
+                                    <div className="rounded-2xl bg-teal-50/80 p-4 text-sm ring-1 ring-teal-100">
                                         <div className="flex justify-between">
-                                            <span className="text-gray-600">Total Positions:</span>
-                                            <span className="font-semibold">{plan.hiringPlan.reduce((sum, p) => sum + (p.numberOfPositions || 0), 0)}</span>
+                                            <span className="text-slate-600">Total Positions</span>
+                                            <span className="font-semibold text-slate-900">{requiredPositions}</span>
                                         </div>
-                                        <div className="flex justify-between mt-1">
-                                            <span className="text-gray-600">Filled:</span>
-                                            <span className="font-semibold">{filledPositions}</span>
+                                        <div className="mt-1.5 flex justify-between">
+                                            <span className="text-slate-600">Filled</span>
+                                            <span className="font-semibold text-emerald-700">{filledPositions}</span>
+                                        </div>
+                                        <div className="mt-1.5 flex justify-between">
+                                            <span className="text-slate-600">Remaining</span>
+                                            <span className="font-semibold text-slate-900">{remainingPositions}</span>
                                         </div>
                                         {totalHiringBudget > 0 && (
-                                            <div className="flex justify-between mt-1">
-                                                <span className="text-gray-600">Total Budget:</span>
-                                                <span className="font-semibold">${totalHiringBudget.toLocaleString()}</span>
+                                            <div className="mt-1.5 flex justify-between">
+                                                <span className="text-slate-600">Total Budget</span>
+                                                <span className="font-semibold text-slate-900">
+                                                    ${totalHiringBudget.toLocaleString()}
+                                                </span>
                                             </div>
                                         )}
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center py-8 text-gray-500">
-                                    <FaUsers className="mx-auto text-4xl mb-2 text-gray-400" />
-                                    <p>No hiring positions planned yet</p>
-                                </div>
+                                <WfEmpty
+                                    icon={FaUsers}
+                                    title="No hiring positions yet"
+                                    description="Add a position to track requirements and create recruitment openings."
+                                    action={
+                                        <WfButton
+                                            size="sm"
+                                            onClick={() => {
+                                                resetHiringForm();
+                                                setShowAddHiringModal(true);
+                                            }}
+                                        >
+                                            <FaPlus /> Add Position
+                                        </WfButton>
+                                    }
+                                />
                             )}
-                        </div>
+                        </WfPanel>
 
-                        {/* Risks */}
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-xl font-semibold flex items-center gap-2">
-                                    <FaExclamationTriangle className="text-orange-500" />
-                                    Risks ({plan.risks?.length || 0})
-                                </h2>
-                                <button
-                                    onClick={() => setShowAddRiskModal(true)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition text-sm"
-                                >
+                        <WfPanel
+                            title={`Risks (${plan.risks?.length || 0})`}
+                            subtitle="Identify and mitigate planning risks"
+                            action={
+                                <WfButton variant="amber" size="sm" onClick={() => setShowAddRiskModal(true)}>
                                     <FaPlus /> Add Risk
-                                </button>
-                            </div>
-                            
+                                </WfButton>
+                            }
+                        >
                             {plan.risks && plan.risks.length > 0 ? (
                                 <div className="space-y-3">
                                     {plan.risks.map((risk, index) => (
-                                        <div key={index} className="border rounded-lg p-4">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h3 className="font-semibold text-gray-800">{risk.risk}</h3>
-                                                <span className={`px-2 py-1 rounded text-xs font-medium ${getImpactColor(risk.impact)}`}>
-                                                    {risk.impact} Impact
-                                                </span>
+                                        <div
+                                            key={index}
+                                            className="rounded-2xl border border-slate-100 bg-white p-4 ring-1 ring-slate-50"
+                                        >
+                                            <div className="mb-2 flex items-start justify-between gap-2">
+                                                <h3 className="font-semibold text-slate-900">{risk.risk}</h3>
+                                                <WfBadge status={risk.impact}>{risk.impact} Impact</WfBadge>
                                             </div>
                                             {risk.mitigation && (
-                                                <p className="text-sm text-gray-600 mt-2">
-                                                    <span className="font-medium">Mitigation:</span> {risk.mitigation}
+                                                <p className="text-sm text-slate-600">
+                                                    <span className="font-medium text-slate-700">Mitigation:</span>{' '}
+                                                    {risk.mitigation}
                                                 </p>
                                             )}
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-8 text-gray-500">
-                                    <FaExclamationTriangle className="mx-auto text-4xl mb-2 text-gray-400" />
-                                    <p>No risks identified yet</p>
-                                </div>
+                                <WfEmpty
+                                    icon={FaExclamationTriangle}
+                                    title="No risks identified"
+                                    description="Document risks that could affect this workforce plan."
+                                    action={
+                                        <WfButton variant="amber" size="sm" onClick={() => setShowAddRiskModal(true)}>
+                                            <FaPlus /> Add Risk
+                                        </WfButton>
+                                    }
+                                />
                             )}
-                        </div>
+                        </WfPanel>
                     </div>
 
-                    {/* Sidebar */}
-                    <div className="min-w-0 space-y-6">
-                        {/* Plan Info */}
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold mb-4">Plan Information</h3>
-                            <div className="space-y-3 text-sm">
-                                <div>
-                                    <span className="text-gray-500">Year:</span>
-                                    <span className="ml-2 font-medium">{plan.planYear}</span>
-                                </div>
-                                <div>
-                                    <span className="text-gray-500">Quarter:</span>
-                                    <span className="ml-2 font-medium">Q{plan.quarter}</span>
-                                </div>
-                                {plan.department && (
-                                    <div>
-                                        <span className="text-gray-500">Department:</span>
-                                        <span className="ml-2 font-medium">{plan.department}</span>
+                    <div className="min-w-0 space-y-5">
+                        <WfPanel title="Plan Information">
+                            <dl className="space-y-3">
+                                {infoRows.map((row) => (
+                                    <div
+                                        key={row.label}
+                                        className="flex items-start justify-between gap-3 border-b border-slate-50 pb-3 last:border-0 last:pb-0"
+                                    >
+                                        <dt className="text-sm text-slate-500">{row.label}</dt>
+                                        <dd className="text-right text-sm font-medium text-slate-800">
+                                            {row.badge ? (
+                                                <WfBadge status={row.badgeStatus || row.value}>{row.value}</WfBadge>
+                                            ) : (
+                                                row.value
+                                            )}
+                                        </dd>
                                     </div>
-                                )}
-                                {plan.createdBy && (
-                                    <div>
-                                        <span className="text-gray-500">Created By:</span>
-                                        <span className="ml-2 font-medium">{plan.createdBy.name || 'N/A'}</span>
-                                    </div>
-                                )}
-                                {plan.approvedBy && (
-                                    <div>
-                                        <span className="text-gray-500">Approved By:</span>
-                                        <span className="ml-2 font-medium">{plan.approvedBy.name || 'N/A'}</span>
-                                    </div>
-                                )}
-                                {plan.approvedAt && (
-                                    <div>
-                                        <span className="text-gray-500">Approved At:</span>
-                                        <span className="ml-2 font-medium">
-                                            {format(new Date(plan.approvedAt), 'MMM dd, yyyy')}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                                ))}
+                            </dl>
+                        </WfPanel>
 
-                        {/* Skills Required */}
+                        {gap !== 0 && (
+                            <div className={`rounded-2xl border p-5 shadow-sm ${
+                                gapStatus === 'Shortage'
+                                    ? 'border-rose-100 bg-rose-50/60'
+                                    : 'border-amber-100 bg-amber-50/60'
+                            }`}>
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                    Workforce Gap
+                                </p>
+                                <p className={`mt-1 text-3xl font-bold ${gapToneFromStatus(gapStatus, gap)}`}>
+                                    {gap}
+                                </p>
+                                <p className="mt-1 text-sm text-slate-600">
+                                    {gapStatus === 'Shortage'
+                                        ? 'Additional headcount needed to reach target'
+                                        : 'Current headcount exceeds planned target'}
+                                </p>
+                            </div>
+                        )}
+
                         {plan.skillsRequired && plan.skillsRequired.length > 0 && (
-                            <div className="bg-white rounded-lg shadow-md p-6">
-                                <h3 className="text-lg font-semibold mb-4">Skills Required</h3>
+                            <WfPanel title="Skills Required">
                                 <div className="space-y-3">
                                     {plan.skillsRequired.map((skill, index) => (
-                                        <div key={index} className="border rounded-lg p-3">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="font-medium">{skill.skill}</span>
+                                        <div
+                                            key={index}
+                                            className="rounded-xl border border-slate-100 bg-slate-50/50 p-3"
+                                        >
+                                            <div className="mb-2 flex items-center justify-between gap-2">
+                                                <span className="font-medium text-slate-800">{skill.skill}</span>
                                                 {skill.gap !== undefined && (
-                                                    <span className={`px-2 py-1 rounded text-xs ${
-                                                        skill.gap > 0 ? 'bg-red-100 text-red-800' : 'bg-theme-primary/10 text-theme-primary'
-                                                    }`}>
+                                                    <WfBadge status={skill.gap > 0 ? 'Shortage' : 'Balanced'}>
                                                         Gap: {skill.gap}
-                                                    </span>
+                                                    </WfBadge>
                                                 )}
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
                                                 <div>Current: {skill.currentCount || 0}</div>
                                                 <div>Required: {skill.requiredCount || 0}</div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </WfPanel>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* Add Hiring Position Modal */}
             {showAddHiringModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-semibold mb-4">Add Hiring Position</h3>
-                        <form onSubmit={addHiringPosition} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Position <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={hiringForm.position}
-                                        onChange={(e) => setHiringForm({ ...hiringForm, position: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Department <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={hiringForm.department}
-                                        onChange={(e) => setHiringForm({ ...hiringForm, department: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
-                                    <input
-                                        type="text"
-                                        value={hiringForm.jobTitle}
-                                        onChange={(e) => setHiringForm({ ...hiringForm, jobTitle: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Number of Positions</label>
-                                    <input
-                                        type="number"
-                                        value={hiringForm.numberOfPositions}
-                                        onChange={(e) => setHiringForm({ ...hiringForm, numberOfPositions: parseInt(e.target.value) || 1 })}
-                                        className="w-full p-3 border rounded-lg"
-                                        min="1"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                                    <select
-                                        value={hiringForm.priority}
-                                        onChange={(e) => setHiringForm({ ...hiringForm, priority: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                    >
-                                        <option value="Low">Low</option>
-                                        <option value="Medium">Medium</option>
-                                        <option value="High">High</option>
-                                        <option value="Critical">Critical</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Expected Start Date</label>
-                                    <input
-                                        type="date"
-                                        value={hiringForm.expectedStartDate}
-                                        onChange={(e) => setHiringForm({ ...hiringForm, expectedStartDate: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Budget ($)</label>
-                                    <input
-                                        type="number"
-                                        value={hiringForm.budget}
-                                        onChange={(e) => setHiringForm({ ...hiringForm, budget: parseFloat(e.target.value) || 0 })}
-                                        className="w-full p-3 border rounded-lg"
-                                        min="0"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex gap-2 justify-end pt-4 border-t">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowAddHiringModal(false);
-                                        setHiringForm({
-                                            position: '',
-                                            department: '',
-                                            jobTitle: '',
-                                            numberOfPositions: 1,
-                                            priority: 'Medium',
-                                            expectedStartDate: '',
-                                            budget: 0,
-                                            status: 'Planned'
-                                        });
-                                    }}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
-                                >
-                                    {submitting ? (
-                                        <>
-                                            <FaSpinner className="animate-spin" />
-                                            Adding...
-                                        </>
-                                    ) : (
-                                        'Add Position'
-                                    )}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Risk Modal */}
-            {showAddRiskModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-semibold mb-4">Add Risk</h3>
-                        <form onSubmit={addRisk} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Risk Description <span className="text-red-500">*</span>
-                                </label>
+                <WfModal
+                    title="Add Hiring Position"
+                    subtitle="Define a workforce requirement for this plan"
+                    maxWidth="max-w-2xl"
+                    onClose={() => {
+                        setShowAddHiringModal(false);
+                        resetHiringForm();
+                    }}
+                >
+                    <form onSubmit={addHiringPosition} className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <WfField label="Position" required>
                                 <input
                                     type="text"
-                                    value={riskForm.risk}
-                                    onChange={(e) => setRiskForm({ ...riskForm, risk: e.target.value })}
-                                    className="w-full p-3 border rounded-lg"
+                                    value={hiringForm.position}
+                                    onChange={(e) => setHiringForm({ ...hiringForm, position: e.target.value })}
+                                    className={wfInputClass}
                                     required
                                 />
-                            </div>
+                            </WfField>
+                            <WfField label="Department" required>
+                                <input
+                                    type="text"
+                                    value={hiringForm.department}
+                                    onChange={(e) => setHiringForm({ ...hiringForm, department: e.target.value })}
+                                    className={wfInputClass}
+                                    required
+                                />
+                            </WfField>
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Impact</label>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <WfField label="Job Title">
+                                <input
+                                    type="text"
+                                    value={hiringForm.jobTitle}
+                                    onChange={(e) => setHiringForm({ ...hiringForm, jobTitle: e.target.value })}
+                                    className={wfInputClass}
+                                />
+                            </WfField>
+                            <WfField label="Number of Positions">
+                                <input
+                                    type="number"
+                                    value={hiringForm.numberOfPositions}
+                                    onChange={(e) => setHiringForm({
+                                        ...hiringForm,
+                                        numberOfPositions: parseInt(e.target.value, 10) || 1,
+                                    })}
+                                    className={wfInputClass}
+                                    min="1"
+                                />
+                            </WfField>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <WfField label="Priority">
                                 <select
-                                    value={riskForm.impact}
-                                    onChange={(e) => setRiskForm({ ...riskForm, impact: e.target.value })}
-                                    className="w-full p-3 border rounded-lg"
+                                    value={hiringForm.priority}
+                                    onChange={(e) => setHiringForm({ ...hiringForm, priority: e.target.value })}
+                                    className={wfInputClass}
                                 >
                                     <option value="Low">Low</option>
                                     <option value="Medium">Medium</option>
                                     <option value="High">High</option>
+                                    <option value="Critical">Critical</option>
                                 </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Mitigation Strategy <span className="text-red-500">*</span>
-                                </label>
-                                <textarea
-                                    value={riskForm.mitigation}
-                                    onChange={(e) => setRiskForm({ ...riskForm, mitigation: e.target.value })}
-                                    className="w-full p-3 border rounded-lg"
-                                    rows="4"
-                                    required
+                            </WfField>
+                            <WfField label="Expected Start Date">
+                                <input
+                                    type="date"
+                                    value={hiringForm.expectedStartDate}
+                                    onChange={(e) => setHiringForm({
+                                        ...hiringForm,
+                                        expectedStartDate: e.target.value,
+                                    })}
+                                    className={wfInputClass}
                                 />
-                            </div>
+                            </WfField>
+                            <WfField label="Budget ($)">
+                                <input
+                                    type="number"
+                                    value={hiringForm.budget}
+                                    onChange={(e) => setHiringForm({
+                                        ...hiringForm,
+                                        budget: parseFloat(e.target.value) || 0,
+                                    })}
+                                    className={wfInputClass}
+                                    min="0"
+                                />
+                            </WfField>
+                        </div>
 
-                            <div className="flex gap-2 justify-end pt-4 border-t">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowAddRiskModal(false);
-                                        setRiskForm({
-                                            risk: '',
-                                            impact: 'Medium',
-                                            mitigation: ''
-                                        });
-                                    }}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
-                                >
-                                    {submitting ? (
-                                        <>
-                                            <FaSpinner className="animate-spin" />
-                                            Adding...
-                                        </>
-                                    ) : (
-                                        'Add Risk'
-                                    )}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                            <WfButton
+                                variant="secondary"
+                                onClick={() => {
+                                    setShowAddHiringModal(false);
+                                    resetHiringForm();
+                                }}
+                            >
+                                Cancel
+                            </WfButton>
+                            <WfButton type="submit" loading={submitting}>
+                                Add Position
+                            </WfButton>
+                        </div>
+                    </form>
+                </WfModal>
             )}
+
+            {showAddRiskModal && (
+                <WfModal
+                    title="Add Risk"
+                    subtitle="Capture impact and mitigation for this plan"
+                    maxWidth="max-w-2xl"
+                    onClose={() => {
+                        setShowAddRiskModal(false);
+                        setRiskForm({ risk: '', impact: 'Medium', mitigation: '' });
+                    }}
+                >
+                    <form onSubmit={addRisk} className="space-y-4">
+                        <WfField label="Risk Description" required>
+                            <input
+                                type="text"
+                                value={riskForm.risk}
+                                onChange={(e) => setRiskForm({ ...riskForm, risk: e.target.value })}
+                                className={wfInputClass}
+                                required
+                            />
+                        </WfField>
+
+                        <WfField label="Impact">
+                            <select
+                                value={riskForm.impact}
+                                onChange={(e) => setRiskForm({ ...riskForm, impact: e.target.value })}
+                                className={wfInputClass}
+                            >
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                            </select>
+                        </WfField>
+
+                        <WfField label="Mitigation Strategy" required>
+                            <textarea
+                                value={riskForm.mitigation}
+                                onChange={(e) => setRiskForm({ ...riskForm, mitigation: e.target.value })}
+                                className={wfInputClass}
+                                rows="4"
+                                required
+                            />
+                        </WfField>
+
+                        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                            <WfButton
+                                variant="secondary"
+                                onClick={() => {
+                                    setShowAddRiskModal(false);
+                                    setRiskForm({ risk: '', impact: 'Medium', mitigation: '' });
+                                }}
+                            >
+                                Cancel
+                            </WfButton>
+                            <WfButton type="submit" variant="amber" loading={submitting}>
+                                Add Risk
+                            </WfButton>
+                        </div>
+                    </form>
+                </WfModal>
+            )}
+
+            {showRejectModal && (
+                <WfModal
+                    title="Reject Workforce Plan"
+                    subtitle="Provide a reason that will remain visible on this plan"
+                    maxWidth="max-w-lg"
+                    onClose={() => {
+                        if (!workflowBusy) {
+                            setShowRejectModal(false);
+                            setRejectionReason('');
+                        }
+                    }}
+                >
+                    <form onSubmit={handleReject} className="space-y-4">
+                        <WfField label="Rejection Reason" required>
+                            <textarea
+                                value={rejectionReason}
+                                onChange={(e) => setRejectionReason(e.target.value)}
+                                className={wfInputClass}
+                                rows="4"
+                                placeholder="Explain why this plan is being rejected..."
+                                required
+                            />
+                        </WfField>
+                        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                            <WfButton
+                                variant="secondary"
+                                disabled={workflowBusy}
+                                onClick={() => {
+                                    setShowRejectModal(false);
+                                    setRejectionReason('');
+                                }}
+                            >
+                                Cancel
+                            </WfButton>
+                            <WfButton type="submit" variant="danger" loading={workflowBusy}>
+                                Reject Plan
+                            </WfButton>
+                        </div>
+                    </form>
+                </WfModal>
+            )}
+            </div>
         </div>
     );
 };
 
 export default WorkforceDetailPage;
-

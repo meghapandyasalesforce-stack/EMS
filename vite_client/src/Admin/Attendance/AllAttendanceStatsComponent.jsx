@@ -12,7 +12,10 @@ import {
   FiClock,
   FiHome,
   FiBriefcase,
+  FiCoffee,
+  FiX,
 } from 'react-icons/fi';
+import * as XLSX from 'xlsx';
 import {
   BarChart,
   Bar,
@@ -24,8 +27,10 @@ import {
   ReferenceLine,
   Legend,
 } from 'recharts';
-import axios, { getUploadUrl } from '../../utils/axios';
+import axios from '../../utils/axios';
 import { BOTH_ATTENDANCE_ENDPOINT } from '../../utils/constant';
+import { toast } from 'react-toastify';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 import {
   fetchTeamAttendanceHistory,
   fetchEmployeeAttendanceDetails,
@@ -36,6 +41,7 @@ import {
   formatAttendanceDateKey,
   resolveAttendanceDateKeyFromRow,
 } from '../../utils/orgTimezone';
+import { formatAttendanceStatusLabel, UI_BADGE_TEXT_CLASS } from '../../utils/textFormat.js';
 
 const TEAL = '#0a8f6c';
 const TEAL_LIGHT = '#e8f7f2';
@@ -81,6 +87,26 @@ function toLocalDateKey(d) {
   return `${y}-${m}-${day}`;
 }
 
+function toDateInput(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function startOfMonthDate(d) {
+  const date = new Date(d);
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfMonthDate(d) {
+  const date = new Date(d);
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
 function monthRange(year, monthIndex) {
   const start = new Date(year, monthIndex, 1);
   const end = new Date(year, monthIndex + 1, 0);
@@ -98,18 +124,13 @@ function initials(emp) {
   );
 }
 
-function profileSrc(emp) {
-  const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
-  if (!photoRef) return null;
-  if (typeof photoRef === 'string') {
-    return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
-  }
-  return getUploadUrl(photoRef.url || photoRef);
-}
-
 function RowAvatar({ employee, sizeClass = 'h-10 w-10' }) {
   const [broken, setBroken] = useState(false);
-  const url = profileSrc(employee);
+  const userId = employee?._id || employee?.id || null;
+  const { photoUrl: url } = useSignedProfilePhoto(
+    employee?.profilePhoto || employee?.profilePicture,
+    { userType: 'employee', userId }
+  );
   const letter = initials(employee);
 
   return (
@@ -171,28 +192,28 @@ function formatBreakMinutes(minsRaw) {
 function statusBadge(uiStatus) {
   const map = {
     present: {
-      label: 'PRESENT',
-      className: `text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full`,
+      label: formatAttendanceStatusLabel('present'),
+      className: UI_BADGE_TEXT_CLASS,
       style: { background: `${TEAL}18`, color: TEAL },
     },
     late: {
-      label: 'LATE ARRIVAL',
-      className: 'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full',
+      label: formatAttendanceStatusLabel('late'),
+      className: UI_BADGE_TEXT_CLASS,
       style: { background: `${ORANGE}18`, color: ORANGE },
     },
     absent: {
-      label: 'ABSENT',
-      className: 'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full',
+      label: formatAttendanceStatusLabel('absent'),
+      className: UI_BADGE_TEXT_CLASS,
       style: { background: `${RED}18`, color: RED },
     },
     wfh: {
-      label: 'WORK FROM HOME',
-      className: 'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full',
+      label: formatAttendanceStatusLabel('wfh'),
+      className: UI_BADGE_TEXT_CLASS,
       style: { background: `${SKY}18`, color: SKY },
     },
     leave: {
-      label: 'ON LEAVE',
-      className: 'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full',
+      label: formatAttendanceStatusLabel('leave'),
+      className: UI_BADGE_TEXT_CLASS,
       style: { background: `${VIOLET}18`, color: VIOLET },
     },
   };
@@ -243,6 +264,17 @@ const AllAttendanceStatsComponent = () => {
   const [showEmployeeDetails, setShowEmployeeDetails] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [selectedBreaksRow, setSelectedBreaksRow] = useState(null);
+  const [showBreaksModal, setShowBreaksModal] = useState(false);
+  
+  // Export selection state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportType, setExportType] = useState(null); // 'date' or 'month'
+  const [exportScope, setExportScope] = useState(null); // 'all' or 'particular'
+  const [selectedExportEmployee, setSelectedExportEmployee] = useState(null);
+  const [allEmployeesList, setAllEmployeesList] = useState([]);
+  const [loadingEmployeesList, setLoadingEmployeesList] = useState(false);
+  const [selectedExportDate, setSelectedExportDate] = useState(new Date());
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -354,6 +386,282 @@ const AllAttendanceStatsComponent = () => {
     setShowEmployeeDetails(false);
     setSelectedEmployeeId(null);
     dispatch(clearEmployeeDetails());
+  };
+
+  const handleViewBreaks = (row) => {
+    setSelectedBreaksRow(row);
+    setShowBreaksModal(true);
+  };
+
+  const handleCloseBreaksModal = () => {
+    setShowBreaksModal(false);
+    setSelectedBreaksRow(null);
+  };
+
+  const handleExportClick = (type) => {
+    setExportType(type);
+    setExportScope(null);
+    setSelectedExportEmployee(null);
+    setShowExportModal(true);
+    loadEmployeesList();
+  };
+
+  const loadEmployeesList = async () => {
+    setLoadingEmployeesList(true);
+    try {
+      const monthStart = startOfMonthDate(new Date());
+      const monthEnd = endOfMonthDate(new Date());
+      const params = {
+        startDate: toLocalDateKey(monthStart),
+        endDate: toLocalDateKey(monthEnd),
+        limit: 1000
+      };
+      const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, { params });
+      const records = res.data?.records || [];
+      
+      // Extract unique employees
+      const employeesMap = new Map();
+      records.forEach(record => {
+        if (record.employee) {
+          const empId = record.employee._id || record.employee.employeeId;
+          if (!employeesMap.has(empId)) {
+            employeesMap.set(empId, record.employee);
+          }
+        }
+      });
+      
+      setAllEmployeesList(Array.from(employeesMap.values()));
+    } catch (error) {
+      console.error('Failed to load employees list:', error);
+    } finally {
+      setLoadingEmployeesList(false);
+    }
+  };
+
+  const handleExportConfirm = async () => {
+    if (!exportScope) {
+      toast.error('Please select export scope');
+      return;
+    }
+
+    if (exportScope === 'particular' && !selectedExportEmployee) {
+      toast.error('Please select an employee');
+      return;
+    }
+
+    setShowExportModal(false);
+
+    if (exportType === 'date') {
+      await handleExportByDate();
+    } else {
+      await handleExportByMonth();
+    }
+  };
+
+  const handleExportByDate = async () => {
+    try {
+      const targetDate = selectedExportDate;
+      const params = {
+        startDate: toLocalDateKey(targetDate),
+        endDate: toLocalDateKey(targetDate),
+        limit: 1000
+      };
+
+      toast.loading('Exporting date-wise data...', { toastId: 'exportDate' });
+
+      const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, { params });
+      const records = res.data?.records || [];
+
+      // Filter records based on scope
+      let filteredRecords = records;
+      if (exportScope === 'particular' && selectedExportEmployee) {
+        filteredRecords = records.filter(record => {
+          const empId = selectedExportEmployee._id;
+          const empEmpId = selectedExportEmployee.employeeId;
+          const selectedEmpName = [selectedExportEmployee.name, selectedExportEmployee.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          const recordEmpId = record.employee?._id;
+          const recordEmpEmpId = record.employee?.employeeId;
+          const recordEmpName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          return recordEmpId === empId || 
+                 recordEmpEmpId === empEmpId ||
+                 record.employee?.id === empId ||
+                 recordEmpName === selectedEmpName ||
+                 (empEmpId && recordEmpEmpId === empEmpId);
+        });
+      }
+
+      if (filteredRecords.length === 0) {
+        toast.dismiss('exportDate');
+        toast.error('No data found for the selected criteria');
+        return;
+      }
+
+      const exportData = [];
+      filteredRecords.forEach((record) => {
+        const breakDurations = getIndividualBreakDurations(record);
+        const totalDuration = breakDurations.reduce((sum, b) => sum + b.duration, 0);
+        const empName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ');
+        
+        const getBreakDuration = (breakType) => {
+          const found = breakDurations.find(b => b.breakType === breakType);
+          return found ? formatBreakDuration(found.duration) : '--';
+        };
+
+        exportData.push({
+          'Employee Name': empName,
+          'Employee ID': record.employee?.employeeId || '--',
+          'Date': formatRowDate(record),
+          'Break 1': getBreakDuration('BREAK_1'),
+          'Break 2': getBreakDuration('BREAK_2'),
+          'Break 3': getBreakDuration('BREAK_3'),
+          'Break 4': getBreakDuration('BREAK_4'),
+          'Total Break Time': formatBreakDuration(totalDuration)
+        });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Employee Breaks');
+      
+      const dateStr = toLocalDateKey(targetDate);
+      const scopeName = exportScope === 'particular' ? selectedExportEmployee.name : 'All_Employees';
+      const fileName = `${scopeName.replace(/\s+/g, '_')}_Breaks_${dateStr}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast.dismiss('exportDate');
+      toast.success('Date-wise export successful!');
+    } catch (error) {
+      toast.dismiss('exportDate');
+      toast.error('Failed to export date-wise data');
+      console.error('Export error:', error);
+    }
+  };
+
+  const handleExportByMonth = async () => {
+    try {
+      const targetDate = selectedExportDate;
+      const monthStart = startOfMonthDate(targetDate);
+      const monthEnd = endOfMonthDate(targetDate);
+      const params = {
+        startDate: toLocalDateKey(monthStart),
+        endDate: toLocalDateKey(monthEnd),
+        limit: 1000
+      };
+
+      toast.loading('Exporting month-wise data...', { toastId: 'exportMonth' });
+
+      const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, { params });
+      const records = res.data?.records || [];
+
+      // Filter records based on scope
+      let filteredRecords = records;
+      if (exportScope === 'particular' && selectedExportEmployee) {
+        filteredRecords = records.filter(record => {
+          const empId = selectedExportEmployee._id;
+          const empEmpId = selectedExportEmployee.employeeId;
+          const selectedEmpName = [selectedExportEmployee.name, selectedExportEmployee.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          const recordEmpId = record.employee?._id;
+          const recordEmpEmpId = record.employee?.employeeId;
+          const recordEmpName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          return recordEmpId === empId || 
+                 recordEmpEmpId === empEmpId ||
+                 record.employee?.id === empId ||
+                 recordEmpName === selectedEmpName ||
+                 (empEmpId && recordEmpEmpId === empEmpId);
+        });
+      }
+
+      if (filteredRecords.length === 0) {
+        toast.dismiss('exportMonth');
+        toast.error('No data found for the selected criteria');
+        return;
+      }
+
+      const exportData = [];
+      filteredRecords.forEach((record) => {
+        const breakDurations = getIndividualBreakDurations(record);
+        const totalDuration = breakDurations.reduce((sum, b) => sum + b.duration, 0);
+        const empName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ');
+        
+        const getBreakDuration = (breakType) => {
+          const found = breakDurations.find(b => b.breakType === breakType);
+          return found ? formatBreakDuration(found.duration) : '--';
+        };
+
+        exportData.push({
+          'Employee Name': empName,
+          'Employee ID': record.employee?.employeeId || '--',
+          'Date': formatRowDate(record),
+          'Break 1': getBreakDuration('BREAK_1'),
+          'Break 2': getBreakDuration('BREAK_2'),
+          'Break 3': getBreakDuration('BREAK_3'),
+          'Break 4': getBreakDuration('BREAK_4'),
+          'Total Break Time': formatBreakDuration(totalDuration)
+        });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Employee Breaks');
+      
+      const monthName = targetDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      const scopeName = exportScope === 'particular' ? selectedExportEmployee.name : 'All_Employees';
+      const fileName = `${scopeName.replace(/\s+/g, '_')}_Breaks_${monthName}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast.dismiss('exportMonth');
+      toast.success('Month-wise export successful!');
+    } catch (error) {
+      toast.dismiss('exportMonth');
+      toast.error('Failed to export month-wise data');
+      console.error('Export error:', error);
+    }
+  };
+
+  const handleExportEmployeeDateToExcel = () => {
+    setExportType('date');
+    setExportScope('particular');
+    setSelectedExportEmployee(selectedBreaksRow.employee);
+    setShowExportModal(true);
+    loadEmployeesList();
+  };
+
+  const handleExportEmployeeMonthToExcel = () => {
+    setExportType('month');
+    setExportScope('particular');
+    setSelectedExportEmployee(selectedBreaksRow.employee);
+    setShowExportModal(true);
+    loadEmployeesList();
+  };
+
+  const formatBreakDuration = (seconds) => {
+    const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const getIndividualBreakDurations = (row) => {
+    if (!row?.breaks || !Array.isArray(row.breaks)) return [];
+    return row.breaks.map((entry, index) => {
+      if (!entry?.breakIn) return null;
+      const breakIn = new Date(entry.breakIn).getTime();
+      if (!Number.isFinite(breakIn)) return null;
+      const breakOut = entry.breakOut ? new Date(entry.breakOut).getTime() : new Date().getTime();
+      if (!Number.isFinite(breakOut) || breakOut <= breakIn) return null;
+      const duration = (breakOut - breakIn) / 1000; // in seconds
+      const breakType = entry.breakType || `BREAK_${index + 1}`; // Backward compatibility
+      return {
+        breakType,
+        duration,
+        isActive: !entry.breakOut
+      };
+    }).filter(Boolean);
   };
 
   const totalPages = Math.max(1, Math.ceil((team.total || 0) / (team.limit || rowsPerPage)));
@@ -893,7 +1201,23 @@ const AllAttendanceStatsComponent = () => {
                           formatHours(row.effectiveHours)
                         )}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">{formatBreakMinutes(toBreakMinutes(row))}</td>
+                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="font-semibold text-slate-800">
+                            {formatBreakMinutes(toBreakMinutes(row))}
+                          </div>
+                          {row.breaks && row.breaks.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleViewBreaks(row)}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0a8f6c] text-white text-xs font-semibold hover:bg-[#0d9488] transition-all shadow-sm hover:shadow-md"
+                            >
+                              <FiCoffee className="h-3.5 w-3.5" />
+                              View Breaks
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-4 whitespace-nowrap">{statusBadge(row.uiStatus)}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-slate-600">
                         {locMeta && LocIcon ? (
@@ -998,6 +1322,239 @@ const AllAttendanceStatsComponent = () => {
             </div>
           </footer>
         </div>
+
+        {/* Break Details Modal */}
+        {showBreaksModal && selectedBreaksRow && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-[#ecfdf5] flex items-center justify-center shrink-0">
+                    <FiCoffee className="h-6 w-6 text-[#0a8f6c]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Break Details</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      {selectedBreaksRow.employee?.name} {selectedBreaksRow.employee?.lastName}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {formatRowDate(selectedBreaksRow)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportEmployeeDateToExcel}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0a8f6c] text-white text-xs font-semibold hover:bg-[#0d9488] transition-colors"
+                  >
+                    <FiDownload className="h-3.5 w-3.5" />
+                    Export Date
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportEmployeeMonthToExcel}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0a8f6c] text-white text-xs font-semibold hover:bg-[#0d9488] transition-colors"
+                  >
+                    <FiDownload className="h-3.5 w-3.5" />
+                    Export Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseBreaksModal}
+                    className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                  >
+                    <FiX className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                <div className="space-y-3">
+                  {getIndividualBreakDurations(selectedBreaksRow).map((breakInfo) => (
+                    <div key={breakInfo.breakType} className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${breakInfo.isActive ? 'bg-amber-100' : 'bg-[#ecfdf5]'}`}>
+                          <FiCoffee className={`h-5 w-5 ${breakInfo.isActive ? 'text-amber-600' : 'text-[#0a8f6c]'}`} />
+                        </div>
+                        <div>
+                          <span className="text-sm font-semibold text-slate-900">
+                            {breakInfo.breakType === 'LUNCH' ? 'Lunch' : breakInfo.breakType.replace('BREAK_', 'Break ')}
+                          </span>
+                          {breakInfo.isActive && (
+                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold tabular-nums text-slate-900">
+                        {formatBreakDuration(breakInfo.duration)}
+                      </span>
+                    </div>
+                  ))}
+                  {getIndividualBreakDurations(selectedBreaksRow).length > 0 && (
+                    <div className="flex items-center justify-between p-4 bg-slate-100 rounded-xl border border-slate-200 mt-4">
+                      <span className="text-sm font-bold text-slate-700">Total Break Time</span>
+                      <span className="text-lg font-bold tabular-nums text-slate-900">
+                        {formatBreakDuration(
+                          getIndividualBreakDurations(selectedBreaksRow).reduce((sum, b) => sum + b.duration, 0)
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {getIndividualBreakDurations(selectedBreaksRow).length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-slate-500 bg-white rounded-xl border border-slate-200">
+                      <FiCoffee className="h-10 w-10 mb-3 text-slate-300" />
+                      <p className="text-sm font-medium">No breaks recorded</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Export Selection Modal */}
+        {showExportModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-[#ecfdf5] flex items-center justify-center shrink-0">
+                    <FiDownload className="h-6 w-6 text-[#0a8f6c]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Export Break Data</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      {exportType === 'date' ? 'Export by Date' : 'Export by Month'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(false)}
+                  className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                <div className="space-y-6">
+                  {/* Scope Selection */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-3">
+                      Do you want to export data for:
+                    </label>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExportScope('all');
+                          setSelectedExportEmployee(null);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                          exportScope === 'all'
+                            ? 'border-[#0a8f6c] bg-[#ecfdf5] text-[#0a8f6c]'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <FiUsers className="h-5 w-5" />
+                        <span className="font-medium">All Employees</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExportScope('particular')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                          exportScope === 'particular'
+                            ? 'border-[#0a8f6c] bg-[#ecfdf5] text-[#0a8f6c]'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <FiCoffee className="h-5 w-5" />
+                        <span className="font-medium">Particular Employee</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Employee Selection */}
+                  {exportScope === 'particular' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-3">
+                        Select Employee:
+                      </label>
+                      {loadingEmployeesList ? (
+                        <div className="flex items-center justify-center py-8 text-slate-500">
+                          <FiLoader className="h-6 w-6 animate-spin mr-2" />
+                          <span className="text-sm">Loading employees...</span>
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedExportEmployee?._id || ''}
+                          onChange={(e) => {
+                            const emp = allEmployeesList.find(emp => emp._id === e.target.value);
+                            setSelectedExportEmployee(emp);
+                          }}
+                          className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0a8f6c] focus:border-transparent"
+                        >
+                          <option value="">Select an employee</option>
+                          {allEmployeesList.map(emp => (
+                            <option key={emp._id} value={emp._id}>
+                              {emp.name} {emp.lastName} ({emp.employeeId || 'N/A'})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Date Selection for Date Export */}
+                  {exportType === 'date' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-3">
+                        Select Date:
+                      </label>
+                      <input
+                        type="date"
+                        value={toLocalDateKey(selectedExportDate)}
+                        onChange={(e) => setSelectedExportDate(new Date(e.target.value))}
+                        className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0a8f6c] focus:border-transparent"
+                      />
+                    </div>
+                  )}
+
+                  {/* Month Selection for Month Export */}
+                  {exportType === 'month' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-3">
+                        Select Month:
+                      </label>
+                      <input
+                        type="month"
+                        value={`${selectedExportDate.getFullYear()}-${String(selectedExportDate.getMonth() + 1).padStart(2, '0')}`}
+                        onChange={(e) => {
+                          const [year, month] = e.target.value.split('-');
+                          setSelectedExportDate(new Date(parseInt(year), parseInt(month) - 1, 1));
+                        }}
+                        className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0a8f6c] focus:border-transparent"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-white">
+                <button
+                  type="button"
+                  onClick={handleExportConfirm}
+                  disabled={!exportScope || (exportScope === 'particular' && !selectedExportEmployee)}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-[#0a8f6c] text-white font-semibold hover:bg-[#0d9488] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FiDownload className="h-5 w-5" />
+                  Export Data
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

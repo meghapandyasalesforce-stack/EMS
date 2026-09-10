@@ -11,6 +11,7 @@ const JOB_TYPE_TO_CATALOG = {
     PAN_CARD: 'PAN',
     DEGREE_CERTIFICATE: 'DEGREE',
     OFFER_LETTER: 'OFFER_LETTER',
+    PASSPORT: 'PASSPORT',
     GUARANTOR_FORM: 'OTHER',
     OTHER: 'OTHER',
 };
@@ -19,6 +20,7 @@ export const JOB_DOCUMENT_TYPES = {
     OFFER_LETTER: 'OFFER_LETTER',
     AADHAR_CARD: 'AADHAR_CARD',
     PAN_CARD: 'PAN_CARD',
+    PASSPORT: 'PASSPORT',
     GUARANTOR_FORM: 'GUARANTOR_FORM',
     DEGREE_CERTIFICATE: 'DEGREE_CERTIFICATE',
     OTHER: 'OTHER',
@@ -26,32 +28,60 @@ export const JOB_DOCUMENT_TYPES = {
 
 const JOB_TYPE_LABELS = {
     OFFER_LETTER: 'Offer Letter',
-    AADHAR_CARD: 'Aadhar Card',
+    AADHAR_CARD: 'Aadhaar Card',
     PAN_CARD: 'Pan Card',
+    PASSPORT: 'Passport',
     GUARANTOR_FORM: 'Guarantor Form',
     DEGREE_CERTIFICATE: 'Degree Certificate',
     OTHER: 'Other Document',
 };
 
+const resolveAadhaarNumber = (parsedInfo = {}) =>
+    String(parsedInfo.aadhaarNumber || parsedInfo.aadharNumber || '').trim();
+
+/** Pull the main ID / reference number from job-details additionalInfo */
 export function extractDocumentNumber(documentType, parsedInfo = {}) {
     if (!parsedInfo || typeof parsedInfo !== 'object') return '';
     switch (documentType) {
-        case 'PAN_CARD': return String(parsedInfo.panNumber || '').trim();
-        case 'AADHAR_CARD': return String(parsedInfo.aadharNumber || '').trim();
-        case 'OFFER_LETTER': return String(parsedInfo.effectiveDate || '').trim();
-        case 'GUARANTOR_FORM': return String(parsedInfo.guarantorName || parsedInfo.guarantorContact || '').trim();
-        case 'DEGREE_CERTIFICATE': return String(parsedInfo.marksheetLevel || parsedInfo.institution || parsedInfo.yearObtained || '').trim();
+        case 'PAN_CARD':
+            return String(parsedInfo.panNumber || '').trim();
+        case 'AADHAR_CARD':
+            return resolveAadhaarNumber(parsedInfo);
+        case 'PASSPORT':
+            return String(parsedInfo.passportNumber || '').trim().toUpperCase();
+        case 'OFFER_LETTER':
+            return String(parsedInfo.effectiveDate || '').trim();
+        case 'GUARANTOR_FORM':
+            return String(parsedInfo.guarantorName || parsedInfo.guarantorContact || '').trim();
+        case 'DEGREE_CERTIFICATE':
+            return String(parsedInfo.marksheetLevel || parsedInfo.institution || parsedInfo.yearObtained || '').trim();
         default:
-            return String(parsedInfo.panNumber || parsedInfo.aadharNumber || parsedInfo.documentNumber || '').trim();
+            return String(
+                parsedInfo.panNumber ||
+                parsedInfo.aadhaarNumber ||
+                parsedInfo.aadharNumber ||
+                parsedInfo.passportNumber ||
+                parsedInfo.documentNumber ||
+                ''
+            ).trim();
     }
 }
 
 export function formatJobDocDescription(documentType, parsedInfo = {}) {
     if (!parsedInfo || typeof parsedInfo !== 'object' || !Object.keys(parsedInfo).length) return '';
     switch (documentType) {
-        case 'PAN_CARD': return parsedInfo.panNumber ? `PAN Number: ${parsedInfo.panNumber}` : '';
-        case 'AADHAR_CARD': return parsedInfo.aadharNumber ? `Aadhar Number: ${parsedInfo.aadharNumber}` : '';
-        case 'OFFER_LETTER': return parsedInfo.effectiveDate ? `Effective Date: ${parsedInfo.effectiveDate}` : '';
+        case 'PAN_CARD':
+            return parsedInfo.panNumber ? `PAN Number: ${parsedInfo.panNumber}` : '';
+        case 'AADHAR_CARD': {
+            const aadhaarNumber = resolveAadhaarNumber(parsedInfo);
+            return aadhaarNumber ? `Aadhaar Number: ${aadhaarNumber}` : '';
+        }
+        case 'PASSPORT':
+            return parsedInfo.passportNumber
+                ? `Passport Number: ${String(parsedInfo.passportNumber).trim().toUpperCase()}`
+                : '';
+        case 'OFFER_LETTER':
+            return parsedInfo.effectiveDate ? `Effective Date: ${parsedInfo.effectiveDate}` : '';
         case 'GUARANTOR_FORM': {
             const parts = [];
             if (parsedInfo.guarantorName) parts.push(`Name: ${parsedInfo.guarantorName}`);

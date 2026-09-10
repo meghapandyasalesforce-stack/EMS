@@ -33,13 +33,6 @@ const NotificationSender = ({ onSent }) => {
     }
   };
 
-  const countClass =
-    message.length > 450
-      ? 'bg-red-50 text-red-700 border-red-100'
-      : message.length > 400
-        ? 'bg-amber-50 text-amber-800 border-amber-100'
-        : 'bg-slate-50 text-slate-600 border-slate-200';
-
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -49,9 +42,6 @@ const NotificationSender = ({ onSent }) => {
             Message is delivered to all employees in your organization.
           </p>
         </div>
-        <span className={`inline-flex self-start items-center rounded-full border px-2.5 py-1 text-xs font-medium ${countClass}`}>
-          {message.length}/500
-        </span>
       </div>
 
       <textarea
@@ -59,9 +49,8 @@ const NotificationSender = ({ onSent }) => {
         className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-sm text-slate-800 placeholder:text-slate-400 transition focus:border-[var(--color-secondary)] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20"
         placeholder="Write your announcement…"
         value={message}
-        onChange={(e) => setMessage(e.target.value.slice(0, 500))}
+        onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
-        maxLength={500}
       />
 
       <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -71,7 +60,7 @@ const NotificationSender = ({ onSent }) => {
               <span className="font-medium">Error:</span> {error}
             </p>
           ) : (
-            <p className="text-xs text-slate-400">Press Enter to send · Shift+Enter for a new line</p>
+            <p className="text-xs text-slate-400"></p>
           )}
         </div>
         <button

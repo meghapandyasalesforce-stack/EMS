@@ -6,6 +6,7 @@ import {
   ensurePushSubscription,
   saveSubscriptionToServer,
   syncPushSubscriptionIfGranted,
+  getServiceWorkerRegistration,
 } from '../utils/push';
 
 /**
@@ -35,10 +36,7 @@ export const usePushNotification = () => {
 
       let registration;
       try {
-        if (!navigator.serviceWorker.controller) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        registration = await navigator.serviceWorker.ready;
+        registration = await getServiceWorkerRegistration(4000);
       } catch (swError) {
         logger.error('Service Worker registration failed', swError);
         setError('Failed to register service worker');
@@ -47,7 +45,7 @@ export const usePushNotification = () => {
       }
 
       if (!registration) {
-        setError('Service worker not available');
+        setError('Service worker not available or active');
         setIsLoading(false);
         return;
       }

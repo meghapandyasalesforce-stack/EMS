@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
+import { resolveProfilePhotoOwner } from '../../utils/profileUtils';
 
 function getInitials(user) {
   const name = user?.name?.trim() || '';
@@ -12,8 +13,7 @@ function getInitials(user) {
 const EmployeeMemberAvatar = ({ user, sizeClassName = 'h-10 w-10' }) => {
   const [imageError, setImageError] = useState(false);
 
-  const userType = user?.role === 'admin' ? 'admin' : 'employee';
-  const userId = user?._id || user?.id || null;
+  const { userType, userId } = resolveProfilePhotoOwner(user);
   const { photoUrl } = useSignedProfilePhoto(
     user?.profilePhoto || user?.profilePicture,
     { userType, userId }

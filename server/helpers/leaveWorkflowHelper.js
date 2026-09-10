@@ -16,6 +16,7 @@ import {
     loadWorkflowStepDefinition,
     prefixWorkflowComment,
 } from './regularizationWorkflowActionHelper.js';
+import { assertApplicantApprovalAccess } from './functionalRolesHelper.js';
 
 const DEFAULT_LEAVE_WORKFLOW = {
     name: 'Leave Approval — Manager then HR',
@@ -139,6 +140,12 @@ export const resolveLeaveWorkflowAction = async ({
     currentStep,
     employeeLinked = true,
 }) => {
+    await assertApplicantApprovalAccess(
+        req,
+        approvalInstance?.requestedBy,
+        'This leave request'
+    );
+
     const reviewerEmployeeId = getReviewerEmployeeId(req);
     const workflowStep = await loadWorkflowStepDefinition(approvalInstance, currentStep);
     const approverType = workflowStep?.approverType || null;

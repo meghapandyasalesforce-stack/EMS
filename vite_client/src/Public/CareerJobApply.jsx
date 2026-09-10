@@ -367,9 +367,8 @@ const CareerJobApply = () => {
                                                 />
                                             </label>
                                             <label className="ats-apply-page__field">
-                                                <span className="ats-form-label">Last Name *</span>
+                                                <span className="ats-form-label">Last Name</span>
                                                 <input
-                                                    required
                                                     className="cm-input w-full"
                                                     value={form.lastName}
                                                     onChange={(e) => set('lastName', e.target.value)}

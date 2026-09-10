@@ -69,7 +69,13 @@ const prependPushHandlers = () => {
 
       res.write = originalWrite
       res.end = originalEnd
-      res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+      if (!res.headersSent) {
+        try {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+        } catch {
+          // Ignore if headers already written
+        }
+      }
       return originalEnd(body, typeof encoding === 'function' ? undefined : encoding, typeof encoding === 'function' ? encoding : cb)
     }
 
@@ -150,11 +156,16 @@ const handleProxyErrors = () => {
         /\[vite\] http proxy error.*ECONNREFUSED/,
         /\[vite\] http proxy error.*ECONNRESET/,
         /\[vite\] http proxy error.*ETIMEDOUT/,
+        /\[vite\] http proxy error.*ECONNABORTED/,
+        /\[vite\] ws proxy socket error/,
         /Error:.*ECONNREFUSED/,
         /Error:.*ECONNRESET/,
         /Error:.*ETIMEDOUT/,
+        /Error:.*ECONNABORTED/,
         /read ECONNRESET/,
         /read ECONNREFUSED/,
+        /write ECONNABORTED/,
+        /write ECONNRESET/,
         /AggregateError.*ECONNREFUSED/,
         /AggregateError.*ECONNRESET/
       ];
@@ -481,19 +492,9 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
         secure: false,
         ws: true,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, req, res) => {
-            // Silently handle dev-time connection issues to backend (e.g. server not running or wrong port)
-            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' ||
-                err.message?.includes('ECONNREFUSED') || err.message?.includes('ECONNRESET')) {
-              if (res && !res.headersSent) {
-                // For WebSocket upgrade failures we can just end the response; the client will retry gracefully.
-                res.end();
-              }
-              return;
-            }
-            // Only log unexpected errors
-            console.error('Socket.io proxy error:', err.message);
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, _res) => {
+            // Silently ignore socket connection drops during dev
           });
         },
       },
@@ -501,115 +502,25 @@ export default defineConfig(({ mode }) => {
         target: proxyTarget, // Backend default port is 10000 (or PORT env var)
         changeOrigin: true,
         secure: false,
-        // Handle connection errors gracefully - suppress ECONNREFUSED errors
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
-            // Check if this is an SSE endpoint (Server-Sent Events)
-            const isSSEEndpoint = req.url?.includes('/get-all-notification');
-            
-            // SSE endpoints need long-lived connections - don't apply timeout
-            if (!isSSEEndpoint) {
-              // 30s timeout so slow operations (e.g. org registration + email) complete before proxy responds 503
-              proxyReq.setTimeout(30000, () => {
-                if (!res.headersSent) {
-                  res.writeHead(503, { 'Content-Type': 'application/json' });
-                  res.end(JSON.stringify({ 
-                    success: false, 
-                    message: 'Service unavailable',
-                    code: 'SERVICE_UNAVAILABLE'
-                  }));
-                }
-              });
-            } else {
-              // For SSE endpoints, set a very long timeout (1 hour) to allow long-lived connections
-              proxyReq.setTimeout(3600000); // 1 hour timeout for SSE connections
-            }
-          });
-          
-          proxy.on('error', (err, req, res) => {
-            // Check if this is an SSE endpoint
-            const isSSEEndpoint = req.url?.includes('/get-all-notification') || req.url?.includes('get-all-notification');
-            
-            // For SSE endpoints, ECONNRESET is normal when clients disconnect or backend restarts
-            // Suppress these errors completely - they're expected behavior
-            if (isSSEEndpoint && (
-              err.code === 'ECONNRESET' || 
-              err.code === 'ECONNREFUSED' ||
-              err.message?.includes('aborted') ||
-              err.message?.includes('ECONNRESET') ||
-              err.message?.includes('ECONNREFUSED')
-            )) {
-              // SSE connection reset is normal - silently ignore
-              // Don't send response if headers already sent (SSE connection)
-              if (res && !res.headersSent) {
-                res.end();
-              }
-              return;
-            }
-            
-            // Silently handle connection refused errors (backend not running)
-            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
-              // Suppress error logging and send a 503 response
-              if (res && !res.headersSent) {
-                res.writeHead(503, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                  success: false, 
-                  message: 'Service unavailable',
-                  code: 'SERVICE_UNAVAILABLE'
-                }));
-              }
-              // Prevent error from being logged by returning early
-              return;
-            }
-            // For other errors, let them propagate (they'll be logged by Vite)
-            console.error('Proxy error:', err.message);
+        ws: false,
+        timeout: 300000, // 5 minutes timeout
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, _res) => {
+            // Silently ignore proxy connection errors
           });
         },
-        // Suppress error logging at the proxy level
-        ws: false,
-        timeout: 300000, // 5 minutes timeout (SSE endpoints handled per-request above)
       },
       '/uploads': {
         target: proxyTarget, // Backend default port is 10000 (or PORT env var)
         changeOrigin: true,
         secure: false,
-        // Handle connection errors gracefully - suppress ECONNREFUSED errors
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
-            proxyReq.setTimeout(30000, () => {
-              if (!res.headersSent) {
-                res.writeHead(503, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                  success: false, 
-                  message: 'Service unavailable',
-                  code: 'SERVICE_UNAVAILABLE'
-                }));
-              }
-            });
-          });
-          
-          proxy.on('error', (err, req, res) => {
-            // Silently handle connection refused errors (backend not running)
-            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
-              // Suppress error logging and send a 503 response
-              if (res && !res.headersSent) {
-                res.writeHead(503, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                  success: false, 
-                  message: 'Service unavailable',
-                  code: 'SERVICE_UNAVAILABLE'
-                }));
-              }
-              // Prevent error from being logged by returning early
-              return;
-            }
-            // For other errors, let them propagate (they'll be logged by Vite)
-            console.error('Proxy error:', err.message);
-          });
-        },
-        // Suppress error logging at the proxy level
         ws: false,
         timeout: 5000,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, _res) => {
+            // Silently ignore proxy connection errors
+          });
+        },
       },
     },
     // Suppress connection errors in the server log

@@ -2386,6 +2386,25 @@ registerEvent({
   })
 });
 
+// ==================== HELPDESK EVENTS ====================
+
+registerEvent({
+  type: 'helpdesk_ticket_created',
+  defaultTitle: 'New Helpdesk Ticket',
+  defaultType: 'general',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ recipients = [] }) => recipients,
+  messageBuilder: ({ ticket, creatorName }) =>
+    `${creatorName || 'An employee'} created ticket ${ticket?.ticketNumber || ''}: ${ticket?.subject || 'Helpdesk request'}`,
+  metadataBuilder: ({ ticket }) => ({
+    ticketId: ticket?._id,
+    ticketNumber: ticket?.ticketNumber,
+    category: ticket?.category,
+    priority: ticket?.priority,
+    link: '/helpdesk'
+  })
+});
+
 export default {
   // This file auto-registers events on import
 };

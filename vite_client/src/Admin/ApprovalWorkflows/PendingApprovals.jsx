@@ -7,6 +7,9 @@ import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { AtsPage, AtsPageHeader, AtsEmpty, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
 import ApprovalDetailModal from './ApprovalDetailModal';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { formatStatusLabel } from '../../utils/textFormat.js';
+
 
 const approvalTitle = (approval) => {
   if (approval.entityType === 'TaxRegimeChange') return 'Tax Regime Change';
@@ -29,6 +32,7 @@ const formatDueLabel = (dueDate) => {
 };
 
 const PendingApprovals = () => {
+  const { isOrgOwner } = useAuthPermissions();
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedApproval, setSelectedApproval] = useState(null);
@@ -145,6 +149,9 @@ const PendingApprovals = () => {
     urgent: approvals.filter((a) => a.priority === 'Urgent' || a.entityType === 'TaxRegimeChange').length,
   }), [approvals]);
 
+  /** Leave / regularization raised by HR staff is admin-only; the rest keep the normal chain. */
+  const canDecideApproval = (approval) => isOrgOwner || !approval?.requiresAdminApproval;
+
   if (loading) {
     return (
       <AtsPage>
@@ -219,6 +226,7 @@ const PendingApprovals = () => {
             const isUrgent = approval.priority === 'Urgent' || approval.entityType === 'TaxRegimeChange';
             const dueMeta = formatDueLabel(pendingStep?.dueDate);
             const requesterName = approval.requestedBy?.name || 'Unknown requester';
+            const canAct = canDecideApproval(approval);
 
             return (
               <article
@@ -277,30 +285,34 @@ const PendingApprovals = () => {
                     {approval.priority && approval.priority !== 'Normal' && (
                       <div className="ats-approval-card__meta-row">
                         <span className="ats-approval-card__meta-label">Priority</span>
-                        <span className="ats-approval-card__meta-value">{approval.priority}</span>
+                        <span className="ats-approval-card__meta-value">{formatStatusLabel(approval.priority)}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div className="ats-approval-card__actions">
-                  <CmButton
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleAction(approval, pendingStep?.stepNumber, 'Approve')}
-                  >
-                    <FiCheckCircle className="h-4 w-4" />
-                    Approve
-                  </CmButton>
-                  <CmButton
-                    variant="outline"
-                    size="sm"
-                    className="ats-approval-card__reject-btn"
-                    onClick={() => handleRejectClick(cardKey)}
-                  >
-                    <FiXCircle className="h-4 w-4" />
-                    Reject
-                  </CmButton>
+                  {canAct ? (
+                    <>
+                      <CmButton
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleAction(approval, pendingStep?.stepNumber, 'Approve')}
+                      >
+                        <FiCheckCircle className="h-4 w-4" />
+                        Approve
+                      </CmButton>
+                      <CmButton
+                        variant="outline"
+                        size="sm"
+                        className="ats-approval-card__reject-btn"
+                        onClick={() => handleRejectClick(cardKey)}
+                      >
+                        <FiXCircle className="h-4 w-4" />
+                        Reject
+                      </CmButton>
+                    </>
+                  ) : null}
                   <button
                     type="button"
                     className="ats-approval-card__view"
@@ -315,7 +327,7 @@ const PendingApprovals = () => {
                   </button>
                 </div>
 
-                {rejectingId === cardKey && (
+                {canAct && rejectingId === cardKey && (
                   <div className="ats-approval-card__reject-panel">
                     <p className="ats-approval-card__reject-label">
                       <FiAlertTriangle aria-hidden />
@@ -358,6 +370,7 @@ const PendingApprovals = () => {
       {showDetail && selectedApproval && (
         <ApprovalDetailModal
           approval={selectedApproval}
+          canAct={canDecideApproval(selectedApproval)}
           onClose={() => {
             setShowDetail(false);
             setSelectedApproval(null);

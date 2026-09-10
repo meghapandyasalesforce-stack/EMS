@@ -16,6 +16,15 @@ import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { sanitizeTaxDeclarationInput } from '../../helpers/taxDeclarationHelper.js';
 import { getIndianFinancialYear } from '../../helpers/incomeTaxCalculation.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import { getEffectiveTimezone } from '../../helpers/organizationTimezoneService.js';
+import {
+    daysUntilMonthDay,
+    formatCelebrationDateLabel,
+    getCalendarMonthDay,
+    calculateCompletedYears,
+    calculateMarriageCompletedYears,
+    getTodayPartsInTimezone,
+} from '../../helpers/celebrationDateHelper.js';
 import { OnboardingWorkflow } from '../../models/onboarding.model.js';
 import { emitOnboardingChangedAsync, runInBackground } from '../../helpers/backgroundTasks.js';
 import { synchronizeOnboardingWorkflows } from '../../services/onboardingService.js';
@@ -23,6 +32,47 @@ import {
     createTaxRegimeChangeRequestForEmployee,
     isNaRegime,
 } from './taxRegimeChangeController.js';
+
+
+const normalizeEmployeeFileValue = (file) => {
+    if (!file) return null;
+    if (typeof file === 'string') return file;
+    if (typeof file === 'object') {
+        return file.url || file.path || file.filename || file.fileName || file.secure_url || null;
+    }
+    return null;
+};
+
+const getEmployeeAnniversaryDate = (employee) => {
+    return employee.anniversaryDate || employee.contactDetails?.anniversaryDate || employee.personalDetails?.anniversaryDate || employee.marriageDate || null;
+};
+
+const getEmployeeMaritalStatus = (employee) => {
+    return employee.maritalStatus || employee.contactDetails?.maritalStatus || employee.personalDetails?.maritalStatus || null;
+};
+
+const getEmployeeSpouseName = (employee) => {
+    return employee.spouseName || employee.contactDetails?.spouseName || employee.personalDetails?.spouseName || '';
+};
+
+const isMarriedOrUnset = (maritalStatus) => {
+    if (!maritalStatus) return true;
+    return String(maritalStatus).trim().toLowerCase() === 'married';
+};
+
+const getEmployeeFullName = (employee) => {
+    return employee.fullName || employee.name || `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.email || 'Employee';
+};
+
+const sortCelebrations = (items = []) => {
+    const typeOrder = { birthday: 1, marriage_anniversary: 2, anniversary: 3 };
+    return [...items].sort((a, b) => {
+        const aDays = Number.isFinite(Number(a.daysUntil)) ? Number(a.daysUntil) : 9999;
+        const bDays = Number.isFinite(Number(b.daysUntil)) ? Number(b.daysUntil) : 9999;
+        if (aDays !== bDays) return aDays - bDays;
+        return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
+    });
+};
 
 const synchronizeFinancialDetailsWithOnboarding = (employeeId, organizationId) => {
   if (!employeeId || !organizationId) return;
@@ -58,7 +108,7 @@ export const updateEmployeeInfo = async (req, res) => {
             'name', 'lastName', 'email', 'password', 'position', 
             'department', 'manager', 'jobTitle', 'jobCategory', 
             'salary', 'role', 'active', 'guarantors', 'nextOfKins',
-            'familyDetails', 'academicRecords', 'professionalQualifications'
+            'familyDetails', 'academicRecords', 'professionalQualifications', 'professionalExperience'
         ];
 
         // Check if update includes restricted fields
@@ -147,6 +197,46 @@ export const updateEmployeeInfo = async (req, res) => {
             if (birthDate > new Date()) {
                 return res.status(400).json({ message: 'Birth date cannot be in the future' });
             }
+        }
+
+        // Validate anniversary date if provided
+        if (Object.prototype.hasOwnProperty.call(req.body, 'anniversaryDate') && (!req.body.anniversaryDate || !String(req.body.anniversaryDate).trim())) {
+            unsetFields.anniversaryDate = '';
+            delete updateData.anniversaryDate;
+        } else if (updateData.anniversaryDate) {
+            const anniversaryDate = new Date(updateData.anniversaryDate);
+            if (Number.isNaN(anniversaryDate.getTime())) {
+                return res.status(400).json({ message: 'Please provide a valid anniversary date' });
+            }
+            if (anniversaryDate > new Date()) {
+                return res.status(400).json({ message: 'Anniversary date cannot be in the future' });
+            }
+        }
+
+        // Validate marriage date if provided (fallback compatibility)
+        if (Object.prototype.hasOwnProperty.call(req.body, 'marriageDate') && (!req.body.marriageDate || !String(req.body.marriageDate).trim())) {
+            unsetFields.marriageDate = '';
+            delete updateData.marriageDate;
+        } else if (updateData.marriageDate) {
+            const marriageDate = new Date(updateData.marriageDate);
+            if (Number.isNaN(marriageDate.getTime())) {
+                return res.status(400).json({ message: 'Please provide a valid marriage date' });
+            }
+            if (marriageDate > new Date()) {
+                return res.status(400).json({ message: 'Marriage date cannot be in the future' });
+            }
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updateData, 'showMarriageAnniversary')) {
+            updateData.showMarriageAnniversary = Boolean(updateData.showMarriageAnniversary);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updateData, 'maritalStatus')) {
+            updateData.maritalStatus = String(updateData.maritalStatus || '').trim();
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updateData, 'spouseName')) {
+            updateData.spouseName = String(updateData.spouseName || '').trim();
         }
 
         // Validate gender if provided
@@ -466,6 +556,44 @@ export const addGuarantorDetails = async (req, res) => {
     }
 };
 
+export const uploadProfessionalQualification = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const files = Array.isArray(req.files) ? req.files : [];
+
+        if (!files.length) {
+            return res.status(400).json({ message: 'Please upload at least one certification file' });
+        }
+
+        const newQualifications = files.map((file) => ({
+            title: file.originalname,
+            filePath: `/uploads/documents/${file.filename}`,
+            fileName: file.filename,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            uploadedAt: new Date()
+        }));
+
+        const updatedEmployee = await Employee.findByIdAndUpdate(
+            employeeId,
+            { $push: { professionalQualifications: { $each: newQualifications } } },
+            { new: true }
+        ).select('professionalQualifications');
+
+        res.status(201).json({
+            message: 'Certification uploaded successfully',
+            professionalQualifications: updatedEmployee.professionalQualifications
+        });
+    } catch (error) {
+        logger.error('Error uploading certification', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to upload certification',
+            error: error.message
+        });
+    }
+};
+
 // Employee updates professional qualification (by subdocument _id)
 export const updateProfessionalQualification = async (req, res) => {
     try {
@@ -540,6 +668,149 @@ export const deleteProfessionalQualification = async (req, res) => {
         logger.error('Error deleting professional qualification', { error: error.message, stack: error.stack });
         res.status(500).json({
             message: 'Failed to delete professional qualification',
+            error: error.message
+        });
+    }
+};
+
+export const addProfessionalExperience = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const {
+            companyName,
+            jobTitle,
+            employmentType,
+            location,
+            startDate,
+            endDate,
+            currentlyWorking,
+            description
+        } = req.body;
+
+        const company = String(companyName || '').trim();
+        const role = String(jobTitle || '').trim();
+
+        if (!company || !role) {
+            return res.status(400).json({ message: 'Company name and job title are required' });
+        }
+
+        const newExperience = {
+            companyName: company,
+            jobTitle: role,
+            employmentType: employmentType != null ? String(employmentType).trim() : '',
+            location: location != null ? String(location).trim() : '',
+            startDate: startDate || null,
+            endDate: currentlyWorking ? null : (endDate || null),
+            currentlyWorking: Boolean(currentlyWorking),
+            description: description != null ? String(description).trim() : ''
+        };
+
+        const updatedEmployee = await Employee.findByIdAndUpdate(
+            employeeId,
+            { $push: { professionalExperience: newExperience } },
+            { new: true }
+        ).select('professionalExperience');
+
+        res.status(201).json({
+            message: 'Professional experience added successfully',
+            professionalExperience: updatedEmployee.professionalExperience
+        });
+    } catch (error) {
+        logger.error('Error adding professional experience', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to add professional experience',
+            error: error.message
+        });
+    }
+};
+
+export const updateProfessionalExperience = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const {
+            professionalExperienceId,
+            companyName,
+            jobTitle,
+            employmentType,
+            location,
+            startDate,
+            endDate,
+            currentlyWorking,
+            description
+        } = req.body;
+
+        if (!professionalExperienceId || !mongoose.isValidObjectId(professionalExperienceId)) {
+            return res.status(400).json({ message: 'Valid professionalExperienceId is required' });
+        }
+
+        const company = String(companyName || '').trim();
+        const role = String(jobTitle || '').trim();
+
+        if (!company || !role) {
+            return res.status(400).json({ message: 'Company name and job title are required' });
+        }
+
+        const result = await Employee.updateOne(
+            { _id: employeeId, 'professionalExperience._id': professionalExperienceId },
+            {
+                $set: {
+                    'professionalExperience.$.companyName': company,
+                    'professionalExperience.$.jobTitle': role,
+                    'professionalExperience.$.employmentType': employmentType != null ? String(employmentType).trim() : '',
+                    'professionalExperience.$.location': location != null ? String(location).trim() : '',
+                    'professionalExperience.$.startDate': startDate || null,
+                    'professionalExperience.$.endDate': currentlyWorking ? null : (endDate || null),
+                    'professionalExperience.$.currentlyWorking': Boolean(currentlyWorking),
+                    'professionalExperience.$.description': description != null ? String(description).trim() : ''
+                }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Professional experience not found' });
+        }
+
+        const updatedEmployee = await Employee.findById(employeeId).select('professionalExperience');
+        res.status(200).json({
+            message: 'Professional experience updated successfully',
+            professionalExperience: updatedEmployee.professionalExperience
+        });
+    } catch (error) {
+        logger.error('Error updating professional experience', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to update professional experience',
+            error: error.message
+        });
+    }
+};
+
+export const deleteProfessionalExperience = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const { professionalExperienceId } = req.body;
+
+        if (!professionalExperienceId || !mongoose.isValidObjectId(professionalExperienceId)) {
+            return res.status(400).json({ message: 'Valid professionalExperienceId is required' });
+        }
+
+        const result = await Employee.updateOne(
+            { _id: employeeId, 'professionalExperience._id': professionalExperienceId },
+            { $pull: { professionalExperience: { _id: professionalExperienceId } } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Professional experience not found' });
+        }
+
+        const updatedEmployee = await Employee.findById(employeeId).select('professionalExperience');
+        res.status(200).json({
+            message: 'Professional experience deleted successfully',
+            professionalExperience: updatedEmployee.professionalExperience
+        });
+    } catch (error) {
+        logger.error('Error deleting professional experience', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to delete professional experience',
             error: error.message
         });
     }
@@ -1198,67 +1469,172 @@ export const acknowledgeOfferLetterLoginRedirect = async (req, res) => {
     }
 };
 
-// Get upcoming birthdays (next 10 days)
+// Get upcoming birthdays and marriage anniversaries (today or exactly 7 days before, org timezone)
 export const getUpcomingBirthdays = async (req, res) => {
     try {
-        const today = new Date();
-        const upcomingWindowDays = 10;
-        const organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+        const CELEBRATION_VISIBLE_DAYS = new Set([0, 7]);
+        const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId || req.organizationId;
         if (!organizationId) {
             return res.status(400).json({ message: 'Organization ID is required' });
         }
 
-        // Find active employees for this organization with birth dates set.
-        const employees = await Employee.find({ 
-            birthDate: { $exists: true, $ne: null },
+        const timezone = await getEffectiveTimezone(organizationId);
+        const today = getTodayPartsInTimezone(timezone);
+
+        const employees = await Employee.find({
             status: 'active',
-            organizationId
-        }).select('name lastName email profilePhoto birthDate department');
+            organizationId,
+            $or: [
+                { birthDate: { $exists: true, $ne: null } },
+                { dateOfBirth: { $exists: true, $ne: null } },
+                { dob: { $exists: true, $ne: null } },
+                { anniversaryDate: { $exists: true, $ne: null } },
+                { marriageDate: { $exists: true, $ne: null } },
+                { 'contactDetails.anniversaryDate': { $exists: true, $ne: null } },
+                { 'personalDetails.anniversaryDate': { $exists: true, $ne: null } },
+            ],
+        }).select(`
+            name lastName firstName fullName email profilePhoto avatar
+            birthDate dateOfBirth dob anniversaryDate marriageDate maritalStatus spouseName
+            showMarriageAnniversary contactDetails personalDetails department
+        `);
 
-        // Filter and format birthday data
-        const upcomingBirthdays = employees
-            .filter(emp => {
-                if (!emp.birthDate) return false;
-                const birthDate = new Date(emp.birthDate);
-                const thisYearBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-                
-                // Check if birthday is within the configured upcoming window.
-                if (thisYearBirthday < today) {
-                    // Birthday already passed this year, check next year
-                    const nextYearBirthday = new Date(today.getFullYear() + 1, birthDate.getMonth(), birthDate.getDate());
-                    return (nextYearBirthday - today) / (1000 * 60 * 60 * 24) <= upcomingWindowDays;
+        const upcomingBirthdays = [];
+        const upcomingMarriageAnniversaries = [];
+
+        for (const emp of employees) {
+            const name = getEmployeeFullName(emp);
+            const birthdayDate = emp.birthDate || emp.dateOfBirth || emp.dob;
+
+            if (birthdayDate) {
+                const daysUntil = daysUntilMonthDay(birthdayDate, timezone);
+                if (daysUntil != null && CELEBRATION_VISIBLE_DAYS.has(daysUntil)) {
+                    const parts = getCalendarMonthDay(birthdayDate, timezone);
+                    const dateLabel = parts ? formatCelebrationDateLabel(parts.month, parts.day) : '';
+                    upcomingBirthdays.push({
+                        type: 'birthday',
+                        employeeId: emp._id,
+                        name,
+                        birthday: dateLabel,
+                        date: dateLabel,
+                        daysUntil,
+                        department: emp.department,
+                        profilePhoto: normalizeEmployeeFileValue(emp.profilePhoto || emp.avatar),
+                    });
                 }
-                return (thisYearBirthday - today) / (1000 * 60 * 60 * 24) <= upcomingWindowDays;
-            })
-            .map(emp => {
-                const birthDate = new Date(emp.birthDate);
-                const thisYearBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-                const daysUntilBirthday = thisYearBirthday < today ? 
-                    Math.ceil((new Date(today.getFullYear() + 1, birthDate.getMonth(), birthDate.getDate()) - today) / (1000 * 60 * 60 * 24)) :
-                    Math.ceil((thisYearBirthday - today) / (1000 * 60 * 60 * 24));
+            }
 
-                return {
-                    employeeId: emp._id,
-                    name: `${emp.name} ${emp.lastName}`,
-                    birthday: `${birthDate.getDate()} ${birthDate.toLocaleDateString('en-US', { month: 'long' })}`,
-                    daysUntil: daysUntilBirthday,
-                    department: emp.department,
-                    profilePhoto: emp.profilePhoto
-                };
-            })
-            .sort((a, b) => a.daysUntil - b.daysUntil)
-            .slice(0, 10); // Limit to 10 upcoming birthdays
+            const weddingDate = getEmployeeAnniversaryDate(emp);
+            const maritalStatus = getEmployeeMaritalStatus(emp);
+            const isEligibleMarriageAnniversary =
+                weddingDate &&
+                isMarriedOrUnset(maritalStatus) &&
+                emp.showMarriageAnniversary !== false;
+
+            if (isEligibleMarriageAnniversary) {
+                const daysUntil = daysUntilMonthDay(weddingDate, timezone);
+                if (daysUntil != null && CELEBRATION_VISIBLE_DAYS.has(daysUntil)) {
+                    const completedYears = calculateMarriageCompletedYears(weddingDate, today.year, timezone);
+                    if (completedYears >= 1) {
+                        const parts = getCalendarMonthDay(weddingDate, timezone);
+                        const dateLabel = parts ? formatCelebrationDateLabel(parts.month, parts.day) : '';
+                        upcomingMarriageAnniversaries.push({
+                            type: 'marriage_anniversary',
+                            employeeId: emp._id,
+                            name,
+                            anniversaryDate: dateLabel,
+                            date: dateLabel,
+                            daysUntil,
+                            completedYears,
+                            spouseName: getEmployeeSpouseName(emp),
+                            department: emp.department,
+                            profilePhoto: normalizeEmployeeFileValue(emp.profilePhoto || emp.avatar),
+                        });
+                    }
+                }
+            }
+        }
+
+        const sortedBirthdays = sortCelebrations(upcomingBirthdays);
+        const sortedMarriageAnniversaries = sortCelebrations(upcomingMarriageAnniversaries);
+        const celebrations = sortCelebrations([
+            ...sortedBirthdays,
+            ...sortedMarriageAnniversaries,
+        ]).slice(0, 15);
 
         res.status(200).json({
             success: true,
-            birthdays: upcomingBirthdays,
-            total: upcomingBirthdays.length
+            birthdays: sortedBirthdays.slice(0, 10),
+            marriageAnniversaries: sortedMarriageAnniversaries.slice(0, 10),
+            celebrations,
+            total: celebrations.length,
         });
 
     } catch (error) {
-        logger.error('Error fetching upcoming birthdays', { error: error.message, stack: error.stack });
-        res.status(500).json({ 
+        logger.error('Error fetching upcoming birthdays and celebrations', { error: error.message, stack: error.stack });
+        res.status(500).json({
             message: 'Failed to fetch upcoming birthdays',
+            error: error.message,
+        });
+    }
+};
+
+// Get upcoming work anniversaries (today or exactly 7 days before, org timezone)
+export const getUpcomingAnniversaries = async (req, res) => {
+    try {
+        const CELEBRATION_VISIBLE_DAYS = new Set([0, 7]);
+        const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({ message: 'Organization ID is required' });
+        }
+
+        const timezone = await getEffectiveTimezone(organizationId);
+        const today = getTodayPartsInTimezone(timezone);
+
+        // Find active employees for this organization with joining dates set.
+        const employees = await Employee.find({
+            joiningDate: { $exists: true, $ne: null },
+            status: 'active',
+            organizationId
+        }).select('name lastName email profilePhoto joiningDate department');
+
+        const upcomingAnniversaries = employees
+            .map((emp) => {
+                if (!emp.joiningDate) return null;
+                const daysUntil = daysUntilMonthDay(emp.joiningDate, timezone);
+                if (daysUntil == null || !CELEBRATION_VISIBLE_DAYS.has(daysUntil)) {
+                    return null;
+                }
+
+                const targetYear = daysUntil === 0 ? today.year : (today.month > 10 && daysUntil > 30 ? today.year + 1 : today.year);
+                const completedYears = calculateCompletedYears(emp.joiningDate, targetYear, timezone);
+                if (completedYears < 1) return null;
+
+                const parts = getCalendarMonthDay(emp.joiningDate, timezone);
+                return {
+                    employeeId: emp._id,
+                    name: `${emp.name} ${emp.lastName || ''}`.trim(),
+                    anniversaryDate: parts ? formatCelebrationDateLabel(parts.month, parts.day) : '',
+                    daysUntil,
+                    completedYears,
+                    department: emp.department,
+                    profilePhoto: normalizeEmployeeFileValue(emp.profilePhoto),
+                    type: 'anniversary'
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.daysUntil - b.daysUntil)
+            .slice(0, 10);
+
+        res.status(200).json({
+            success: true,
+            anniversaries: upcomingAnniversaries,
+            total: upcomingAnniversaries.length
+        });
+    } catch (error) {
+        logger.error('Error fetching upcoming anniversaries', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to fetch upcoming anniversaries',
             error: error.message,
         });
     }

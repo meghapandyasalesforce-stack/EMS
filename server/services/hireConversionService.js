@@ -268,6 +268,47 @@ export async function convertCandidateToEmployee({
     });
     await candidate.save();
 
+    // Sync Workforce Planning hiring fill from the linked recruitment job (already incremented by markHired).
+    // Do not call syncWorkforceFillOnEmployeeJoin here — that would double-count Recruitment.filledPositions.
+    try {
+        const { WorkforcePlan } = await import('../models/workforce.model.js');
+        const { getLiveHeadcount } = await import('../helpers/workforceHeadcountHelper.js');
+        const jobId = candidate.jobPostingId;
+        if (jobId) {
+            const job = await Recruitment.findById(jobId).select('filledPositions numberOfPositions').lean();
+            const plans = await WorkforcePlan.find({
+                organizationId,
+                status: { $in: ['Draft', 'Approved', 'In Progress', 'Pending Approval'] },
+                'hiringPlan.recruitmentJobId': jobId,
+            });
+            for (const plan of plans) {
+                let changed = false;
+                for (const hiring of plan.hiringPlan || []) {
+                    if (String(hiring.recruitmentJobId) !== String(jobId)) continue;
+                    hiring.filledPositions = Number(job?.filledPositions) || 0;
+                    const required = Number(hiring.numberOfPositions) || 0;
+                    if (hiring.status === 'Planned') hiring.status = 'In Progress';
+                    if (required > 0 && hiring.filledPositions >= required && hiring.status !== 'Cancelled') {
+                        hiring.status = 'Filled';
+                    }
+                    changed = true;
+                }
+                if (changed) {
+                    plan.currentHeadcount = await getLiveHeadcount(organizationId, {
+                        department: plan.department || undefined,
+                        jobTitle: plan.jobTitle || undefined,
+                    });
+                    await plan.save();
+                }
+            }
+        } else {
+            const { syncWorkforceFillOnEmployeeJoin } = await import('../helpers/workforceHeadcountHelper.js');
+            await syncWorkforceFillOnEmployeeJoin(employee);
+        }
+    } catch (wfErr) {
+        logger.warn('Hire: workforce fill sync failed', { employeeId: employee._id, error: wfErr.message });
+    }
+
     return {
         alreadyConverted: false,
         employee: {

@@ -73,15 +73,50 @@ export const createJobPosting = asyncHandler(async (req, res) => {
     const body = withoutClientPostedDate(normalizeJobBodyScreeningCriteria(req.body));
     const status = body.status || 'Draft';
 
+    const workforcePlanId = body.workforcePlanId || null;
+    const workforceHiringIndex =
+        body.workforceHiringIndex != null && body.workforceHiringIndex !== ''
+            ? Number(body.workforceHiringIndex)
+            : null;
+
     const jobPosting = new Recruitment({
         ...body,
         organizationId,
         createdBy,
+        workforcePlanId: workforcePlanId || null,
+        workforceHiringIndex: Number.isFinite(workforceHiringIndex) ? workforceHiringIndex : null,
         // Draft create time is not a posting date — stamp only when published Open
         postedDate: status === 'Open' ? new Date() : null,
     });
 
+    if (workforcePlanId) {
+        const tags = new Set([...(jobPosting.tags || []), 'workforce-planning', String(workforcePlanId)]);
+        jobPosting.tags = [...tags];
+    }
+
     await jobPosting.save();
+
+    // Link back to workforce hiring line when created from a WP requirement
+    if (workforcePlanId && Number.isFinite(workforceHiringIndex)) {
+        try {
+            const { WorkforcePlan } = await import('../../models/workforce.model.js');
+            const plan = await WorkforcePlan.findOne({ _id: workforcePlanId, organizationId });
+            if (plan?.hiringPlan?.[workforceHiringIndex]) {
+                const hiring = plan.hiringPlan[workforceHiringIndex];
+                if (!hiring.recruitmentJobId) {
+                    hiring.recruitmentJobId = jobPosting._id;
+                    if (hiring.status === 'Planned') hiring.status = 'In Progress';
+                    await plan.save();
+                }
+            }
+        } catch (linkErr) {
+            logger.warn('Failed to link job posting to workforce hiring line', {
+                error: linkErr.message,
+                workforcePlanId,
+                workforceHiringIndex,
+            });
+        }
+    }
 
     // Notify employees when posted directly as Open + internal
     if (jobPosting.status === 'Open' && jobPosting.internalVisible) {
@@ -1569,8 +1604,8 @@ export const publicApplyForJob = asyncHandler(async (req, res) => {
     const { organizationId, id: jobPostingId } = req.params;
     const { firstName, lastName, email, phone, coverLetter, coverLetterAttachment, resume, consentAccepted } = req.body;
 
-    if (!firstName || !lastName || !email) {
-        return res.status(400).json({ success: false, message: 'firstName, lastName and email are required' });
+    if (!firstName || !email) {
+        return res.status(400).json({ success: false, message: 'firstName and email are required' });
     }
     if (!consentAccepted) {
         return res.status(400).json({ success: false, message: 'Consent is required to submit an application' });

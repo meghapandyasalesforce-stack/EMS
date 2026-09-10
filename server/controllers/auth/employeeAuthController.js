@@ -178,11 +178,11 @@ export const registerEmployee = async (req, res) => {
             });
         }
 
-        // Validate required fields (password and manager optional - manager defaults to 'CEO' for first employee only)
-        if (!name || !lastName || !email || !position ||
+        // Validate required fields (lastName, password, and manager optional - manager defaults to 'CEO' for first employee only)
+        if (!name || !email || !position ||
             !department || !jobTitle || !jobCategory || !salary) {
             return sendValidationError(res, 
-                'All fields are required (password will be auto-generated if not provided)'
+                'All required fields must be filled (password will be auto-generated if not provided)'
             );
         }
 
@@ -600,6 +600,12 @@ export const registerEmployee = async (req, res) => {
 
         runInBackground('register-employee-cache-invalidate', async () => {
             await invalidateEmployeesCache(organizationId);
+        });
+
+        // Sync workforce hiring fill tracking when a new employee joins
+        runInBackground('register-employee-workforce-fill', async () => {
+            const { syncWorkforceFillOnEmployeeJoin } = await import('../../helpers/workforceHeadcountHelper.js');
+            await syncWorkforceFillOnEmployeeJoin(employee);
         });
 
         // Auto-create employee onboarding workflow (only if org setting enabled)

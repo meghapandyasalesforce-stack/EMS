@@ -3,6 +3,10 @@ import {
   markNotificationAsRead,
   buildUserNotificationFilter,
   withEffectiveReadState,
+  resolveAnnouncementViewerContext,
+  filterAnnouncementPayloadForViewer,
+  toAnnouncementJoinedAt,
+  isAnnouncementInAudienceForViewer,
 } from "../../helpers/notificationService.js";
 import Notification from "../../models/notification.model.js";
 import User from "../../models/user.model.js";
@@ -65,6 +69,36 @@ const resolveActorIdentity = (req) => {
     return { primaryId: req.employee._id, userType: 'Employee' };
   }
   return { primaryId: null, userType: 'User' };
+};
+
+/** Announcement-only audience cutoff: when the employee was added to EMS (not backdated joiningDate). */
+const resolveAnnouncementJoinedAtForReq = async (req) => {
+  try {
+    const primaryId = req.user?._id || req.employee?._id || req.employeeProfileId || null;
+    if (primaryId) {
+      const ctx = await resolveAnnouncementViewerContext(primaryId);
+      if (ctx.joinedAt) return ctx.joinedAt;
+    }
+
+    // Fallback: load employee record explicitly
+    let emp = null;
+    if (req.employee?._id) {
+      emp = await Employee.findById(req.employee._id).select('joiningDate createdAt').lean();
+    }
+    if (!emp && req.user?._id) {
+      emp = await Employee.findOne({ userId: req.user._id }).select('joiningDate createdAt').lean();
+    }
+    if (!emp && req.employeeProfileId) {
+      emp = await Employee.findById(req.employeeProfileId).select('joiningDate createdAt').lean();
+    }
+    if (!emp && req.employee) {
+      return toAnnouncementJoinedAt(req.employee.createdAt, req.employee.joiningDate);
+    }
+    return toAnnouncementJoinedAt(emp?.createdAt, emp?.joiningDate);
+  } catch (error) {
+    logger.warn('Failed to resolve announcement join cutoff', { error: error.message });
+    return null;
+  }
 };
 
 export const createNotification = async (req, res) => {
@@ -183,8 +217,10 @@ export const getAnnouncementReceipts = async (req, res) => {
       organizationId,
       status: 'active',
     })
-      .select('_id name lastName email userId')
+      .select('_id name lastName email userId joiningDate createdAt')
       .lean();
+
+    const sentAt = announcement.createdAt ? new Date(announcement.createdAt) : null;
 
     const receiptById = new Map();
     for (const receipt of announcement.readReceipts || []) {
@@ -198,6 +234,11 @@ export const getAnnouncementReceipts = async (req, res) => {
     const notSeen = [];
 
     for (const emp of audience) {
+      // New hires added to EMS after this announcement was sent are not in its audience
+      const empJoinedAt = toAnnouncementJoinedAt(emp.createdAt, emp.joiningDate);
+      if (sentAt && empJoinedAt && empJoinedAt > sentAt) {
+        continue;
+      }
       const empId = String(emp._id);
       const userId = emp.userId ? String(emp.userId) : null;
       const receipt = receiptById.get(empId) || (userId ? receiptById.get(userId) : null);
@@ -256,6 +297,11 @@ export const getNotifications = async (req, res) => {
   // Try to authenticate user (optional - for personalized notifications)
   let userId = null;
   let userRole = null;
+  let announcementViewerCtx = {
+    organizationId: null,
+    recipientIds: [],
+    joinedAt: null,
+  };
   
   try {
     // Check for token in cookie or Authorization header
@@ -271,6 +317,7 @@ export const getNotifications = async (req, res) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       userId = decoded.userId;
       userRole = decoded.role;
+      announcementViewerCtx = await resolveAnnouncementViewerContext(userId);
     }
   } catch (authError) {
     // Authentication failed - continue without user ID (will only get broadcasts)
@@ -286,32 +333,42 @@ export const getNotifications = async (req, res) => {
   const sendNotifications = async () => {
     try {
       // Build query: broadcasts OR user-specific notifications
-      const baseOr = [{ isBroadcast: true }];
+      // Org scope applies to broadcasts only so personal notifications stay unchanged.
+      const baseOr = [
+        announcementViewerCtx.organizationId
+          ? { isBroadcast: true, organizationId: announcementViewerCtx.organizationId }
+          : { isBroadcast: true },
+      ];
       if (userId) {
         baseOr.push({ recipient: userId });
       }
+
+      const query = { $or: baseOr };
 
       let notifications;
       if (isFirstPoll) {
         isFirstPoll = false;
         const since = new Date(Date.now() - HISTORY_MS);
         notifications = await Notification.find({
-          $or: baseOr,
+          ...query,
           createdAt: { $gte: since },
         })
           .sort({ createdAt: -1 })
           .limit(50);
       } else {
         notifications = await Notification.find({
-          $or: baseOr,
+          ...query,
           createdAt: { $gt: lastCheck },
         })
           .sort({ createdAt: -1 })
           .limit(50);
       }
 
-      if (notifications.length > 0) {
-        res.write(`data: ${JSON.stringify(notifications)}\n\n`);
+      // Announcements only: skip already-read + pre-join. Other types unchanged.
+      const payload = filterAnnouncementPayloadForViewer(notifications, announcementViewerCtx);
+
+      if (payload.length > 0) {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
       }
       // Always advance — avoids getting stuck when the prior window had zero rows
       lastCheck = new Date();
@@ -434,21 +491,41 @@ export const getUserNotifications = async (req, res) => {
       return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
     }
 
+    const announcementJoinedAt = await resolveAnnouncementJoinedAtForReq(req);
+
     const filter = buildUserNotificationFilter(organizationId, recipientIds, {
       unreadOnly: unreadOnly === 'true' || unreadOnly === true,
+      announcementJoinedAt,
     });
 
     if (type) filter.type = type;
 
-    const notifications = await Notification.find(filter)
-      .populate('sender', 'name email')
-      .populate('recipient', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(limitNum)
-      .skip((pageNum - 1) * limitNum);
+    let notifications = [];
+    try {
+      notifications = await Notification.find(filter)
+        .populate('sender', 'name email')
+        .populate('recipient', 'name email')
+        .sort({ createdAt: -1 })
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum);
+    } catch (popErr) {
+      logger.warn('Failed to populate sender/recipient in notifications, falling back to unpopulated find', { error: popErr.message });
+      notifications = await Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum);
+    }
 
     const total = await Notification.countDocuments(filter);
-    const withReadState = withEffectiveReadState(notifications, recipientIds);
+    let withReadState = withEffectiveReadState(notifications, recipientIds);
+
+    // Belt-and-suspenders: never return pre-join announcements (other types untouched)
+    withReadState = withReadState.filter((n) =>
+      isAnnouncementInAudienceForViewer(n, {
+        organizationId,
+        joinedAt: announcementJoinedAt,
+      })
+    );
 
     return sendSuccess(res, {
       notifications: withReadState,
@@ -564,7 +641,11 @@ export const getUnreadCount = async (req, res) => {
       return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
     }
 
-    const filter = buildUserNotificationFilter(organizationId, recipientIds, { unreadOnly: true });
+    const announcementJoinedAt = await resolveAnnouncementJoinedAtForReq(req);
+    const filter = buildUserNotificationFilter(organizationId, recipientIds, {
+      unreadOnly: true,
+      announcementJoinedAt,
+    });
     const count = await Notification.countDocuments(filter);
 
     return sendSuccess(res, { unreadCount: count }, 'Unread count retrieved successfully');
@@ -647,19 +728,25 @@ export const notifyAdminsOnEmployeeBack = async (req, res) => {
       return sendUnauthorized(res, 'Unauthorized');
     }
 
-    const employee = await Employee.findById(employeeId).select('name email');
-    const admins = await User.find({ role: 'admin', isActive: true }).select('_id');
+    const employee = await Employee.findById(employeeId).select('name email organizationId');
+    const organizationId = employee?.organizationId || req.organizationId;
+    const admins = await User.find({ role: 'admin', isActive: true, ...(organizationId ? { organizationId } : {}) }).select('_id');
 
     const message = `${employee?.name || 'An employee'} navigated back from Attendance`;
 
-    await Promise.all(admins.map(a => Notification.create({
-      recipient: a._id,
-      sender: employeeId,
-      message,
-      type: 'system',
-      priority: 'low',
-      metadata: { source: 'attendance', action: 'back' }
-    })));
+    if (admins.length > 0 && organizationId) {
+      await Promise.all(admins.map(a => Notification.create({
+        organizationId,
+        recipient: a._id,
+        recipientType: 'User',
+        sender: employeeId,
+        senderType: 'Employee',
+        message,
+        type: 'system',
+        priority: 'low',
+        metadata: { source: 'attendance', action: 'back' }
+      })));
+    }
 
     return sendSuccess(res, null, 'Admins notified');
   } catch (error) {

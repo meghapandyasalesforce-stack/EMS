@@ -109,8 +109,9 @@ function calcRoleTaskProgress(tasks, role) {
 }
 
 const CANONICAL_DOCUMENT_TYPES = Object.freeze({
-    AADHAAR: ['AADHAR_CARD'],
+    AADHAAR: ['AADHAR_CARD', 'AADHAAR_CARD'],
     PAN: ['PAN_CARD'],
+    PASSPORT: ['PASSPORT'],
     DEGREE: ['DEGREE_CERTIFICATE'],
     OFFER_ACK: ['OFFER_LETTER'],
     OTHER: ['OTHER'],

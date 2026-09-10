@@ -178,8 +178,8 @@ export const employeeValidations = {
             .isLength({ min: 2, max: 99 }).withMessage('Name must be between 2 and 99 characters')
             .matches(/^[a-zA-Z\s'-]+$/).withMessage('Name can only contain letters, spaces, hyphens, and apostrophes'),
         body('lastName')
+            .optional({ values: 'falsy' })
             .trim()
-            .notEmpty().withMessage('Last name is required')
             .isLength({ min: 2, max: 99 }).withMessage('Last name must be between 2 and 99 characters')
             .matches(/^[a-zA-Z\s'-]+$/).withMessage('Last name can only contain letters, spaces, hyphens, and apostrophes'),
         body('email')
