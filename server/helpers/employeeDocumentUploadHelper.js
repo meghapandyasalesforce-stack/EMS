@@ -156,7 +156,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         .replace(/[^a-zA-Z0-9_]/g, '')
         .slice(0, 60);
     const filename = `${safeBase}-${timestamp}-${random}${ext}`;
-    const s3Key = buildDocumentS3Key(organizationId, filename);
+    const s3Key = buildDocumentS3Key(organizationId, filename, employeeId);
 
     const s3Url = await uploadFile(file.buffer, s3Key, file.mimetype, false);
 
