@@ -28,6 +28,18 @@ const formatWfhDateRange = (from, to) => {
   return `${fromStr} – ${formatDate(to)}`;
 };
 
+const formatWfhType = (wfhType, halfDayType) => {
+  const type = wfhType || 'full_day';
+  if (type === 'half_day') {
+    return halfDayType === 'first_half' ? 'Half Day - First Half' : 'Half Day - Second Half';
+  }
+  return 'Full Day';
+};
+
+const getWfhTypeFromRequest = (request) => {
+  return request.wfhType || 'full_day';
+};
+
 /**
  * Work From Home request panel (informational).
  * Submits a WFH intimation that emails the reporting manager, HR, and admin.
@@ -36,11 +48,16 @@ const formatWfhDateRange = (from, to) => {
 const WfhRequestPanel = () => {
   const [wfhDateFrom, setWfhDateFrom] = useState(toDateInput(new Date()));
   const [wfhDateTo, setWfhDateTo] = useState(toDateInput(new Date()));
+  const [isHalfDay, setIsHalfDay] = useState(false);
+  const [halfDayType, setHalfDayType] = useState('');
   const [reason, setReason] = useState('');
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+
+  // Check if same day is selected
+  const isSameDay = wfhDateFrom && wfhDateTo && wfhDateFrom === wfhDateTo;
 
   const fetchMyRequests = async () => {
     try {
@@ -72,6 +89,10 @@ const WfhRequestPanel = () => {
       toast.error('End date cannot be before start date');
       return;
     }
+    if (isHalfDay && !halfDayType) {
+      toast.error('Please select First Half or Second Half');
+      return;
+    }
     if (!reason.trim()) {
       toast.error('Please enter a reason');
       return;
@@ -79,14 +100,17 @@ const WfhRequestPanel = () => {
 
     try {
       setSubmitting(true);
+      const wfhType = isHalfDay ? 'half_day' : 'full_day';
       const res = await axios.post(
         '/v1/both/wfh-requests',
-        { wfhDateFrom, wfhDateTo, reason: reason.trim(), remarks: remarks.trim() },
+        { wfhDateFrom, wfhDateTo, wfhType, halfDayType, reason: reason.trim(), remarks: remarks.trim() },
         { withCredentials: true }
       );
       toast.success(res.data?.message || 'Work From Home request submitted');
       setReason('');
       setRemarks('');
+      setIsHalfDay(false);
+      setHalfDayType('');
       fetchMyRequests();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to submit Work From Home request');
@@ -125,6 +149,11 @@ const WfhRequestPanel = () => {
                 if (wfhDateTo && e.target.value > wfhDateTo) {
                   setWfhDateTo(e.target.value);
                 }
+                // Uncheck half day if dates become different
+                if (isHalfDay && e.target.value !== wfhDateTo) {
+                  setIsHalfDay(false);
+                  setHalfDayType('');
+                }
               }}
               className="w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#20C997] focus:outline-none"
               required
@@ -139,12 +168,65 @@ const WfhRequestPanel = () => {
               type="date"
               value={wfhDateTo}
               min={wfhDateFrom}
-              onChange={(e) => setWfhDateTo(e.target.value)}
-              className="w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#20C997] focus:outline-none"
+              onChange={(e) => {
+                setWfhDateTo(e.target.value);
+                // Uncheck half day if dates become different
+                if (isHalfDay && e.target.value !== wfhDateFrom) {
+                  setIsHalfDay(false);
+                  setHalfDayType('');
+                }
+              }}
+              disabled={isHalfDay}
+              className={`w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#20C997] focus:outline-none ${isHalfDay ? 'bg-slate-100 cursor-not-allowed' : ''}`}
               required
             />
+            {isHalfDay && (
+              <p className="mt-1 text-xs text-[#64748B]">Same as start date for half-day WFH (0.5 day).</p>
+            )}
           </div>
         </div>
+
+        {isSameDay && (
+          <div className="rounded-lg border-2 border-[#E3F2FD] bg-[#F8FAFC] p-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="half-day-wfh"
+                checked={isHalfDay}
+                onChange={(e) => {
+                  setIsHalfDay(e.target.checked);
+                  if (e.target.checked) {
+                    setWfhDateTo(wfhDateFrom);
+                  }
+                  setHalfDayType('');
+                }}
+                className="h-4 w-4 rounded border-[#CBD5E1] text-[#20C997] focus:ring-[#20C997]"
+              />
+              <label htmlFor="half-day-wfh" className="text-sm font-semibold text-[#334155]">
+                Half Day WFH
+              </label>
+            </div>
+
+            {isHalfDay && (
+              <div className="mt-4">
+                <label className="mb-1 block text-xs font-semibold text-[#475569]" htmlFor="half-day-type">
+                  Half Day Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="half-day-type"
+                  value={halfDayType}
+                  onChange={(e) => setHalfDayType(e.target.value)}
+                  className="w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#20C997] focus:outline-none"
+                  required
+                >
+                  <option value="">Select Half Day</option>
+                  <option value="first_half">First Half (Morning)</option>
+                  <option value="second_half">Second Half (Afternoon)</option>
+                </select>
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="mb-1 block text-xs font-semibold text-[#475569]" htmlFor="wfh-reason">
@@ -206,6 +288,7 @@ const WfhRequestPanel = () => {
               <thead className="bg-[#F8FAFC]">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">WFH Period</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">WFH Type</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">Reason</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">Remarks</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">Submitted</th>
@@ -216,6 +299,7 @@ const WfhRequestPanel = () => {
                 {requests.map((r) => (
                   <tr key={r._id}>
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-[#0F172A]">{formatWfhDateRange(r.wfhDate, r.wfhDateTo)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-[#334155]">{formatWfhType(r.wfhType, r.halfDayType)}</td>
                     <td className="max-w-[240px] px-4 py-3 text-[#334155]">{r.reason}</td>
                     <td className="max-w-[200px] px-4 py-3 text-[#64748B]">{r.remarks || '--'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-[#64748B]">

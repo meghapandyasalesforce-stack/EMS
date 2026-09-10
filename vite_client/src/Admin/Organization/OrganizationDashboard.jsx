@@ -65,20 +65,20 @@ const OrganizationDashboard = () => {
     })) || [];
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 pt-2 lg:pt-0">
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Organization Dashboard</h1>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                    <h1 className="mb-1 text-2xl font-bold text-gray-900 md:text-3xl">Organization Dashboard</h1>
                     <p className="text-sm text-gray-600">Overview of your organization's key metrics and activities</p>
                 </div>
                 <button
                     type="button"
                     onClick={() => navigate('/organization/profile')}
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-theme-primary text-white text-sm font-medium hover:opacity-90 transition-colors"
+                    className="inline-flex w-full items-center justify-center rounded-md bg-theme-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90 md:w-auto"
                 >
                     Organization Profile
                 </button>

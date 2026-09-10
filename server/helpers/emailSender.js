@@ -1898,12 +1898,24 @@ const formatWfhDateRange = (fromDate, toDate) => {
 };
 
 /**
+ * Format WFH type for emails.
+ */
+const formatWfhType = (wfhType, halfDayType) => {
+  const type = wfhType || 'full_day';
+  if (type === 'half_day') {
+    return halfDayType === 'first_half' ? 'Half Day (First Half)' : 'Half Day (Second Half)';
+  }
+  return 'Full Day';
+};
+
+/**
  * Generate Work From Home request email template (same branding as leave emails)
  * @param {Object} data - WFH request data
  * @returns {string} HTML content
  */
 const generateWfhRequestEmailTemplate = (data) => {
   const wfhDate = formatWfhDateRange(data.wfhDate, data.wfhDateTo);
+  const wfhType = formatWfhType(data.wfhType, data.halfDayType);
   const isRange = data.wfhDateTo
     && new Date(data.wfhDateTo).toDateString() !== new Date(data.wfhDate).toDateString();
   const wfhMessage = isRange
@@ -2069,6 +2081,10 @@ const generateWfhRequestEmailTemplate = (data) => {
         <td class="info-value">${wfhDate}</td>
       </tr>
       <tr>
+        <td class="info-label">WFH Type</td>
+        <td class="info-value">${wfhType}</td>
+      </tr>
+      <tr>
         <td class="info-label">Reason</td>
         <td class="info-value">${data.reason || 'N/A'}</td>
       </tr>
@@ -2169,6 +2185,7 @@ const generateWfhDecisionEmailTemplate = (data, status) => {
   const remarksLabel = isApproved ? 'Remarks' : 'Rejection Reason';
   const remarks = data.reviewNote || data.remarks || data.reason || 'N/A';
   const wfhDate = formatWfhDateRange(data.wfhDate, data.wfhDateTo);
+  const wfhType = formatWfhType(data.wfhType, data.halfDayType);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -2314,6 +2331,10 @@ const generateWfhDecisionEmailTemplate = (data, status) => {
       <tr>
         <td class="info-label">WFH Period</td>
         <td class="info-value">${wfhDate}</td>
+      </tr>
+      <tr>
+        <td class="info-label">WFH Type</td>
+        <td class="info-value">${wfhType}</td>
       </tr>
       <tr>
         <td class="info-label">Manager Name</td>

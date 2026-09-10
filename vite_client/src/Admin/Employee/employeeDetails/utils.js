@@ -1,3 +1,5 @@
+import { formatStatusLabel } from '../../../utils/textFormat.js';
+
 export const formatDate = (value, options = { year: 'numeric', month: 'short', day: 'numeric' }) => {
   if (!value) return 'N/A';
   const d = new Date(value);
@@ -39,8 +41,8 @@ export const getFullName = (employee) =>
   [employee?.name, employee?.lastName].filter(Boolean).join(' ') || 'Employee';
 
 export const getStatusLabel = (employee) => {
-  if (employee?.status === 'terminated') return 'Terminated';
-  return employee?.active ? 'Active' : 'Inactive';
+  if (employee?.status === 'terminated') return formatStatusLabel('terminated');
+  return employee?.active ? formatStatusLabel('active') : formatStatusLabel('inactive');
 };
 
 export const formatSalary = (salary) => {

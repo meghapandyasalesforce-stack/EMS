@@ -31,6 +31,26 @@ const courseSchema = new mongoose.Schema({
         type: Number, // in hours
         required: true
     },
+    provider: {
+        type: String,
+        trim: true
+    },
+    resourceType: {
+        type: String,
+        enum: ['YOUTUBE', 'YOUTUBE_PLAYLIST', 'EXTERNAL_LINK']
+    },
+    externalUrl: {
+        type: String,
+        trim: true
+    },
+    thumbnail: {
+        type: String,
+        trim: true
+    },
+    isMandatory: {
+        type: Boolean,
+        default: false
+    },
     instructor: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee'
@@ -141,6 +161,18 @@ const enrollmentSchema = new mongoose.Schema({
         completedDate: Date,
         score: Number
     }],
+    dueDate: Date,
+    priority: {
+        type: String,
+        enum: ['Low', 'Medium', 'High', 'Urgent'],
+        default: 'Medium'
+    },
+    startedAt: Date,
+    completedAt: Date,
+    completionSource: {
+        type: String,
+        enum: ['self', 'hr', 'module_progress', 'system']
+    },
     startDate: Date,
     completionDate: Date,
     lastAccessedDate: Date,
@@ -159,6 +191,32 @@ const enrollmentSchema = new mongoose.Schema({
     assignedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee'
+    },
+    playlistProgress: {
+        totalItems: Number,
+        items: [{
+            index: Number,
+            videoId: String,
+            percent: {
+                type: Number,
+                min: 0,
+                max: 100,
+                default: 0
+            },
+            completedAt: Date
+        }]
+    },
+    assignmentTarget: {
+        type: {
+            type: String,
+            enum: ['individual', 'team'],
+            default: 'individual'
+        },
+        teamManagerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Employee'
+        },
+        teamName: String
     },
     notes: String
 }, {
@@ -259,8 +317,10 @@ const skillSchema = new mongoose.Schema({
 // Indexes
 courseSchema.index({ organizationId: 1, status: 1 });
 courseSchema.index({ organizationId: 1, category: 1 });
+courseSchema.index({ organizationId: 1, resourceType: 1 });
 enrollmentSchema.index({ organizationId: 1, employeeId: 1, status: 1 });
 enrollmentSchema.index({ organizationId: 1, courseId: 1 });
+enrollmentSchema.index({ organizationId: 1, employeeId: 1, dueDate: 1 });
 learningPathSchema.index({ organizationId: 1, status: 1 });
 skillSchema.index({ organizationId: 1, employeeId: 1 });
 

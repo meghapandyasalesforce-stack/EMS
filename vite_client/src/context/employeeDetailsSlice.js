@@ -290,6 +290,73 @@ export const deleteProfessionalQualification = createAsyncThunk(
   }
 );
 
+export const addProfessionalExperience = createAsyncThunk(
+  'employeeDetails/addProfessionalExperience',
+  async (experienceData, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(
+        `${BOTH_PROFILE_ENDPOINT}/add-professional-experience`,
+        experienceData,
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.professionalExperience;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to add professional experience'
+      );
+    }
+  }
+);
+
+export const updateProfessionalExperience = createAsyncThunk(
+  'employeeDetails/updateProfessionalExperience',
+  async (payload, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.put(
+        `${BOTH_PROFILE_ENDPOINT}/update-professional-experience`,
+        payload,
+        { withCredentials: true }
+      );
+      return {
+        ...employee,
+        professionalExperience: response.data.professionalExperience
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update professional experience');
+    }
+  }
+);
+
+export const deleteProfessionalExperience = createAsyncThunk(
+  'employeeDetails/deleteProfessionalExperience',
+  async (professionalExperienceId, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.delete(
+        `${BOTH_PROFILE_ENDPOINT}/delete-professional-experience`,
+        {
+          data: { professionalExperienceId },
+          withCredentials: true
+        }
+      );
+      return {
+        ...employee,
+        professionalExperience: response.data.professionalExperience
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete professional experience');
+    }
+  }
+);
+
 // Async thunk for adding next of kin
 export const addNextOfKin = createAsyncThunk(
   'employeeDetails/addNextOfKin',
@@ -474,6 +541,7 @@ const employeeDetailsSlice = createSlice({
     addingRecord: false,
     addingGuarantor: false,
     addingQualification: false,
+    addingProfessionalExperience: false,
     addingNextOfKin: false,
     addingFamilyDetail: false,
     updatingFamilyDetail: false,
@@ -701,6 +769,46 @@ const employeeDetailsSlice = createSlice({
       })
       .addCase(deleteProfessionalQualification.rejected, (state, action) => {
         state.addingQualification = false;
+        state.error = action.payload;
+      })
+
+      .addCase(addProfessionalExperience.pending, (state) => {
+        state.addingProfessionalExperience = true;
+      })
+      .addCase(addProfessionalExperience.fulfilled, (state, action) => {
+        state.addingProfessionalExperience = false;
+        if (state.employee) {
+          state.employee.professionalExperience = action.payload;
+        }
+      })
+      .addCase(addProfessionalExperience.rejected, (state, action) => {
+        state.addingProfessionalExperience = false;
+        state.error = action.payload;
+      })
+      .addCase(updateProfessionalExperience.pending, (state) => {
+        state.addingProfessionalExperience = true;
+      })
+      .addCase(updateProfessionalExperience.fulfilled, (state, action) => {
+        state.addingProfessionalExperience = false;
+        if (state.employee) {
+          state.employee.professionalExperience = action.payload.professionalExperience;
+        }
+      })
+      .addCase(updateProfessionalExperience.rejected, (state, action) => {
+        state.addingProfessionalExperience = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteProfessionalExperience.pending, (state) => {
+        state.addingProfessionalExperience = true;
+      })
+      .addCase(deleteProfessionalExperience.fulfilled, (state, action) => {
+        state.addingProfessionalExperience = false;
+        if (state.employee) {
+          state.employee.professionalExperience = action.payload.professionalExperience;
+        }
+      })
+      .addCase(deleteProfessionalExperience.rejected, (state, action) => {
+        state.addingProfessionalExperience = false;
         state.error = action.payload;
       })
 

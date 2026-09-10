@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { 
     FaPlus, FaBook, FaYoutube, FaFilePdf, FaLink, FaVideo, 
-    FaTrash, FaEdit, FaEye, FaSpinner, FaCheckCircle, FaTimesCircle,
-    FaUpload, FaTag
+    FaTrash, FaEdit, FaSpinner, FaTimesCircle,
+    FaGraduationCap
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { filterEmployeesByManager, isManager } from '../../utils/managerHelper';
+import { formatStatusLabel, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
 
 const TeamLearningPage = () => {
+    const navigate = useNavigate();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     
@@ -22,6 +25,8 @@ const TeamLearningPage = () => {
         const userObj = user || employee;
         return isManager(userObj);
     }, [user, employee]);
+    const currentEmployeeId =
+        employee?._id || user?.employeeProfileId || user?._id || user?.id;
     const [learnings, setLearnings] = useState([]);
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -48,6 +53,22 @@ const TeamLearningPage = () => {
         url: '',
         description: ''
     });
+
+    const overallStats = useMemo(
+        () =>
+            learnings.reduce(
+                (totals, learning) => {
+                    const stats = learning.completionStats || {};
+                    totals.totalAssigned += stats.totalAssigned || 0;
+                    totals.completed += stats.completed || 0;
+                    totals.inProgress += stats.inProgress || 0;
+                    totals.notStarted += stats.notStarted || 0;
+                    return totals;
+                },
+                { totalAssigned: 0, completed: 0, inProgress: 0, notStarted: 0 }
+            ),
+        [learnings]
+    );
 
     useEffect(() => {
         fetchLearnings();
@@ -201,10 +222,19 @@ const TeamLearningPage = () => {
         return icons[type] || FaLink;
     };
 
+    const getProgressStatusColor = (status) => {
+        const colors = {
+            'Completed': 'bg-green-100 text-green-800',
+            'In Progress': 'bg-blue-100 text-blue-800',
+            'Not Started': 'bg-gray-100 text-gray-700'
+        };
+        return colors[status] || colors['Not Started'];
+    };
+
     const getCategoryColor = (category) => {
         const colors = {
             'MERN': 'bg-purple-100 text-purple-800',
-            'Technical': 'bg-theme-secondary/10 text-theme-secondary',
+            'Technical': 'bg-theme-primary/10 text-theme-primary',
             'Soft Skills': 'bg-theme-primary/10 text-theme-primary',
             'Leadership': 'bg-yellow-100 text-yellow-800',
             'Other': 'bg-gray-100 text-gray-800'
@@ -217,72 +247,123 @@ const TeamLearningPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
             <div className="page-shell-inner hrms-stack">
-                <div className="bg-white rounded-xl shadow-md p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-800">Team Learning Resources</h1>
-                            <p className="text-gray-600 mt-1">Share learning materials with your team</p>
+                <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                        <div className="flex items-start gap-4">
+                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-theme-primary/10 text-xl text-theme-primary">
+                                <FaGraduationCap />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Team Learning</h1>
+                                <p className="mt-1 text-sm text-slate-500">Share learning materials and track team completion</p>
+                            </div>
                         </div>
-                        {isManagerUser && (
+                        <div className="flex flex-wrap items-center gap-2">
                             <button
-                                onClick={() => {
-                                    setSelectedLearning(null);
-                                    resetForm();
-                                    setShowCreateModal(true);
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
+                                type="button"
+                                onClick={() => navigate('/employee/benefits-learning?tab=learning')}
+                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                             >
-                                <FaPlus />
-                                Create Learning Resource
+                                <FaGraduationCap />
+                                My Learning
                             </button>
-                        )}
-                    </div>
-
-                    {/* Filter */}
-                    <div className="mb-6">
-                        <select
-                            value={filterCategory}
-                            onChange={(e) => setFilterCategory(e.target.value)}
-                            className="px-4 py-2 border rounded-lg"
-                        >
-                            <option value="all">All Categories</option>
-                            <option value="MERN">MERN</option>
-                            <option value="Technical">Technical</option>
-                            <option value="Soft Skills">Soft Skills</option>
-                            <option value="Leadership">Leadership</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-
-                    {/* Learning Resources List */}
-                    {learnings.length === 0 ? (
-                        <div className="text-center py-12">
-                            <FaBook className="mx-auto text-gray-400 text-4xl mb-4" />
-                            <p className="text-gray-600 mb-4">No learning resources found</p>
                             {isManagerUser && (
                                 <button
-                                    onClick={() => setShowCreateModal(true)}
-                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedLearning(null);
+                                        resetForm();
+                                        setShowCreateModal(true);
+                                    }}
+                                    className="inline-flex items-center gap-2 rounded-xl bg-theme-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-theme-primary"
                                 >
-                                    Create Your First Resource
+                                    <FaPlus />
+                                    Create Resource
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </header>
+
+                    {isManagerUser && overallStats.totalAssigned > 0 && (
+                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                            {[
+                                { label: 'Total assignments', value: overallStats.totalAssigned },
+                                { label: 'Completed', value: overallStats.completed },
+                                { label: 'In progress', value: overallStats.inProgress },
+                                { label: 'Not started', value: overallStats.notStarted }
+                            ].map((stat) => (
+                                <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                    <p className={UI_FORM_LABEL_CLASS}>{stat.label}</p>
+                                    <p className="mt-1 text-2xl font-bold text-slate-900">{stat.value}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+                        <div className="flex flex-wrap gap-2">
+                            {['all', 'MERN', 'Technical', 'Soft Skills', 'Leadership', 'Other'].map((category) => (
+                                <button
+                                    key={category}
+                                    type="button"
+                                    onClick={() => setFilterCategory(category)}
+                                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                                        filterCategory === category
+                                            ? 'bg-theme-primary text-white shadow-sm'
+                                            : 'text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {category === 'all' ? 'All' : category}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {learnings.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center shadow-sm">
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-primary/10 text-theme-primary">
+                                <FaBook className="h-7 w-7" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-slate-900">No learning resources found</h3>
+                            <p className="mt-1 text-sm text-slate-500">Share a guide, video, or course with your team.</p>
+                            {isManagerUser && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateModal(true)}
+                                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-theme-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-theme-primary"
+                                >
+                                    <FaPlus /> Create Your First Resource
                                 </button>
                             )}
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {learnings.map((learning) => (
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {learnings.map((learning) => {
+                                const stats = learning.completionStats || {};
+                                const isAssignedToMe = (learning.assignedTo || []).some(
+                                    (assignee) => String(assignee?._id || assignee) === String(currentEmployeeId)
+                                );
+                                return (
                                 <div
                                     key={learning._id}
-                                    className="border rounded-lg p-4 hover:shadow-lg transition-shadow"
+                                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-theme-primary/30 hover:shadow-md"
                                 >
                                     <div className="flex justify-between items-start mb-3">
                                         <div className="flex-1">
                                             <h3 className="font-semibold text-gray-800 mb-2">{learning.title}</h3>
-                                            <span className={`inline-block px-2 py-1 rounded text-xs ${getCategoryColor(learning.category)}`}>
-                                                {learning.category}
-                                            </span>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className={`inline-block px-2 py-1 rounded text-xs ${getCategoryColor(learning.category)}`}>
+                                                    {learning.category}
+                                                </span>
+                                                {isAssignedToMe && (
+                                                    <span className={`inline-block px-2 py-1 rounded text-xs ${getProgressStatusColor(learning.progressStatus)}`}>
+                                                        You: {formatStatusLabel(learning.progressStatus || 'Not Started')}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         {isManagerUser && (
                                             <div className="flex gap-2">
@@ -302,7 +383,7 @@ const TeamLearningPage = () => {
                                                         });
                                                         setShowCreateModal(true);
                                                     }}
-                                                    className="p-2 text-theme-secondary hover:bg-theme-secondary/10 rounded"
+                                                    className="p-2 text-theme-primary hover:bg-theme-primary/10 rounded"
                                                 >
                                                     <FaEdit />
                                                 </button>
@@ -325,21 +406,49 @@ const TeamLearningPage = () => {
                                             Due: {format(new Date(learning.dueDate), 'MMM dd, yyyy')}
                                         </div>
                                     )}
+                                    {isManagerUser && stats.totalAssigned > 0 && (
+                                        <div className="mt-3 border-t pt-3">
+                                            <div className="flex items-center justify-between text-xs font-medium text-gray-700">
+                                                <span>Team completion</span>
+                                                <span>
+                                                    {stats.completed}/{stats.totalAssigned} ({stats.completionRate}%)
+                                                </span>
+                                            </div>
+                                            <div className="mt-2 h-2 w-full rounded-full bg-gray-200">
+                                                <div
+                                                    className="h-2 rounded-full bg-theme-primary transition-all"
+                                                    style={{ width: `${stats.completionRate}%` }}
+                                                />
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                                                <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-800">
+                                                    {stats.completed} completed
+                                                </span>
+                                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-800">
+                                                    {stats.inProgress} in progress
+                                                </span>
+                                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
+                                                    {stats.notStarted} not started
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
-                </div>
             </div>
 
-            {/* Create/Edit Modal */}
             {showCreateModal && isManagerUser && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
-                    <div className="bg-white rounded-lg p-4 sm:p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-lg font-semibold mb-4">
-                            {selectedLearning ? 'Edit Learning Resource' : 'Create Learning Resource'}
-                        </h3>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+                    <div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-2xl">
+                        <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-6">
+                            <h3 className="text-lg font-bold text-slate-900">
+                                {selectedLearning ? 'Edit Learning Resource' : 'Create Learning Resource'}
+                            </h3>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4 p-5 sm:p-6">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Title <span className="text-red-500">*</span>
@@ -489,7 +598,7 @@ const TeamLearningPage = () => {
                                             return (
                                                 <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                                                     <div className="flex items-center gap-3">
-                                                        <Icon className="text-theme-secondary" />
+                                                        <Icon className="text-theme-primary" />
                                                         <div>
                                                             <p className="font-medium text-sm">{resource.title}</p>
                                                             <p className="text-xs text-gray-500">{resource.type}</p>
@@ -533,7 +642,7 @@ const TeamLearningPage = () => {
                                 <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
                             </div>
 
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -541,14 +650,14 @@ const TeamLearningPage = () => {
                                         setSelectedLearning(null);
                                         resetForm();
                                     }}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                                    className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    className="rounded-xl bg-theme-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-theme-primary disabled:opacity-50"
                                 >
                                     {submitting ? (
                                         <>

@@ -7,9 +7,71 @@ import { useMediaQuery } from 'react-responsive';
 import { DEFAULT_LEAVE_TYPE, getAllLeaveTypeOptions } from '../../constants/leaveConstants';
 import axios from '../../utils/axios';
 import { EMPLOYEE_LEAVE_ENDPOINT } from '../../utils/constant';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
 
 const SICK_DOC_MESSAGE =
   'Medical certificate is required when Sick Leave exceeds 1 day in a calendar month.';
+
+/**
+ * Submission window is based on the selected leave start date (not a rolling today range).
+ * Leave Date + 4 calendar days = last valid submission day (5 days inclusive through 23:59).
+ * Example: leave on 8 Sep → can submit on 8–12 Sep; from 13 Sep the application is rejected.
+ */
+const LEAVE_APPLICATION_WINDOW_DAYS = 5;
+
+function toDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getTodayDateInputValue() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return toDateInputValue(today);
+}
+
+/**
+ * Calendar bounds for leave start: the 5 leave dates still submittable today.
+ * today = 8 Sep → selectable leave starts are 4–8 Sep (leave date + 4 includes today).
+ */
+function getLeaveStartCalendarBounds(todayStr = getTodayDateInputValue()) {
+  const today = parseLocalDateInput(todayStr) || new Date();
+  today.setHours(0, 0, 0, 0);
+  const minDate = new Date(today);
+  minDate.setDate(minDate.getDate() - (LEAVE_APPLICATION_WINDOW_DAYS - 1));
+  return {
+    todayStr: toDateInputValue(today),
+    minStartStr: toDateInputValue(minDate),
+    maxStartStr: toDateInputValue(today),
+  };
+}
+
+function parseLocalDateInput(value) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Returns error message if leave start is outside its own submission window; otherwise ''. */
+function getLeaveApplicationWindowError(startDateStr, todayStr = getTodayDateInputValue()) {
+  const startDate = parseLocalDateInput(startDateStr);
+  const today = parseLocalDateInput(todayStr);
+  if (!startDate || !today) return '';
+
+  if (startDate > today) {
+    return 'Leave start date cannot be in the future.';
+  }
+
+  const lastSubmissionDate = new Date(startDate);
+  lastSubmissionDate.setDate(lastSubmissionDate.getDate() + (LEAVE_APPLICATION_WINDOW_DAYS - 1));
+  if (today > lastSubmissionDate) {
+    return `Leave for ${startDateStr} can only be submitted until ${toDateInputValue(lastSubmissionDate)} (within ${LEAVE_APPLICATION_WINDOW_DAYS} days of the leave date).`;
+  }
+
+  return '';
+}
 
 /** Days of an existing leave that fall in a given calendar month. */
 function getLeaveDaysInMonth(leave, year, monthIndex) {
@@ -49,6 +111,16 @@ const LeaveApplication = () => {
   const user = useSelector((state) => state.auth.user);
   const isMobile = useMediaQuery({ query: '(max-width: 768px)' });
   const location = useLocation();
+  const { isOrgOwner, isHrManager, isHrExecutive } = useAuthPermissions();
+
+  /** HR staff have no manager→HR chain for their own leave; the org admin decides. */
+  const isHrApplicant = !isOrgOwner && (isHrManager || isHrExecutive);
+  const submitNotice = isHrApplicant
+    ? 'Your leave request goes straight to the organization admin for approval. HR cannot approve its own leave.'
+    : 'After you submit, your manager must approve first. Then HR completes final approval before leave is deducted from your balance.';
+  const submitToast = isHrApplicant
+    ? 'Leave submitted. It is pending organization admin approval.'
+    : 'Leave submitted. It goes to your manager first, then HR for final approval.';
 
   const [leaveForm, setLeaveForm] = useState({
     name: '',
@@ -65,6 +137,7 @@ const LeaveApplication = () => {
   const [errors, setErrors] = useState({});
   const [myLeaves, setMyLeaves] = useState([]);
   const leaveTypeOptions = useMemo(() => getAllLeaveTypeOptions(), []);
+  const { todayStr, minStartStr, maxStartStr } = getLeaveStartCalendarBounds();
 
   useEffect(() => {
     if (user) {
@@ -203,6 +276,10 @@ const LeaveApplication = () => {
         formErrors.endDate =
           'Half-day leave must be on a single day (end date matches start date).';
       }
+      const windowError = getLeaveApplicationWindowError(leaveForm.startDate, todayStr);
+      if (windowError) {
+        formErrors.startDate = windowError;
+      }
     }
 
     if (leaveForm.isHalfDay && !leaveForm.startDate) {
@@ -243,7 +320,7 @@ const LeaveApplication = () => {
 
   useEffect(() => {
     if (success) {
-      toast.success('Leave submitted. It goes to your manager first, then HR for final approval.');
+      toast.success(submitToast);
       setLeaveForm({
         name: user?.name || '',
         email: user?.email || '',
@@ -267,7 +344,7 @@ const LeaveApplication = () => {
       toast.error(`Submission failed: ${error}`);
       dispatch(resetStatus());
     }
-  }, [success, error, dispatch, user]);
+  }, [success, error, dispatch, user, submitToast]);
 
   // Clear selected file when sick document upload is no longer required
   useEffect(() => {
@@ -290,9 +367,7 @@ const LeaveApplication = () => {
       <div className="page-shell-inner">
         <div className="mt-4 w-full min-w-0 rounded-xl bg-white p-3 shadow-md transition-all duration-300 sm:p-4 md:p-6 lg:mt-6">
         <h2 className="mb-2 text-xl font-bold text-gray-800 md:text-2xl">Leave Application Form</h2>
-        <p className="mb-4 text-sm text-gray-600 md:mb-6">
-          After you submit, your manager must approve first. Then HR completes final approval before leave is deducted from your balance.
-        </p>
+        <p className="mb-4 text-sm text-gray-600 md:mb-6">{submitNotice}</p>
         <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 md:space-y-6">
           {/* Name and Email */}
           <div className="hrms-form-grid">
@@ -346,7 +421,12 @@ const LeaveApplication = () => {
                   disabled={
                     submitting || (field === 'endDate' && leaveForm.isHalfDay)
                   }
-                  min={field === 'endDate' ? leaveForm.startDate : new Date().toISOString().split('T')[0]}
+                  min={
+                    field === 'startDate'
+                      ? minStartStr
+                      : leaveForm.startDate || minStartStr
+                  }
+                  max={field === 'startDate' ? maxStartStr : undefined}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base disabled:bg-gray-100"
                 />
                 {field === 'endDate' && leaveForm.isHalfDay && (

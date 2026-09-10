@@ -32,11 +32,14 @@ export const createWfhRequest = async (req, res) => {
             });
         }
 
-        const { wfhDate, wfhDateFrom, wfhDateTo, reason, remarks } = req.body;
+        const { wfhDate, wfhDateFrom, wfhDateTo, wfhType, halfDayType, reason, remarks } = req.body;
         const fromDateRaw = wfhDateFrom || wfhDate;
         const fromDate = fromDateRaw ? new Date(fromDateRaw) : null;
         const toDateRaw = wfhDateTo || fromDateRaw;
         const toDate = toDateRaw ? new Date(toDateRaw) : null;
+
+        // Default to full_day for backward compatibility
+        const normalizedWfhType = wfhType || 'full_day';
 
         if (!fromDate || Number.isNaN(fromDate.getTime())) {
             return res.status(400).json({
@@ -56,6 +59,24 @@ export const createWfhRequest = async (req, res) => {
                 message: 'WFH end date cannot be before the start date'
             });
         }
+
+        // Half Day WFH specific validations
+        if (normalizedWfhType === 'half_day') {
+            if (!halfDayType || !['first_half', 'second_half'].includes(halfDayType)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Please select First Half or Second Half for Half Day WFH'
+                });
+            }
+            // Half Day WFH can only be for a single date
+            if (fromDate.toDateString() !== toDate.toDateString()) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Half Day WFH can only be requested for a single date'
+                });
+            }
+        }
+
         if (!reason || !String(reason).trim()) {
             return res.status(400).json({
                 success: false,
@@ -68,6 +89,8 @@ export const createWfhRequest = async (req, res) => {
             employeeId: req.employee._id,
             wfhDate: fromDate,
             wfhDateTo: toDate,
+            wfhType: normalizedWfhType,
+            halfDayType: normalizedWfhType === 'half_day' ? halfDayType : undefined,
             reason: String(reason).trim(),
             remarks: remarks ? String(remarks).trim() : ''
         });
@@ -99,6 +122,8 @@ export const createWfhRequest = async (req, res) => {
                     designation: employee.position,
                     wfhDate: wfhRequest.wfhDate,
                     wfhDateTo: wfhRequest.wfhDateTo,
+                    wfhType: wfhRequest.wfhType,
+                    halfDayType: wfhRequest.halfDayType,
                     reason: wfhRequest.reason,
                     remarks: wfhRequest.remarks,
                     submittedAt: wfhRequest.createdAt,
@@ -330,6 +355,8 @@ export const reviewWfhRequest = async (req, res) => {
                 employeeId: employee.employeeId,
                 wfhDate: wfhRequest.wfhDate,
                 wfhDateTo: wfhRequest.wfhDateTo,
+                wfhType: wfhRequest.wfhType,
+                halfDayType: wfhRequest.halfDayType,
                 managerName,
                 reviewerName: wfhRequest.reviewerName,
                 reason: wfhRequest.reason,

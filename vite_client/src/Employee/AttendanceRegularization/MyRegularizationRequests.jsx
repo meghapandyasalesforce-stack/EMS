@@ -8,6 +8,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { isHR as checkIsHR } from '../../utils/managerHelper';
+import { formatStatusLabel, formatUiLabel } from '../../utils/textFormat.js';
 
 const canAccessTeamRegularization = (userObj) => {
     const role = userObj?.role || (typeof localStorage !== 'undefined' ? localStorage.getItem('role') : '') || '';
@@ -302,7 +303,7 @@ const MyRegularizationRequests = () => {
                                             : 'text-gray-600 hover:text-gray-800'
                                     }`}
                                 >
-                                    {status.charAt(0).toUpperCase() + status.slice(1)} ({requests.filter(r => status === 'all' || r.status === status).length})
+                                    {status === 'all' ? formatUiLabel('all') : formatStatusLabel(status)} ({requests.filter(r => status === 'all' || r.status === status).length})
                                 </button>
                             ))}
                         </div>
@@ -338,7 +339,7 @@ const MyRegularizationRequests = () => {
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-3 mb-2">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusBadge(request.status)}`}>
-                                                    {request.status}
+                                                    {formatStatusLabel(request.status)}
                                                 </span>
                                                 <span className="text-sm text-gray-600">
                                                     {getTypeLabel(request.regularizationType)}

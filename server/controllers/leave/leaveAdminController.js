@@ -19,6 +19,7 @@ import {
     sendLeaveActionError,
 } from "../../helpers/leaveWorkflowHelper.js";
 import { sendLeaveApprovalNotification, sendLeaveRejectionNotification } from "../../helpers/leaveEmailHelper.js";
+import { assertApplicantApprovalAccess, resolveHrApplicantIds } from "../../helpers/functionalRolesHelper.js";
 import { streamLeaveAttachment } from "../../helpers/leaveDocumentHelper.js";
 
 export const getAllLeaves = async (req, res) => {
@@ -72,7 +73,7 @@ export const getAllLeaves = async (req, res) => {
         const [leavesRaw, total] = await Promise.all([
             Leave.find(query)
                 .select('-__v')
-                .populate('employee', 'name lastName email department jobTitle designation position profilePhoto manager managerId')
+                .populate('employee', 'name lastName email department jobTitle designation position profilePhoto manager managerId functionalRoles userId')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -81,9 +82,13 @@ export const getAllLeaves = async (req, res) => {
         ]);
 
         const leavesWithWorkflow = await attachWorkflowSummariesToLeaves(leavesRaw);
+        const hrApplicantIds = await resolveHrApplicantIds(
+            leavesWithWorkflow.map((leave) => leave.employee).filter(Boolean)
+        );
         const leaves = leavesWithWorkflow.map((leave) => ({
             ...leave,
             approvalStage: getLeaveApprovalStageLabel(leave),
+            requiresAdminApproval: hrApplicantIds.has(String(leave.employee?._id || '')),
         }));
 
         // Calculate statistics efficiently using aggregation (only for approved leaves)
@@ -187,6 +192,20 @@ export const updateLeaveStatus = async (req, res) => {
         const leave = await Leave.findOne({ _id: id, organizationId }).populate('employee', 'department');
         if (!leave) {
             return res.status(404).json({ message: 'Leave application not found' });
+        }
+
+        // Leave raised by HR staff bypasses the manager → HR chain: org admin decides.
+        try {
+            await assertApplicantApprovalAccess(
+                req,
+                leave.employee?._id || leave.employee,
+                'This leave request'
+            );
+        } catch (accessError) {
+            return res.status(accessError.statusCode || 403).json({
+                success: false,
+                message: accessError.message,
+            });
         }
 
         // Get leave before update for audit log

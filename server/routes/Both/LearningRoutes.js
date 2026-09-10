@@ -4,6 +4,11 @@ import {
     enrollInCourse,
     getEmployeeEnrollments,
     updateEnrollmentProgress,
+    startExternalLearning,
+    completeExternalLearning,
+    updateExternalLearningProgress,
+    getEnrollmentCertificate,
+    downloadEnrollmentCertificate,
     upsertSkill,
     getEmployeeSkills
 } from '../../controllers/learning/learningController.js';
@@ -24,7 +29,20 @@ router.route('/enrollments')
     .get(isAuthenticatedBoth, readLimiter, getEmployeeEnrollments);
 
 router.route('/enrollments/:id/progress')
-    .put(isAuthenticatedBoth, writeLimiter, updateEnrollmentProgress);
+    .put(isAuthenticatedBoth, writeLimiter, updateEnrollmentProgress)
+    .patch(isAuthenticatedBoth, writeLimiter, updateExternalLearningProgress);
+
+router.route('/enrollments/:id/start')
+    .post(isAuthenticatedBoth, writeLimiter, startExternalLearning);
+
+router.route('/enrollments/:id/complete')
+    .post(isAuthenticatedBoth, writeLimiter, completeExternalLearning);
+
+router.route('/enrollments/:id/certificate')
+    .get(isAuthenticatedBoth, readLimiter, getEnrollmentCertificate);
+
+router.route('/enrollments/:id/certificate/download')
+    .get(isAuthenticatedBoth, readLimiter, downloadEnrollmentCertificate);
 
 // Skills
 router.route('/skills')

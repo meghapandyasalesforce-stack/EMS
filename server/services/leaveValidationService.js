@@ -31,6 +31,13 @@ import {
     selectApplicableLeavePolicy,
 } from '../helpers/leavePolicyApplicabilityHelper.js';
 
+/**
+ * Submission window is based on the selected leave start date (not a rolling today range).
+ * Leave Date + 4 calendar days = last valid submission day (5 days inclusive through 23:59).
+ * Example: leave on 8 Sep → can submit on 8–12 Sep; from 13 Sep the application is rejected.
+ */
+const LEAVE_APPLICATION_WINDOW_DAYS = 5;
+
 class LeaveValidationService {
     /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
     parseLeaveDate(dateInput) {
@@ -48,6 +55,52 @@ class LeaveValidationService {
             return null;
         }
         return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+
+    /** Local calendar today (midnight). */
+    getTodayLocal() {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    /**
+     * Leave start must be today or in the past.
+     * Application day must be on or before (leave start + 4 calendar days).
+     * End date is not constrained by this window (must still be on/after start elsewhere).
+     */
+    checkLeaveApplicationWindow(startDate, endDate, applicationDate = this.getTodayLocal()) {
+        const today = applicationDate;
+
+        if (startDate > today) {
+            return {
+                allowed: false,
+                reason: 'Leave start date cannot be in the future.',
+            };
+        }
+
+        const lastSubmissionDate = new Date(startDate);
+        lastSubmissionDate.setDate(
+            lastSubmissionDate.getDate() + (LEAVE_APPLICATION_WINDOW_DAYS - 1)
+        );
+
+        if (today > lastSubmissionDate) {
+            const leaveLabel = startDate.toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+            });
+            const lastLabel = lastSubmissionDate.toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+            });
+            return {
+                allowed: false,
+                reason: `Leave for ${leaveLabel} can only be submitted until ${lastLabel} (within ${LEAVE_APPLICATION_WINDOW_DAYS} days of the leave date).`,
+            };
+        }
+
+        return { allowed: true };
     }
 
     /**
@@ -96,6 +149,12 @@ class LeaveValidationService {
                         'Half-day leave must be on a single day. Use the same start and end date.'
                     );
                 }
+            }
+
+            // Submission window: leave start + 4 calendar days from that leave date
+            const applicationWindowCheck = this.checkLeaveApplicationWindow(startDate, endDate);
+            if (!applicationWindowCheck.allowed) {
+                errors.push(applicationWindowCheck.reason);
             }
 
             // 1. Check notice period restrictions
@@ -904,7 +963,7 @@ class LeaveValidationService {
             monthLabel,
             inProbation: employeeInProbation,
             probationNote: employeeInProbation
-                ? 'On probation — leave follows probation rules until confirmation. Normal rules start from the 1st of the next month after confirmation.'
+                ? ''
                 : null,
             types,
         };

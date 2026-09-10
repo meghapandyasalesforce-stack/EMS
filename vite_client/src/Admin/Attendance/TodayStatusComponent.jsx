@@ -11,7 +11,8 @@ import {
   FiBarChart2,
 } from 'react-icons/fi';
 import { fetchTodayStatus } from '../../context/attendanceSlice';
-import { getUploadUrl } from '../../utils/axios';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
+import { formatAttendanceStatusLabel, UI_BADGE_TEXT_CLASS } from '../../utils/textFormat.js';
 
 const TEAL = '#0a8f6c';
 const ORANGE = '#ea580c';
@@ -29,18 +30,13 @@ function initials(emp) {
   );
 }
 
-function profileSrc(emp) {
-  const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
-  if (!photoRef) return null;
-  if (typeof photoRef === 'string') {
-    return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
-  }
-  return getUploadUrl(photoRef.url || photoRef);
-}
-
 function RowAvatar({ employee, sizeClass = 'h-10 w-10' }) {
   const [broken, setBroken] = useState(false);
-  const url = profileSrc(employee);
+  const userId = employee?._id || employee?.id || null;
+  const { photoUrl: url } = useSignedProfilePhoto(
+    employee?.profilePhoto || employee?.profilePicture,
+    { userType: 'employee', userId }
+  );
   const letter = initials(employee);
 
   return (
@@ -255,10 +251,10 @@ const TodayStatusComponent = () => {
                         </span>
                         {emp.isLateArrival && (
                           <span
-                            className="ml-2 text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                            className={`ml-2 ${UI_BADGE_TEXT_CLASS}`}
                             style={{ background: `${ORANGE}18`, color: ORANGE }}
                           >
-                            Late
+                            {formatAttendanceStatusLabel('late')}
                           </span>
                         )}
                       </td>
@@ -286,10 +282,10 @@ const TodayStatusComponent = () => {
                       </td>
                       <td className="px-6 py-4 pr-6">
                         <span
-                          className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                          className={UI_BADGE_TEXT_CLASS}
                           style={{ background: `${TEAL}18`, color: TEAL }}
                         >
-                          Present
+                          {formatAttendanceStatusLabel('present')}
                         </span>
                       </td>
                     </tr>
@@ -339,7 +335,7 @@ const TodayStatusComponent = () => {
                         <td className="px-4 py-4">{formatTime(emp.clockIn)}</td>
                         <td className="px-6 py-4 pr-6">
                           <span
-                            className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                            className={UI_BADGE_TEXT_CLASS}
                             style={{ background: `${AMBER}22`, color: AMBER }}
                           >
                             {emp.currentBreakDuration ?? 0} min on break

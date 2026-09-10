@@ -126,7 +126,7 @@ export const dashboardRoutes = [
   { path: '/dashboard/vp', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading VP dashboard...', allowedRoles: ['admin', 'executive'] },
   { path: '/dashboard/manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager', 'project_manager', 'executive'] },
   { path: '/dashboard/employee', component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')), message: 'Loading employee dashboard...', allowedRoles: [] },
-  { path: '/dashboard-admin', component: lazy(() => import('../Admin/DashboardAdmin')), message: 'Loading admin dashboard...', allowedRoles: ['admin'], requiredPermissions: ROUTE_PERMISSIONS.adminDashboard },
+  { path: '/dashboard-admin', component: lazy(() => import('../Admin/DashboardAdmin.jsx')), message: 'Loading admin dashboard...', allowedRoles: ['admin'], requiredPermissions: ROUTE_PERMISSIONS.adminDashboard },
   { path: '/dashboard-employee', component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')), message: 'Loading employee dashboard...', allowedRoles: [] },
   { path: '/dashboard-hr', component: lazy(() => import('../HR/Dashboard/DashboardHR')), message: 'Loading HR dashboard...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.hrDashboard },
   { path: '/dashboard-manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager', 'project_manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.managerDashboard },
@@ -158,6 +158,7 @@ export const profileDetailRoutes = [
   { path: '/profile-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/contact-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/education-qualifications', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
+  { path: '/professional-experience', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/family-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/job-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/financial-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] }
@@ -168,6 +169,7 @@ export const renderProfileRoutes = () => {
     '/profile-details',
     '/contact-details',
     '/education-qualifications',
+    '/professional-experience',
     '/family-details',
     '/job-details',
     '/financial-details',
@@ -289,13 +291,18 @@ export const hrRoutes = [
   { path: '/employee/documents-id', component: lazy(() => import('../Employee/DocumentsAndId/DocumentsAndIdPage')), message: 'Loading documents & ID card...', allowedRoles: [] },
   { path: '/employee/my-documents', component: lazy(() => import('../Employee/Documents/MyDocumentsPage')), message: 'Loading my documents...', allowedRoles: [] },
   { path: '/documents/:id/versions', component: lazy(() => import('../HR/Documents/DocumentVersions')), message: 'Loading document versions...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/employee/document-requests', component: lazy(() => import('../Employee/Documents/DocumentRequestsLanding.jsx')), message: 'Loading document requests...', allowedRoles: [] },
+  { path: '/hr/document-requests', component: lazy(() => import('../HR/Documents/HREmployeeDocumentRequests.jsx')), message: 'Loading document requests...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/admin/document-requests', component: lazy(() => import('../Admin/Documents/AdminEmployeeDocumentRequests.jsx')), message: 'Loading document requests...', allowedRoles: ['admin', 'executive'] },
+  { path: '/admin/document-templates', component: lazy(() => import('../Admin/Documents/DocumentTemplateManager.jsx')), message: 'Loading document templates...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/admin/document-management', component: lazy(() => import('../Admin/Documents/DocumentManagement.jsx')), message: 'Loading document management...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/benefits', component: lazy(() => import('../components/BenefitsRouteWrapper')), message: 'Loading benefits...', allowedRoles: [] },
   { path: '/benefits/:id', component: lazy(() => import('../HR/Benefits/BenefitDetailPage')), message: 'Loading benefit plan details...', allowedRoles: [] },
   { path: '/succession', component: lazy(() => import('../HR/Succession/SuccessionPage')), message: 'Loading succession planning...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/succession/:id', component: lazy(() => import('../HR/Succession/SuccessionDetailPage')), message: 'Loading succession plan details...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/workforce', component: lazy(() => import('../HR/Workforce/WorkforcePage')), message: 'Loading workforce planning...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/workforce/:id', component: lazy(() => import('../HR/Workforce/WorkforceDetailPage')), message: 'Loading workforce plan details...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/helpdesk', component: lazy(() => import('../HR/Helpdesk/HelpdeskPage')), message: 'Loading helpdesk...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/helpdesk', component: lazy(() => import('../HR/Helpdesk/HelpdeskPage')), message: 'Loading helpdesk...', allowedRoles: [] },
   { path: '/admin/reports/*', component: lazy(() => import('../HR/Reports/HRReportsLayout')), message: 'Loading HR reports...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/hr/analytics', component: lazy(() => import('../HR/Analytics/HRAnalyticsPage')), message: 'Loading HR analytics...', allowedRoles: ['admin', 'hr', 'executive'] }
 ];
@@ -303,6 +310,8 @@ export const hrRoutes = [
 // Other routes
 export const otherRoutes = [
   { path: '/employee/calendar', component: lazy(() => import('../Employee/Calendar/EmployeeCalendar')), message: 'Loading calendar...', allowedRoles: [] },
+  { path: '/celebrations', component: lazy(() => import('../Both/CelebrationEventPage')), message: 'Loading celebrations...', allowedRoles: [] },
+  { path: '/celebrations/:eventId', component: lazy(() => import('../Both/CelebrationEventPage')), message: 'Loading celebration...', allowedRoles: [] },
   { path: '/notifications', component: lazy(() => import('../Both/Notifications')), message: 'Loading notifications...', allowedRoles: [] },
   { path: '/sent-announcements', component: lazy(() => import('../Admin/SentAnnouncementsPage')), message: 'Loading announcements...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/daily-report', component: lazy(() => import('../Others/DailyReport')), message: 'Loading daily report...', allowedRoles: [] },

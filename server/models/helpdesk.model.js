@@ -99,8 +99,8 @@ const helpdeskTicketSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Generate ticket number before save
-helpdeskTicketSchema.pre('save', async function(next) {
+// Generate ticket number before validation (Mongoose validates before pre('save'))
+helpdeskTicketSchema.pre('validate', async function(next) {
     if (!this.ticketNumber) {
         const count = await mongoose.model('HelpdeskTicket').countDocuments();
         this.ticketNumber = `TKT-${Date.now()}-${String(count + 1).padStart(4, '0')}`;

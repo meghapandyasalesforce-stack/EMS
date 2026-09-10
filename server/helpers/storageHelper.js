@@ -7,7 +7,7 @@ import logger from './logger.js';
 /**
  * Upload a buffer to S3.
  * @param {Buffer} buffer
- * @param {string} key  - S3 object key e.g. "{orgId}/profile-photos/{empId}-{ts}.webp"
+ * @param {string} key  - S3 object key e.g. "{orgId}/employees/{empId}/profile/{ts}.jpg"
  * @param {string} mimeType
  * @param {boolean} isPublic - true for profile photos / QR codes, false for sensitive docs
  * @returns {Promise<string>} full S3 URL
@@ -61,20 +61,43 @@ export async function getSignedUrl(key, expiresIn = 900) {
 
 /**
  * Build S3 key for a given file type.
- * Keeps files isolated per organization — SaaS-ready.
+ * Employee-owned files: {orgId}/employees/{employeeId}/documents|profile|leave-attachments/{filename}
+ * Company documents:    {orgId}/documents/company/{filename}
+ * Admin user photos:    {orgId}/users/{userId}/profile/{filename}
+ *
+ * @param {string} type
+ * @param {string|import('mongoose').Types.ObjectId} organizationId
+ * @param {string} filename
+ * @param {string|import('mongoose').Types.ObjectId} [ownerId]
+ * @param {{ ownerKind?: 'employee'|'user' }} [options]
  */
-export function buildS3Key(type, organizationId, filename) {
+export function buildS3Key(type, organizationId, filename, ownerId = null, options = {}) {
     const orgPrefix = String(organizationId);
+    const owner = ownerId ? String(ownerId) : null;
+    const ownerKind = options.ownerKind === 'user' ? 'user' : 'employee';
+
     switch (type) {
         case 'profile-photo':
+            if (owner && ownerKind === 'user') {
+                return `${orgPrefix}/users/${owner}/profile/${filename}`;
+            }
+            if (owner) {
+                return `${orgPrefix}/employees/${owner}/profile/${filename}`;
+            }
             return `${orgPrefix}/profile-photos/${filename}`;
         case 'document':
-            return `${orgPrefix}/documents/${filename}`;
+            if (owner) {
+                return `${orgPrefix}/employees/${owner}/documents/${filename}`;
+            }
+            return `${orgPrefix}/documents/company/${filename}`;
         case 'pdf-template':
             return `${orgPrefix}/pdf-templates/${filename}`;
         case 'resume':
             return `${orgPrefix}/resumes/${filename}`;
         case 'leave-attachment':
+            if (owner) {
+                return `${orgPrefix}/employees/${owner}/leave-attachments/${filename}`;
+            }
             return `${orgPrefix}/leave-attachments/${filename}`;
         default:
             return `${orgPrefix}/misc/${filename}`;

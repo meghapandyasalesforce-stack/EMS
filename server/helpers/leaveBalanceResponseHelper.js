@@ -297,7 +297,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
     balanceObj.probation = {
         inProbation: employeeInProbation,
         note: employeeInProbation
-            ? 'On probation — leave follows probation rules until confirmation. Normal rules start from the 1st of the next month after confirmation.'
+            ? ''
             : null,
     };
 

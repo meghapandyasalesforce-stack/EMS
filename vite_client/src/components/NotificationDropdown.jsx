@@ -1,23 +1,54 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { FaBell, FaTimes, FaCheck, FaTrash } from 'react-icons/fa';
-import axios from '../utils/axios';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { io } from 'socket.io-client';
-import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 import { getTokenFromCookie } from '../utils/authHelper';
 import { getSocketIOUrl } from '../utils/socketUrl';
 import useHrmsPopupDismiss from '../Hooks/useHrmsPopupDismiss';
+import {
+    fetchUserNotifications,
+    fetchUnreadCount,
+    markOneNotificationRead,
+    markAllNotificationsRead,
+    deleteNotificationById,
+    receiveSocketNotification
+} from '../context/notificationSlice';
+
+/** Hide org announcements sent before this employee was added to EMS. */
+function getAnnouncementAudienceCutoff(employee, authUser) {
+    // Prefer EMS createdAt over joiningDate (joiningDate is often backdated)
+    for (const value of [employee?.createdAt, authUser?.createdAt, employee?.joiningDate]) {
+        if (!value) continue;
+        const t = new Date(value).getTime();
+        if (!Number.isNaN(t)) return new Date(t);
+    }
+    return null;
+}
+
+function isVisibleAnnouncementForHire(notification, cutoff) {
+    if (!notification) return false;
+    const isAnnouncement =
+        notification.type === 'announcement' ||
+        (notification.isBroadcast === true && notification.type === 'announcement');
+    if (!isAnnouncement || !notification.isBroadcast) return true;
+    if (!cutoff) return true;
+    const created = new Date(notification.createdAt).getTime();
+    if (Number.isNaN(created)) return true;
+    return created >= cutoff.getTime();
+}
 
 const NotificationDropdown = () => {
+    const dispatch = useDispatch();
     const [isOpen, setIsOpen] = useState(false);
     const closeDropdown = useCallback(() => setIsOpen(false), []);
     useHrmsPopupDismiss(closeDropdown, isOpen);
-    const [notifications, setNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [loading, setLoading] = useState(false);
+    
+    const notifications = useSelector((state) => state.notifications.notifications || []);
+    const loading = useSelector((state) => state.notifications.loading || false);
+
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, maxHeight: 512, width: 320 });
     const buttonRef = useRef(null);
     const dropdownRef = useRef(null);
@@ -26,45 +57,62 @@ const NotificationDropdown = () => {
     const employeeUser = useSelector((state) => state?.employeeDetails?.employee);
     const sessionUser = authUser || employeeUser;
 
+    const announcementCutoff = useMemo(
+        () => getAnnouncementAudienceCutoff(employeeUser, authUser),
+        [employeeUser, authUser]
+    );
+
+    const visibleNotifications = useMemo(
+        () =>
+            (Array.isArray(notifications) ? notifications : []).filter((n) =>
+                isVisibleAnnouncementForHire(n, announcementCutoff)
+            ),
+        [notifications, announcementCutoff]
+    );
+
+    const visibleUnreadCount = useMemo(
+        () =>
+            visibleNotifications.filter(
+                (n) => n?.isRead === false || n?.read === false
+            ).length,
+        [visibleNotifications]
+    );
+
     useEffect(() => {
         // Only fetch when a user is available (authenticated) and password reset is not required
         if (!sessionUser || sessionUser?.mustResetPassword) return;
         
-        // Initial fetch with delay to avoid race conditions
+        // Initial fetch
         const initialTimeout = setTimeout(() => {
-            fetchNotifications();
-            fetchUnreadCount();
-        }, 500);
+            dispatch(fetchUserNotifications({ limit: 50, page: 1 }));
+            dispatch(fetchUnreadCount());
+        }, 300);
         
-        // Poll for new notifications every 60 seconds (reduced from 30s to reduce load)
-        // Only poll when tab is visible to reduce unnecessary requests
+        // Poll for new notifications every 60 seconds
         let interval;
         const handleVisibilityChange = () => {
             if (document.hidden) {
-                // Tab is hidden, clear interval
                 if (interval) {
                     clearInterval(interval);
                     interval = null;
                 }
             } else {
-                // Tab is visible, start polling
                 if (!interval && sessionUser) {
                     interval = setInterval(() => {
                         if (sessionUser && !document.hidden) {
-                            fetchUnreadCount();
+                            dispatch(fetchUnreadCount());
                         }
-                    }, 60000); // 60 seconds
+                    }, 60000);
                 }
             }
         };
         
-        // Start polling only if tab is visible
         if (!document.hidden && sessionUser) {
             interval = setInterval(() => {
                 if (sessionUser && !document.hidden) {
-                    fetchUnreadCount();
+                    dispatch(fetchUnreadCount());
                 }
-            }, 60000); // 60 seconds
+            }, 60000);
         }
         
         document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -74,9 +122,9 @@ const NotificationDropdown = () => {
             if (interval) clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [sessionUser]);
+    }, [sessionUser, dispatch]);
 
-    // Realtime in-app updates while the phone/laptop app is open
+    // Realtime in-app updates while the app is open
     useEffect(() => {
         if (!sessionUser || sessionUser?.mustResetPassword) return;
 
@@ -94,14 +142,10 @@ const NotificationDropdown = () => {
         const onNotification = (payload) => {
             const notification = payload?.data || payload;
             if (!notification) return;
+            // Do not surface pre-hire announcements to newly added employees
+            if (!isVisibleAnnouncementForHire(notification, announcementCutoff)) return;
 
-            setUnreadCount((prev) => prev + 1);
-            setNotifications((prev) => {
-                const id = notification._id || notification.id;
-                if (id && prev.some((n) => String(n._id) === String(id))) return prev;
-                return [notification, ...prev].slice(0, 10);
-            });
-
+            dispatch(receiveSocketNotification(notification));
             const message = notification.message || notification.title || 'New notification';
             toast.info(message, { autoClose: 4000 });
         };
@@ -112,7 +156,7 @@ const NotificationDropdown = () => {
             socket.off('notification', onNotification);
             socket.disconnect();
         };
-    }, [sessionUser]);
+    }, [sessionUser, dispatch, announcementCutoff]);
 
     // Calculate dropdown position when opening – panel opens to the right of the button, stays in viewport
     const DROPDOWN_MAX_HEIGHT_PX = 512;
@@ -158,134 +202,49 @@ const NotificationDropdown = () => {
         }
     }, [isOpen]);
 
-    const fetchNotifications = async () => {
-        if (!sessionUser || sessionUser?.mustResetPassword) return;
-        try {
-            setLoading(true);
-            const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications?limit=10&unreadOnly=true`);
-
-            if (response.data.success) {
-                setNotifications(response.data.notifications);
-            }
-        } catch (error) {
-            // Gracefully handle connection errors (backend not running)
-            const status = error?.response?.status;
-            const isConnectionError = error.code === 'ECONNREFUSED' || 
-                                     error.code === 'ECONNRESET' ||
-                                     error.message?.includes('Network Error') ||
-                                     error.message?.includes('ERR_CONNECTION_REFUSED') ||
-                                     status === 503; // Service Unavailable (backend not running)
-            
-            if (isConnectionError) {
-                // Backend is not running - silently fail
-                setNotifications([]);
-                return;
-            }
-            
-            // Handle rate limiting (429) gracefully - don't retry immediately
-            if (status === 429) {
-                // Rate limited - silently fail, will retry on next poll
-                setNotifications([]);
-                return;
-            }
-            
-            // Gracefully ignore auth errors; avoid noisy console in UI
-            if (status !== 401 && status !== 403) {
-                // Removed console.error for production
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchUnreadCount = async () => {
-        if (!sessionUser || sessionUser?.mustResetPassword) return;
-        try {
-            const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/unread-count`);
-
-            if (response.data.success) {
-                setUnreadCount(response.data.unreadCount);
-            }
-        } catch (error) {
-            // Gracefully handle connection errors (backend not running)
-            const status = error?.response?.status;
-            const isConnectionError = error.code === 'ECONNREFUSED' || 
-                                     error.code === 'ECONNRESET' ||
-                                     error.message?.includes('Network Error') ||
-                                     error.message?.includes('ERR_CONNECTION_REFUSED') ||
-                                     status === 503; // Service Unavailable (backend not running)
-            
-            if (isConnectionError) {
-                // Backend is not running - silently fail
-                setUnreadCount(0);
-                return;
-            }
-            
-            // Handle rate limiting (429) gracefully - don't update count, will retry later
-            if (status === 429) {
-                // Rate limited - don't update count, will retry on next poll
-                return;
-            }
-            
-            if (status === 401 || status === 403) {
-                setUnreadCount(0);
-                return; // silently ignore
-            }
-            // Removed console.error for production
-        }
-    };
-
     const markAsRead = async (notificationId) => {
         try {
-            await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/${notificationId}/read`, {});
-            setNotifications(prev => prev.filter(notification => notification._id !== notificationId));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            await dispatch(markOneNotificationRead(notificationId)).unwrap();
         } catch (error) {
-            const status = error?.response?.status;
-            if (status !== 401 && status !== 403) {
-                // Removed console.error for production
-            }
+            // Silently handle error
         }
     };
 
     const markAllAsRead = async () => {
         try {
-            await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/mark-all-read`, {});
-            // Do not batch-delete to avoid 404 noise for legacy items
-            setNotifications([]);
-            setUnreadCount(0);
+            await dispatch(markAllNotificationsRead()).unwrap();
             toast.success('All notifications marked as read');
         } catch (error) {
-            const status = error?.response?.status;
-            if (status !== 401 && status !== 403) {
-                // Removed console.error for production
-            }
+            // Silently handle error
         }
     };
 
     const deleteNotification = async (notificationId) => {
         try {
-            await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/${notificationId}`);
-
-            setNotifications(prev => 
-                prev.filter(notification => notification._id !== notificationId)
-            );
-            
-            // Check if the deleted notification was unread
-            const deletedNotification = notifications.find(n => n._id === notificationId);
-            if (deletedNotification && !deletedNotification.isRead) {
-                setUnreadCount(prev => Math.max(0, prev - 1));
-            }
+            await dispatch(deleteNotificationById(notificationId)).unwrap();
         } catch (error) {
-            const status = error?.response?.status;
-            if (status !== 401 && status !== 403) {
-                // Removed console.error for production
-            }
+            // Silently handle error
         }
     };
 
     const getNotificationIcon = (type) => {
         switch (type) {
+            case 'birthday':
+            case 'celebration_birthday_upcoming':
+            case 'celebration_birthday_today':
+                return '🎂';
+            case 'celebration_birthday_wish':
+            case 'celebration_anniversary_wish':
+            case 'celebration_marriage_anniversary_wish':
+                return '💬';
+            case 'anniversary':
+            case 'celebration_anniversary_upcoming':
+            case 'celebration_anniversary_today':
+                return '🎉';
+            case 'marriage_anniversary':
+            case 'celebration_marriage_anniversary_upcoming':
+            case 'celebration_marriage_anniversary_today':
+                return '💍';
             case 'task_created':
             case 'task_assigned':
             case 'task_updated':
@@ -343,7 +302,8 @@ const NotificationDropdown = () => {
                 onClick={() => {
                     setIsOpen(!isOpen);
                     if (!isOpen) {
-                        fetchNotifications();
+                        dispatch(fetchUserNotifications({ limit: 50, page: 1 }));
+                        dispatch(fetchUnreadCount());
                     }
                 }}
                 className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -352,9 +312,9 @@ const NotificationDropdown = () => {
                 data-hrms-popup-trigger
             >
                 <FaBell className="text-xl" />
-                {unreadCount > 0 && (
+                {visibleUnreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
+                        {visibleUnreadCount > 9 ? '9+' : visibleUnreadCount}
                     </span>
                 )}
             </button>
@@ -384,7 +344,7 @@ const NotificationDropdown = () => {
                         <div className="flex items-center justify-between gap-2">
                             <h3 className="text-base sm:text-lg font-semibold text-gray-900">Notifications</h3>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                                {unreadCount > 0 && (
+                                {visibleUnreadCount > 0 && (
                                     <button
                                         onClick={markAllAsRead}
                                         className="text-xs whitespace-nowrap font-medium text-theme-secondary hover:opacity-80"
@@ -409,48 +369,48 @@ const NotificationDropdown = () => {
                             <div className="p-4 text-center">
                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-theme-primary mx-auto"></div>
                             </div>
-                        ) : notifications.length === 0 ? (
+                        ) : visibleNotifications.length === 0 ? (
                             <div className="p-4 text-center text-gray-500">
                                 No notifications yet
                             </div>
                         ) : (
-                            notifications.map((notification) => (
+                            visibleNotifications.map((notification) => (
                                 <div
-                                    key={notification._id}
+                                    key={notification?._id || Math.random()}
                                     className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
-                                        !notification.isRead ? 'bg-theme-secondary/10' : ''
+                                        !notification?.isRead ? 'bg-theme-secondary/10' : ''
                                     }`}
                                 >
                                     <div className="flex items-start space-x-3">
                                         <span className="text-lg">
-                                            {getNotificationIcon(notification.type)}
+                                            {getNotificationIcon(notification?.type)}
                                         </span>
                                         <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-medium ${getNotificationColor(notification.type)}`}>
-                                                {notification.message}
+                                            <p className={`text-sm font-medium ${getNotificationColor(notification?.type)}`}>
+                                                {notification?.message || 'Notification'}
                                             </p>
                                             <p className="text-xs text-gray-500 mt-1">
-                                                {formatTime(notification.createdAt)}
+                                                {formatTime(notification?.createdAt)}
                                             </p>
-                                            {notification.sender && (
+                                            {notification?.sender && (
                                                 <p className="text-xs text-gray-400 mt-1">
-                                                    From: {notification.sender.name}
+                                                    From: {notification.sender.name || 'System'}
                                                 </p>
                                             )}
                                         </div>
                                         <div className="flex flex-col space-y-1">
-                                            {!notification.isRead && (
+                                            {!notification?.isRead && (
                                                 <button
-                                                    onClick={() => markAsRead(notification._id)}
+                                                    onClick={() => markAsRead(notification?._id)}
                                                     className="text-xs text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
+                                                    style={{ color: 'var(--color-secondary)' }}
                                                     title="Mark as read"
                                                 >
                                                     <FaCheck />
                                                 </button>
                                             )}
                                             <button
-                                                onClick={() => deleteNotification(notification._id)}
+                                                onClick={() => deleteNotification(notification?._id)}
                                                 className="text-red-600 hover:text-red-800 text-xs"
                                                 title="Delete"
                                             >
@@ -463,7 +423,7 @@ const NotificationDropdown = () => {
                         )}
                     </div>
 
-                    {notifications.length > 0 && (
+                    {visibleNotifications.length > 0 && (
                         <div className="p-3 border-t border-gray-200 text-center flex-shrink-0 bg-gray-50">
                             <button
                                 onClick={() => {
@@ -472,7 +432,7 @@ const NotificationDropdown = () => {
                                     navigate('/notifications');
                                 }}
                                 className="text-sm font-medium text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
+                                style={{ color: 'var(--color-secondary)' }}
                             >
                                 View all notifications
                             </button>

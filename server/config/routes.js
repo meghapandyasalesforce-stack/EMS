@@ -74,6 +74,7 @@ import benefitsAdminRouter from "../routes/Admin/BenefitsRoutes.js";
 import successionRouter from "../routes/Admin/SuccessionRoutes.js";
 import workforceRouter from "../routes/Admin/WorkforceRoutes.js";
 import helpdeskRouter from "../routes/Both/HelpdeskRoutes.js";
+import celebrationEventRouter from "../routes/Both/CelebrationEventRoutes.js";
 import oneOnOneRouter from "../routes/Both/OneOnOneRoutes.js";
 import teamLearningRouter from "../routes/Both/TeamLearningRoutes.js";
 import analyticsRouter from "../routes/Admin/AnalyticsRoutes.js";
@@ -86,6 +87,12 @@ import payrollReportsRouter from "../routes/Admin/PayrollReportsRoutes.js";
 import auditLogRouter from "../routes/Admin/AuditLogRoutes.js";
 import platformRolesRouter from "../routes/Admin/PlatformRolesRoutes.js";
 import orgStructureRouter from "../routes/Admin/OrgStructureRoutes.js";
+
+import employeeDocumentRequestRouter from "../routes/employeeDocumentRequestRoutes.js";
+import documentTemplateRouter from "../routes/documentTemplateRoutes.js";
+import selfServiceDocumentRouter from "../routes/selfServiceDocumentRoutes.js";
+import { isAuthenticatedBoth } from "../middlewares/isAuthenticatedBoth.js";
+import { attachAuthContext } from "../middlewares/requirePermission.js";
 
 import { setCacheHeaders } from "../middlewares/cacheHeaders.js";
 
@@ -167,8 +174,12 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/documents", documentBothRouter);
   app.use("/api/v1/both/benefits", benefitsBothRouter);
   app.use("/api/v1/both/helpdesk", helpdeskRouter);
+  app.use("/api/v1/both/celebrations", celebrationEventRouter);
   app.use("/api/v1/both/one-on-one", oneOnOneRouter);
   app.use("/api/v1/both/team-learning", teamLearningRouter);
+  app.use("/api/v1/both/employee-document-requests", isAuthenticatedBoth, attachAuthContext, employeeDocumentRequestRouter);
+  app.use("/api/v1/both/document-templates", isAuthenticatedBoth, attachAuthContext, documentTemplateRouter);
+  app.use("/api/v1/both/self-service-documents", isAuthenticatedBoth, attachAuthContext, selfServiceDocumentRouter);
   
   // New HR & Manager Features - Admin Only Routes
   app.use("/api/v1/admin/recruitment", recruitmentAdminRouter);

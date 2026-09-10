@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPayrolls, generatePayrolls } from '../../context/payrollSlice';
 import axios from '../../utils/axios';
+import { formatStatusLabel, UI_BADGE_TEXT_CLASS } from '../../utils/textFormat.js';
 
 const AdminPayroll = () => {
     const dispatch = useDispatch();
@@ -462,8 +463,8 @@ const AdminPayroll = () => {
                                             <td className="px-2 py-1">{r.employeeEmail || '-'}</td>
                                             <td className="px-2 py-1">{formatCurrency(r.amount || 0)}</td>
                                             <td className="px-2 py-1">
-                                                <span className={`px-2 py-0.5 rounded text-white ${r.status === 'Success' ? 'bg-theme-primary' : 'bg-red-600'}`}>
-                                                    {r.status}
+                                                <span className={`${UI_BADGE_TEXT_CLASS} px-2 py-0.5 rounded text-white ${r.status === 'Success' ? 'bg-theme-primary' : 'bg-red-600'}`}>
+                                                    {formatStatusLabel(r.status)}
                                                 </span>
                                             </td>
                                             <td className="px-2 py-1 break-all">{r.reference || r.error || '-'}</td>
@@ -615,8 +616,8 @@ const AdminPayroll = () => {
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.leaves}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.inHandSalary)}</td>
                                             <td className="py-2 px-2 sm:px-4">
-                                                <span className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(status)}`}>
-                                                    {status}
+                                                <span className={`inline-flex items-center ${UI_BADGE_TEXT_CLASS} px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full ${getStatusBadgeClass(status)}`}>
+                                                    {formatStatusLabel(status)}
                                                 </span>
                                             </td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">
@@ -701,8 +702,8 @@ const AdminPayroll = () => {
                                         <p><span className="font-medium">Department:</span> {selectedEmployee.department || 'N/A'}</p>
                                         <p><span className="font-medium">Position:</span> {selectedEmployee.position || 'N/A'}</p>
                                         <p><span className="font-medium">Status:</span> 
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ml-2 ${getStatusBadgeClass(getPayrollStatus(selectedEmployee))}`}>
-                                                {getPayrollStatus(selectedEmployee)}
+                                            <span className={`inline-flex items-center ${UI_BADGE_TEXT_CLASS} px-2.5 py-0.5 rounded-full ml-2 ${getStatusBadgeClass(getPayrollStatus(selectedEmployee))}`}>
+                                                {formatStatusLabel(getPayrollStatus(selectedEmployee))}
                                             </span>
                                         </p>
                                     </div>
@@ -799,8 +800,8 @@ const AdminPayroll = () => {
                                                     <div className="flex items-center justify-between gap-3">
                                                         <div className="text-sm font-medium text-gray-800">
                                                             {adj.subType || 'off-cycle'}{" "}
-                                                            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(adj.status || 'Pending')}`}>
-                                                                {adj.status || 'Pending'}
+                                                            <span className={`ml-2 inline-flex items-center ${UI_BADGE_TEXT_CLASS} px-2 py-0.5 rounded-full ${getStatusBadgeClass(adj.status || 'Pending')}`}>
+                                                                {formatStatusLabel(adj.status || 'Pending')}
                                                             </span>
                                                         </div>
                                                         <div className="text-sm font-semibold">

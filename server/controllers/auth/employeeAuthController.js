@@ -684,6 +684,12 @@ export const registerEmployee = async (req, res) => {
             await invalidateEmployeesCache(organizationId);
         });
 
+        // Sync workforce hiring fill tracking when a new employee joins
+        runInBackground('register-employee-workforce-fill', async () => {
+            const { syncWorkforceFillOnEmployeeJoin } = await import('../../helpers/workforceHeadcountHelper.js');
+            await syncWorkforceFillOnEmployeeJoin(employee);
+        });
+
         // Auto-create employee onboarding workflow (only if org setting enabled)
         runInBackground('register-employee-onboarding', async () => {
             try {

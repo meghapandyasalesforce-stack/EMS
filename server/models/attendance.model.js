@@ -48,6 +48,11 @@ const attendanceSchema = new mongoose.Schema({
         type: Date,
     },
     breaks: [{
+        breakType: {
+            type: String,
+            enum: ["BREAK_1", "BREAK_2", "BREAK_3", "BREAK_4", "LUNCH"],
+            default: null
+        },
         breakIn: Date,
         breakOut: Date
     }],
@@ -155,6 +160,20 @@ attendanceSchema.pre("save", async function (next) {
             if (!this.timezoneUsed) {
                 this.timezoneUsed = tz;
             }
+        }
+
+        // Backward compatibility: Derive breakType for existing breaks without it
+        // Only do this for completed breaks (both breakIn and breakOut exist)
+        if (this.breaks && this.breaks.length > 0) {
+            this.breaks.forEach((b, index) => {
+                if (!b.breakType && b.breakIn && b.breakOut) {
+                    // Derive break type from array index for backward compatibility
+                    const breakNumber = index + 1;
+                    if (breakNumber <= 4) {
+                        b.breakType = `BREAK_${breakNumber}`;
+                    }
+                }
+            });
         }
 
         if (this.clockIn && this.clockOut) {

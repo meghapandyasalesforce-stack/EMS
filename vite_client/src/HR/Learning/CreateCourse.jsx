@@ -5,7 +5,6 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import CourseFormShell from './CourseFormShell';
-import { MINT_GRADIENT } from '../Reports/constants';
 import { getStatusHint, toastForSave } from '../../utils/publishStatusUi';
 
 const CreateCourse = () => {
@@ -17,6 +16,11 @@ const CreateCourse = () => {
         category: 'Technical',
         level: 'Beginner',
         duration: 0,
+        provider: '',
+        resourceType: '',
+        externalUrl: '',
+        thumbnail: '',
+        isMandatory: false,
         instructor: '',
         externalInstructor: {
             name: '',
@@ -83,7 +87,7 @@ const CreateCourse = () => {
 
     const addModule = () => {
         if (!newModule.moduleTitle) {
-            alert('Please enter module title');
+            toast.error('Please enter module title');
             return;
         }
         const module = {
@@ -154,6 +158,10 @@ const CreateCourse = () => {
         try {
             const payload = {
                 ...formData,
+                resourceType: formData.resourceType || null,
+                provider: formData.provider.trim() || null,
+                externalUrl: formData.externalUrl.trim() || null,
+                thumbnail: formData.thumbnail.trim() || null,
                 status: targetStatus,
                 duration: parseFloat(formData.duration) || 0,
                 maxEnrollments: formData.maxEnrollments ? parseInt(formData.maxEnrollments) : undefined,
@@ -279,14 +287,92 @@ const CreateCourse = () => {
                         </div>
                     </div>
 
+                    {/* Learning resource */}
+                    <div className="space-y-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-800">Learning Resource</h2>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Keep Course Modules for existing LMS content, or link an external course.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Resource Type</label>
+                                <select
+                                    name="resourceType"
+                                    value={formData.resourceType}
+                                    onChange={handleInputChange}
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                                >
+                                    <option value="">Course Modules (existing LMS)</option>
+                                    <option value="YOUTUBE">YouTube Video</option>
+                                    <option value="YOUTUBE_PLAYLIST">YouTube Playlist</option>
+                                    <option value="EXTERNAL_LINK">External Course Link</option>
+                                </select>
+                            </div>
+                            {formData.resourceType && (
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Provider</label>
+                                    <input
+                                        type="text"
+                                        name="provider"
+                                        value={formData.provider}
+                                        onChange={handleInputChange}
+                                        placeholder={formData.resourceType.startsWith('YOUTUBE') ? 'YouTube' : 'Coursera, Udemy, Microsoft Learn...'}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        {formData.resourceType && (
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                                        External URL <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="url"
+                                        name="externalUrl"
+                                        value={formData.externalUrl}
+                                        onChange={handleInputChange}
+                                        required
+                                        placeholder="https://..."
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Thumbnail URL</label>
+                                    <input
+                                        type="url"
+                                        name="thumbnail"
+                                        value={formData.thumbnail}
+                                        onChange={handleInputChange}
+                                        placeholder="https://..."
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <input
+                                type="checkbox"
+                                name="isMandatory"
+                                checked={formData.isMandatory}
+                                onChange={handleInputChange}
+                                className="h-4 w-4"
+                            />
+                            Mandatory training
+                        </label>
+                    </div>
+
                     {/* Course Content */}
-                    <div className="space-y-4">
+                    {!formData.resourceType && <div className="space-y-4">
                         <div className="flex justify-between items-center">
                             <h2 className="text-xl font-semibold text-gray-800">Course Content</h2>
                             <button
                                 type="button"
                                 onClick={() => setShowModuleForm(!showModuleForm)}
-                                className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
+                                className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                             >
                                 <FaPlus className="w-4 h-4" />
                                 Add Module
@@ -415,7 +501,7 @@ const CreateCourse = () => {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </div>}
 
                     {/* Skills & Tags */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -433,19 +519,19 @@ const CreateCourse = () => {
                                 <button
                                     type="button"
                                     onClick={addSkill}
-                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition"
                                 >
                                     <FaPlus className="w-4 h-4" />
                                 </button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {formData.skills.map((skill, index) => (
-                                    <span key={index} className="px-3 py-1 bg-theme-secondary/10 text-theme-secondary rounded-full text-sm flex items-center gap-2">
+                                    <span key={index} className="px-3 py-1 bg-theme-primary/10 text-theme-primary rounded-full text-sm flex items-center gap-2">
                                         {skill}
                                         <button
                                             type="button"
                                             onClick={() => removeSkill(skill)}
-                                            className="text-theme-secondary hover:text-theme-secondary"
+                                            className="text-theme-primary hover:text-theme-primary"
                                         >
                                             <FaTimes className="w-3 h-3" />
                                         </button>
@@ -468,7 +554,7 @@ const CreateCourse = () => {
                                 <button
                                     type="button"
                                     onClick={addTag}
-                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition"
                                 >
                                     <FaPlus className="w-4 h-4" />
                                 </button>
@@ -625,7 +711,7 @@ const CreateCourse = () => {
                         <button
                             type="button"
                             onClick={() => navigate('/learning')}
-                            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                            className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         >
                             Cancel
                         </button>
@@ -633,7 +719,7 @@ const CreateCourse = () => {
                             type="button"
                             disabled={loading}
                             onClick={(e) => handleSubmit(e, 'Draft')}
-                            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-60"
+                            className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                         >
                             Save as Draft
                         </button>
@@ -641,8 +727,7 @@ const CreateCourse = () => {
                             type="button"
                             disabled={loading}
                             onClick={(e) => handleSubmit(e, 'Published')}
-                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
-                            style={{ background: MINT_GRADIENT }}
+                            className="inline-flex items-center gap-2 rounded-xl bg-theme-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-theme-primary disabled:opacity-60"
                         >
                             <FaSave className="w-4 h-4" />
                             Publish Course

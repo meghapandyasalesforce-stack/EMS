@@ -348,8 +348,8 @@ function AddEmployee() {
 
     const validateStep = (stepIndex) => {
         if (stepIndex === 0) {
-            if (!form.name.trim() || !form.lastName.trim() || !form.email.trim()) {
-                toast.error('Please fill in name, last name, and email.');
+            if (!form.name.trim() || !form.email.trim()) {
+                toast.error('Please fill in first name and email.');
                 return false;
             }
             if (form.password && form.password.length < 8) {
@@ -578,10 +578,9 @@ function AddEmployee() {
                 <input
                     className={inputClass}
                     name="lastName"
-                    placeholder="Last name"
+                    placeholder="Last name (optional)"
                     value={form.lastName}
                     onChange={handleChange}
-                    required
                 />
             </div>
             <div className="flex flex-col gap-4 lg:flex-row">

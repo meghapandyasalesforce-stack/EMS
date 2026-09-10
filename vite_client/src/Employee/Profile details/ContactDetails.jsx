@@ -1,41 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateEmployeeInfo } from '../../context/employeeDetailsSlice';
+import { updateEmployeeInfo, fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import {
     NATIONAL_ID_TYPE_VALUES,
     getNationalIdPlaceholder,
     validateNationalIdInput,
 } from '../../utils/nationalIdValidation';
 import { toast } from 'react-toastify';
+import { FiEdit2 } from 'react-icons/fi';
+
+const inputClass =
+    'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition placeholder:text-gray-400';
+const labelClass = 'block text-xs font-medium text-gray-600 mb-1';
+
+const InfoItem = ({ label, value, full }) => (
+    <div className={`${full ? 'sm:col-span-2 md:col-span-3' : ''} rounded-lg bg-gray-50 px-4 py-3`}>
+        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">{label}</p>
+        <p className="mt-0.5 text-sm font-semibold text-gray-900 break-words whitespace-pre-line">{value || 'N/A'}</p>
+    </div>
+);
 
 const ContactDetails = () => {
     const dispatch = useDispatch();
     const { employee, updatingInfo } = useSelector((state) => state.employeeDetails);
 
     const [formData, setFormData] = useState({
-        phone1: '',
-        phone2: '',
-        personalEmail: '',
-        address: '',
-        birthDate: '',
-        gender: '',
-        nationalIdType: '',
-        nationalId: '',
+        phone1: '', phone2: '', personalEmail: '', address: '',
+        gender: '', nationalIdType: '', nationalId: '',
+        maritalStatus: '', anniversaryDate: '', spouseName: '',
+        emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelationship: '',
     });
-
     const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
         if (employee) {
             setFormData({
-                phone1: employee.phone1 || '',
-                phone2: employee.phone2 || '',
-                personalEmail: employee.personalEmail || '',
-                address: employee.address || '',
-                birthDate: employee.birthDate ? new Date(employee.birthDate).toISOString().split('T')[0] : '',
-                gender: employee.gender || '',
-                nationalIdType: employee.nationalIdType || '',
+                phone1: employee.phone1 || '', phone2: employee.phone2 || '',
+                personalEmail: employee.personalEmail || '', address: employee.address || '',
+                gender: employee.gender || '', nationalIdType: employee.nationalIdType || '',
                 nationalId: employee.nationalId || '',
+                maritalStatus: employee.maritalStatus || '',
+                anniversaryDate: employee.anniversaryDate ? new Date(employee.anniversaryDate).toISOString().split('T')[0] : '',
+                spouseName: employee.spouseName || '',
+                emergencyContactName: employee.emergencyContactName || '',
+                emergencyContactPhone: employee.emergencyContactPhone || '',
+                emergencyContactRelationship: employee.emergencyContactRelationship || '',
             });
         }
     }, [employee]);
@@ -47,52 +56,35 @@ const ContactDetails = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const { phone1, personalEmail, address, birthDate, gender, nationalId, nationalIdType } = formData;
-
-        if (!phone1 || !personalEmail || !address) {
-            toast.error('Please fill in all required fields.');
-            return;
-        }
-
-        if (birthDate) {
-            const selectedDate = new Date(birthDate);
-            if (Number.isNaN(selectedDate.getTime()) || selectedDate > new Date()) {
-                toast.error('Please enter a valid birth date.');
-                return;
-            }
-        }
+        const { phone1, personalEmail, address, nationalId, nationalIdType } = formData;
+        if (!phone1 || !personalEmail || !address) { toast.error('Please fill in all required fields.'); return; }
 
         let nationalPayload = {};
         if (nationalId?.trim()) {
-            if (!nationalIdType) {
-                toast.error('Select which national ID document you are using.');
-                return;
-            }
+            if (!nationalIdType) { toast.error('Select which national ID document you are using.'); return; }
             const check = validateNationalIdInput(nationalIdType, nationalId);
-            if (!check.ok) {
-                toast.error(check.message);
-                return;
-            }
+            if (!check.ok) { toast.error(check.message); return; }
             nationalPayload = { nationalId: check.normalized, nationalIdType };
         } else if (nationalIdType && !nationalId?.trim()) {
-            toast.error('Enter the ID number, or clear the document type.');
-            return;
+            toast.error('Enter the ID number, or clear the document type.'); return;
         } else if (employee?.nationalId || employee?.nationalIdType) {
             nationalPayload = { nationalId: '' };
         }
 
         try {
             const payload = {
-                phone1,
-                phone2: formData.phone2,
-                personalEmail,
-                address,
-                ...(birthDate ? { birthDate } : {}),
-                ...(gender ? { gender } : {}),
+                phone1, phone2: formData.phone2, personalEmail, address,
+                ...(formData.gender ? { gender: formData.gender } : {}),
                 ...nationalPayload,
+                maritalStatus: formData.maritalStatus,
+                anniversaryDate: formData.maritalStatus === 'Married' ? (formData.anniversaryDate || '') : '',
+                spouseName: formData.maritalStatus === 'Married' ? (formData.spouseName || '') : '',
+                emergencyContactName: formData.emergencyContactName,
+                emergencyContactPhone: formData.emergencyContactPhone,
+                emergencyContactRelationship: formData.emergencyContactRelationship,
             };
-
             await dispatch(updateEmployeeInfo(payload)).unwrap();
+            await dispatch(fetchEmployeeOwnInfo()).unwrap();
             toast.success('Contact details updated successfully!');
             setIsEditing(false);
         } catch (err) {
@@ -100,187 +92,98 @@ const ContactDetails = () => {
         }
     };
 
-    if (!employee) {
+    if (!employee) return <div className="flex justify-center items-center p-8 text-sm text-gray-500">Loading...</div>;
+
+    if (isEditing) {
         return (
-            <div className="flex justify-center items-center p-4">
-                Loading employee info...
-            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div><label className={labelClass}>Phone 1 <span className="text-red-500">*</span></label><input type="text" name="phone1" value={formData.phone1} onChange={handleChange} className={inputClass} placeholder="Primary phone" required /></div>
+                    <div><label className={labelClass}>Phone 2</label><input type="text" name="phone2" value={formData.phone2} onChange={handleChange} className={inputClass} placeholder="Secondary phone" /></div>
+                    <div><label className={labelClass}>Personal email <span className="text-red-500">*</span></label><input type="email" name="personalEmail" value={formData.personalEmail} onChange={handleChange} className={inputClass} placeholder="you@example.com" required /></div>
+                    <div><label className={labelClass}>Gender</label>
+                        <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
+                            <option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option><option value="Prefer not to say">Prefer not to say</option>
+                        </select>
+                    </div>
+                </div>
+                <div><label className={labelClass}>Address <span className="text-red-500">*</span></label><textarea name="address" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} rows={2} placeholder="Full address" required /></div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div><label className={labelClass}>Marital status</label>
+                        <select name="maritalStatus" value={formData.maritalStatus} onChange={handleChange} className={inputClass}>
+                            <option value="">Select</option><option value="Single">Single</option><option value="Married">Married</option><option value="Divorced">Divorced</option><option value="Widowed">Widowed</option>
+                        </select>
+                    </div>
+                    {formData.maritalStatus === 'Married' && <div><label className={labelClass}>Spouse name</label><input type="text" name="spouseName" value={formData.spouseName} onChange={handleChange} className={inputClass} placeholder="Spouse name" /></div>}
+                </div>
+                {formData.maritalStatus === 'Married' && (
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div><label className={labelClass}>Anniversary date</label><input type="date" name="anniversaryDate" value={formData.anniversaryDate} onChange={handleChange} className={inputClass} /></div>
+                    </div>
+                )}
+
+                <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Emergency contact</p>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div><label className={labelClass}>Name</label><input type="text" name="emergencyContactName" value={formData.emergencyContactName} onChange={handleChange} className={inputClass} placeholder="Contact name" /></div>
+                        <div><label className={labelClass}>Phone</label><input type="text" name="emergencyContactPhone" value={formData.emergencyContactPhone} onChange={handleChange} className={inputClass} placeholder="Phone" /></div>
+                        <div><label className={labelClass}>Relationship</label>
+                            <select name="emergencyContactRelationship" value={formData.emergencyContactRelationship} onChange={handleChange} className={inputClass}>
+                                <option value="">Select</option><option value="Spouse">Spouse</option><option value="Parent">Parent</option><option value="Sibling">Sibling</option><option value="Friend">Friend</option><option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">National ID</p>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div><label className={labelClass}>Document type</label>
+                            <select name="nationalIdType" value={formData.nationalIdType} onChange={handleChange} className={inputClass}>
+                                <option value="">Select</option>{NATIONAL_ID_TYPE_VALUES.map((t) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div><label className={labelClass}>ID number</label>
+                            <input type={formData.nationalIdType === 'Aadhaar' ? 'tel' : 'text'} name="nationalId" value={formData.nationalId} onChange={handleChange} inputMode={formData.nationalIdType === 'Aadhaar' ? 'numeric' : 'text'} autoComplete="off" className={inputClass} placeholder={getNationalIdPlaceholder(formData.nationalIdType)} disabled={!formData.nationalIdType} />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                    <button type="submit" disabled={updatingInfo} className="rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50">{updatingInfo ? 'Saving...' : 'Save'}</button>
+                </div>
+            </form>
         );
     }
 
     return (
-        <div className="w-full font-sans">
-                {isEditing ? (
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-4 md:gap-5">
-                        <div className="hrms-form-grid">
-                            <div>
-                                <label className="mb-2 block text-sm font-medium text-gray-700">Phone 1*</label>
-                                <input
-                                    type="text"
-                                    name="phone1"
-                                    value={formData.phone1}
-                                    onChange={handleChange}
-                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-2 block text-sm font-medium text-gray-700">Phone 2</label>
-                                <input
-                                    type="text"
-                                    name="phone2"
-                                    value={formData.phone2}
-                                    onChange={handleChange}
-                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-gray-700">Personal Email*</label>
-                            <input
-                                type="email"
-                                name="personalEmail"
-                                value={formData.personalEmail}
-                                onChange={handleChange}
-                                className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-gray-700">Address*</label>
-                            <textarea
-                                name="address"
-                                value={formData.address}
-                                onChange={handleChange}
-                                className="w-full resize-none rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                                rows={4}
-                                required
-                            />
-                        </div>
-
-                        <div className="hrms-form-grid">
-                            <div>
-                                <label className="mb-2 block text-sm font-medium text-gray-700">Birth Date</label>
-                                <input
-                                    type="date"
-                                    name="birthDate"
-                                    value={formData.birthDate}
-                                    onChange={handleChange}
-                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                                    max={new Date().toISOString().split('T')[0]}
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-2 block text-sm font-medium text-gray-700">Gender</label>
-                                <select
-                                    name="gender"
-                                    value={formData.gender}
-                                    onChange={handleChange}
-                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                                >
-                                    <option value="">Select gender</option>
-                                    <option value="Male">Male</option>
-                                    <option value="Female">Female</option>
-                                    <option value="Other">Other</option>
-                                    <option value="Prefer not to say">Prefer not to say</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-gray-700">National ID document</label>
-                            <select
-                                name="nationalIdType"
-                                value={formData.nationalIdType}
-                                onChange={handleChange}
-                                className="mb-2 w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                            >
-                                <option value="">Select document type</option>
-                                {NATIONAL_ID_TYPE_VALUES.map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                ))}
-                            </select>
-                            <label className="mb-2 block text-sm font-medium text-gray-700">ID number</label>
-                            <input
-                                type={formData.nationalIdType === 'Aadhaar' ? 'tel' : 'text'}
-                                name="nationalId"
-                                value={formData.nationalId}
-                                onChange={handleChange}
-                                inputMode={formData.nationalIdType === 'Aadhaar' ? 'numeric' : 'text'}
-                                autoComplete="off"
-                                className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
-                                placeholder={getNationalIdPlaceholder(formData.nationalIdType)}
-                                disabled={!formData.nationalIdType}
-                            />
-                            {formData.nationalIdType && (
-                                <p className="mt-1 text-xs text-gray-500">
-                                    Format is checked when you save based on the document selected.
-                                </p>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
-                            <button
-                                type="submit"
-                                disabled={updatingInfo}
-                                className="w-full rounded bg-theme-primary px-4 py-2 font-semibold text-white hover:bg-theme-primary sm:w-auto sm:px-6"
-                            >
-                                {updatingInfo ? 'Saving...' : 'Save'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setIsEditing(false)}
-                                className="w-full rounded bg-gray-500 px-4 py-2 font-semibold text-white hover:bg-gray-600 sm:w-auto sm:px-6"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                ) : (
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-base font-semibold text-slate-800">Contact Details</h3>
-                            <button
-                                type="button"
-                                onClick={() => setIsEditing(true)}
-                                className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
-                            >
-                                Edit
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            {[
-                                { label: 'Phone 1', value: formData.phone1 || 'N/A' },
-                                { label: 'Phone 2', value: formData.phone2 || 'N/A' },
-                                { label: 'Personal Email', value: formData.personalEmail || 'N/A' },
-                                { label: 'Birth Date', value: formData.birthDate ? new Date(formData.birthDate).toLocaleDateString() : 'N/A' },
-                                { label: 'Gender', value: formData.gender || 'N/A' },
-                            ].map((item) => (
-                                <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
-                                    <p className="mt-1 text-sm font-medium text-slate-800 break-words">{item.value}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Address</p>
-                            <p className="mt-1 text-sm font-medium text-slate-800 whitespace-pre-line">{formData.address || 'N/A'}</p>
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">National ID</p>
-                            <p className="mt-1 text-sm font-medium text-slate-800">
-                                {formData.nationalId
-                                    ? `${formData.nationalIdType ? `${formData.nationalIdType} - ` : ''}${formData.nationalId}`
-                                    : 'N/A'}
-                            </p>
-                        </div>
-                    </div>
-                )}
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">Contact details</h3>
+                <button type="button" onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-90 transition">
+                    <FiEdit2 size={13} /> Edit
+                </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <InfoItem label="Phone 1" value={formData.phone1} />
+                <InfoItem label="Phone 2" value={formData.phone2} />
+                <InfoItem label="Personal email" value={formData.personalEmail} />
+                <InfoItem label="Gender" value={formData.gender} />
+                <InfoItem label="Marital status" value={formData.maritalStatus} />
+                {formData.maritalStatus === 'Married' && <InfoItem label="Spouse name" value={formData.spouseName} />}
+                <InfoItem label="Address" value={formData.address} full />
+                {formData.maritalStatus === 'Married' && formData.anniversaryDate && <InfoItem label="Anniversary" value={formData.anniversaryDate} />}
+                <InfoItem label="National ID" value={formData.nationalId ? `${formData.nationalIdType ? `${formData.nationalIdType} — ` : ''}${formData.nationalId}` : null} />
+            </div>
+            {formData.emergencyContactName && (
+                <div className="rounded-lg bg-red-50/50 border border-red-100 p-4">
+                    <p className="text-[11px] font-medium text-red-400 uppercase tracking-wide mb-1">Emergency contact</p>
+                    <p className="text-sm font-semibold text-gray-900">{formData.emergencyContactName}</p>
+                    <p className="text-xs text-gray-600">{[formData.emergencyContactRelationship, formData.emergencyContactPhone].filter(Boolean).join(' • ')}</p>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FiFolder, FiUploadCloud } from 'react-icons/fi';
 import { BOTH_DOCUMENTS_ENDPOINT, BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
 import { getCsrfToken } from '../../utils/authHelper';
 import axios from '../../utils/axios';
@@ -24,11 +25,11 @@ const DOCUMENT_SECTIONS = [
     },
     {
         type: 'AADHAR_CARD',
-        title: 'Aadhar Card',
+        title: 'Aadhaar Card',
         accept: '.pdf,.jpg,.jpeg,.png',
         extraField: {
-            key: 'aadharNumber',
-            label: 'Aadhar Number',
+            key: 'aadhaarNumber',
+            label: 'Aadhaar Number',
             inputType: 'text',
             placeholder: 'XXXX XXXX XXXX',
             maxLength: 14,
@@ -44,6 +45,19 @@ const DOCUMENT_SECTIONS = [
             inputType: 'text',
             placeholder: 'ABCDE1234F',
             maxLength: 10,
+            upperCase: true,
+        },
+    },
+    {
+        type: 'PASSPORT',
+        title: 'Passport',
+        accept: '.pdf,.jpg,.jpeg,.png',
+        extraField: {
+            key: 'passportNumber',
+            label: 'Passport Number',
+            inputType: 'text',
+            placeholder: 'A1234567',
+            maxLength: 8,
             upperCase: true,
         },
     },
@@ -75,6 +89,9 @@ const statusClass = (status) => {
     if (status === 'Approved') return 'bg-emerald-100 text-emerald-800';
     return 'bg-slate-100 text-slate-700';
 };
+
+const inputClassName =
+    'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
 
 const JobDetails = () => {
     const [additionalInfo, setAdditionalInfo] = useState({});
@@ -133,7 +150,6 @@ const JobDetails = () => {
         loadUploadedDocuments();
     }, [loadUploadedDocuments]);
 
-    // Clear one-time first-login redirect; highlight Offer Letter when opened from that flow
     useEffect(() => {
         const fromFirstLogin = sessionStorage.getItem('redirectToOfferLetterOnLogin') === '1';
         let stopHighlightTimer;
@@ -242,25 +258,25 @@ const JobDetails = () => {
         const label = statusLabel(doc);
         const isRejected = label === 'Rejected';
         return (
-            <div className="mb-3 flex flex-col gap-2 rounded-md border border-slate-100 bg-slate-50 p-3">
+            <div className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50/70 p-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                         <p className={`text-sm font-medium ${isRejected ? 'text-red-700' : 'text-emerald-700'}`}>
                             {levelLabel ? `${levelLabel} — ` : ''}
                             {isRejected ? 'Rejected' : 'Uploaded'}
                         </p>
                         {doc.fileName ? (
-                            <p className="mt-0.5 text-sm text-gray-600 truncate max-w-md">{doc.fileName}</p>
+                            <p className="mt-0.5 text-sm text-gray-500 truncate max-w-md">{doc.fileName}</p>
                         ) : null}
                     </div>
                     <span
-                        className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass(label)}`}
+                        className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClass(label)}`}
                     >
                         {label}
                     </span>
                 </div>
                 {isRejected && doc.rejectionReason ? (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                         Reason: {doc.rejectionReason}
                     </p>
                 ) : null}
@@ -273,47 +289,52 @@ const JobDetails = () => {
         const value = additionalInfo[type]?.[extraField.key] ?? '';
 
         return (
-            <div className="flex flex-col gap-3">
-                <div className="hrms-form-grid">
-                <div className="flex flex-col gap-2 min-w-0">
-                    <label className="font-medium text-gray-700 text-sm md:text-base">
-                        {isReplace ? 'Re-upload File' : 'Upload File'}
-                    </label>
-                    <input
-                        type="file"
-                        ref={(el) => {
-                            fileRefs.current[type] = el;
-                        }}
-                        className="w-full max-w-full border p-2 rounded text-sm"
-                        accept={accept}
-                    />
+            <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <div className="flex flex-col min-w-0">
+                        <label className="text-xs font-medium text-gray-600 mb-1">
+                            {isReplace ? 'Re-upload file' : 'Upload file'}
+                        </label>
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 flex items-center h-[42px]">
+                            <input
+                                type="file"
+                                ref={(el) => {
+                                    fileRefs.current[type] = el;
+                                }}
+                                className="w-full text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-gray-200 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-300 file:transition file:cursor-pointer"
+                                accept={accept}
+                            />
+                        </div>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <label className="text-xs font-medium text-gray-600 mb-1">{extraField.label}</label>
+                        <input
+                            type={extraField.inputType}
+                            value={value}
+                            onChange={(e) =>
+                                handleAdditionalInfoChange(
+                                    type,
+                                    extraField.key,
+                                    extraField.upperCase ? e.target.value.toUpperCase() : e.target.value
+                                )
+                            }
+                            className={`${inputClassName} h-[42px]${extraField.upperCase ? ' uppercase' : ''}`}
+                            placeholder={extraField.placeholder}
+                            maxLength={extraField.maxLength}
+                        />
+                    </div>
                 </div>
-                <div className="flex flex-col gap-2 min-w-0">
-                    <label className="font-medium text-gray-700 text-sm md:text-base">{extraField.label}</label>
-                    <input
-                        type={extraField.inputType}
-                        value={value}
-                        onChange={(e) =>
-                            handleAdditionalInfoChange(
-                                type,
-                                extraField.key,
-                                extraField.upperCase ? e.target.value.toUpperCase() : e.target.value
-                            )
-                        }
-                        className={`w-full max-w-full border p-2 rounded text-sm${extraField.upperCase ? ' uppercase' : ''}`}
-                        placeholder={extraField.placeholder}
-                        maxLength={extraField.maxLength}
-                    />
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={() => handleUpload(fileRefs.current[type]?.files?.[0], type)}
+                        disabled={isLoading}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-60"
+                    >
+                        <FiUploadCloud className="h-4 w-4" />
+                        {isLoading ? 'Uploading...' : (isReplace ? 'Re-upload' : 'Upload')}
+                    </button>
                 </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => handleUpload(fileRefs.current[type]?.files?.[0], type)}
-                    disabled={isLoading}
-                    className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
-                >
-                    {isLoading ? 'Uploading...' : (isReplace ? 'Re-upload' : 'Upload')}
-                </button>
             </div>
         );
     };
@@ -328,119 +349,135 @@ const JobDetails = () => {
         const isReplace = Boolean(selectedDoc);
 
         return (
-            <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">{title}</h3>
-                {loadingDocs ? (
-                    <p className="text-sm text-gray-500">Loading…</p>
-                ) : (
-                    <>
-                        {MARKSHEET_LEVELS.map(({ value, label }) => {
-                            const doc = uploadedByType[getUploadKey(type, value)];
-                            if (!doc) return null;
-                            return (
-                                <div key={value}>
-                                    {renderUploadedStatus(doc, label)}
-                                </div>
-                            );
-                        })}
-
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">
-                                    Select Marksheet
-                                </label>
-                                <select
-                                    value={selectedMarksheetLevel}
-                                    onChange={(e) => setSelectedMarksheetLevel(e.target.value)}
-                                    className="w-full max-w-full border p-2 rounded text-sm"
-                                >
-                                    <option value="">Select</option>
-                                    {MARKSHEET_LEVELS.map(({ value, label }) => (
-                                        <option key={value} value={value}>
-                                            {label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {showUploadForm ? (
-                                <>
-                                    <div className="flex flex-col gap-2">
-                                        <label className="font-medium text-gray-700 text-sm md:text-base">
-                                            {isReplace ? 'Re-upload File' : 'Upload File'}
-                                        </label>
-                                        <input
-                                            type="file"
-                                            ref={(el) => {
-                                                fileRefs.current[fileRefKey] = el;
-                                            }}
-                                            className="w-full max-w-full border p-2 rounded text-sm"
-                                            accept={accept}
-                                        />
+            <div className="rounded-xl border border-gray-200 bg-white">
+                <div className="px-5 py-4 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+                </div>
+                <div className="px-5 py-4 space-y-4">
+                    {loadingDocs ? (
+                        <p className="text-sm text-gray-400">Loading…</p>
+                    ) : (
+                        <>
+                            {MARKSHEET_LEVELS.map(({ value, label }) => {
+                                const doc = uploadedByType[getUploadKey(type, value)];
+                                if (!doc) return null;
+                                return (
+                                    <div key={value}>
+                                        {renderUploadedStatus(doc, label)}
                                     </div>
-                                    {isReplace ? (
-                                        <p className="text-sm text-gray-500">
-                                            {selectedMarksheetLevel} marksheet is already uploaded. Choose a new file to replace it.
-                                        </p>
-                                    ) : null}
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            handleUpload(
-                                                fileRefs.current[fileRefKey]?.files?.[0],
-                                                type,
-                                                selectedMarksheetLevel
-                                            )
-                                        }
-                                        disabled={isLoading}
-                                        className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
+                                );
+                            })}
+
+                            <div className="flex flex-col gap-4">
+                                <div className="flex flex-col min-w-0">
+                                    <label className="text-xs font-medium text-gray-600 mb-1">
+                                        Select Marksheet
+                                    </label>
+                                    <select
+                                        value={selectedMarksheetLevel}
+                                        onChange={(e) => setSelectedMarksheetLevel(e.target.value)}
+                                        className={inputClassName}
                                     >
-                                        {isLoading ? 'Uploading...' : (isReplace ? 'Re-upload' : 'Upload')}
-                                    </button>
-                                </>
-                            ) : null}
-                        </div>
-                    </>
-                )}
+                                        <option value="">Select</option>
+                                        {MARKSHEET_LEVELS.map(({ value, label }) => (
+                                            <option key={value} value={value}>
+                                                {label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {showUploadForm ? (
+                                    <>
+                                        <div className="flex flex-col min-w-0">
+                                            <label className="text-xs font-medium text-gray-600 mb-1">
+                                                {isReplace ? 'Re-upload File' : 'Upload File'}
+                                            </label>
+                                            <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 bg-gray-50/50">
+                                                <input
+                                                    type="file"
+                                                    ref={(el) => {
+                                                        fileRefs.current[fileRefKey] = el;
+                                                    }}
+                                                    className="w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 file:transition file:cursor-pointer"
+                                                    accept={accept}
+                                                />
+                                            </div>
+                                        </div>
+                                        {isReplace ? (
+                                            <p className="text-xs text-gray-400">
+                                                {selectedMarksheetLevel} marksheet is already uploaded. Choose a new file to replace it.
+                                            </p>
+                                        ) : null}
+                                        <div className="flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    handleUpload(
+                                                        fileRefs.current[fileRefKey]?.files?.[0],
+                                                        type,
+                                                        selectedMarksheetLevel
+                                                    )
+                                                }
+                                                disabled={isLoading}
+                                                className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-60"
+                                            >
+                                                <FiUploadCloud className="h-4 w-4" />
+                                                {isLoading ? 'Uploading...' : (isReplace ? 'Re-upload' : 'Upload')}
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : null}
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         );
     };
 
     return (
-        <div className="w-full min-w-0">
-            <div className="w-full">
-                <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-4 md:mb-6 text-left">
-                    Documents
-                </h2>
-                <div className="space-y-3 sm:space-y-4 md:space-y-5">
-                    {DOCUMENT_SECTIONS.map((section) => {
-                        const uploadedDoc = uploadedByType[section.type];
-                        const isReplace = Boolean(uploadedDoc);
-                        return (
-                            <div
-                                key={section.type}
-                                ref={section.type === 'OFFER_LETTER' ? offerLetterRef : undefined}
-                                className={`border p-3 md:p-4 rounded-lg bg-white shadow-sm ${
-                                    section.type === 'OFFER_LETTER' && highlightOfferLetter
-                                        ? 'job-details-offer-letter-highlight'
-                                        : ''
-                                }`}
-                            >
-                                <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">{section.title}</h3>
-                                {loadingDocs ? (
-                                    <p className="text-sm text-gray-500">Loading…</p>
-                                ) : (
-                                    <>
-                                        {uploadedDoc ? renderUploadedStatus(uploadedDoc) : null}
-                                        {renderUploadForm(section, { isReplace })}
-                                    </>
-                                )}
-                            </div>
-                        );
-                    })}
-                    {renderMarksheetSection()}
+        <div className="w-full min-w-0 space-y-6">
+            <div className="rounded-xl border border-gray-200 bg-white">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50">
+                        <FiFolder className="h-4.5 w-4.5 text-blue-600" />
+                    </div>
+                    <h2 className="text-base font-semibold text-gray-900">Documents</h2>
                 </div>
             </div>
+
+            {DOCUMENT_SECTIONS.map((section) => {
+                const uploadedDoc = uploadedByType[section.type];
+                const isReplace = Boolean(uploadedDoc);
+                return (
+                    <div
+                        key={section.type}
+                        ref={section.type === 'OFFER_LETTER' ? offerLetterRef : undefined}
+                        className={`rounded-xl border border-gray-200 bg-white ${
+                            section.type === 'OFFER_LETTER' && highlightOfferLetter
+                                ? 'job-details-offer-letter-highlight'
+                                : ''
+                        }`}
+                    >
+                        <div className="px-5 py-4 border-b border-gray-100">
+                            <h3 className="text-sm font-semibold text-gray-900">{section.title}</h3>
+                        </div>
+                        <div className="px-5 py-4 space-y-4">
+                            {loadingDocs ? (
+                                <p className="text-sm text-gray-400">Loading…</p>
+                            ) : (
+                                <>
+                                    {uploadedDoc ? renderUploadedStatus(uploadedDoc) : null}
+                                    {renderUploadForm(section, { isReplace })}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+
+            {renderMarksheetSection()}
         </div>
     );
 };
