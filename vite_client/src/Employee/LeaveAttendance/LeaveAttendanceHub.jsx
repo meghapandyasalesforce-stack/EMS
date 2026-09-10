@@ -1055,6 +1055,22 @@ const LeaveAttendanceHub = () => {
                       const mobileSession = selectedMobileCell.session;
                       const mobileIsLate = Boolean(mobileSession?.isLateArrival) || selectedMobileCell.status === 'late';
                       const mobileNotPunchedOut = Boolean(mobileSession?.clockIn) && !mobileSession?.clockOut;
+                      const mobileDate = mobileSession?.date
+                        || new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), selectedMobileCell.day);
+                      const regularizationRow = {
+                        ...(mobileSession || {}),
+                        date: mobileDate,
+                        status: mobileIsLate ? 'late' : (mobileSession?.status || selectedMobileCell.status),
+                        clockIn: mobileSession?.clockIn,
+                        clockOut: mobileSession?.clockOut,
+                        isLateArrival: mobileIsLate,
+                      };
+                      const todayKey = toDateInput(new Date());
+                      const selectedDateKey = toDateInput(mobileDate);
+                      const showRegularizeAction =
+                        selectedMobileCell.status !== 'weekend' &&
+                        selectedMobileCell.status !== 'holiday' &&
+                        selectedDateKey <= todayKey;
                       return (
                         <>
                     <div className="flex items-start justify-between gap-3">
@@ -1100,6 +1116,11 @@ const LeaveAttendanceHub = () => {
                       <p className="mt-2 text-xs text-[#64748B]">
                         {selectedMobileCell.status === 'weekend' ? 'Weekend - no attendance required.' : 'No attendance data for this date.'}
                       </p>
+                    )}
+                    {showRegularizeAction && (
+                      <div className="mt-3 flex items-center justify-end border-t border-[#E2E8F0] pt-2">
+                        {renderRegularizationAction(regularizationRow)}
+                      </div>
                     )}
                         </>
                       );
