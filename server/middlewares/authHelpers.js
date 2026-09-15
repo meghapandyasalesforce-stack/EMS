@@ -229,5 +229,14 @@ export const hydrateRequestIdentity = async (req, decoded, authContext) => {
     if (orgId && !decoded.organizationId) {
         decoded.organizationId = orgId;
     }
+
+    if (orgId) {
+        try {
+            const { attachTenantToRequest } = await import('../services/tenantService.js');
+            await attachTenantToRequest(req);
+        } catch {
+            // Non-fatal — tenant limits checked explicitly on write paths
+        }
+    }
 };
 

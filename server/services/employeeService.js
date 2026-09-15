@@ -8,6 +8,11 @@ import Employee from '../models/employee.model.js';
 import { parsePagination } from '../helpers/paginationHelper.js';
 import { getCachedEmployees, setCachedEmployees, invalidateEmployeesCache } from '../helpers/cacheHelper.js';
 import { addOrganizationFilter, getOrganizationId } from '../helpers/organizationHelper.js';
+import {
+    attachTenantToRequest,
+    assertEmployeeCapacity,
+    TenantError,
+} from '../services/tenantService.js';
 import logger from '../helpers/logger.js';
 
 /**
@@ -106,8 +111,18 @@ export const getEmployeeByIdService = async (employeeId, organizationId) => {
  * @param {string} organizationId - Organization ID
  * @returns {Promise<Object>} Created employee
  */
-export const createEmployeeService = async (employeeData, organizationId) => {
+export const createEmployeeService = async (employeeData, organizationId, req = null) => {
     try {
+        if (req?.tenant) {
+            await assertEmployeeCapacity(organizationId, req.tenant, { additional: 1 });
+        } else {
+            const mockReq = { organizationId };
+            await attachTenantToRequest(mockReq);
+            if (mockReq.tenant) {
+                await assertEmployeeCapacity(organizationId, mockReq.tenant, { additional: 1 });
+            }
+        }
+
         // ✅ Ensure active and status are set for new employees
         const employee = new Employee({
             ...employeeData,
@@ -134,6 +149,9 @@ export const createEmployeeService = async (employeeData, organizationId) => {
 
         return employeeObj;
     } catch (error) {
+        if (error instanceof TenantError) {
+            throw error;
+        }
         logger.error('Error in createEmployeeService', { 
             organizationId,
             error: error.message 

@@ -394,6 +394,7 @@ export async function runCelebrationNotificationCheck(refDate = new Date()) {
   }
 }
 
+/**
  * Schedule isolated Birthday & Anniversary notifications from 9:00 AM org local time.
  * If the server starts after 9:00, it still sends once for that day (no duplicates).
  */

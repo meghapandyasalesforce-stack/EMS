@@ -24,6 +24,8 @@ import {
     getRoleMismatch,
     isElevatedSystemRole,
 } from '../../utils/systemRoleHelpers';
+import { getSystemRoleHome } from '../../utils/systemRoleHome';
+import useOrgStructureCatalog from '../../Hooks/useOrgStructureCatalog';
 
 const VISIBLE_STEPS = [
     { id: 'personal', label: 'Personal' },
@@ -42,18 +44,26 @@ function AddEmployee() {
         name: '',
         lastName: '',
         department: '',
+        departmentId: '',
+        teamId: '',
         manager: '',
         jobTitle: '',
+        jobRoleId: '',
         jobCategory: '',
         email: '',
         password: '',
         position: '',
+        designationId: '',
+        locationId: '',
+        employmentTypeId: '',
+        workModeId: '',
         salary: '',
         systemRole: DEFAULT_SYSTEM_ROLE,
         onProbation: false,
         probationMonths: 6,
     });
     const [roleCatalog, setRoleCatalog] = useState([]);
+    const [systemRoleManual, setSystemRoleManual] = useState(false);
     const [loadingRoles, setLoadingRoles] = useState(true);
     const [roleSuggestionReason, setRoleSuggestionReason] = useState(null);
     const [elevatedConfirmedForRole, setElevatedConfirmedForRole] = useState(null);
@@ -115,28 +125,44 @@ function AddEmployee() {
         return '/dashboard-admin';
     }, [user, employee]);
 
-    const departments = [
-        'Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations',
-        'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration',
-        'Salesforce',
-    ];
+    const { catalog, loading: catalogLoading } = useOrgStructureCatalog(form.departmentId || null);
 
-    const jobTitles = [
-        'Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager', 'HR Executive',
-        'Financial Analyst', 'Marketing Executive', 'Sales Representative', 'Product Manager',
-        'QA Tester', 'Customer Support Specialist', 'UX/UI Designer', 'Project Manager',
-        'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer',
-    ];
+    const filteredJobRoles = useMemo(() => {
+        const roles = catalog.jobRoles || [];
+        if (!form.departmentId) return roles;
+        return roles.filter(
+            (r) =>
+                !Array.isArray(r.departmentIds) ||
+                r.departmentIds.length === 0 ||
+                r.departmentIds.some((id) => String(id) === String(form.departmentId))
+        );
+    }, [catalog.jobRoles, form.departmentId]);
 
+    const filteredTeams = useMemo(() => {
+        if (!form.departmentId) return catalog.teams || [];
+        return (catalog.teams || []).filter(
+            (t) => String(t.departmentId) === String(form.departmentId)
+        );
+    }, [catalog.teams, form.departmentId]);
+
+    const selectedDepartmentName = useMemo(() => {
+        const d = (catalog.departments || []).find((x) => String(x._id) === String(form.departmentId));
+        return d?.name || form.department;
+    }, [catalog.departments, form.departmentId, form.department]);
+
+    const selectedJobRoleName = useMemo(() => {
+        const r = filteredJobRoles.find((x) => String(x._id) === String(form.jobRoleId));
+        return r?.name || form.jobTitle;
+    }, [filteredJobRoles, form.jobRoleId, form.jobTitle]);
+
+    const selectedDesignationName = useMemo(() => {
+        const d = (catalog.designations || []).find((x) => String(x._id) === String(form.designationId));
+        return d?.name || form.position;
+    }, [catalog.designations, form.designationId, form.position]);
     const jobCategories = [
         'Information Technology', 'Human Resources', 'Finance', 'Marketing', 'Sales', 'Operations',
         'Customer Service', 'Research and Development', 'Engineering', 'Legal', 'Administration',
         'Management', 'Design', 'Product Management', 'Salesforce',
-    ];
-
-    const positions = [
-        'Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager',
-        'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO',
     ];
 
     const fetchManagers = useCallback(async () => {
@@ -165,23 +191,31 @@ function AddEmployee() {
 
     const { suggestion: suggestedRole, loading: suggestionLoading } = useSuggestedSystemRole(
         {
-            department: form.department,
-            jobTitle: form.jobTitle,
-            position: form.position,
+            department: selectedDepartmentName,
+            jobTitle: selectedJobRoleName,
+            position: selectedDesignationName,
         },
-        { enabled: Boolean(form.department && form.jobTitle && form.position) }
+        { enabled: Boolean(selectedDepartmentName && selectedJobRoleName && selectedDesignationName) }
     );
 
     useEffect(() => {
-        if (suggestionLoading || !form.department || !form.jobTitle || !form.position) return;
+        if (suggestionLoading || !selectedDepartmentName || !selectedJobRoleName || !selectedDesignationName) return;
 
         setRoleSuggestionReason(suggestedRole.reason);
+        if (systemRoleManual) return;
         setForm((prev) =>
             prev.systemRole === suggestedRole.systemRoleId
                 ? prev
                 : { ...prev, systemRole: suggestedRole.systemRoleId }
         );
-    }, [suggestedRole, suggestionLoading, form.department, form.jobTitle, form.position]);
+    }, [
+        suggestedRole,
+        suggestionLoading,
+        selectedDepartmentName,
+        selectedJobRoleName,
+        selectedDesignationName,
+        systemRoleManual,
+    ]);
 
     const resolveSystemRole = useCallback(
         () => form.systemRole || suggestedRole.systemRoleId || DEFAULT_SYSTEM_ROLE,
@@ -191,14 +225,14 @@ function AddEmployee() {
     const roleMismatch = useMemo(
         () =>
             getRoleMismatch({
-                department: form.department,
-                jobTitle: form.jobTitle,
-                position: form.position,
+                department: selectedDepartmentName,
+                jobTitle: selectedJobRoleName,
+                position: selectedDesignationName,
                 systemRoleId: form.systemRole,
                 suggestedRoleId: suggestedRole.systemRoleId,
                 suggestedReason: suggestedRole.reason,
             }),
-        [form.department, form.jobTitle, form.position, form.systemRole, suggestedRole]
+        [selectedDepartmentName, selectedJobRoleName, selectedDesignationName, form.systemRole, suggestedRole]
     );
 
     const selectedRoleLabel = getRoleLabel(form.systemRole, roleCatalog);
@@ -257,6 +291,45 @@ function AddEmployee() {
             return;
         }
 
+        if (name === 'departmentId') {
+            const dept = (catalog.departments || []).find((d) => String(d._id) === String(value));
+            setSystemRoleManual(false);
+            setForm((prev) => ({
+                ...prev,
+                departmentId: value,
+                department: dept?.name || '',
+                teamId: '',
+                jobRoleId: '',
+                jobTitle: '',
+            }));
+            return;
+        }
+        if (name === 'jobRoleId') {
+            const role = filteredJobRoles.find((r) => String(r._id) === String(value));
+            setSystemRoleManual(false);
+            setForm((prev) => ({
+                ...prev,
+                jobRoleId: value,
+                jobTitle: role?.name || '',
+            }));
+            return;
+        }
+        if (name === 'designationId') {
+            const des = (catalog.designations || []).find((d) => String(d._id) === String(value));
+            setSystemRoleManual(false);
+            setForm((prev) => ({
+                ...prev,
+                designationId: value,
+                position: des?.name || '',
+            }));
+            return;
+        }
+        if (name === 'systemRole') {
+            setSystemRoleManual(true);
+            setForm((prev) => ({ ...prev, systemRole: value }));
+            return;
+        }
+
         setForm((prev) => ({ ...prev, [name]: value }));
     };
 
@@ -287,8 +360,12 @@ function AddEmployee() {
         }
 
         if (stepIndex === 1) {
-            if (!form.department || !form.jobTitle || !form.jobCategory || !form.position || !form.salary) {
-                toast.error('Please complete all job detail fields.');
+            if (!form.departmentId || !form.jobRoleId || !form.designationId || !form.jobCategory || !form.salary) {
+                toast.error('Please complete department, job role, designation, category, and salary.');
+                return false;
+            }
+            if (!form.systemRole) {
+                toast.error('Please select Access & home screen (which dashboard they open).');
                 return false;
             }
             if (managers.length > 0 && (!form.manager || !String(form.manager).trim())) {
@@ -374,9 +451,28 @@ function AddEmployee() {
         }
 
         const linkAsOrgOwnerMe = isOrgOwner && (usingAdminEmail || linkAsMyProfile);
-        const resultAction = await dispatch(
-            createEmployee({ ...form, systemRole, confirmReplace, linkAsOrgOwnerMe })
-        );
+        const payload = {
+            ...form,
+            department: selectedDepartmentName,
+            jobTitle: selectedJobRoleName,
+            position: selectedDesignationName,
+            systemRole,
+            confirmReplace,
+            linkAsOrgOwnerMe,
+        };
+        // Omit empty optional ObjectIds so Mongoose never receives ""
+        [
+            'teamId',
+            'locationId',
+            'employmentTypeId',
+            'workModeId',
+            'departmentId',
+            'jobRoleId',
+            'designationId',
+        ].forEach((key) => {
+            if (!payload[key]) delete payload[key];
+        });
+        const resultAction = await dispatch(createEmployee(payload));
 
         if (createEmployee.fulfilled.match(resultAction)) {
             queryClient.invalidateQueries({ queryKey: ['employees'] });
@@ -545,17 +641,96 @@ function AddEmployee() {
 
     const renderJobStep = () => (
         <div className="space-y-4">
+            {catalogLoading ? (
+                <p className="text-sm text-slate-500">Loading organization structure…</p>
+            ) : null}
             <div className="flex flex-col gap-4 lg:flex-row">
                 <select
                     className={selectClass}
-                    name="department"
-                    value={form.department}
+                    name="departmentId"
+                    value={form.departmentId}
                     onChange={handleChange}
                     required
                 >
                     <option value="">Select department</option>
-                    {departments.map((dep) => (
-                        <option key={dep} value={dep}>{dep}</option>
+                    {(catalog.departments || []).map((dep) => (
+                        <option key={dep._id} value={dep._id}>{dep.name}</option>
+                    ))}
+                </select>
+                <select
+                    className={selectClass}
+                    name="teamId"
+                    value={form.teamId}
+                    onChange={handleChange}
+                    disabled={!form.departmentId}
+                >
+                    <option value="">Team (optional)</option>
+                    {filteredTeams.map((team) => (
+                        <option key={team._id} value={team._id}>{team.name}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="flex flex-col gap-4 lg:flex-row">
+                <select
+                    className={selectClass}
+                    name="jobRoleId"
+                    value={form.jobRoleId}
+                    onChange={handleChange}
+                    required
+                    disabled={!form.departmentId}
+                >
+                    <option value="">Select job role</option>
+                    {filteredJobRoles.map((role) => (
+                        <option key={role._id} value={role._id}>{role.name}</option>
+                    ))}
+                </select>
+                <select
+                    className={selectClass}
+                    name="designationId"
+                    value={form.designationId}
+                    onChange={handleChange}
+                    required
+                >
+                    <option value="">Select designation</option>
+                    {(catalog.designations || []).map((des) => (
+                        <option key={des._id} value={des._id}>{des.name}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="flex flex-col gap-4 lg:flex-row">
+                <select
+                    className={selectClass}
+                    name="employmentTypeId"
+                    value={form.employmentTypeId}
+                    onChange={handleChange}
+                >
+                    <option value="">Employment type (optional)</option>
+                    {(catalog.employmentTypes || []).map((et) => (
+                        <option key={et._id} value={et._id}>{et.name}</option>
+                    ))}
+                </select>
+                <select
+                    className={selectClass}
+                    name="workModeId"
+                    value={form.workModeId}
+                    onChange={handleChange}
+                >
+                    <option value="">Work mode (optional)</option>
+                    {(catalog.workModes || []).map((wm) => (
+                        <option key={wm._id} value={wm._id}>{wm.name}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="flex flex-col gap-4 lg:flex-row">
+                <select
+                    className={selectClass}
+                    name="locationId"
+                    value={form.locationId}
+                    onChange={handleChange}
+                >
+                    <option value="">Location (optional)</option>
+                    {(catalog.locations || []).map((loc) => (
+                        <option key={loc._id} value={loc._id}>{loc.name}</option>
                     ))}
                 </select>
                 <select
@@ -585,18 +760,6 @@ function AddEmployee() {
             <div className="flex flex-col gap-4 lg:flex-row">
                 <select
                     className={selectClass}
-                    name="jobTitle"
-                    value={form.jobTitle}
-                    onChange={handleChange}
-                    required
-                >
-                    <option value="">Select job title</option>
-                    {jobTitles.map((title) => (
-                        <option key={title} value={title}>{title}</option>
-                    ))}
-                </select>
-                <select
-                    className={selectClass}
                     name="jobCategory"
                     value={form.jobCategory}
                     onChange={handleChange}
@@ -605,20 +768,6 @@ function AddEmployee() {
                     <option value="">Select job category</option>
                     {jobCategories.map((cat) => (
                         <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                </select>
-            </div>
-            <div className="flex flex-col gap-4 lg:flex-row">
-                <select
-                    className={selectClass}
-                    name="position"
-                    value={form.position}
-                    onChange={handleChange}
-                    required
-                >
-                    <option value="">Select position level</option>
-                    {positions.map((pos) => (
-                        <option key={pos} value={pos}>{pos}</option>
                     ))}
                 </select>
                 <input
@@ -631,6 +780,52 @@ function AddEmployee() {
                     required
                 />
             </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                <div>
+                    <h3 className="text-sm font-semibold text-slate-900">Access &amp; home screen</h3>
+                    <p className="mt-1 text-xs text-slate-600">
+                        This controls which dashboard and modules they get after login. Department and job title are labels only — they do not pick the home screen.
+                    </p>
+                </div>
+                <select
+                    className={selectClass}
+                    name="systemRole"
+                    value={form.systemRole || DEFAULT_SYSTEM_ROLE}
+                    onChange={handleChange}
+                    required
+                    disabled={loadingRoles}
+                >
+                    <option value="">{loadingRoles ? 'Loading access options…' : 'Select access & home'}</option>
+                    {roleCatalog.map((role) => {
+                        const home = getSystemRoleHome(role.id);
+                        return (
+                            <option key={role.id} value={role.id}>
+                                {role.label} → {home.label}
+                            </option>
+                        );
+                    })}
+                </select>
+                {form.systemRole ? (
+                    <p className="text-xs text-slate-600">
+                        Opens <span className="font-medium text-slate-800">{getSystemRoleHome(form.systemRole).label}</span>
+                        {' '}({getSystemRoleHome(form.systemRole).path})
+                        {roleCatalog.find((r) => r.id === form.systemRole)?.description
+                            ? ` — ${roleCatalog.find((r) => r.id === form.systemRole).description}`
+                            : ''}
+                    </p>
+                ) : null}
+                {!systemRoleManual && roleSuggestionReason ? (
+                    <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                        Suggested from job details: {roleSuggestionReason}. You can change the selection above.
+                    </p>
+                ) : null}
+                {systemRoleManual && roleMismatch.mismatch ? (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Job details suggest {getRoleLabel(roleMismatch.suggestedRoleId, roleCatalog)}. You overrode access to {selectedRoleLabel}.
+                    </p>
+                ) : null}
+            </div>
+
             <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
                 <label className="flex items-start gap-3 cursor-pointer">
                     <input
@@ -689,15 +884,15 @@ function AddEmployee() {
                         </div>
                         <div>
                             <dt className="text-slate-500">Department</dt>
-                            <dd className="font-medium text-slate-900">{form.department}</dd>
+                            <dd className="font-medium text-slate-900">{selectedDepartmentName}</dd>
                         </div>
                         <div>
                             <dt className="text-slate-500">Job title</dt>
-                            <dd className="font-medium text-slate-900">{form.jobTitle}</dd>
+                            <dd className="font-medium text-slate-900">{selectedJobRoleName}</dd>
                         </div>
                         <div>
                             <dt className="text-slate-500">Position</dt>
-                            <dd className="font-medium text-slate-900">{form.position}</dd>
+                            <dd className="font-medium text-slate-900">{selectedDesignationName}</dd>
                         </div>
                         <div>
                             <dt className="text-slate-500">Manager</dt>
@@ -712,14 +907,13 @@ function AddEmployee() {
                             </dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">System access</dt>
+                            <dt className="text-slate-500">Access &amp; home</dt>
                             <dd className="font-semibold text-emerald-700">
                                 {selectedRoleLabel}
-                                {roleSuggestionReason ? (
-                                    <span className="ml-1 text-xs font-normal text-slate-500">
-                                        (auto-assigned)
-                                    </span>
-                                ) : null}
+                                <span className="ml-1 text-xs font-normal text-slate-500">
+                                    → {getSystemRoleHome(form.systemRole).label}
+                                    {!systemRoleManual && roleSuggestionReason ? ' (suggested)' : ''}
+                                </span>
                             </dd>
                         </div>
                         <div>
@@ -734,8 +928,8 @@ function AddEmployee() {
 
                 {roleMismatch.mismatch ? (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                        Job details suggest {getRoleLabel(roleMismatch.suggestedRoleId, roleCatalog)}. System access was auto-assigned as{' '}
-                        {selectedRoleLabel}.
+                        Job details suggest {getRoleLabel(roleMismatch.suggestedRoleId, roleCatalog)}. Access &amp; home is set to{' '}
+                        {selectedRoleLabel} → {getSystemRoleHome(form.systemRole).label}.
                     </div>
                 ) : null}
             </div>
@@ -752,7 +946,7 @@ function AddEmployee() {
                 <div className="page-shell-inner rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-8">
                     <h1 className="mb-2 text-xl font-semibold text-slate-900 sm:text-2xl">Add employee</h1>
                     <p className="mb-6 text-sm text-slate-500">
-                        Create a profile and assign job details. System access is assigned automatically from the role.
+                        Job details describe where they sit. Access &amp; home screen chooses their dashboard and modules (like Zoho roles).
                     </p>
 
                     {renderStepIndicator()}

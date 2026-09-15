@@ -227,6 +227,7 @@ export const organizationRoutes = [
   { path: '/organization/profile', component: lazy(() => import('../Admin/Organization/OrganizationProfile')), message: 'Loading organization profile...', allowedRoles: ['admin', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.orgSettings },
   { path: '/organization/dashboard', component: lazy(() => import('../Admin/Organization/OrganizationDashboard')), message: 'Loading organization dashboard...', allowedRoles: ['admin', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.orgSettings },
   { path: '/organization/settings', component: lazy(() => import('../Admin/Organization/OrganizationSettings')), message: 'Loading organization settings...', allowedRoles: ['admin', 'executive'] },
+  { path: '/organization/structure', component: lazy(() => import('../Admin/Organization/OrgStructurePage')), message: 'Loading organization structure...', allowedRoles: ['admin', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.orgSettings },
   { path: '/organization/onboarding', component: lazy(() => import('../Admin/Organization/OrganizationOnboarding')), message: 'Loading onboarding...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/subscription', component: lazy(() => import('../Admin/Organization/SubscriptionManagement')), message: 'Loading subscription...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/verification', component: lazy(() => import('../Admin/Organization/OrganizationVerification')), message: 'Loading verification...', allowedRoles: ['admin', 'executive'] },

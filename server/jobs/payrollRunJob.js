@@ -11,82 +11,6 @@ import {
 } from '../helpers/payrollGenerationHelper.js';
 import { getCachedEffectiveTimezone } from '../helpers/orgContextCache.js';
 
-async function runPreviewForOrg({ organizationId, month, year, asOf, orgTimezone }) {
-    const targetYear = parseInt(year, 10);
-    const targetMonthIndex = new Date(`${month} 1, ${targetYear}`).getMonth();
-    const { monthStart, monthEnd: endOfMonth } = getPayrollMonthUtcBounds(
-        targetYear,
-        targetMonthIndex,
-        orgTimezone
-    );
-    const employees = await Employee.find({
-        salary: { $exists: true, $gt: 0 },
-        organizationId,
-        $or: [
-            { active: true },
-            {
-                status: 'terminated',
-                $or: [
-                    { lastWorkingDate: { $gte: monthStart, $lte: endOfMonth } },
-                    { terminationDate: { $gte: monthStart, $lte: endOfMonth } }
-                ]
-            }
-        ]
-    }).select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails');
-
-    for (const emp of employees) {
-        const orgId = emp.organizationId || organizationId;
-
-        const existing = await Payroll.findOne({
-            employeeId: emp._id,
-            month,
-            year: targetYear,
-            organizationId: orgId,
-            type: 'monthly'
-        });
-
-        if (existing && (existing.status === 'Paid' || existing.status === 'Processed' || existing.payrollLocked)) {
-            continue;
-        }
-
-        const payload = await buildGeneratedPayrollPayload({
-            emp,
-            month,
-            year: targetYear,
-            organizationId,
-            mode: 'preview',
-            asOf
-        });
-
-        const meta = {
-            organizationId: orgId,
-            employeeId: emp._id,
-            month,
-            year: targetYear,
-            type: 'monthly',
-            generationType: 'preview',
-            isProvisional: true,
-            computedAsOf: endOfMonth,
-            payrollLocked: false,
-            isVisible: true
-        };
-
-        if (existing) {
-            await Payroll.findByIdAndUpdate(existing._id, {
-                ...payload,
-                ...meta,
-                status: 'Pending'
-            });
-        } else {
-            await Payroll.create({
-                ...payload,
-                ...meta,
-                status: 'Pending'
-            });
-        }
-    }
-}
-
 async function runFinalForOrg({ organizationId, month, year, now, orgTimezone }) {
     const targetYear = parseInt(year, 10);
     const targetMonthIndex = new Date(`${month} 1, ${targetYear}`).getMonth();
@@ -173,11 +97,9 @@ async function runFinalForOrg({ organizationId, month, year, now, orgTimezone })
 }
 
 export const schedulePayrollRunJobs = () => {
-    // Run at 2:00 AM on the 1st day of every month:
-    // - Generate FINAL for the previous month
-    // - Generate PREVIEW for the current month (employees see estimated/provisional figures)
+    // Final payroll for the previous month only. Preview is manual (admin Preview button).
     cron.schedule('0 2 1 * *', async () => {
-        logger.info('Running payroll run automation job');
+        logger.info('Running payroll final automation job');
         const now = new Date();
 
         try {
@@ -187,8 +109,6 @@ export const schedulePayrollRunJobs = () => {
                 try {
                     const orgTimezone = await getCachedEffectiveTimezone(org._id);
                     const nowInOrg = DateTime.fromJSDate(now, { zone: orgTimezone });
-                    const currentMonth = nowInOrg.setLocale('en-US').toFormat('MMMM');
-                    const currentYear = nowInOrg.year;
                     const prevInOrg = nowInOrg.minus({ months: 1 });
                     const prevMonth = prevInOrg.setLocale('en-US').toFormat('MMMM');
                     const prevYear = prevInOrg.year;
@@ -198,14 +118,6 @@ export const schedulePayrollRunJobs = () => {
                         month: prevMonth,
                         year: prevYear,
                         now,
-                        orgTimezone
-                    });
-
-                    await runPreviewForOrg({
-                        organizationId: org._id,
-                        month: currentMonth,
-                        year: currentYear,
-                        asOf: now,
                         orgTimezone
                     });
                 } catch (orgError) {
@@ -220,5 +132,5 @@ export const schedulePayrollRunJobs = () => {
         }
     });
 
-    logger.info('Payroll automation jobs scheduled');
+    logger.info('Payroll final automation job scheduled (1st of month 02:00, previous month only)');
 };

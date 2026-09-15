@@ -22,12 +22,68 @@ import axios, { fetchDocumentWithFallback, getDocumentDownloadUrl, saveDocumentD
 import LoadingSpinner from '../../components/LoadingSpinner';
 import logger from '../../utils/logger';
 import { canAccessHrDocuments } from '../../utils/managerHelper';
-import { ADMIN_DOCUMENTS_ENDPOINT } from '../../utils/constant';
+import { ADMIN_DOCUMENTS_ENDPOINT, EMPLOYEE_AUTH_ENDPOINT } from '../../utils/constant';
 
 const DOCUMENT_CATEGORY_OPTIONS = [
     'Employee', 'Company', 'Policy', 'Contract', 'Certificate',
     'Training', 'Compliance', 'Financial', 'Legal', 'Other'
 ];
+
+/** Employee-owned documents must name their owner (server rejects the upload otherwise). */
+const OWNER_REQUIRED_CATEGORY = 'Employee';
+
+/** Matches server parsePagination maxLimit for employee list endpoints. */
+const EMPLOYEE_PICKER_PAGE_SIZE = 100;
+const EMPLOYEE_PICKER_MAX_PAGES = 50;
+
+function employeeMatchesQuery(employee, query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return true;
+    const name = formatEmployeeFullName(employee).toLowerCase();
+    const email = String(employee?.email || '').toLowerCase();
+    const code = String(employee?.employeeId || '').toLowerCase();
+    return name.includes(q) || email.includes(q) || code.includes(q);
+}
+
+/**
+ * Load the full org roster for the owner typeahead (paginated).
+ * Admins use /admin/employee; HR users fall back to the employee roster on 401/403.
+ */
+async function fetchAllEmployeeOptions() {
+    const fetchPage = async (page) => {
+        const params = { page, limit: EMPLOYEE_PICKER_PAGE_SIZE };
+        try {
+            const { data } = await axios.get('/v1/admin/employee', { withCredentials: true, params });
+            return {
+                employees: data?.data || [],
+                hasNext: Boolean(data?.pagination?.hasNext),
+            };
+        } catch (error) {
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                const { data } = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, {
+                    withCredentials: true,
+                    params,
+                });
+                return {
+                    employees: data?.data || data?.employees || [],
+                    hasNext: Boolean(data?.pagination?.hasNext),
+                };
+            }
+            throw error;
+        }
+    };
+
+    const all = [];
+    let page = 1;
+    let hasNext = true;
+    while (hasNext && page <= EMPLOYEE_PICKER_MAX_PAGES) {
+        const result = await fetchPage(page);
+        all.push(...(result.employees || []));
+        hasNext = result.hasNext;
+        page += 1;
+    }
+    return all;
+}
 
 /** Sidebar category key → backend `category` enum */
 const CATEGORY_NAV = [
@@ -76,9 +132,10 @@ function resolveDocumentEmployee(doc) {
         value && typeof value === 'object' && (value.name || value.lastName || value.email);
 
     const uploader = isPopulatedPerson(doc.uploadedBy) ? doc.uploadedBy : null;
+    // Prefer relatedId (owner) over uploadedBy — HR-issued docs are uploaded by HR, owned by the employee.
     const related =
         doc.relatedTo === 'Employee' && isPopulatedPerson(doc.relatedId) ? doc.relatedId : null;
-    const person = uploader || related;
+    const person = related || uploader;
 
     const orgCategories = new Set(['Company', 'Policy', 'Training', 'Compliance']);
     if (person) {
@@ -240,6 +297,18 @@ const DocumentsPage = () => {
     const [searchInput, setSearchInput] = useState('');
     const debouncedSearch = useDebouncedValue(searchInput, 350);
 
+    const [filterEmployee, setFilterEmployee] = useState(null);
+    const [filterEmployeeSearch, setFilterEmployeeSearch] = useState('');
+    const [filterEmployeeOptions, setFilterEmployeeOptions] = useState([]);
+    const [filterEmployeeLoading, setFilterEmployeeLoading] = useState(false);
+    const [filterEmployeeOpen, setFilterEmployeeOpen] = useState(false);
+    const filterEmployeeRef = useRef(null);
+
+    const filteredFilterEmployees = useMemo(
+        () => filterEmployeeOptions.filter((employee) => employeeMatchesQuery(employee, filterEmployeeSearch)),
+        [filterEmployeeOptions, filterEmployeeSearch]
+    );
+
     useEffect(() => {
         const hint = location.state?.search;
         if (typeof hint === 'string' && hint.trim()) {
@@ -265,6 +334,18 @@ const DocumentsPage = () => {
     const [uploadCategory, setUploadCategory] = useState('Company');
     const [uploadDescription, setUploadDescription] = useState('');
     const [uploading, setUploading] = useState(false);
+    const [uploadOwner, setUploadOwner] = useState(null);
+    const [ownerSearchInput, setOwnerSearchInput] = useState('');
+    const [ownerOptions, setOwnerOptions] = useState([]);
+    const [ownerOptionsLoading, setOwnerOptionsLoading] = useState(false);
+    const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
+    const ownerPickerRef = useRef(null);
+    const ownerRequired = uploadCategory === OWNER_REQUIRED_CATEGORY;
+
+    const filteredOwnerOptions = useMemo(
+        () => ownerOptions.filter((employee) => employeeMatchesQuery(employee, ownerSearchInput)),
+        [ownerOptions, ownerSearchInput]
+    );
 
     const [versionDoc, setVersionDoc] = useState(null);
     const [versionFile, setVersionFile] = useState(null);
@@ -290,6 +371,10 @@ const DocumentsPage = () => {
         setUploadName('');
         setUploadCategory('Company');
         setUploadDescription('');
+        setUploadOwner(null);
+        setOwnerSearchInput('');
+        setOwnerOptions([]);
+        setOwnerPickerOpen(false);
     };
 
     const openUploadModal = () => {
@@ -320,6 +405,9 @@ const DocumentsPage = () => {
             if (selectedCategoryParam) params.category = selectedCategoryParam;
             if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
             if (accessBucketsParam) params.accessBuckets = accessBucketsParam;
+            if (filterEmployee?._id) {
+                params.relatedId = filterEmployee._id;
+            }
 
             const response = await axios.get('/v1/both/documents', {
                 params,
@@ -342,7 +430,7 @@ const DocumentsPage = () => {
             setLoading(false);
             listFetchEverCompleted.current = true;
         }
-    }, [page, selectedCategoryParam, debouncedSearch, accessBucketsParam]);
+    }, [page, selectedCategoryParam, debouncedSearch, accessBucketsParam, filterEmployee?._id]);
 
     useEffect(() => {
         fetchDocuments();
@@ -353,8 +441,80 @@ const DocumentsPage = () => {
     }, [isHRUser, fetchPendingDocuments]);
 
     useEffect(() => {
+        if (!showUploadModal || !ownerRequired) return;
+        let cancelled = false;
+        setOwnerOptionsLoading(true);
+        fetchAllEmployeeOptions()
+            .then((employees) => {
+                if (!cancelled) setOwnerOptions(employees);
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                logger.error('Error fetching employees for document owner:', error);
+                setOwnerOptions([]);
+                toast.error('Failed to load employees. Please try again.');
+            })
+            .finally(() => {
+                if (!cancelled) setOwnerOptionsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [showUploadModal, ownerRequired]);
+
+    useEffect(() => {
+        if (!ownerPickerOpen) return undefined;
+        const onPointerDown = (event) => {
+            if (ownerPickerRef.current && !ownerPickerRef.current.contains(event.target)) {
+                setOwnerPickerOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        return () => document.removeEventListener('mousedown', onPointerDown);
+    }, [ownerPickerOpen]);
+
+    useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, accessBucketsParam]);
+    }, [debouncedSearch, accessBucketsParam, filterEmployee?._id]);
+
+    useEffect(() => {
+        if (!isHRUser) return;
+        let cancelled = false;
+        setFilterEmployeeLoading(true);
+        fetchAllEmployeeOptions()
+            .then((employees) => {
+                if (!cancelled) setFilterEmployeeOptions(employees);
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                logger.error('Error fetching employees for document filter:', error);
+                setFilterEmployeeOptions([]);
+            })
+            .finally(() => {
+                if (!cancelled) setFilterEmployeeLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [isHRUser]);
+
+    useEffect(() => {
+        if (!filterEmployeeOpen) return undefined;
+        const onPointerDown = (event) => {
+            if (filterEmployeeRef.current && !filterEmployeeRef.current.contains(event.target)) {
+                setFilterEmployeeOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        return () => document.removeEventListener('mousedown', onPointerDown);
+    }, [filterEmployeeOpen]);
+
+    const clearEmployeeFilter = () => {
+        setFilterEmployee(null);
+        setFilterEmployeeSearch('');
+        setFilterEmployeeOpen(false);
+        setPage(1);
+    };
 
     const handleUploadSubmit = async (e) => {
         e.preventDefault();
@@ -362,11 +522,18 @@ const DocumentsPage = () => {
             toast.error('Please choose a file');
             return;
         }
+        if (ownerRequired && !uploadOwner) {
+            toast.error('Select the employee this document belongs to');
+            return;
+        }
         const name = uploadName.trim() || uploadFile.name;
         const formData = new FormData();
         formData.append('document', uploadFile);
         formData.append('name', name);
         formData.append('category', uploadCategory);
+        if (ownerRequired) {
+            formData.append('relatedId', uploadOwner._id);
+        }
         if (uploadDescription.trim()) {
             formData.append('description', uploadDescription.trim());
         }
@@ -588,15 +755,84 @@ const DocumentsPage = () => {
                 {/* Sticky filters */}
                 <div className="sticky top-2 z-20 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90">
                     <div className="flex flex-col gap-4">
-                        <div className="relative min-w-0">
-                            <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <input
-                                type="search"
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                placeholder="Search by name, employee, or ID…"
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                            />
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                            <div className="relative min-w-0 flex-1">
+                                <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="search"
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    placeholder="Search by document name…"
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                />
+                            </div>
+
+                            {isHRUser && (
+                                <div ref={filterEmployeeRef} className="relative w-full lg:w-80">
+                                    <div className="relative">
+                                        <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="search"
+                                            value={filterEmployeeSearch}
+                                            onChange={(e) => {
+                                                setFilterEmployeeSearch(e.target.value);
+                                                setFilterEmployeeOpen(true);
+                                                if (filterEmployee) setFilterEmployee(null);
+                                            }}
+                                            onFocus={() => setFilterEmployeeOpen(true)}
+                                            autoComplete="off"
+                                            placeholder="Filter by employee…"
+                                            className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-9 text-sm text-slate-900 placeholder:text-slate-400 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                        />
+                                        {(filterEmployee || filterEmployeeSearch) && (
+                                            <button
+                                                type="button"
+                                                onClick={clearEmployeeFilter}
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                                title="Clear employee filter"
+                                            >
+                                                <FaTimes className="h-3 w-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {filterEmployeeOpen && (
+                                        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                                            {filterEmployeeLoading ? (
+                                                <p className="px-3 py-2 text-sm text-slate-500">Loading employees…</p>
+                                            ) : filteredFilterEmployees.length === 0 ? (
+                                                <p className="px-3 py-2 text-sm text-slate-500">No matching employees</p>
+                                            ) : (
+                                                <ul className="py-1">
+                                                    {filteredFilterEmployees.map((option) => (
+                                                        <li key={option._id}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFilterEmployee(option);
+                                                                    setFilterEmployeeSearch(formatEmployeeFullName(option));
+                                                                    setFilterEmployeeOpen(false);
+                                                                    setPage(1);
+                                                                }}
+                                                                className="flex w-full flex-col px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+                                                            >
+                                                                <span className="font-medium">{formatEmployeeFullName(option)}</span>
+                                                                <span className="text-xs text-slate-500">
+                                                                    {[option.employeeId, option.email].filter(Boolean).join(' · ')}
+                                                                </span>
+                                                            </button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+                                    {filterEmployee && (
+                                        <p className="mt-1 text-xs text-emerald-700">
+                                            Showing documents for {formatEmployeeFullName(filterEmployee)}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1095,7 +1331,15 @@ const DocumentsPage = () => {
                                 <select
                                     id="upload-category"
                                     value={uploadCategory}
-                                    onChange={(ev) => setUploadCategory(ev.target.value)}
+                                    onChange={(ev) => {
+                                        const next = ev.target.value;
+                                        setUploadCategory(next);
+                                        if (next !== OWNER_REQUIRED_CATEGORY) {
+                                            setUploadOwner(null);
+                                            setOwnerSearchInput('');
+                                            setOwnerPickerOpen(false);
+                                        }
+                                    }}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 >
                                     {DOCUMENT_CATEGORY_OPTIONS.map((c) => (
@@ -1103,6 +1347,82 @@ const DocumentsPage = () => {
                                     ))}
                                 </select>
                             </div>
+                            {ownerRequired && (
+                                <div ref={ownerPickerRef} className="relative">
+                                    <label htmlFor="upload-owner-search" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Employee <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            id="upload-owner-search"
+                                            type="text"
+                                            value={ownerSearchInput}
+                                            onChange={(ev) => {
+                                                setOwnerSearchInput(ev.target.value);
+                                                setOwnerPickerOpen(true);
+                                                if (uploadOwner) setUploadOwner(null);
+                                            }}
+                                            onFocus={() => setOwnerPickerOpen(true)}
+                                            autoComplete="off"
+                                            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                            placeholder="Search or pick an employee"
+                                        />
+                                    </div>
+                                    {ownerPickerOpen && (
+                                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                                            {ownerOptionsLoading ? (
+                                                <p className="px-3 py-2 text-sm text-slate-500">Loading employees…</p>
+                                            ) : filteredOwnerOptions.length === 0 ? (
+                                                <p className="px-3 py-2 text-sm text-slate-500">
+                                                    {ownerOptions.length === 0
+                                                        ? 'No employees found in this organization'
+                                                        : 'No matches — try another name, email or ID'}
+                                                </p>
+                                            ) : (
+                                                <ul className="py-1">
+                                                    {filteredOwnerOptions.map((option) => {
+                                                        const selected = uploadOwner?._id === option._id;
+                                                        return (
+                                                            <li key={option._id}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setUploadOwner(option);
+                                                                        setOwnerSearchInput(formatEmployeeFullName(option));
+                                                                        setOwnerPickerOpen(false);
+                                                                    }}
+                                                                    className={`flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                                                                        selected ? 'bg-emerald-50 text-emerald-900' : 'text-slate-800'
+                                                                    }`}
+                                                                >
+                                                                    <span className="font-medium">{formatEmployeeFullName(option)}</span>
+                                                                    <span className="text-xs text-slate-500">
+                                                                        {[option.employeeId, option.email].filter(Boolean).join(' · ')}
+                                                                    </span>
+                                                                </button>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+                                    {uploadOwner && (
+                                        <p className="mt-1.5 text-xs text-emerald-700">
+                                            Selected: {formatEmployeeFullName(uploadOwner)}
+                                            {uploadOwner.employeeId ? ` · ${uploadOwner.employeeId}` : ''}
+                                        </p>
+                                    )}
+                                    {!uploadOwner && (
+                                        <p className="mt-1 text-xs text-slate-400">
+                                            {ownerOptionsLoading
+                                                ? 'Loading full employee list…'
+                                                : `${ownerOptions.length} employee${ownerOptions.length === 1 ? '' : 's'} available — type to filter or pick from the list.`}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                             <div>
                                 <label htmlFor="upload-description" className="block text-sm font-medium text-gray-700 mb-1">
                                     Description (optional)
@@ -1129,7 +1449,7 @@ const DocumentsPage = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={uploading || !uploadFile}
+                                    disabled={uploading || !uploadFile || (ownerRequired && !uploadOwner)}
                                     className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50"
                                 >
                                     {uploading ? 'Uploading…' : 'Upload'}

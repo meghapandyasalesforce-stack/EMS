@@ -1,8 +1,9 @@
 import React from 'react';
 import { formatPermissionLabel } from '../utils/systemRoles';
+import { getSystemRoleHome } from '../utils/systemRoleHome';
 
 /**
- * SaaS-style system role selector with description + optional permission preview.
+ * SaaS-style system role selector — Access & home with dashboard labels.
  */
 const SystemRolePicker = ({
   catalog = [],
@@ -10,10 +11,11 @@ const SystemRolePicker = ({
   onChange,
   disabled = false,
   showPreview = true,
-  label = 'System access',
+  label = 'Access & home screen',
   className = '',
 }) => {
   const selected = catalog.find((r) => r.id === value) || catalog[0];
+  const home = getSystemRoleHome(selected?.id || value);
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -25,19 +27,24 @@ const SystemRolePicker = ({
           disabled={disabled || !catalog.length}
           className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:bg-slate-50"
         >
-          {catalog.map((role) => (
-            <option key={role.id} value={role.id}>
-              {role.label}
-            </option>
-          ))}
+          {catalog.map((role) => {
+            const roleHome = getSystemRoleHome(role.id);
+            return (
+              <option key={role.id} value={role.id}>
+                {role.label} → {roleHome.label}
+              </option>
+            );
+          })}
         </select>
       </div>
 
-      {selected?.description && (
-        <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          {selected.description}
+      {selected ? (
+        <p className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-sm text-slate-700">
+          Opens <span className="font-semibold text-slate-900">{home.label}</span>
+          <span className="text-slate-500"> ({home.path})</span>
+          {selected.description ? ` — ${selected.description}` : ''}
         </p>
-      )}
+      ) : null}
 
       {showPreview && selected?.permissionPreview?.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-3">

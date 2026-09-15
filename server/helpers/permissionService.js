@@ -53,7 +53,7 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
     if (decoded.employeeProfileId && !employee) {
       employee = await Employee.findById(decoded.employeeProfileId)
         .select(
-          'name lastName email employeeId functionalRoles department position jobTitle organizationId status active isManager isHR manager userId'
+          'name lastName email employeeId functionalRoles department departmentId position jobTitle organizationId status active isManager isHR manager managerId userId accessDataScope accessDepartmentIds'
         )
         .lean();
     }
@@ -61,7 +61,7 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
     if (!employee) {
       employee = await Employee.findById(decoded.userId)
         .select(
-          'name lastName email employeeId functionalRoles department position jobTitle organizationId status active isManager isHR manager userId'
+          'name lastName email employeeId functionalRoles department departmentId position jobTitle organizationId status active isManager isHR manager managerId userId accessDataScope accessDepartmentIds'
         )
         .lean();
     }
@@ -217,8 +217,19 @@ export const shouldScopeDataToManagedTeam = (req) => {
   return Boolean(req.employee?.isManager && !req.employee?.isHR);
 };
 
-/** Data scope for list endpoints */
+/** Data scope for list endpoints — role default, overridable via employee.accessDataScope */
 export const getDataScope = (authContext) => {
+  const override = String(authContext?.employee?.accessDataScope || 'default').toLowerCase();
+  if (
+    override === 'organization' ||
+    override === 'department' ||
+    override === 'departments' ||
+    override === 'team' ||
+    override === 'self'
+  ) {
+    return override;
+  }
+
   if (authContext?.isOrgOwner || authContext?.isHrManager || authContext?.isHrExecutive) {
     if (hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_ALL)) {
       return 'organization';
@@ -230,11 +241,18 @@ export const getDataScope = (authContext) => {
   if (authContext?.isPayrollAdmin && hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_ALL)) {
     return 'organization';
   }
-  // People managers: team only (takes precedence over project_manager hybrid)
+  // Department-scoped HR (employee.departmentId when enforced in queries)
+  if (
+    (authContext?.isHrManager || authContext?.isHrExecutive) &&
+    hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_TEAM) &&
+    !hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_ALL) &&
+    authContext?.employee?.departmentId
+  ) {
+    return 'department';
+  }
   if (authContext?.isLineManager) {
     return 'team';
   }
-  // Pure project managers: org-wide for project membership pickers
   if (authContext?.isProjectManager) {
     return 'organization';
   }

@@ -227,9 +227,55 @@ export const DEFAULT_ORG_DEPARTMENTS = [
     'Engineering', 'Human Resources', 'Finance', 'Sales', 'Marketing', 'Operations', 'IT Support',
 ];
 
+/**
+ * Designations = seniority / rank only (not job function).
+ * Job function belongs in DEFAULT_ORG_JOB_ROLES / Org Job Roles.
+ */
 export const DEFAULT_ORG_DESIGNATIONS = [
-    'Software Engineer', 'HR Manager', 'Finance Manager', 'Sales Executive',
-    'Marketing Manager', 'Operations Manager', 'Project Manager',
+    'Intern',
+    'Trainee',
+    'Junior',
+    'Mid-Level',
+    'Senior',
+    'Lead',
+    'Supervisor',
+    'Manager',
+    'Senior Manager',
+    'Director',
+    'Executive',
+    'VP',
+    'CTO',
+    'CFO',
+    'CEO',
+];
+
+/**
+ * Job roles = what work the person does (function), optionally linked to a department.
+ * Includes titles previously mis-seeded as designations.
+ */
+export const DEFAULT_ORG_JOB_ROLES = [
+    'Software Engineer',
+    'Senior Software Engineer',
+    'Frontend Developer',
+    'Backend Developer',
+    'Full Stack Developer',
+    'DevOps Engineer',
+    'QA Tester',
+    'UX/UI Designer',
+    'Product Manager',
+    'Project Manager',
+    'HR Manager',
+    'HR Executive',
+    'Finance Manager',
+    'Financial Analyst',
+    'Marketing Manager',
+    'Marketing Executive',
+    'Sales Executive',
+    'Sales Representative',
+    'Operations Manager',
+    'Operations Coordinator',
+    'Customer Support Specialist',
+    'Legal Advisor',
 ];
 
 export const DEFAULT_EMPLOYMENT_TYPES = [

@@ -13,7 +13,7 @@ const UPLOADS_ROOT = path.resolve(__dirname, '../uploads');
  * Upload a leave attachment buffer to S3.
  * @returns {Promise<string>} S3 object key stored on Leave.document
  */
-export async function uploadLeaveAttachmentToS3(file, organizationId) {
+export async function uploadLeaveAttachmentToS3(file, organizationId, employeeId = null) {
     if (!file?.buffer?.length) {
         throw new Error('Uploaded file buffer is empty. Please try uploading again.');
     }
@@ -28,7 +28,7 @@ export async function uploadLeaveAttachmentToS3(file, organizationId) {
         .replace(/[^a-zA-Z0-9_]/g, '')
         .slice(0, 60);
     const filename = `leave-${safeBase}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-    const s3Key = buildS3Key('leave-attachment', organizationId, filename);
+    const s3Key = buildS3Key('leave-attachment', organizationId, filename, employeeId);
     return uploadFile(file.buffer, s3Key, file.mimetype, false);
 }
 

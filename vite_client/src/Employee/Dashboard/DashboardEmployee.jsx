@@ -452,6 +452,7 @@ function DashboardEmployee() {
 
             try {
                 setLoading(true);
+                setError('');
                 setHasFetched(true);
                 const result = await dispatch(fetchEmployeeOwnInfo());
                 if (fetchEmployeeOwnInfo.rejected.match(result)) {
@@ -737,7 +738,11 @@ function DashboardEmployee() {
                     <p className="mb-4 font-medium text-red-600">Error: {error}</p>
                     <button
                         type="button"
-                        onClick={() => window.location.reload()}
+                        onClick={() => {
+                            setError('');
+                            setHasFetched(false);
+                            setLoading(true);
+                        }}
                         className="rounded-full bg-[#20C997] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ab589]"
                     >
                         Retry

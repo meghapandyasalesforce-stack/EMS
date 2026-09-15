@@ -22,6 +22,7 @@ import { exportPayrollPDF } from "../../controllers/admin/pdfExportController.js
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isCEOAuthenticated from "../../middlewares/isCEOAuthenticated.js";
 import {
+  attachAuthContext,
   composeMiddleware,
   requireAnyPermission,
   requirePayrollPublish,
@@ -31,8 +32,13 @@ import { payrollLimiter, exportLimiter } from "../../middlewares/endpointRateLim
 import { writeLimiter } from "../../middlewares/rateLimiter.js";
 import { payrollValidations, payrollValidationsExtended } from "../../middlewares/inputValidation.js";
 import { cacheMiddleware } from "../../helpers/cache.js";
+import { requireFeature } from "../../middlewares/tenantMiddleware.js";
+import { SAAS_FEATURES } from "../../constants/saasFeatures.js";
 
 const router = express.Router();
+
+router.use(attachAuthContext);
+router.use(requireFeature(SAAS_FEATURES.PAYROLL));
 
 const viewPayrollAll = composeMiddleware(
   requireAnyPermission([PERMISSIONS.PAYROLL_VIEW_ALL])

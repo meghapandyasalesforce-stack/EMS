@@ -86,6 +86,7 @@ import compOffAdminRouter from "../routes/Admin/CompOffAdminRoutes.js";
 import payrollReportsRouter from "../routes/Admin/PayrollReportsRoutes.js";
 import auditLogRouter from "../routes/Admin/AuditLogRoutes.js";
 import platformRolesRouter from "../routes/Admin/PlatformRolesRoutes.js";
+import orgStructureRouter from "../routes/Admin/OrgStructureRoutes.js";
 
 import employeeDocumentRequestRouter from "../routes/employeeDocumentRequestRoutes.js";
 import documentTemplateRouter from "../routes/documentTemplateRoutes.js";
@@ -131,6 +132,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/admin/notification-settings", notificationSettingsRouter);
   app.use("/api/v1/admin/reports", reportRouter);
   app.use("/api/v1/admin/organization", organizationRouter);
+  app.use("/api/v1/admin/org-structure", orgStructureRouter);
   app.use("/api/v1/admin/review-cycle", reviewCycleRouter);
 
   // Employee routes (register specific routes first to avoid conflicts)

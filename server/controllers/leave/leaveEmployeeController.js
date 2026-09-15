@@ -518,7 +518,7 @@ export const uploadLeaveDocument = async (req, res) => {
             return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
         }
 
-        const documentRef = await uploadLeaveAttachmentToS3(req.file, organizationId);
+        const documentRef = await uploadLeaveAttachmentToS3(req.file, organizationId, employeeId);
         return sendSuccess(
             res,
             {

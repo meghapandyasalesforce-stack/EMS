@@ -22,12 +22,11 @@ function clearAuthAndRedirectToLogin() {
   window.location.href = '/login';
 }
 
-/** Session probe calls — reject quietly; never refresh tokens or redirect to login. */
+/** Session probe calls — reject quietly; never refresh tokens or redirect to login.
+ * Keep permissions-only: get-my-details must be allowed to refresh on 401/NO_TOKEN
+ * so dashboards don't hard-fail when the short-lived jwt cookie expired. */
 function isSessionProbeRequest(url = '') {
-  return (
-    url.includes('/auth/permissions') ||
-    url.includes('/profile-details/get-my-details')
-  );
+  return url.includes('/auth/permissions');
 }
 
 function maybeRedirectToLoginOn401(errorCode) {
@@ -480,13 +479,12 @@ instance.interceptors.response.use(
     // Handle 401 errors - attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       const requestUrl = originalRequest.url || '';
-      const skipAuthRedirect = Boolean(originalRequest.skipAuthRedirect);
       const onPublicGuestRoute =
         typeof window !== 'undefined' &&
         isPublicGuestRoute(window.location.pathname);
 
-      // Public/guest pages and session probes must never force HRMS login.
-      if (skipAuthRedirect || onPublicGuestRoute) {
+      // Guest/public pages must never trigger refresh or HRMS login redirects.
+      if (onPublicGuestRoute) {
         return Promise.reject(error);
       }
 

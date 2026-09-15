@@ -14,7 +14,7 @@ import { organizationIsolationPlugin } from "../plugins/organizationIsolation.js
  * @property {string} manager - Manager name or ID (required)
  * @property {number} salary - Employee salary (required)
  * @property {string} role - User role, either 'admin' or 'employee' (default: 'employee')
- * @property {string} employeeId - Unique employee identifier (auto-generated, format: EMP-{NAME}-{YEAR}-{RANDOM})
+ * @property {string} employeeId - Employee identifier unique per organization (prefix+seq or legacy EMP-…)
  * @property {Object} profilePhoto - Profile photo metadata (url, filename, uploadedAt)
  * @property {Date} joiningDate - Employee joining date (required, default: Date.now)
  * @property {Date} birthDate - Employee birth date (optional)
@@ -148,11 +148,25 @@ const employeeSchema = new mongoose.Schema({
         }],
         default: []
     },
+
+    /**
+     * SaaS data visibility override (Zoho-style scope separate from System Role).
+     * default = derive from role (org for HR/payroll, team for managers, self for employees)
+     */
+    accessDataScope: {
+        type: String,
+        enum: ['default', 'organization', 'department', 'departments', 'team', 'self'],
+        default: 'default',
+    },
+    /** Used when accessDataScope === 'departments' — OrgDepartment ids in this tenant */
+    accessDepartmentIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgDepartment',
+    }],
     
-    // Employee ID/Code generation
+    // Employee ID/Code generation — unique per organization (see compound index), not globally
     employeeId: { 
         type: String, 
-        unique: true, 
         required: true,
         default: function() {
             // Generate unique employee ID: EMP-{first3lettersOfName}-{joiningYear}-{random4Digits}
@@ -313,31 +327,60 @@ const employeeSchema = new mongoose.Schema({
     jobTitle: {
         type: String,
         required: true,
-        enum: [
-            "Software Engineer", "Frontend Developer", "Backend Developer", "DevOps Engineer", "HR Manager", "HR Executive",
-            "Financial Analyst", "Marketing Executive", "Sales Representative", "Product Manager",
-            "QA Tester", "Customer Support Specialist", "UX/UI Designer", "Project Manager",
-            "Legal Advisor", "Operations Coordinator", "Full Stack Developer"
-        ]
+        trim: true,
     },
 
     position: {
         type: String,
         required: true,
-        enum: [
-            "Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager",
-            "Director", "Executive", "VP", "CTO", "CFO", "CEO", "Developer"
-        ]
+        trim: true,
     },
 
     department: {
         type: String,
         required: true,
-        enum: [
-            "Engineering", "HR", "Finance", "Sales", "Marketing", "IT Support", "Operations",
-            "Customer Support", "Legal", "Product", "Research & Development", "Design", "Administration"
-        ]
+        trim: true,
     },
+
+    /** Organization structure master references (SaaS org chart) */
+    departmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgDepartment',
+        index: true,
+    },
+    teamId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgTeam',
+        index: true,
+    },
+    jobFamilyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgJobFamily',
+    },
+    jobRoleId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgJobRole',
+        index: true,
+    },
+    designationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgDesignation',
+    },
+    locationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgLocation',
+    },
+    employmentTypeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgEmploymentType',
+    },
+    workModeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgWorkMode',
+    },
+    /** Denormalized labels for reports / legacy consumers */
+    employmentType: { type: String, trim: true },
+    workMode: { type: String, trim: true },
 
     // Optional fields (can be added later)
     phone1: { type: String },

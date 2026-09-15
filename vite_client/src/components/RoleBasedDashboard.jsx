@@ -6,6 +6,7 @@ import LoadingSpinner from './LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
 import { mergeSessionProfile } from '../utils/profileUtils';
 import FirstLoginPermissionRequest from './FirstLoginPermissionRequest';
+import { resolveDashboardFromAccessProfile } from '../utils/resolveDashboardFromAccess';
 
 const RoleBasedDashboard = () => {
     const navigate = useNavigate();
@@ -17,6 +18,32 @@ const RoleBasedDashboard = () => {
     const [loading, setLoading] = useState(true);
     
     const userRole = profile?.role;
+
+    /**
+     * Fallback when server route API unavailable.
+     * SaaS: functionalRoles / assignedRole — not department name.
+     */
+    const getComprehensiveFallback = () => {
+        if (!profile) {
+            return '/dashboard-employee';
+        }
+
+        const isOrganizationLogin = localStorage.getItem('isOrganizationLogin') === 'true';
+        const userEmail = user?.email?.toLowerCase() || '';
+        const isGmailUser = userEmail.endsWith('@gmail.com');
+        if ((isOrganizationLogin || isGmailUser) && profile?.role === 'admin') {
+            return '/organization/dashboard';
+        }
+
+        return resolveDashboardFromAccessProfile({
+            functionalRoles: profile.functionalRoles,
+            assignedRole: profile.assignedRole,
+            position: profile.position,
+            jobTitle: profile.jobTitle,
+            role: profile.role,
+            allowLegacyJobStrings: true,
+        });
+    };
     
     useEffect(() => {
         // Honor one-time Job Details redirect if login sent user to /dashboard first
@@ -94,103 +121,7 @@ const RoleBasedDashboard = () => {
         
         fetchDashboardRoute();
     }, [userRole, navigate, location, user, employee, profile]);
-    
-    /**
-     * Comprehensive fallback routing - used when server is unavailable
-     * Checks ALL criteria (position, department, jobTitle, role, assignedRole)
-     * Priority order matches server-side logic
-     */
-    const getComprehensiveFallback = () => {
-        const userPosition = (profile?.position || '').toLowerCase().trim();
-        const userDepartment = (profile?.department || '').toLowerCase().trim();
-        const userJobTitle = (profile?.jobTitle || '').toLowerCase().trim();
-        const fallbackRole = profile?.role;
-        const userAssignedRole = profile?.assignedRole;
-        
-        if (!profile) {
-            return '/dashboard-employee';
-        }
-        
-        // PRIORITY 1: Check Assigned Role
-        if (userAssignedRole?.dashboardRoute) {
-            return userAssignedRole.dashboardRoute;
-        }
-        
-        // PRIORITY 2: Check Organization Admin
-        const isOrganizationLogin = localStorage.getItem('isOrganizationLogin') === 'true';
-        const userEmail = user?.email?.toLowerCase() || '';
-        const isGmailUser = userEmail.endsWith('@gmail.com');
-        if ((isOrganizationLogin || isGmailUser) && fallbackRole === 'admin') {
-            return '/organization/dashboard';
-        }
-        
-        // PRIORITY 3: Check Executive Position (CEO/CTO/CFO/VP)
-        if (
-            userPosition === 'ceo' || 
-            userPosition === 'cto' || 
-            userPosition === 'cfo' || 
-            userPosition === 'vp'
-        ) {
-            return '/dashboard-administration';
-        }
-        
-        // PRIORITY 4: Check HR Department/JobTitle
-        if (
-            userDepartment === 'hr' || 
-            userDepartment.includes('hr') || 
-            userDepartment.includes('human resource') ||
-            userJobTitle.includes('hr manager') ||
-            userJobTitle.includes('human resource') ||
-            userJobTitle.includes('hr')
-        ) {
-            return '/dashboard-hr';
-        }
-        
-        // PRIORITY 5: Check Tech Department
-        if (
-            userDepartment === 'technology' ||
-            userDepartment === 'tech' ||
-            userDepartment.includes('technology') ||
-            userDepartment === 'it' ||
-            (userDepartment.includes('it') && !userDepartment.includes('support'))
-        ) {
-            return '/dashboard/tech';
-        }
-        
-        // PRIORITY 6: Check Finance Department
-        if (
-            userDepartment === 'finance' || 
-            userDepartment.includes('finance')
-        ) {
-            return '/dashboard-finance';
-        }
 
-        // PRIORITY 7: Project Manager → Projects workspace
-        if (
-            userJobTitle === 'project manager' ||
-            (Array.isArray(profile?.functionalRoles) &&
-                profile.functionalRoles.some((r) => String(r).toLowerCase() === 'project_manager'))
-        ) {
-            return '/dashboard-manager';
-        }
-        
-        // PRIORITY 8: Check Manager/Director Position
-        if (
-            userPosition === 'manager' || 
-            userPosition === 'director'
-        ) {
-            return '/dashboard-manager';
-        }
-        
-        // PRIORITY 9: Check Admin Role
-        if (fallbackRole === 'admin') {
-            return '/dashboard-admin';
-        }
-        
-        // PRIORITY 10: Default → Employee Dashboard
-        return '/dashboard-employee';
-    };
-    
     // Render appropriate dashboard - only redirect, don't render directly
     const renderDashboard = () => {
         if (loading) {

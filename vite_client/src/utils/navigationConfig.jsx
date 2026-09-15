@@ -284,6 +284,7 @@ const isTech = (department) => {
 const getAdminNavigation = () => [
     { path: "/dashboard-admin", name: "Dashboard", icon: <FaHome /> },
     { path: "/organization/dashboard", name: "Organization", icon: <FaBuilding />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EXECUTIVE_DASHBOARD] },
+    { path: "/organization/structure", name: "Org Structure", icon: <FaBuilding />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/employees", name: "Employees", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
     { path: "/onboarding", name: "Employee lifecycle", icon: <FaUserCheck />, permissions: [PERMISSIONS.ONBOARDING_MANAGE, PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/leave-management", name: "Leave management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM] },

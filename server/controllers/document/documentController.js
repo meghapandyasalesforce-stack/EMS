@@ -260,23 +260,34 @@ async function findLegacyEmbeddedDocument(req, documentId, { employeeIdOnly = nu
     };
 }
 
-async function uploadDocumentFileToS3(file, organizationId) {
+async function uploadDocumentFileToS3(file, organizationId, employeeId = null) {
     if (!file?.buffer?.length) throw new Error('Uploaded file buffer is empty. Please try uploading again.');
     const ext = path.extname(file.originalname || '').toLowerCase() || '';
     const safeBase = (file.originalname || 'document').replace(ext, '').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 60);
     const filename = `${safeBase}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-    const s3Key = buildS3Key('document', organizationId, filename);
+    const s3Key = buildS3Key('document', organizationId, filename, employeeId);
     return uploadFile(file.buffer, s3Key, file.mimetype, false);
 }
 
-async function loadLegacyEmployeeDocumentsForHr(req, { searchTrim, category }) {
+function documentStorageEmployeeId(document) {
+    if (document?.relatedTo === 'Employee' && document.relatedId) return document.relatedId;
+    if (document?.category === 'Employee' && document.uploadedBy) return document.uploadedBy;
+    return null;
+}
+
+async function loadLegacyEmployeeDocumentsForHr(req, { searchTrim, category, relatedId = null }) {
     if (category && category !== 'Employee') return [];
 
     const orgFilter = addOrganizationFilter(req, {});
-    const employees = await Employee.find({
+    const employeeQuery = {
         ...orgFilter,
         'documents.0': { $exists: true },
-    })
+    };
+    if (relatedId) {
+        employeeQuery._id = relatedId;
+    }
+
+    const employees = await Employee.find(employeeQuery)
         .select('name lastName email employeeId department documents')
         .lean();
 
@@ -363,8 +374,6 @@ export const uploadDocument = asyncHandler(async (req, res) => {
         ? req.body.type
         : mimeToDocumentTypeEnum(file.mimetype);
 
-    const s3Url = await uploadDocumentFileToS3(file, organizationId);
-
     const validAccessLevels = ['Public', 'Department', 'Role', 'Specific', 'Private'];
     let accessLevel = 'Public';
     let relatedTo = req.body.relatedTo && ['Employee', 'Department', 'Project', 'Policy', 'Course', 'General'].includes(req.body.relatedTo)
@@ -394,12 +403,18 @@ export const uploadDocument = asyncHandler(async (req, res) => {
             accessLevel = 'Specific';
             allowedEmployees = [targetEmployee._id];
         } else {
-            relatedTo = 'Employee';
-            accessLevel = 'Private';
+            // Without an owner the record cannot be shown to the employee it concerns,
+            // and its file cannot live under that employee's storage prefix.
+            return res.status(400).json({
+                success: false,
+                message: 'Select the employee this document belongs to',
+            });
         }
     } else if (req.body.accessLevel && validAccessLevels.includes(req.body.accessLevel)) {
         accessLevel = req.body.accessLevel;
     }
+
+    const s3Url = await uploadDocumentFileToS3(file, organizationId, relatedId || null);
 
     const document = new Document({
         name,
@@ -456,7 +471,7 @@ export const uploadOffboardingExperienceLetter = asyncHandler(async (req, res) =
     }
 
     const employeeId = workflow.employeeId?._id || workflow.employeeId;
-    const s3Url = await uploadDocumentFileToS3(file, organizationId);
+    const s3Url = await uploadDocumentFileToS3(file, organizationId, employeeId);
 
     await Document.updateMany(
         {
@@ -610,7 +625,17 @@ export const getDocuments = asyncHandler(async (req, res) => {
 
     if (category) query.category = category;
     if (relatedTo) query.relatedTo = relatedTo;
-    if (relatedId) query.relatedId = relatedId;
+    // Employee-wise filter: owned by, uploaded by (employee category), or explicitly shared with them.
+    if (relatedId) {
+        const ownershipFilter = {
+            $or: [
+                { relatedId },
+                { uploadedBy: relatedId, category: 'Employee' },
+                { allowedEmployees: relatedId },
+            ],
+        };
+        query.$and = Array.isArray(query.$and) ? [...query.$and, ownershipFilter] : [ownershipFilter];
+    }
 
     // Employees: hide inactive unless HR. HR sees everything (pending, approved, rejected, superseded).
     if (!docCtx.isHr) {
@@ -665,6 +690,7 @@ export const getDocuments = asyncHandler(async (req, res) => {
         const legacyRows = await loadLegacyEmployeeDocumentsForHr(req, {
             searchTrim,
             category,
+            relatedId: relatedId || null,
         });
 
         const combined = [...documentsFromDb, ...legacyRows].sort(
@@ -1041,7 +1067,7 @@ export const uploadDocumentVersion = asyncHandler(async (req, res) => {
 
     // Delete old file from S3 and upload new version
     if (document.fileUrl) await deleteFile(document.fileUrl);
-    const newS3Url = await uploadDocumentFileToS3(file, organizationId);
+    const newS3Url = await uploadDocumentFileToS3(file, organizationId, documentStorageEmployeeId(document));
 
     document.fileUrl = newS3Url;
     document.fileName = file.originalname || file.name;
@@ -1393,7 +1419,11 @@ export const replaceMyDocumentFile = asyncHandler(async (req, res) => {
 
     const organizationId = getOrganizationId(req);
     if (document.fileUrl) await deleteFile(document.fileUrl);
-    const replacedS3Url = await uploadDocumentFileToS3(file, organizationId);
+    const replacedS3Url = await uploadDocumentFileToS3(
+        file,
+        organizationId,
+        documentStorageEmployeeId(document) || req.employee?._id
+    );
 
     document.fileUrl = replacedS3Url;
     document.fileName = file.originalname || file.name || document.fileName;

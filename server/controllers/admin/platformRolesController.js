@@ -1,4 +1,5 @@
 import asyncHandler from '../../helpers/asyncHandler.js';
+import mongoose from 'mongoose';
 import User from '../../models/user.model.js';
 import Employee from '../../models/employee.model.js';
 import { sendSuccess, sendNotFound, sendValidationError } from '../../helpers/responseHelper.js';
@@ -129,7 +130,7 @@ export const getUsersRolesRoster = asyncHandler(async (req, res) => {
   const organizationId = getOrganizationId(req);
 
   const employees = await Employee.find({ organizationId })
-    .select('name lastName email jobTitle position department functionalRoles userId employeeId status')
+    .select('name lastName email jobTitle position department departmentId functionalRoles userId employeeId status accessDataScope accessDepartmentIds')
     .sort({ name: 1, lastName: 1 })
     .lean();
 
@@ -149,6 +150,7 @@ export const getUsersRolesRoster = asyncHandler(async (req, res) => {
       email: emp.email,
       jobTitle: emp.jobTitle,
       department: emp.department,
+      departmentId: emp.departmentId,
       status: emp.status,
       systemRoleId,
       systemRoleLabel: def.shortLabel || def.label,
@@ -156,6 +158,8 @@ export const getUsersRolesRoster = asyncHandler(async (req, res) => {
       userId: user?._id,
       platformRoles: user?.roles || [],
       functionalRoles: emp.functionalRoles || [],
+      accessDataScope: emp.accessDataScope || 'default',
+      accessDepartmentIds: emp.accessDepartmentIds || [],
     };
   });
 
@@ -193,15 +197,24 @@ export const getEmployeeAccess = asyncHandler(async (req, res) => {
     userId: user?._id,
     platformRoles: user?.roles || [],
     functionalRoles: employee.functionalRoles || [],
+    accessDataScope: employee.accessDataScope || 'default',
+    accessDepartmentIds: employee.accessDepartmentIds || [],
+    departmentId: employee.departmentId || null,
+    department: employee.department || null,
     catalog: buildRoleCatalog(),
     permissionPreview: getPermissionPreviewForSystemRole(systemRoleId),
   });
 });
 
-/** PATCH body: { systemRole: string } — assign SaaS system role */
+/** PATCH body: { systemRole, accessDataScope?, accessDepartmentIds?, syncJobProfile? } */
 export const assignEmployeeSystemRole = asyncHandler(async (req, res) => {
   const { employeeId } = req.params;
-  const { systemRole } = req.body;
+  const {
+    systemRole,
+    accessDataScope,
+    accessDepartmentIds,
+    syncJobProfile = false,
+  } = req.body;
   const organizationId = getOrganizationId(req);
 
   if (!systemRole || typeof systemRole !== 'string') {
@@ -213,7 +226,31 @@ export const assignEmployeeSystemRole = asyncHandler(async (req, res) => {
       employeeId,
       systemRoleId: systemRole,
       organizationId,
+      syncJobProfile: Boolean(syncJobProfile),
     });
+
+    const scopeValue = accessDataScope !== undefined
+      ? String(accessDataScope).toLowerCase().trim()
+      : undefined;
+    const allowedScopes = new Set(['default', 'organization', 'department', 'departments', 'team', 'self']);
+
+    if (scopeValue !== undefined) {
+      if (!allowedScopes.has(scopeValue)) {
+        return sendValidationError(res, {
+          accessDataScope: `Must be one of: ${[...allowedScopes].join(', ')}`,
+        });
+      }
+      result.employee.accessDataScope = scopeValue;
+      if (scopeValue === 'departments') {
+        const ids = Array.isArray(accessDepartmentIds) ? accessDepartmentIds : [];
+        result.employee.accessDepartmentIds = ids.filter((id) =>
+          mongoose.Types.ObjectId.isValid(id)
+        );
+      } else if (scopeValue !== 'departments') {
+        result.employee.accessDepartmentIds = [];
+      }
+      await result.employee.save();
+    }
 
     return sendSuccess(
       res,
@@ -224,8 +261,10 @@ export const assignEmployeeSystemRole = asyncHandler(async (req, res) => {
         functionalRoles: result.functionalRoles,
         platformRoles: result.platformRoles,
         permissionPreview: result.permissionPreview,
+        accessDataScope: result.employee.accessDataScope || 'default',
+        accessDepartmentIds: result.employee.accessDepartmentIds || [],
       },
-      'System role updated. The user should log out and back in for permissions to refresh.'
+      'Access & home updated. Ask the user to log out and back in for changes to apply.'
     );
   } catch (err) {
     if (err.message === 'Employee not found') {

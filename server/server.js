@@ -41,6 +41,11 @@ import csrfProtection from "./middlewares/csrf.js";
 import { requestTimeout } from "./middlewares/requestTimeout.js";
 import { staticCacheHeaders } from "./middlewares/cacheHeaders.js";
 import { setOrganizationContext } from "./middlewares/organizationIsolation.js";
+import {
+  sanitizeClientOrganizationId,
+  requireTenantContext,
+  requireActiveSubscription,
+} from "./middlewares/tenantMiddleware.js";
 import logger from "./helpers/logger.js";
 
 // Initialize centralized notification event registry
@@ -205,15 +210,31 @@ app.use((req, res, next) => {
 });
 
 // ✅ Organization isolation (set context for all authenticated requests)
-// This should be after authentication middleware but before routes
 // CRITICAL: Skip for static file requests to prevent 404 errors
 app.use((req, res, next) => {
-  // Skip organization isolation for static file requests
-  // Static files don't need organization context
+  if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
+    return next();
+  }
+  sanitizeClientOrganizationId(req, res, next);
+});
+app.use((req, res, next) => {
   if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
     return next();
   }
   setOrganizationContext(req, res, next);
+});
+// SaaS tenant pipeline (subscription + features on req.tenant)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
+    return next();
+  }
+  requireTenantContext(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
+    return next();
+  }
+  requireActiveSubscription(req, res, next);
 });
 
 // =================== ROUTES ===================
@@ -258,6 +279,13 @@ const startServer = async () => {
     if (process.env.MONGO_URI) {
       await connectDB();
       logger.info("MongoDB connected successfully");
+      try {
+        const Employee = (await import('./models/employee.model.js')).default;
+        const { dropGlobalEmployeeIdUniqueIndex } = await import('./helpers/employeeIdHelper.js');
+        await dropGlobalEmployeeIdUniqueIndex(Employee);
+      } catch (indexError) {
+        logger.warn('Employee ID index migration skipped', { error: indexError.message });
+      }
     } else {
       logger.warn("No MONGO_URI found — skipping DB connection");
     }

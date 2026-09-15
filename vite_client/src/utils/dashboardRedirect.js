@@ -1,41 +1,32 @@
 /**
- * Returns the correct dashboard route for a user based on role, position, department, and jobTitle.
- * Used for redirecting unauthorized users to their own dashboard (exact route).
- * Mirrors server-side and RoleBasedDashboard fallback logic.
- *
- * @param {Object} user - Auth user (admin)
- * @param {Object} employee - Employee details (when logged in as employee)
- * @returns {string} Dashboard path
+ * Returns the correct dashboard route for a user.
+ * SaaS rule: assignedRole / functionalRoles first — not department name.
  */
+
+import { resolveDashboardFromAccessProfile } from './resolveDashboardFromAccess';
+
 export function getDefaultDashboardRoute(user, employee) {
   const userObj = user || employee;
   if (!userObj) return '/dashboard-employee';
 
-  const position = (userObj.position || '').toLowerCase().trim();
-  const department = (userObj.department || '').toLowerCase().trim();
-  const jobTitle = (userObj.jobTitle || '').toLowerCase().trim();
   const userRole = userObj.role;
   const assignedRole = userObj.assignedRole;
-  const functionalRoles = Array.isArray(userObj.functionalRoles)
-    ? userObj.functionalRoles.map((r) => String(r).toLowerCase().trim())
-    : [];
+  const functionalRoles = Array.isArray(userObj.functionalRoles) ? userObj.functionalRoles : [];
 
-  if (assignedRole?.dashboardRoute) return assignedRole.dashboardRoute;
-
-  const isOrganizationLogin = typeof localStorage !== 'undefined' && localStorage.getItem('isOrganizationLogin') === 'true';
+  const isOrganizationLogin =
+    typeof localStorage !== 'undefined' && localStorage.getItem('isOrganizationLogin') === 'true';
   const userEmail = (userObj.email || '').toLowerCase();
   const isGmailUser = userEmail.endsWith('@gmail.com');
-  if ((isOrganizationLogin || isGmailUser) && userRole === 'admin') return '/organization/dashboard';
+  if ((isOrganizationLogin || isGmailUser) && userRole === 'admin') {
+    return '/organization/dashboard';
+  }
 
-  if (position === 'ceo' || position === 'cto' || position === 'cfo' || position === 'vp') return '/dashboard-administration';
-  if (department === 'hr' || department.includes('hr') || department.includes('human resource') ||
-      jobTitle.includes('hr manager') || jobTitle.includes('human resource') || jobTitle.includes('hr')) return '/dashboard-hr';
-  if (functionalRoles.includes('project_manager') || jobTitle === 'project manager') return '/dashboard-manager';
-  if (department === 'technology' || department === 'tech' || department.includes('technology') ||
-      department === 'it' || (department.includes('it') && !department.includes('support'))) return '/dashboard/tech';
-  if (department === 'finance' || department.includes('finance')) return '/dashboard-finance';
-  if (position === 'manager' || position === 'director' || functionalRoles.includes('manager')) return '/dashboard-manager';
-  if (userRole === 'admin') return '/dashboard-admin';
-
-  return '/dashboard-employee';
+  return resolveDashboardFromAccessProfile({
+    functionalRoles,
+    assignedRole,
+    position: userObj.position,
+    jobTitle: userObj.jobTitle,
+    role: userRole,
+    allowLegacyJobStrings: true,
+  });
 }

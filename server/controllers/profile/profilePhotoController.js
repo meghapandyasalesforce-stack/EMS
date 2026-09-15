@@ -21,17 +21,17 @@ export const upload = multer({
     },
 });
 
-async function uploadProfilePhotoToS3(buffer, organizationId, entityId) {
+async function uploadProfilePhotoToS3(buffer, organizationId, entityId, { ownerKind = 'employee' } = {}) {
     const timestamp = Date.now();
     const random = crypto.randomBytes(4).toString('hex');
-    const filename = `${entityId}-${timestamp}-${random}.jpg`;
-    const key = buildS3Key('profile-photo', organizationId, filename);
+    const filename = `photo-${timestamp}-${random}.jpg`;
+    const key = buildS3Key('profile-photo', organizationId, filename, entityId, { ownerKind });
 
     const optimized = await processProfilePhotoBuffer(buffer, 800);
     const thumbBuffer = await generateThumbnailBuffer(optimized, 200);
 
-    const thumbFilename = `${entityId}-${timestamp}-${random}_thumb.jpg`;
-    const thumbKey = buildS3Key('profile-photo', organizationId, thumbFilename);
+    const thumbFilename = `photo-${timestamp}-${random}_thumb.jpg`;
+    const thumbKey = buildS3Key('profile-photo', organizationId, thumbFilename, entityId, { ownerKind });
 
     // Private upload: profile photos are private S3 objects served via signed URLs.
     await Promise.all([
@@ -178,7 +178,8 @@ export const uploadAdminPhoto = async (req, res) => {
         const photoRecord = await uploadProfilePhotoToS3(
             req.file.buffer,
             user.organizationId,
-            user._id
+            user._id,
+            { ownerKind: 'user' }
         );
 
         user.profilePhoto = photoRecord;

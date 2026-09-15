@@ -1,3 +1,68 @@
+import { SAAS_FEATURES } from '../constants/saasFeatures.js';
+
+/**
+ * Module feature flags per plan (SaaS gating — backend + frontend).
+ * Org-level overrides may be added later on Organization.settings.features.
+ */
+export const PLAN_MODULE_FEATURES = {
+    free: {
+        [SAAS_FEATURES.EMPLOYEES]: true,
+        [SAAS_FEATURES.LEAVE]: true,
+        [SAAS_FEATURES.ATTENDANCE]: true,
+        [SAAS_FEATURES.RECRUITMENT]: false,
+        [SAAS_FEATURES.PAYROLL]: false,
+        [SAAS_FEATURES.PERFORMANCE]: false,
+        [SAAS_FEATURES.WORKFORCE_PLANNING]: false,
+        [SAAS_FEATURES.LIFECYCLE]: true,
+        [SAAS_FEATURES.ENGAGEMENT]: false,
+        [SAAS_FEATURES.DOCUMENTS]: true,
+        [SAAS_FEATURES.ANALYTICS]: false,
+        [SAAS_FEATURES.PROJECTS]: false,
+    },
+    basic: {
+        [SAAS_FEATURES.EMPLOYEES]: true,
+        [SAAS_FEATURES.LEAVE]: true,
+        [SAAS_FEATURES.ATTENDANCE]: true,
+        [SAAS_FEATURES.RECRUITMENT]: true,
+        [SAAS_FEATURES.PAYROLL]: true,
+        [SAAS_FEATURES.PERFORMANCE]: true,
+        [SAAS_FEATURES.WORKFORCE_PLANNING]: false,
+        [SAAS_FEATURES.LIFECYCLE]: true,
+        [SAAS_FEATURES.ENGAGEMENT]: true,
+        [SAAS_FEATURES.DOCUMENTS]: true,
+        [SAAS_FEATURES.ANALYTICS]: true,
+        [SAAS_FEATURES.PROJECTS]: true,
+    },
+    premium: {
+        [SAAS_FEATURES.EMPLOYEES]: true,
+        [SAAS_FEATURES.LEAVE]: true,
+        [SAAS_FEATURES.ATTENDANCE]: true,
+        [SAAS_FEATURES.RECRUITMENT]: true,
+        [SAAS_FEATURES.PAYROLL]: true,
+        [SAAS_FEATURES.PERFORMANCE]: true,
+        [SAAS_FEATURES.WORKFORCE_PLANNING]: true,
+        [SAAS_FEATURES.LIFECYCLE]: true,
+        [SAAS_FEATURES.ENGAGEMENT]: true,
+        [SAAS_FEATURES.DOCUMENTS]: true,
+        [SAAS_FEATURES.ANALYTICS]: true,
+        [SAAS_FEATURES.PROJECTS]: true,
+    },
+    enterprise: {
+        [SAAS_FEATURES.EMPLOYEES]: true,
+        [SAAS_FEATURES.LEAVE]: true,
+        [SAAS_FEATURES.ATTENDANCE]: true,
+        [SAAS_FEATURES.RECRUITMENT]: true,
+        [SAAS_FEATURES.PAYROLL]: true,
+        [SAAS_FEATURES.PERFORMANCE]: true,
+        [SAAS_FEATURES.WORKFORCE_PLANNING]: true,
+        [SAAS_FEATURES.LIFECYCLE]: true,
+        [SAAS_FEATURES.ENGAGEMENT]: true,
+        [SAAS_FEATURES.DOCUMENTS]: true,
+        [SAAS_FEATURES.ANALYTICS]: true,
+        [SAAS_FEATURES.PROJECTS]: true,
+    },
+};
+
 /**
  * Subscription plan configurations
  */
@@ -80,6 +145,24 @@ export const getPlanDetails = (planId) => {
 export const getPlanMaxEmployees = (planId) => {
     const plan = getPlanDetails(planId);
     return plan ? plan.maxEmployees : 10;
+};
+
+/**
+ * Resolved module features for a plan id.
+ * @param {string} planId
+ * @returns {Record<string, boolean>}
+ */
+export const getPlanModuleFeatures = (planId) => {
+    const key = String(planId || 'free').toLowerCase();
+    return { ...(PLAN_MODULE_FEATURES[key] || PLAN_MODULE_FEATURES.free) };
+};
+
+/**
+ * Whether a module feature is enabled for a plan.
+ */
+export const isPlanFeatureEnabled = (planId, featureKey) => {
+    const features = getPlanModuleFeatures(planId);
+    return Boolean(features[featureKey]);
 };
 
 /**
