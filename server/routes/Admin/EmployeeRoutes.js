@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
   updateEmployeeWorkInfo,
   getEmployeeWorkInfo,
@@ -22,6 +24,8 @@ import { writeLimiter as generalWriteLimiter } from '../../middlewares/rateLimit
 import { cacheMiddleware } from '../../helpers/cache.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.EMPLOYEES));
 
 const editPayrollSettingsMw = composeMiddleware(
   requireAnyPermission([PERMISSIONS.PAYROLL_EDIT])

@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
   clockIn,
   breakIn,
@@ -26,6 +28,8 @@ import { attendanceCheckInLimiter, attendanceCheckOutLimiter, attendanceRadiusCh
 import { attendanceValidations } from '../../middlewares/inputValidation.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.ATTENDANCE));
 
 // Employee actions (no caching - write operations)
 router.route("/clock-in").post(

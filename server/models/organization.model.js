@@ -67,6 +67,22 @@ const organizationSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    /** Soft-delete for platform ops (hidden from default lists) */
+    deletedAt: {
+        type: Date,
+        default: null,
+        index: true,
+    },
+    /** Internal platform ops notes / tags (not visible to tenant) */
+    platformNotes: {
+        type: String,
+        trim: true,
+        default: '',
+    },
+    platformTags: {
+        type: [String],
+        default: [],
+    },
     /** Set true when enterprise lifecycle is bootstrapped at org registration */
     lifecycleEnterpriseEnabled: {
         type: Boolean,
@@ -347,6 +363,15 @@ const organizationSchema = new mongoose.Schema({
         acceptedDate: { type: Date }
     },
     settings: {
+        /**
+         * SaaS module feature overrides (boolean map keyed by SAAS_FEATURES).
+         * Merged over plan defaults in tenantService.
+         */
+        features: {
+            type: Map,
+            of: Boolean,
+            default: undefined,
+        },
         allowEmployeeRegistration: { 
             type: Boolean, 
             default: true 

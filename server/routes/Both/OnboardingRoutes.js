@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     getMyOnboardingWorkflow,
     updateOnboardingTask,
@@ -31,6 +33,8 @@ import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 import { requireLifecycleFeature } from '../../middlewares/requireLifecycleFeature.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LIFECYCLE));
 
 router.route('/my-workflow')
     .get(isAuthenticatedBoth, readLimiter, getMyOnboardingWorkflow);

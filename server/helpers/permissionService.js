@@ -158,6 +158,26 @@ export const permissionsFromBuckets = (buckets) => {
 };
 
 export const resolveAuthContext = async (decoded, req = {}) => {
+  if (decoded?.role === 'platform') {
+    return {
+      buckets: [],
+      platformRoles: ['platform_operator'],
+      functionalRoles: [],
+      user: null,
+      employee: null,
+      jwtRole: 'platform',
+      permissions: [],
+      isOrgOwner: false,
+      isHrManager: false,
+      isHrExecutive: false,
+      isPayrollAdmin: false,
+      isLineManager: false,
+      isProjectManager: false,
+      isExecutive: false,
+      isPlatformOperator: true,
+    };
+  }
+
   const roleInfo = await resolveRoleBuckets(decoded, req);
   const permissions = permissionsFromBuckets(roleInfo.buckets);
   return {
@@ -170,6 +190,7 @@ export const resolveAuthContext = async (decoded, req = {}) => {
     isLineManager: roleInfo.buckets.includes(ROLE_BUCKETS.LINE_MANAGER),
     isProjectManager: roleInfo.buckets.includes(ROLE_BUCKETS.PROJECT_MANAGER),
     isExecutive: roleInfo.buckets.includes(ROLE_BUCKETS.EXECUTIVE),
+    isPlatformOperator: false,
   };
 };
 

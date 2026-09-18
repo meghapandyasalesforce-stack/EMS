@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createSurvey,
     getSurveys,
@@ -33,6 +35,8 @@ import { PERMISSIONS } from '../../config/permissions.constants.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.ENGAGEMENT));
 
 const surveyManage = requireAnyPermission([
     PERMISSIONS.ENGAGEMENT_SURVEY_MANAGE,

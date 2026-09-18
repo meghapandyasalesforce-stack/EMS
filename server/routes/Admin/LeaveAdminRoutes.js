@@ -1,4 +1,6 @@
 import express from "express";
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import { getAllLeaves, getLeaveStatistics, updateLeaveStatus, downloadLeaveDocument } from "../../controllers/leave/leaveAdminController.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
@@ -6,6 +8,8 @@ import { leaveLimiter } from "../../middlewares/endpointRateLimiters.js";
 import { writeLimiter, readLimiter } from "../../middlewares/rateLimiter.js";
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LEAVE));
  
 // Get all leaves - with rate limiting
 // Allow HR and Managers to access this endpoint for managing leave requests

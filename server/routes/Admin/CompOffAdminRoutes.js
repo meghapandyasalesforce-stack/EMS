@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     getAllCompOffRequests,
     approveCompOff,
@@ -8,6 +10,8 @@ import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManage
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.ATTENDANCE));
 
 // Admin/HR/Manager routes
 router.route('/requests')

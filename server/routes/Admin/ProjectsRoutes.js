@@ -1,5 +1,7 @@
 
 import express from "express";
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import { 
     createProject, 
     deleteProject, 
@@ -33,6 +35,8 @@ import { writeLimiter } from "../../middlewares/rateLimiter.js";
 import { projectValidations } from "../../middlewares/inputValidation.js";
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.PROJECTS));
 
 // Get all projects (for dashboard - root endpoint) - with rate limiting
 // Allow managers to view projects they manage or in their department

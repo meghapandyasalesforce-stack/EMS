@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     requestLeaveEncashment,
     getEncashmentHistory
@@ -8,6 +10,8 @@ import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROr
 import { approveLeaveEncashment } from '../../controllers/leave/leaveEncashmentController.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LEAVE));
 
 // Employee routes
 router.route('/request')

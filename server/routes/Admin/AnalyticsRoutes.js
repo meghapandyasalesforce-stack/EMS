@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     getHRAnalytics,
     getManagerAnalytics
@@ -8,6 +10,8 @@ import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
 import { readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.ANALYTICS));
 
 // HR Analytics - Allow HR, admins, and executives
 router.route('/hr')

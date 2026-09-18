@@ -1,4 +1,6 @@
 import express from "express";
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createLeave,
     getMyLeaves,
@@ -12,6 +14,8 @@ import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import { readLimiter } from "../../middlewares/rateLimiter.js";
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LEAVE));
 
 router.route("/create-leave").post(isAuthenticated, createLeave);
 

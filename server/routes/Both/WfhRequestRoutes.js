@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createWfhRequest,
     getMyWfhRequests,
@@ -9,6 +11,8 @@ import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.ATTENDANCE));
 
 // Employee: submit + view own WFH requests
 router.route('/').post(isAuthenticated, createWfhRequest);

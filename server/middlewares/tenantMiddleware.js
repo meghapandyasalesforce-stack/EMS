@@ -20,6 +20,7 @@ const TENANT_EXEMPT_PREFIXES = [
     '/api/v1/public/',
     '/api/v1/both/auth',
     '/api/v1/admin/auth',
+    '/api/v1/platform/',
     '/api/v1/employee/auth/login',
     '/api/v1/employee/auth/refresh-token',
     '/api/push',

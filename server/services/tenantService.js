@@ -64,9 +64,13 @@ export const attachTenantToRequest = async (req) => {
     const plan = getPlanDetails(planId) || getPlanDetails('free');
     const maxEmployees = org.maxEmployees ?? plan.maxEmployees ?? getPlanMaxEmployees(planId);
     const planFeatures = getPlanModuleFeatures(planId);
-    const orgFeatureOverrides = org.settings?.features && typeof org.settings.features === 'object'
-        ? org.settings.features
-        : {};
+    const rawOverrides = org.settings?.features;
+    const orgFeatureOverrides =
+        rawOverrides instanceof Map
+            ? Object.fromEntries(rawOverrides)
+            : rawOverrides && typeof rawOverrides === 'object'
+                ? rawOverrides
+                : {};
 
     const features = { ...planFeatures };
     Object.keys(orgFeatureOverrides).forEach((key) => {

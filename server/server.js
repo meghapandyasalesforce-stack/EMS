@@ -280,6 +280,12 @@ const startServer = async () => {
       await connectDB();
       logger.info("MongoDB connected successfully");
       try {
+        const { ensurePlansSeeded } = await import('./helpers/planCatalog.js');
+        await ensurePlansSeeded();
+      } catch (planSeedError) {
+        logger.warn('Subscription plan seed/cache skipped', { error: planSeedError.message });
+      }
+      try {
         const Employee = (await import('./models/employee.model.js')).default;
         const { dropGlobalEmployeeIdUniqueIndex } = await import('./helpers/employeeIdHelper.js');
         await dropGlobalEmployeeIdUniqueIndex(Employee);

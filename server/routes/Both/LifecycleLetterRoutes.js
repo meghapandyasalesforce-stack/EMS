@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     listMyLetters,
     viewLetterHandler,
@@ -8,6 +10,8 @@ import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import { readLimiter, writeLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LIFECYCLE));
 
 router.route('/letters/mine')
     .get(isAuthenticated, readLimiter, listMyLetters);

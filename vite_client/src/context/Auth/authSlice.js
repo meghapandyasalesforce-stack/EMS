@@ -41,6 +41,10 @@ export const checkAuthSession = createAsyncThunk(
         roleBuckets: permData.roleBuckets || [],
         permissionFlags: permData.permissionFlags || permData.flags || {},
         dataScope: permData.dataScope || 'self',
+        saasFeatures: permData.saasFeatures || {},
+        planId: permData.planId || null,
+        planName: permData.planName || null,
+        subscriptionStatus: permData.subscriptionStatus || null,
       };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Session invalid');
@@ -84,6 +88,10 @@ const authSlice = createSlice({
     roleBuckets: [],
     permissionFlags: {},
     dataScope: 'self',
+    saasFeatures: {},
+    planId: null,
+    planName: null,
+    subscriptionStatus: null,
     activePortal: null,
     availablePortals: [],
     error: null,
@@ -103,12 +111,20 @@ const authSlice = createSlice({
       state.roleBuckets = p.roleBuckets || [];
       state.permissionFlags = p.permissionFlags || {};
       state.dataScope = p.dataScope || 'self';
+      if (p.saasFeatures) state.saasFeatures = p.saasFeatures;
+      if (p.planId !== undefined) state.planId = p.planId;
+      if (p.planName !== undefined) state.planName = p.planName;
+      if (p.subscriptionStatus !== undefined) state.subscriptionStatus = p.subscriptionStatus;
     },
     clearAuthPermissions: (state) => {
       state.permissions = [];
       state.roleBuckets = [];
       state.permissionFlags = {};
       state.dataScope = 'self';
+      state.saasFeatures = {};
+      state.planId = null;
+      state.planName = null;
+      state.subscriptionStatus = null;
     },
     setActivePortal: (state, action) => {
       const portalId = action.payload;
@@ -194,6 +210,10 @@ const authSlice = createSlice({
         state.roleBuckets = action.payload?.roleBuckets || [];
         state.permissionFlags = permissionFlags;
         state.dataScope = action.payload?.dataScope || 'self';
+        state.saasFeatures = action.payload?.saasFeatures || {};
+        state.planId = action.payload?.planId || null;
+        state.planName = action.payload?.planName || null;
+        state.subscriptionStatus = action.payload?.subscriptionStatus || null;
         state.error = null;
         state.authChecked = true;
         state.sessionValidated = true;
@@ -237,6 +257,10 @@ const authSlice = createSlice({
         state.roleBuckets = [];
         state.permissionFlags = {};
         state.dataScope = 'self';
+        state.saasFeatures = {};
+        state.planId = null;
+        state.planName = null;
+        state.subscriptionStatus = null;
         state.activePortal = null;
         state.availablePortals = [];
         state.error = null;

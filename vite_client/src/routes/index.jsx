@@ -10,6 +10,7 @@ import { Route } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
 import ProtectedRoute from '../components/ProtectedRoute';
+import PlatformProtectedRoute from '../components/PlatformProtectedRoute';
 import { ROUTE_PERMISSIONS } from '../utils/permissions';
 
 // Helper to create lazy route element (unprotected - for auth routes)
@@ -111,7 +112,62 @@ export const authRoutes = [
     path: '/application/:token',
     component: lazy(() => import('../Public/ApplicationSelfServicePortal')),
     message: 'Loading application portal...'
+  },
+  {
+    path: '/platform/login',
+    component: lazy(() => import('../Platform/Login')),
+    message: 'Loading platform login...'
   }
+];
+
+/** SaaS platform control panel (shell + nested pages) */
+export const platformShellRoute = {
+  path: '/platform',
+  component: lazy(() => import('../Platform/layout/PlatformShell')),
+  message: 'Loading control panel...',
+};
+
+export const platformChildRoutes = [
+  {
+    path: '',
+    component: lazy(() => import('../Platform/Dashboard')),
+    message: 'Loading dashboard...',
+  },
+  {
+    path: 'organizations',
+    component: lazy(() => import('../Platform/OrganizationsList')),
+    message: 'Loading organizations...',
+  },
+  {
+    path: 'organizations/new',
+    component: lazy(() => import('../Platform/CreateOrganization')),
+    message: 'Loading create organization...',
+  },
+  {
+    path: 'organizations/:orgId',
+    component: lazy(() => import('../Platform/OrganizationDetail')),
+    message: 'Loading organization...',
+  },
+  {
+    path: 'plans',
+    component: lazy(() => import('../Platform/PlansPage')),
+    message: 'Loading plans...',
+  },
+  {
+    path: 'feature-catalog',
+    component: lazy(() => import('../Platform/FeatureCatalogPage')),
+    message: 'Loading feature catalog...',
+  },
+  {
+    path: 'operators',
+    component: lazy(() => import('../Platform/OperatorsPage')),
+    message: 'Loading operators...',
+  },
+  {
+    path: 'audit-logs',
+    component: lazy(() => import('../Platform/AuditLogsPage')),
+    message: 'Loading audit logs...',
+  },
 ];
 
 // Dashboard routes - allowedRoles restrict who can open each dashboard by URL
@@ -338,5 +394,42 @@ export const renderProtectedRoutes = (routes) => {
     if (route.condition && !route.condition()) return null;
     return createProtectedLazyRoute(route);
   }).filter(Boolean);
+};
+
+/**
+ * Render platform control-panel shell with nested protected child routes.
+ */
+export const renderPlatformRoutes = () => {
+  const Shell = platformShellRoute.component;
+  return (
+    <Route
+      key="/platform"
+      path="/platform"
+      element={
+        <PlatformProtectedRoute>
+          <RouteErrorBoundary>
+            <Suspense fallback={<LoadingSpinner message={platformShellRoute.message} />}>
+              <Shell />
+            </Suspense>
+          </RouteErrorBoundary>
+        </PlatformProtectedRoute>
+      }
+    >
+      {platformChildRoutes.map((route) => (
+        <Route
+          key={route.path || 'index'}
+          index={route.path === ''}
+          path={route.path === '' ? undefined : route.path}
+          element={
+            <RouteErrorBoundary>
+              <Suspense fallback={<LoadingSpinner message={route.message} />}>
+                <route.component />
+              </Suspense>
+            </RouteErrorBoundary>
+          }
+        />
+      ))}
+    </Route>
+  );
 };
 

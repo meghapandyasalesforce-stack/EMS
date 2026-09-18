@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createLeavePolicy,
     getAllLeavePolicies,
@@ -22,6 +24,8 @@ import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROr
 import isAuthenticatedBoth from '../../middlewares/isAuthenticatedBoth.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LEAVE));
 
 // Balance routes — must be registered BEFORE /:id to avoid route shadowing
 router.route('/balance/recalculate')

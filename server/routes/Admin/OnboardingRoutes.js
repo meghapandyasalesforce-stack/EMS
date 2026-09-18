@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createOnboardingWorkflow,
     getOnboardingWorkflows,
@@ -43,6 +45,8 @@ import { upload } from '../../controllers/fileUpload/uploadConfigController.js';
 import { uploadOffboardingExperienceLetter } from '../../controllers/document/documentController.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LIFECYCLE));
 
 // Analytics BEFORE :id routes to avoid "analytics" being captured as id
 router.route('/onboarding/analytics')

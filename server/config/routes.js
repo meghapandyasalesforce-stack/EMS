@@ -87,6 +87,8 @@ import payrollReportsRouter from "../routes/Admin/PayrollReportsRoutes.js";
 import auditLogRouter from "../routes/Admin/AuditLogRoutes.js";
 import platformRolesRouter from "../routes/Admin/PlatformRolesRoutes.js";
 import orgStructureRouter from "../routes/Admin/OrgStructureRoutes.js";
+import platformAuthRouter from "../routes/Platform/PlatformAuthRoutes.js";
+import platformOrgRouter from "../routes/Platform/PlatformOrgRoutes.js";
 
 import employeeDocumentRequestRouter from "../routes/employeeDocumentRequestRoutes.js";
 import documentTemplateRouter from "../routes/documentTemplateRoutes.js";
@@ -106,6 +108,10 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/public/lifecycle", lifecyclePortalRouter);
   app.use("/api/v1/public/recruitment", recruitmentPortalRouter);
   app.use("/api/v1/public/recruitment", candidateSelfServiceRouter);
+
+  // SaaS platform control panel (cross-tenant; tenant middleware exempt)
+  app.use("/api/v1/platform/auth", platformAuthRouter);
+  app.use("/api/v1/platform", platformOrgRouter);
   
   // Organization routes (public - for registration and login)
   app.use("/api/v1/organization/auth", organizationAuthRouter);

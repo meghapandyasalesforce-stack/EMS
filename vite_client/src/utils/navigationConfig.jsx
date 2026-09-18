@@ -18,6 +18,7 @@ import { mergeSessionProfile } from './profileUtils';
 import { isProjectManager } from './projectManagerHelper';
 import { PERMISSIONS, filterNavByPermissions } from './permissions';
 import { SYSTEM_ROLE_IDS } from './systemRoles';
+import { filterNavBySaasFeatures } from '../constants/saasFeatures';
 
 /**
  * Get navigation items based on user role, department, and position
@@ -163,7 +164,8 @@ export const getNavigationItems = (
     employee,
     permissions = [],
     permissionFlags = {},
-    activePortal = null
+    activePortal = null,
+    saasFeatures = {}
 ) => {
     const profile = mergeSessionProfile(user, employee);
     const role = profile?.role || 'employee';
@@ -172,14 +174,17 @@ export const getNavigationItems = (
     const jobTitle = (profile?.jobTitle || '').toLowerCase().trim();
 
     if (activePortal) {
-        return getNavigationForPortal(activePortal, {
-            position,
-            department,
-            jobTitle,
-            profile,
-            permissions,
-            permissionFlags,
-        });
+        return filterNavBySaasFeatures(
+            getNavigationForPortal(activePortal, {
+                position,
+                department,
+                jobTitle,
+                profile,
+                permissions,
+                permissionFlags,
+            }),
+            saasFeatures
+        );
     }
 
     let items =
@@ -215,7 +220,10 @@ export const getNavigationItems = (
         }
     }
 
-    return filterNavByPermissions(items, permissions);
+    return filterNavBySaasFeatures(
+        filterNavByPermissions(items, permissions),
+        saasFeatures
+    );
 };
 
 /**

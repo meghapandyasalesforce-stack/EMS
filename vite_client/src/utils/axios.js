@@ -1,6 +1,6 @@
 import axios from 'axios';
 import logger from './logger.js';
-import { isPublicGuestRoute } from './authSessionUtils.js';
+import { isPublicGuestRoute, isPlatformRoute } from './authSessionUtils.js';
 
 /**
  * Clear persisted auth and UI state before redirecting to login on 401.
@@ -19,7 +19,8 @@ function clearAuthAndRedirectToLogin() {
   } catch (e) {
     logger.warn('clearAuthAndRedirectToLogin', e?.message);
   }
-  window.location.href = '/login';
+  const isPlatform = window.location.pathname.startsWith('/platform');
+  window.location.href = isPlatform ? '/platform/login' : '/login';
 }
 
 /** Session probe calls — reject quietly; never refresh tokens or redirect to login.
@@ -31,7 +32,8 @@ function isSessionProbeRequest(url = '') {
 
 function maybeRedirectToLoginOn401(errorCode) {
   // Logout only via explicit Logout button — never on generic 401 or refresh failure.
-  if (errorCode === 'PASSWORD_CHANGED') {
+  // PASSWORD_CHANGED and hard platform refresh failures clear session and redirect.
+  if (errorCode === 'PASSWORD_CHANGED' || errorCode === 'PLATFORM_SESSION_DEAD') {
     clearAuthAndRedirectToLogin();
   }
 }
@@ -479,11 +481,13 @@ instance.interceptors.response.use(
     // Handle 401 errors - attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       const requestUrl = originalRequest.url || '';
-      const onPublicGuestRoute =
-        typeof window !== 'undefined' &&
-        isPublicGuestRoute(window.location.pathname);
+      const pathname =
+        typeof window !== 'undefined' ? window.location.pathname : '';
+      const onPublicGuestRoute = isPublicGuestRoute(pathname);
+      const onPlatformRoute = isPlatformRoute(pathname);
 
       // Guest/public pages must never trigger refresh or HRMS login redirects.
+      // Platform control panel is NOT a guest portal — it may refresh tokens.
       if (onPublicGuestRoute) {
         return Promise.reject(error);
       }
@@ -559,6 +563,9 @@ instance.interceptors.response.use(
         if (!refreshTokenPresent) {
           isRefreshing = false;
           processQueue(error, null);
+          if (onPlatformRoute) {
+            maybeRedirectToLoginOn401('PLATFORM_SESSION_DEAD');
+          }
           return Promise.reject(error);
         }
 
@@ -582,7 +589,7 @@ instance.interceptors.response.use(
           
           // If no role cookie found, try to infer from token payload (last resort)
           // Note: This is a fallback - role should always be in cookie after login
-          if (role === 'employee' && refreshToken) {
+          if ((role === 'employee' || !role) && refreshToken) {
             try {
               // Decode JWT token to get role (without verification, just for endpoint selection)
               const tokenParts = refreshToken.split('.');
@@ -598,10 +605,17 @@ instance.interceptors.response.use(
           // Fallback to employee if role cannot be determined
           role = 'employee';
         }
+
+        if (onPlatformRoute || role === 'platform') {
+          role = 'platform';
+        }
         
-        const refreshEndpoint = role === 'admin' 
-          ? '/v1/admin/auth/refresh-token'
-          : '/v1/employee/auth/refresh-token';
+        const refreshEndpoint =
+          role === 'platform'
+            ? '/v1/platform/auth/refresh-token'
+            : role === 'admin'
+              ? '/v1/admin/auth/refresh-token'
+              : '/v1/employee/auth/refresh-token';
 
         // Call refresh token endpoint
         // SECURITY FIX: Refresh token is sent automatically via httpOnly cookie
@@ -642,6 +656,11 @@ instance.interceptors.response.use(
           originalRequest.headers['x-csrf-token'] = newCsrfToken;
           // CSRF token is stored in cookie by server, but we also need it in header
           // This is safe because CSRF tokens are not sensitive (they're meant to be readable)
+          try {
+            localStorage.setItem('csrfToken', newCsrfToken);
+          } catch {
+            // ignore
+          }
         }
 
         // Process queued requests (pass token for Authorization header, but don't store)
@@ -654,6 +673,10 @@ instance.interceptors.response.use(
         // Refresh failed - clear persisted auth so login page doesn't redirect back to dashboard (fixes loop when user deleted or session invalid)
         processQueue(refreshError, null);
         isRefreshing = false;
+
+        if (onPlatformRoute) {
+          maybeRedirectToLoginOn401('PLATFORM_SESSION_DEAD');
+        }
 
         return Promise.reject(refreshError);
       }

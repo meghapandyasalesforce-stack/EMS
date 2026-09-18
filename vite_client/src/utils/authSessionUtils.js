@@ -149,6 +149,12 @@ export function isPublicGuestRoute(pathname) {
   );
 }
 
+/** SaaS platform control-panel routes (separate from HRMS guest portals). */
+export function isPlatformRoute(pathname) {
+  if (!pathname || typeof pathname !== 'string') return false;
+  return pathname.startsWith('/platform');
+}
+
 /** Allow only internal Career Portal return paths after login. */
 export function getSafeCareerReturnTo(value) {
   if (!value || typeof value !== 'string') return null;

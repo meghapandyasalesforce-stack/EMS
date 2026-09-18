@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     uploadDocument,
     approveDocument,
@@ -15,6 +17,8 @@ import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 import { upload } from '../../controllers/fileUpload/uploadConfigController.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.DOCUMENTS));
 
 // Upload Document (multipart field name: "document")
 router.route('/upload')
