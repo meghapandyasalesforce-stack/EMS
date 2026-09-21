@@ -25,7 +25,6 @@ const PersonalTab = ({ employee }) => {
     { label: 'National ID Type', value: employee.nationalIdType },
     { label: 'National ID Number', value: employee.nationalId },
     { label: 'Emergency Contact', value: getEmergencyContactSummary(employee) },
-    { label: 'Professional Bio', value: employee.professionalBio || '—' },
   ];
 
   return (

@@ -16,7 +16,7 @@ const ACTIVE_STATUSES = ['active'];
 export const buildActiveEmployeeFilter = (organizationId, { department, jobTitle } = {}) => {
     const filter = {
         organizationId,
-        status: { $in: ACTIVE_STATUSES }
+        status: { $in: ACTIVE_STATUSES },
     };
     if (department) filter.department = department;
     if (jobTitle) filter.jobTitle = jobTitle;

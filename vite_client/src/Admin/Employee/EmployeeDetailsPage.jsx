@@ -16,7 +16,6 @@ import {
   Select,
   MenuItem,
   Box,
-  Grid,
 } from '@mui/material';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -24,6 +23,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { FiChevronRight, FiEdit, FiStar } from 'react-icons/fi';
 import { isHR, isManager } from '../../utils/managerHelper';
 import { checkAuthSession } from '../../context/Auth/authSlice';
+import { ORG_POSITION_LEVELS } from '../../constants/orgPositionLevels';
 import {
   fetchEmployeeDetails,
   updateEmployeeStatus,
@@ -115,7 +115,12 @@ const EmployeeDetailsPage = () => {
     probationStartDate: '',
     probationEndDate: '',
     probationConfirmedAt: '',
+    shiftId: '',
   });
+  const [shiftOptions, setShiftOptions] = useState([
+    { key: 'shift1', name: 'Shift 1', startTime: '09:00', endTime: '17:00' },
+    { key: 'shift2', name: 'Shift 2', startTime: '21:00', endTime: '06:00' },
+  ]);
   const [editPerformanceForm, setEditPerformanceForm] = useState({ performanceScore: '' });
   const [editPayrollSettingsForm, setEditPayrollSettingsForm] = useState({
     deductPf: true,
@@ -208,9 +213,10 @@ const EmployeeDetailsPage = () => {
     }
     try {
       setLoadingDropdownOptions(true);
-      const [managersRes, jobTitlesRes] = await Promise.all([
+      const [managersRes, jobTitlesRes, shiftsRes] = await Promise.all([
         axiosInstance.get('/v1/admin/employee/managers?limit=500', { withCredentials: true }),
         axiosInstance.get('/v1/admin/employee/job-titles', { withCredentials: true }),
+        axiosInstance.get('/v1/admin/attendance-rules/shifts', { withCredentials: true }).catch(() => null),
       ]);
       const managersData = managersRes?.data;
       const managerList = Array.isArray(managersData?.data)
@@ -222,6 +228,10 @@ const EmployeeDetailsPage = () => {
         : Array.isArray(titlesData?.jobTitles) ? titlesData.jobTitles : [];
       setManagerOptions(managerList);
       setJobTitleOptions(titleList);
+      const shiftData = shiftsRes?.data?.data || shiftsRes?.data || {};
+      if (Array.isArray(shiftData.shifts) && shiftData.shifts.length) {
+        setShiftOptions(shiftData.shifts);
+      }
     } catch {
       setManagerOptions([]);
       setJobTitleOptions([]);
@@ -361,17 +371,28 @@ const EmployeeDetailsPage = () => {
   const handleEditWorkClick = () => {
     const toDateInput = (value) =>
       value ? new Date(value).toISOString().split('T')[0] : '';
+    const rawManagerId =
+      employee.managerId && typeof employee.managerId === 'object'
+        ? employee.managerId._id || employee.managerId.id
+        : employee.managerId;
     setEditWorkForm({
       jobTitle: employee.jobTitle || '',
       department: employee.department || '',
       position: employee.position || '',
-      manager: employee.managerId || employee.manager || '',
+      manager: rawManagerId
+        ? String(rawManagerId)
+        : employee.isOrgOwnerRoot ||
+            !employee.manager ||
+            ['Admin', 'CEO', 'None'].includes(String(employee.manager).trim())
+          ? 'Admin'
+          : employee.manager || '',
       salary: employee.salary != null ? employee.salary : '',
       joiningDate: toDateInput(employee.joiningDate),
       probationStatus: employee.probation?.status || 'None',
       probationStartDate: toDateInput(employee.probation?.startDate),
       probationEndDate: toDateInput(employee.probation?.endDate),
       probationConfirmedAt: toDateInput(employee.probation?.confirmedAt),
+      shiftId: employee.shiftId || '',
     });
     setOpenEditWorkDialog(true);
   };
@@ -415,6 +436,23 @@ const EmployeeDetailsPage = () => {
   };
 
   const handleSaveWorkInfo = async () => {
+    if (!String(editWorkForm.jobTitle || '').trim()) {
+      setSnackbar({ open: true, message: 'Please select a job title.', severity: 'error' });
+      return;
+    }
+    if (!String(editWorkForm.department || '').trim()) {
+      setSnackbar({ open: true, message: 'Please select a department.', severity: 'error' });
+      return;
+    }
+    if (!String(editWorkForm.position || '').trim()) {
+      setSnackbar({ open: true, message: 'Please select a position.', severity: 'error' });
+      return;
+    }
+    if (!String(editWorkForm.manager || '').trim()) {
+      setSnackbar({ open: true, message: 'Please select a manager (or None for org root).', severity: 'error' });
+      return;
+    }
+
     let salaryValue = employee?.salary ?? 0;
     if (!hidePayrollForHrExecutive) {
       salaryValue =
@@ -427,22 +465,30 @@ const EmployeeDetailsPage = () => {
       }
     }
 
+    const managerValue = ['None', 'none', 'CEO'].includes(String(editWorkForm.manager).trim())
+      ? 'Admin'
+      : editWorkForm.manager;
+
     const workData = {
-      jobTitle: editWorkForm.jobTitle,
-      department: editWorkForm.department,
-      position: editWorkForm.position,
-      manager: editWorkForm.manager,
+      jobTitle: String(editWorkForm.jobTitle).trim(),
+      department: String(editWorkForm.department).trim(),
+      position: String(editWorkForm.position).trim(),
+      manager: managerValue,
       salary: salaryValue,
-      joiningDate: editWorkForm.joiningDate
-        ? new Date(editWorkForm.joiningDate).toISOString()
-        : null,
       probation: {
         status: editWorkForm.probationStatus || 'None',
         startDate: editWorkForm.probationStartDate || null,
         endDate: editWorkForm.probationEndDate || null,
         confirmedAt: editWorkForm.probationConfirmedAt || null,
       },
+      shiftId: editWorkForm.shiftId || '',
+      shiftName: editWorkForm.shiftId
+        ? (shiftOptions.find((s) => s.key === editWorkForm.shiftId) || {}).name || ''
+        : '',
     };
+    if (editWorkForm.joiningDate) {
+      workData.joiningDate = new Date(editWorkForm.joiningDate).toISOString();
+    }
 
     const resultAction = await dispatch(
       updateEmployeeWorkInfo({
@@ -799,70 +845,142 @@ const EmployeeDetailsPage = () => {
         maxWidth="md"
         fullWidth
         fullScreen={isMobile}
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            maxWidth: 760,
+            overflow: 'visible',
+          },
+        }}
       >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FiEdit /> Edit work information
+        <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.125rem', fontWeight: 500 }}>
+            <FiEdit size={18} /> Edit work information
           </Box>
         </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ pt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Job title</InputLabel>
-                <Select
-                  value={editWorkForm.jobTitle}
-                  onChange={handleEditWorkFormChange('jobTitle')}
-                  label="Job title"
-                  disabled={loadingDropdownOptions}
-                >
-                  {editWorkForm.jobTitle && !jobTitleOptions.includes(editWorkForm.jobTitle) && (
-                    <MenuItem value={editWorkForm.jobTitle}>{editWorkForm.jobTitle}</MenuItem>
-                  )}
-                  {jobTitleOptions.map((t) => (
-                    <MenuItem key={t} value={t}>{t}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Department</InputLabel>
-                <Select
-                  value={editWorkForm.department}
-                  onChange={handleEditWorkFormChange('department')}
-                  label="Department"
-                >
-                  {['Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations', 'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration'].map((d) => (
-                    <MenuItem key={d} value={d}>{d}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Position</InputLabel>
-                <Select
-                  value={editWorkForm.position}
-                  onChange={handleEditWorkFormChange('position')}
-                  label="Position"
-                >
-                  {['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO'].map((p) => (
-                    <MenuItem key={p} value={p}>{p}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Manager</InputLabel>
-                <Select
-                  value={editWorkForm.manager}
-                  onChange={handleEditWorkFormChange('manager')}
-                  label="Manager"
-                  disabled={loadingDropdownOptions}
-                >
-                  {managerOptions.map((m) => {
+        <DialogContent
+          sx={{
+            px: 3,
+            // MUI sets padding-top: 0 when DialogContent follows DialogTitle, which clips outlined labels
+            pt: '24px !important',
+            pb: 1,
+            overflow: 'visible',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: '1fr 1fr',
+                md: 'repeat(4, minmax(0, 1fr))',
+              },
+            }}
+          >
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel id="edit-work-job-title-label" shrink>
+                Job title
+              </InputLabel>
+              <Select
+                labelId="edit-work-job-title-label"
+                value={editWorkForm.jobTitle || ''}
+                onChange={handleEditWorkFormChange('jobTitle')}
+                label="Job title"
+                notched
+                displayEmpty
+                disabled={loadingDropdownOptions}
+                renderValue={(selected) =>
+                  selected ? selected : <span style={{ color: '#94a3b8' }}>Select job title</span>
+                }
+              >
+                <MenuItem value="">
+                  <span style={{ color: '#94a3b8' }}>Select job title</span>
+                </MenuItem>
+                {editWorkForm.jobTitle && !jobTitleOptions.includes(editWorkForm.jobTitle) && (
+                  <MenuItem value={editWorkForm.jobTitle}>{editWorkForm.jobTitle}</MenuItem>
+                )}
+                {jobTitleOptions.map((t) => (
+                  <MenuItem key={t} value={t}>{t}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel id="edit-work-department-label" shrink>
+                Department
+              </InputLabel>
+              <Select
+                labelId="edit-work-department-label"
+                value={editWorkForm.department || ''}
+                onChange={handleEditWorkFormChange('department')}
+                label="Department"
+                notched
+                displayEmpty
+                renderValue={(selected) =>
+                  selected ? selected : <span style={{ color: '#94a3b8' }}>Select department</span>
+                }
+              >
+                <MenuItem value="">
+                  <span style={{ color: '#94a3b8' }}>Select department</span>
+                </MenuItem>
+                {['Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations', 'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration'].map((d) => (
+                  <MenuItem key={d} value={d}>{d}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel id="edit-work-position-label" shrink>
+                Position
+              </InputLabel>
+              <Select
+                labelId="edit-work-position-label"
+                value={editWorkForm.position || ''}
+                onChange={handleEditWorkFormChange('position')}
+                label="Position"
+                notched
+                displayEmpty
+                renderValue={(selected) =>
+                  selected ? selected : <span style={{ color: '#94a3b8' }}>Select position</span>
+                }
+              >
+                <MenuItem value="">
+                  <span style={{ color: '#94a3b8' }}>Select position</span>
+                </MenuItem>
+                {ORG_POSITION_LEVELS.map((p) => (
+                  <MenuItem key={p} value={p}>{p}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel id="edit-work-manager-label" shrink>
+                Manager
+              </InputLabel>
+              <Select
+                labelId="edit-work-manager-label"
+                value={editWorkForm.manager || ''}
+                onChange={handleEditWorkFormChange('manager')}
+                label="Manager"
+                notched
+                displayEmpty
+                disabled={loadingDropdownOptions}
+                renderValue={(selected) => {
+                  if (!selected) return <span style={{ color: '#94a3b8' }}>Select manager</span>;
+                  if (selected === 'Admin' || selected === 'CEO' || selected === 'None') return 'None';
+                  const match = managerOptions.find((m) => String(m?._id) === String(selected));
+                  if (match) return `${match.name || ''} ${match.lastName || ''}`.trim() || String(selected);
+                  return String(selected);
+                }}
+              >
+                <MenuItem value="">
+                  <span style={{ color: '#94a3b8' }}>Select manager</span>
+                </MenuItem>
+                <MenuItem value="Admin">None</MenuItem>
+                {managerOptions
+                  .filter((m) => String(m?._id) !== String(employee?._id))
+                  .map((m) => {
                     const id = m?._id;
                     const name = `${m?.name || ''} ${m?.lastName || ''}`.trim();
                     return (
@@ -871,11 +989,22 @@ const EmployeeDetailsPage = () => {
                       </MenuItem>
                     );
                   })}
-                </Select>
-              </FormControl>
-            </Grid>
-            {!hidePayrollForHrExecutive && (
-            <Grid item xs={12} md={6}>
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: hidePayrollForHrExecutive ? '1fr 1fr' : 'repeat(3, minmax(0, 1fr))',
+              },
+              mt: 2,
+            }}
+          >
+            {!hidePayrollForHrExecutive ? (
               <TextField
                 fullWidth
                 size="small"
@@ -883,25 +1012,66 @@ const EmployeeDetailsPage = () => {
                 type="number"
                 value={editWorkForm.salary}
                 onChange={handleEditWorkFormChange('salary')}
-                InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography> }}
-              />
-            </Grid>
-            )}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Joining date"
-                type="date"
-                value={editWorkForm.joiningDate}
-                onChange={handleEditWorkFormChange('joiningDate')}
+                placeholder="Enter salary"
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  startAdornment: (
+                    <Typography component="span" sx={{ mr: 1, color: 'text.secondary' }}>
+                      ₹
+                    </Typography>
+                  ),
+                }}
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            ) : null}
+            <TextField
+              fullWidth
+              size="small"
+              label="Joining date"
+              type="date"
+              value={editWorkForm.joiningDate}
+              onChange={handleEditWorkFormChange('joiningDate')}
+              placeholder="dd-mm-yyyy"
+              InputLabelProps={{ shrink: true }}
+            />
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel id="edit-work-shift-label" shrink>
+                Shift
+              </InputLabel>
+              <Select
+                labelId="edit-work-shift-label"
+                value={editWorkForm.shiftId || ''}
+                onChange={handleEditWorkFormChange('shiftId')}
+                label="Shift"
+                notched
+                displayEmpty
+              >
+                <MenuItem value="">
+                  <span style={{ color: '#94a3b8' }}>No Shift</span>
+                </MenuItem>
+                {shiftOptions.map((s) => (
+                  <MenuItem key={s.key} value={s.key}>
+                    {s.name}
+                    {s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' },
+              mt: 2,
+              alignItems: 'start',
+            }}
+          >
+            <Box>
               <FormControl fullWidth size="small">
-                <InputLabel>Probation status</InputLabel>
+                <InputLabel id="edit-work-probation-status-label">Probation status</InputLabel>
                 <Select
+                  labelId="edit-work-probation-status-label"
                   value={
                     getAllowedProbationStatuses(
                       employee?.probation?.status || 'None',
@@ -923,7 +1093,11 @@ const EmployeeDetailsPage = () => {
                   ))}
                 </Select>
               </FormControl>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.75, lineHeight: 1.4 }}
+              >
                 {allowProbationAfterJoining
                   ? 'Synced with Lifecycle. This organization allows starting or restarting probation after joining.'
                   : normalizeProbationStatus(employee?.probation?.status) === 'None'
@@ -933,57 +1107,61 @@ const EmployeeDetailsPage = () => {
                       ? 'You can extend or reduce the end date, or confirm probation. Restarting after confirmation is disabled for this organization.'
                       : 'Probation is complete. This organization does not allow putting the employee on probation again.'}
               </Typography>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Probation start"
-                type="date"
-                value={editWorkForm.probationStartDate}
-                onChange={handleEditWorkFormChange('probationStartDate')}
-                InputLabelProps={{ shrink: true }}
-                disabled={
-                  !allowProbationAfterJoining &&
-                  normalizeProbationStatus(employee?.probation?.status) === 'None'
-                }
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Probation end"
-                type="date"
-                value={editWorkForm.probationEndDate}
-                onChange={handleEditWorkFormChange('probationEndDate')}
-                InputLabelProps={{ shrink: true }}
-                disabled={
-                  !allowProbationAfterJoining &&
-                  !['Active', 'Extended'].includes(
-                    normalizeProbationStatus(employee?.probation?.status)
-                  )
-                }
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Confirmed on"
-                type="date"
-                value={editWorkForm.probationConfirmedAt}
-                onChange={handleEditWorkFormChange('probationConfirmedAt')}
-                InputLabelProps={{ shrink: true }}
-                disabled={
-                  !allowProbationAfterJoining &&
-                  normalizeProbationStatus(employee?.probation?.status) === 'None'
-                }
-              />
-            </Grid>
-          </Grid>
+            </Box>
+            <TextField
+              fullWidth
+              size="small"
+              label="Probation start"
+              type="date"
+              value={editWorkForm.probationStartDate}
+              onChange={handleEditWorkFormChange('probationStartDate')}
+              InputLabelProps={{ shrink: true }}
+              disabled={
+                !allowProbationAfterJoining &&
+                normalizeProbationStatus(employee?.probation?.status) === 'None'
+              }
+            />
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              mt: 2,
+            }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              label="Probation end"
+              type="date"
+              value={editWorkForm.probationEndDate}
+              onChange={handleEditWorkFormChange('probationEndDate')}
+              InputLabelProps={{ shrink: true }}
+              disabled={
+                !allowProbationAfterJoining &&
+                !['Active', 'Extended'].includes(
+                  normalizeProbationStatus(employee?.probation?.status)
+                )
+              }
+            />
+            <TextField
+              fullWidth
+              size="small"
+              label="Confirmed on"
+              type="date"
+              value={editWorkForm.probationConfirmedAt}
+              onChange={handleEditWorkFormChange('probationConfirmedAt')}
+              InputLabelProps={{ shrink: true }}
+              disabled={
+                !allowProbationAfterJoining &&
+                normalizeProbationStatus(employee?.probation?.status) === 'None'
+              }
+            />
+          </Box>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={() => setOpenEditWorkDialog(false)} disabled={updatingWorkInfo}>
             Cancel
           </Button>

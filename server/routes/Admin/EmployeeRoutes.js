@@ -5,6 +5,7 @@ import {
   calculateEmployeeStats,
   promoteEmployeeToHrManager,
   updateEmployeePayrollSettings,
+  bulkAssignEmployeeShift,
 } from '../../controllers/admin/employeeController.js';
 import {
   getManagers,
@@ -40,6 +41,10 @@ router.route('/managers')
 // Get organization-specific job titles for dropdowns
 router.route('/job-titles')
   .get(isAdminOrHROrExecutiveAuthenticated, employeeListLimiter, getOrganizationJobTitles);
+
+// Bulk assign Shift 1 / Shift 2 to existing employees (must be before /:employeeId routes)
+router.route('/bulk-assign-shift')
+  .post(isAdminOrHROrExecutiveAuthenticated, generalWriteLimiter, bulkAssignEmployeeShift);
 
 // Manually promote employee to HR Manager (job profile + access; login unchanged)
 router.route('/:employeeId/promote-hr-manager')

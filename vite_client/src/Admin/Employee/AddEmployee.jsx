@@ -61,7 +61,12 @@ function AddEmployee() {
         systemRole: DEFAULT_SYSTEM_ROLE,
         onProbation: false,
         probationMonths: 6,
+        shiftId: '',
     });
+    const [shiftOptions, setShiftOptions] = useState([
+        { key: 'shift1', name: 'Shift 1', startTime: '09:00', endTime: '17:00' },
+        { key: 'shift2', name: 'Shift 2', startTime: '21:00', endTime: '06:00' },
+    ]);
     const [roleCatalog, setRoleCatalog] = useState([]);
     const [systemRoleManual, setSystemRoleManual] = useState(false);
     const [loadingRoles, setLoadingRoles] = useState(true);
@@ -173,13 +178,15 @@ function AddEmployee() {
             const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
             setManagers(list);
             if (list.length === 0) {
-                setForm((prev) => ({ ...prev, manager: 'CEO' }));
+                setForm((prev) => ({ ...prev, manager: 'Admin' }));
             } else {
-                setForm((prev) => (prev.manager === 'CEO' ? { ...prev, manager: '' } : prev));
+                setForm((prev) =>
+                    prev.manager === 'CEO' || prev.manager === 'Admin' ? { ...prev, manager: '' } : prev
+                );
             }
         } catch {
             setManagers([]);
-            setForm((prev) => ({ ...prev, manager: 'CEO' }));
+            setForm((prev) => ({ ...prev, manager: 'Admin' }));
         } finally {
             setLoadingManagers(false);
         }
@@ -188,6 +195,40 @@ function AddEmployee() {
     useEffect(() => {
         fetchManagers();
     }, [fetchManagers]);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await axios.get('/v1/admin/attendance-rules/shifts', { withCredentials: true });
+                const data = res.data?.data || res.data || {};
+                const list = Array.isArray(data.shifts) && data.shifts.length
+                    ? data.shifts
+                    : [
+                        { key: 'shift1', name: 'Shift 1', ...(data.shift1 || {}) },
+                        { key: 'shift2', name: 'Shift 2', ...(data.shift2 || {}) },
+                    ];
+                if (!cancelled && list.length) {
+                    setShiftOptions(list.map((s) => ({
+                        key: s.key || (s.name === 'Shift 2' ? 'shift2' : 'shift1'),
+                        name: s.name || 'Shift',
+                        startTime: s.startTime || '',
+                        endTime: s.endTime || '',
+                    })));
+                }
+            } catch {
+                // keep defaults
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    const selectedShiftLabel = useMemo(() => {
+        if (!form.shiftId) return 'No Shift';
+        const s = shiftOptions.find((x) => x.key === form.shiftId);
+        if (!s) return form.shiftId || 'No Shift';
+        return `${s.name}${s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}`;
+    }, [shiftOptions, form.shiftId]);
 
     const { suggestion: suggestedRole, loading: suggestionLoading } = useSuggestedSystemRole(
         {
@@ -239,7 +280,7 @@ function AddEmployee() {
 
     const managerLabel = useMemo(() => {
         if (!form.manager) return '—';
-        if (form.manager === 'CEO') return 'First employee (no manager)';
+        if (form.manager === 'CEO' || form.manager === 'Admin') return 'Admin (organization root)';
         const match = managers.find(
             (mgr) => String(mgr._id) === String(form.manager) || mgr.employeeId === form.manager
         );
@@ -459,6 +500,10 @@ function AddEmployee() {
             systemRole,
             confirmReplace,
             linkAsOrgOwnerMe,
+            shiftId: form.shiftId || '',
+            shiftName: form.shiftId
+                ? (shiftOptions.find((s) => s.key === form.shiftId) || {}).name || ''
+                : '',
         };
         // Omit empty optional ObjectIds so Mongoose never receives ""
         [
@@ -735,6 +780,22 @@ function AddEmployee() {
                 </select>
                 <select
                     className={selectClass}
+                    name="shiftId"
+                    value={form.shiftId}
+                    onChange={handleChange}
+                >
+                    <option value="">No Shift</option>
+                    {shiftOptions.map((s) => (
+                        <option key={s.key} value={s.key}>
+                            {s.name}
+                            {s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <div className="flex flex-col gap-4 lg:flex-row">
+                <select
+                    className={selectClass}
                     name="manager"
                     value={form.manager}
                     onChange={handleChange}
@@ -745,18 +806,30 @@ function AddEmployee() {
                         {loadingManagers ? 'Loading managers...' : managers.length > 0 ? 'Select manager (required)' : 'Select manager'}
                     </option>
                     {managers.length === 0 && !loadingManagers ? (
-                        <option value="CEO">First employee — no manager</option>
+                        <option value="Admin">Admin profile — organization root (no manager)</option>
                     ) : null}
                     {managers.map((mgr) => {
                         const fullName = `${mgr.name}${mgr.lastName ? ` ${mgr.lastName}` : ''}`.trim();
+                        const isRoot = !mgr.managerId;
                         return (
                             <option key={mgr._id || mgr.employeeId} value={mgr._id || fullName}>
-                                {fullName} — {mgr.position}
+                                {fullName} — {mgr.position}{isRoot ? ' (Admin root)' : ''}
                             </option>
                         );
                     })}
                 </select>
             </div>
+            {!loadingManagers && managers.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                    No employees yet — this profile becomes the organization Admin root (managerId empty).
+                    Department managers added later should report to this Admin.
+                </p>
+            ) : !loadingManagers ? (
+                <p className="text-xs text-slate-500">
+                    Every employee after the Admin root must select a manager. Department managers
+                    can report directly to Admin; others follow their department hierarchy.
+                </p>
+            ) : null}
             <div className="flex flex-col gap-4 lg:flex-row">
                 <select
                     className={selectClass}
@@ -897,6 +970,10 @@ function AddEmployee() {
                         <div>
                             <dt className="text-slate-500">Manager</dt>
                             <dd className="font-medium text-slate-900">{managerLabel}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-slate-500">Shift</dt>
+                            <dd className="font-medium text-slate-900">{selectedShiftLabel}</dd>
                         </div>
                         <div>
                             <dt className="text-slate-500">Probation</dt>

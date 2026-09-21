@@ -12,7 +12,9 @@ import {
     updateOrgMaster,
     deleteOrgMaster,
     getTenantFeaturesAndUsage,
+    getOrganizationChart,
 } from '../../controllers/organization/orgStructureController.js';
+import { requireEmployeeList } from '../../middlewares/requirePermission.js';
 
 const router = express.Router();
 
@@ -20,6 +22,7 @@ const manageOrgMw = composeMiddleware(
     requireAnyPermission([PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_CREATE])
 );
 
+router.get('/chart', requireEmployeeList, getOrganizationChart);
 router.get('/catalog', isAdminOrHROrExecutiveAuthenticated, getOrgStructureCatalog);
 router.post('/seed', isAdminAuthenticated, writeLimiter, seedOrgStructure);
 router.get('/tenant-features', isAdminAuthenticated, getTenantFeaturesAndUsage);

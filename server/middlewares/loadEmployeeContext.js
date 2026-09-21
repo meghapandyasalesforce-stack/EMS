@@ -1,7 +1,11 @@
 import Employee from '../models/employee.model.js';
 import User from '../models/user.model.js';
 import { attachUserToRequest } from './authHelpers.js';
-import { findOrgOwnerEmployeeProfile, resolveOrgOwnerUser } from '../helpers/identityService.js';
+import {
+  ensureOrgOwnerEmployeeRoot,
+  isOrgOwnerUser,
+} from '../helpers/identityService.js';
+import logger from '../helpers/logger.js';
 
 /**
  * Resolve employee id from JWT (employee session or admin with linked profile).
@@ -17,52 +21,55 @@ export const resolveEmployeeIdFromToken = (decoded) => {
 };
 
 /**
- * Resolve linked workforce profile for an admin User (JWT may be stale).
+ * Resolve linked Me workforce profile for an admin User (JWT may be stale).
+ * Never returns the permanent isOrgOwnerRoot Admin/CEO Employee as Me.
+ * Ensures the chart root exists for org owners without linking it as Me.
  */
 const resolveAdminLinkedEmployee = async (decoded) => {
   if (!decoded?.userId) return null;
 
   const userDoc = await User.findById(decoded.userId)
-    .select('employeeProfileId organizationId email roles role')
+    .select('employeeProfileId organizationId email roles role name phone')
     .lean();
 
   if (!userDoc) return null;
+
+  // Keep permanent Admin/CEO root present for the org chart (does not set employeeProfileId)
+  if (userDoc.organizationId && isOrgOwnerUser(userDoc)) {
+    try {
+      await ensureOrgOwnerEmployeeRoot(userDoc, userDoc.organizationId);
+    } catch (err) {
+      logger.warn('Failed to ensure org-owner employee root on context load', {
+        organizationId: userDoc.organizationId,
+        error: err.message,
+      });
+    }
+  }
 
   if (userDoc.employeeProfileId) {
     const byProfileLink = await Employee.findById(userDoc.employeeProfileId)
       .select('-password -__v')
       .lean();
-    if (byProfileLink) return byProfileLink;
+    if (byProfileLink && byProfileLink.isOrgOwnerRoot !== true) {
+      return byProfileLink;
+    }
   }
 
   if (userDoc.organizationId) {
     const byUserId = await Employee.findOne({
       userId: decoded.userId,
       organizationId: userDoc.organizationId,
+      isOrgOwnerRoot: { $ne: true },
+      status: { $ne: 'terminated' },
     })
       .select('-password -__v')
       .lean();
     if (byUserId) return byUserId;
   }
 
-  const orgOwner = await resolveOrgOwnerUser(userDoc.organizationId);
-  if (orgOwner && String(orgOwner._id) === String(decoded.userId)) {
-    const ownerEmail = String(orgOwner.email || '').toLowerCase().trim();
-    const byOwnerEmail = await findOrgOwnerEmployeeProfile(
-      orgOwner,
-      userDoc.organizationId,
-      ownerEmail
-    );
-    if (byOwnerEmail) {
-      return typeof byOwnerEmail.toObject === 'function'
-        ? byOwnerEmail.toObject()
-        : byOwnerEmail;
-    }
-  }
-
+  // No separate Me profile yet — do not fall back to the CEO root
   return null;
 };
-
 /**
  * Load workforce employee onto req (department, organizationId, etc.).
  * Used by isAuthenticated and isAuthenticatedBoth so rule API matches clock-in.

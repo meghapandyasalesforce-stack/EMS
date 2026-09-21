@@ -55,11 +55,24 @@ function RowAvatar({ employee, sizeClass = 'h-10 w-10' }) {
   );
 }
 
+function formatShiftLabel(empRow) {
+  const name =
+    empRow?.shiftName ||
+    empRow?.employee?.shiftName ||
+    null;
+  if (!name) return '—';
+  const start = empRow?.shiftStartTime;
+  const end = empRow?.shiftEndTime;
+  if (start && end) return `${name} (${start}–${end})`;
+  return name;
+}
+
 const TodayStatusComponent = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { todayStatus, loading, error } = useSelector((state) => state.attendance);
   const [isMobile, setIsMobile] = useState(false);
+  const [shiftFilter, setShiftFilter] = useState('all');
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -94,7 +107,17 @@ const TodayStatusComponent = () => {
     }
   };
 
-  const statusData = todayStatus?.data || [];
+  const rawStatusData = todayStatus?.data || [];
+  const statusData = useMemo(() => {
+    if (shiftFilter === 'all') return rawStatusData;
+    return rawStatusData.filter((row) => {
+      const id = String(row?.shiftId || row?.employee?.shiftId || '').toLowerCase();
+      if (shiftFilter === 'unassigned') return !id;
+      if (shiftFilter === 'shift1') return id === 'shift1' || id === '1';
+      if (shiftFilter === 'shift2') return id === 'shift2' || id === '2';
+      return true;
+    });
+  }, [rawStatusData, shiftFilter]);
 
   const presentEmployees = statusData.filter((emp) => emp.status === 'present' && !emp.isOnBreak);
   const onBreakEmployees = statusData.filter((emp) => emp.isOnBreak);
@@ -133,6 +156,27 @@ const TodayStatusComponent = () => {
             <p className="mb-1 text-sm font-medium text-slate-500">{headerDate}</p>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Today's live roster</h1>
             <p className="mt-1 text-sm text-slate-600">Who's in, on break, or absent right now</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                { id: 'all', label: 'All shifts' },
+                { id: 'shift1', label: 'Shift 1' },
+                { id: 'shift2', label: 'Shift 2' },
+                { id: 'unassigned', label: 'No shift' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setShiftFilter(opt.id)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                    shiftFilter === opt.id
+                      ? 'bg-[#0a8f6c] text-white'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -213,6 +257,7 @@ const TodayStatusComponent = () => {
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
                   <th className="px-6 py-3">Team member</th>
                   {!isMobile && <th className="px-4 py-3">Department</th>}
+                  {!isMobile && <th className="px-4 py-3">Shift</th>}
                   <th className="px-4 py-3">Clock in</th>
                   <th className="px-4 py-3">Device</th>
                   <th className="px-4 py-3">Location</th>
@@ -239,11 +284,19 @@ const TodayStatusComponent = () => {
                           <div>
                             <p className="font-semibold text-slate-900">{name || e?.name}</p>
                             <p className="text-xs text-slate-500">{e?.position || '—'}</p>
+                            {isMobile ? (
+                              <p className="text-xs text-slate-500 mt-0.5">{formatShiftLabel(emp)}</p>
+                            ) : null}
                           </div>
                         </div>
                       </td>
                       {!isMobile && (
                         <td className="px-4 py-4 text-slate-600">{e?.department || '—'}</td>
+                      )}
+                      {!isMobile && (
+                        <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
+                          {formatShiftLabel(emp)}
+                        </td>
                       )}
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span className={emp.isLateArrival ? 'font-semibold' : 'text-slate-800'} style={emp.isLateArrival ? { color: ORANGE } : undefined}>
@@ -310,6 +363,7 @@ const TodayStatusComponent = () => {
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
                     <th className="px-6 py-3">Team member</th>
                     {!isMobile && <th className="px-4 py-3">Department</th>}
+                    {!isMobile && <th className="px-4 py-3">Shift</th>}
                     <th className="px-4 py-3">Clock in</th>
                     <th className="px-6 py-3 pr-6">Break</th>
                   </tr>
@@ -331,6 +385,11 @@ const TodayStatusComponent = () => {
                         </td>
                         {!isMobile && (
                           <td className="px-4 py-4 text-slate-600">{e?.department}</td>
+                        )}
+                        {!isMobile && (
+                          <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
+                            {formatShiftLabel(emp)}
+                          </td>
                         )}
                         <td className="px-4 py-4">{formatTime(emp.clockIn)}</td>
                         <td className="px-6 py-4 pr-6">
@@ -360,6 +419,7 @@ const TodayStatusComponent = () => {
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
                   <th className="px-6 py-3">Team member</th>
                   {!isMobile && <th className="px-4 py-3">Department</th>}
+                  {!isMobile && <th className="px-4 py-3">Shift</th>}
                   <th className="px-6 py-3 pr-6">Email</th>
                 </tr>
               </thead>
@@ -380,6 +440,11 @@ const TodayStatusComponent = () => {
                       </td>
                       {!isMobile && (
                         <td className="px-4 py-4 text-slate-600">{e?.department}</td>
+                      )}
+                      {!isMobile && (
+                        <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
+                          {formatShiftLabel(emp)}
+                        </td>
                       )}
                       <td className="px-6 py-4 pr-6 text-slate-600">{e?.email || '—'}</td>
                     </tr>

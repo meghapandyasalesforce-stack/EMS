@@ -25,8 +25,24 @@ export const createEmployee = createAsyncThunk(
       };
     } catch (err) {
       const data = err.response?.data || {};
+      const fieldErrors = data.errors;
+      let detail = null;
+      if (Array.isArray(fieldErrors) && fieldErrors.length) {
+        const first = fieldErrors[0];
+        if (typeof first === 'string') detail = first;
+        else if (first?.message) detail = first.field ? `${first.field}: ${first.message}` : first.message;
+        else if (first && typeof first === 'object') {
+          const key = Object.keys(first)[0];
+          detail = key ? `${key}: ${first[key]}` : null;
+        }
+      } else if (fieldErrors && typeof fieldErrors === 'object' && !Array.isArray(fieldErrors)) {
+        const key = Object.keys(fieldErrors)[0];
+        if (key) detail = `${key}: ${fieldErrors[key]}`;
+      }
+      const rawMessage = data.message || '';
+      const messageLooksLikeKey = typeof rawMessage === 'string' && /^errors\./i.test(rawMessage);
       return thunkAPI.rejectWithValue({
-        message: data.message || 'Failed to create employee',
+        message: detail || (!messageLooksLikeKey && rawMessage) || 'Failed to create employee',
         code: data.code || null,
         existingProfile: data.details?.existingProfile || null,
       });

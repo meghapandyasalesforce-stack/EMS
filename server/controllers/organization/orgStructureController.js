@@ -12,6 +12,7 @@ import {
 import { getTenantUsageSnapshot } from '../../services/tenantService.js';
 import { SAAS_FEATURE_LABELS } from '../../constants/saasFeatures.js';
 import asyncHandler from '../../helpers/asyncHandler.js';
+import { getOrganizationChartPayload } from '../../services/organizationChartService.js';
 
 const RESOURCES = Object.keys(MASTER_MODELS);
 
@@ -90,4 +91,11 @@ export const getTenantFeaturesAndUsage = asyncHandler(async (req, res) => {
         planName: req.tenant?.planName,
         subscriptionStatus: req.tenant?.subscriptionStatus,
     }, 'Tenant features and usage');
+});
+
+/** GET /api/v1/admin/org-structure/chart — reporting hierarchy for org chart UI */
+export const getOrganizationChart = asyncHandler(async (req, res) => {
+    const organizationId = requireOrganizationId(req);
+    const payload = await getOrganizationChartPayload(organizationId, req);
+    return sendSuccess(res, payload, 'Organization chart data');
 });

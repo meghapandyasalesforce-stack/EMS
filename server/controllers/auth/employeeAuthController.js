@@ -6,7 +6,7 @@ import {
     findOrgOwnerEmployeeProfile,
     linkOrgOwnerMeProfile,
     resolveOrgOwnerUser,
-    linkUserToEmployeeProfile,
+    countOrgOwnerMeEmailEmployees,
     unifiedAuthPlaceholderPassword,
     verifyEmployeeLoginPassword,
     getEmployeeLoginAuthRecord,
@@ -35,11 +35,17 @@ import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWo
 import { buildEmployeeProbationFromOptIn } from '../../helpers/employeeProbationSyncHelper.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import {
+    isTopLevelManagerLabel,
+    validateManagerAssignment,
+} from '../../helpers/managerAssignmentHelper.js';
+import {
     assertEmployeeCapacity,
     attachTenantToRequest,
     TenantError,
 } from '../../services/tenantService.js';
 import { resolveEmployeeOrgFields, seedOrgStructureFromOrganization } from '../../services/orgStructureService.js';
+import AttendanceRule from '../../models/attendanceRule.model.js';
+import { parseEmployeeShiftAssignment } from '../../helpers/shiftHelper.js';
 
 // Generate token with employeeId instead of email
 
@@ -175,12 +181,14 @@ export const registerEmployee = async (req, res) => {
             onProbation = false,
             probationMonths = 6,
             joiningDate: joiningDateInput,
+            shiftId: shiftIdInput,
+            shiftName: shiftNameInput,
         } = req.body;
 
-        // Validate required fields (password and manager optional - manager defaults to 'CEO' for first employee only)
+        // Validate required fields (password, lastName, and manager optional)
         const hasLegacyWorkInfo = Boolean(position && department && jobTitle);
         const hasMasterWorkInfo = Boolean(departmentId && jobRoleId && designationId);
-        if (!name || !lastName || !email || !jobCategory || !salary) {
+        if (!name || !email || !jobCategory || !salary) {
             return sendValidationError(res,
                 'All fields are required (password will be auto-generated if not provided)'
             );
@@ -248,6 +256,23 @@ export const registerEmployee = async (req, res) => {
         const resolvedJobTitle = resolvedWork.jobTitle || jobTitle;
         const resolvedPosition = resolvedWork.position || position;
 
+        let assignedShift = null;
+        try {
+            const activeRuleForShift = await AttendanceRule.findOne({
+                organizationId,
+                isActive: true,
+            })
+                .sort({ priority: -1, updatedAt: -1 })
+                .select('shifts')
+                .lean();
+            assignedShift = parseEmployeeShiftAssignment(
+                { shiftId: shiftIdInput, shiftName: shiftNameInput },
+                activeRuleForShift?.shifts
+            );
+        } catch (shiftErr) {
+            return sendValidationError(res, { shiftId: shiftErr.message });
+        }
+
         if (!resolvedDepartment || !resolvedJobTitle || !resolvedPosition) {
             return sendValidationError(res, 'Department, job role, and designation are required');
         }
@@ -268,19 +293,59 @@ export const registerEmployee = async (req, res) => {
 
         const orgHasEmployees = await Employee.exists({ organizationId });
         const managerTrimmed = manager && String(manager).trim();
-        // First employee (none yet) can have no manager / CEO; every employee after must have a manager selected
+        const normalizedEmail = email.toLowerCase().trim();
+
+        const [existingNonRootByEmail, orgUserByEmail, orgOwnerUser] = await Promise.all([
+            Employee.findOne({
+                email: normalizedEmail,
+                organizationId,
+                isOrgOwnerRoot: { $ne: true },
+                status: { $ne: 'terminated' },
+            }),
+            findOrgUserForEmployeeEmail(normalizedEmail, organizationId),
+            resolveOrgOwnerUser(organizationId),
+        ]);
+
+        // Migrate email indexes + ensure permanent CEO root exists (never sets Me)
+        if (orgOwnerUser) {
+            const { ensureOrgOwnerEmployeeRoot } = await import('../../helpers/identityService.js');
+            await ensureOrgOwnerEmployeeRoot(orgOwnerUser, organizationId);
+        }
+
+        const orgOwnerEmail = orgOwnerUser
+            ? String(orgOwnerUser.email || '').toLowerCase().trim()
+            : null;
+        const isOrgOwnerEmail = Boolean(orgOwnerEmail && orgOwnerEmail === normalizedEmail);
+        const wantLinkAsMe =
+            linkAsOrgOwnerMe === true ||
+            linkAsOrgOwnerMe === 'true' ||
+            linkAsOrgOwnerMe === 1;
+        // Admin email / explicit Me link → create a separate Me Employee (never the CEO root)
+        const isOrgOwnerMeRegistration = Boolean(
+            (isOrgOwnerEmail && orgOwnerUser) || (wantLinkAsMe && orgOwnerUser)
+        );
+
+        const existingMeProfile = orgOwnerUser
+            ? await findOrgOwnerEmployeeProfile(orgOwnerUser, organizationId)
+            : null;
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return sendValidationError(res, { email: 'Invalid email format' });
+        }
+
+        // Permanent root already exists after registration — every new hire (including Me) needs a manager
+        let managerValue = 'Admin';
+        let managerId = null;
         if (orgHasEmployees) {
-            if (!managerTrimmed || managerTrimmed === 'CEO') {
-                return sendError(res, 
-                    'Manager is required. Please select a manager from the list. Only the first employee can be added without a manager (CEO/Manager).',
+            if (!managerTrimmed || isTopLevelManagerLabel(managerTrimmed)) {
+                return sendError(res,
+                    'Manager is required. Select a reporting manager. Only the organization Admin/CEO root can have no manager.',
                     400,
                     'MANAGER_REQUIRED'
                 );
             }
-        }
-        let managerValue = managerTrimmed || 'CEO';
-        let managerId = null;
-        if (orgHasEmployees) {
             const managerInput = managerTrimmed;
             const managerBaseQuery = { organizationId, status: 'active' };
             let managerEmployee = null;
@@ -311,65 +376,29 @@ export const registerEmployee = async (req, res) => {
 
             managerId = managerEmployee._id;
             managerValue = `${managerEmployee.name || ''} ${managerEmployee.lastName || ''}`.trim() || managerInput;
-        }
 
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return sendValidationError(res, { email: 'Invalid email format' });
-        }
-
-        // Legacy position validation skipped — designations come from org masters
-        const normalizedEmail = email.toLowerCase().trim();
-        
-        const [existingEmployeeByEmail, orgUserByEmail, orgOwnerUser] = await Promise.all([
-            Employee.findOne({ email: normalizedEmail, organizationId }),
-            findOrgUserForEmployeeEmail(normalizedEmail, organizationId),
-            resolveOrgOwnerUser(organizationId),
-        ]);
-
-        const orgOwnerEmail = orgOwnerUser
-            ? String(orgOwnerUser.email || '').toLowerCase().trim()
-            : null;
-        const isOrgOwnerEmail = Boolean(orgOwnerEmail && orgOwnerEmail === normalizedEmail);
-        const linkedOrgUser = isOrgOwnerEmail ? orgOwnerUser : null;
-        const wantLinkAsMe =
-            linkAsOrgOwnerMe === true ||
-            linkAsOrgOwnerMe === 'true' ||
-            linkAsOrgOwnerMe === 1;
-
-        if (wantLinkAsMe && orgOwnerUser && !linkedOrgUser) {
-            const existingMe = await findOrgOwnerEmployeeProfile(
-                orgOwnerUser,
+            const assignmentCheck = await validateManagerAssignment({
                 organizationId,
-                orgOwnerEmail
-            );
-            if (existingMe) {
-                const shouldReplace =
-                    confirmReplace === true ||
-                    confirmReplace === 'true' ||
-                    confirmReplace === 1;
-                if (!shouldReplace) {
-                    return sendError(
-                        res,
-                        'You already have a Me profile linked. Replace it with this employee?',
-                        409,
-                        'PROFILE_EXISTS_REQUIRES_CONFIRMATION',
-                        {
-                            existingProfile: {
-                                _id: existingMe._id,
-                                name: existingMe.name,
-                                lastName: existingMe.lastName,
-                                email: existingMe.email,
-                                employeeId: existingMe.employeeId,
-                            },
-                        }
-                    );
-                }
+                managerId,
+            });
+            if (!assignmentCheck.valid) {
+                return sendError(res, assignmentCheck.message, 400, 'INVALID_MANAGER');
             }
+            managerId = assignmentCheck.managerId;
+            managerValue = assignmentCheck.manager;
+        } else {
+            const assignmentCheck = await validateManagerAssignment({
+                organizationId,
+                managerId: null,
+            });
+            if (!assignmentCheck.valid) {
+                return sendError(res, assignmentCheck.message, 400, 'INVALID_MANAGER');
+            }
+            managerId = assignmentCheck.managerId;
+            managerValue = assignmentCheck.manager;
         }
 
-        // Only the org owner's email may share login with one employee profile
+        // Only the org owner's email may be reused for a Me Employee (root already uses it)
         if (orgUserByEmail && !isOrgOwnerEmail) {
             return sendError(
                 res,
@@ -379,136 +408,73 @@ export const registerEmployee = async (req, res) => {
             );
         }
 
-        let profileToUpdate = null;
-        if (linkedOrgUser) {
-            profileToUpdate = await findOrgOwnerEmployeeProfile(
-                linkedOrgUser,
-                organizationId,
-                normalizedEmail
-            );
-        }
+        // Admin email → at most one separate Me Employee (never update/overwrite the CEO root)
+        if (isOrgOwnerMeRegistration) {
+            if (existingMeProfile) {
+                return sendError(
+                    res,
+                    'A Me employee profile is already linked to the Admin account. Another employee with the Admin email cannot be created.',
+                    409,
+                    'ME_PROFILE_ALREADY_EXISTS',
+                    {
+                        existingProfile: {
+                            _id: existingMeProfile._id,
+                            name: existingMeProfile.name,
+                            lastName: existingMeProfile.lastName,
+                            email: existingMeProfile.email,
+                            employeeId: existingMeProfile.employeeId,
+                        },
+                    }
+                );
+            }
 
-        if (!linkedOrgUser && existingEmployeeByEmail) {
+            if (isOrgOwnerEmail) {
+                const meEmailCount = await countOrgOwnerMeEmailEmployees(organizationId, orgOwnerEmail);
+                if (meEmailCount >= 1 || existingNonRootByEmail) {
+                    return sendError(
+                        res,
+                        'A Me employee profile already uses the Admin email. Another employee with this email cannot be created.',
+                        409,
+                        'ME_PROFILE_ALREADY_EXISTS',
+                        existingNonRootByEmail
+                            ? {
+                                  existingProfile: {
+                                      _id: existingNonRootByEmail._id,
+                                      name: existingNonRootByEmail.name,
+                                      lastName: existingNonRootByEmail.lastName,
+                                      email: existingNonRootByEmail.email,
+                                      employeeId: existingNonRootByEmail.employeeId,
+                                  },
+                              }
+                            : undefined
+                    );
+                }
+            }
+        } else if (existingNonRootByEmail) {
             return sendError(
                 res,
                 'An employee with this email already exists in this organization. Please use a different email address.',
                 409,
                 'DUPLICATE_EMAIL'
             );
-        }
-
-        // Org admin email: exactly one employee profile linked to the same login
-        if (linkedOrgUser && profileToUpdate) {
-            const shouldReplace =
-                confirmReplace === true ||
-                confirmReplace === 'true' ||
-                confirmReplace === 1;
-
-            if (!shouldReplace) {
+        } else if (isOrgOwnerEmail) {
+            // Non-Me path somehow used owner email without link flag — still block if Me slot taken
+            const meEmailCount = await countOrgOwnerMeEmailEmployees(organizationId, orgOwnerEmail);
+            if (meEmailCount >= 1) {
                 return sendError(
                     res,
-                    'A profile already exists for this employee. Do you want to replace the existing profile with the new one?',
+                    'An employee with this email already exists in this organization. Please use a different email address.',
                     409,
-                    'PROFILE_EXISTS_REQUIRES_CONFIRMATION',
-                    {
-                        existingProfile: {
-                            _id: profileToUpdate._id,
-                            name: profileToUpdate.name,
-                            lastName: profileToUpdate.lastName,
-                            email: profileToUpdate.email,
-                            employeeId: profileToUpdate.employeeId,
-                        },
-                    }
+                    'DUPLICATE_EMAIL'
                 );
             }
-
-            profileToUpdate.name = name;
-            profileToUpdate.lastName = lastName;
-            profileToUpdate.position = resolvedPosition;
-            profileToUpdate.department = resolvedDepartment;
-            profileToUpdate.manager = managerValue;
-            profileToUpdate.managerId = managerId;
-            profileToUpdate.jobTitle = resolvedJobTitle;
-            profileToUpdate.jobCategory = jobCategory;
-            if (resolvedWork.departmentId) profileToUpdate.departmentId = resolvedWork.departmentId;
-            if (resolvedWork.teamId) profileToUpdate.teamId = resolvedWork.teamId;
-            if (resolvedWork.jobRoleId) profileToUpdate.jobRoleId = resolvedWork.jobRoleId;
-            if (resolvedWork.designationId) profileToUpdate.designationId = resolvedWork.designationId;
-            if (resolvedWork.locationId) profileToUpdate.locationId = resolvedWork.locationId;
-            if (resolvedWork.employmentTypeId) profileToUpdate.employmentTypeId = resolvedWork.employmentTypeId;
-            if (resolvedWork.workModeId) profileToUpdate.workModeId = resolvedWork.workModeId;
-            if (resolvedWork.employmentType) profileToUpdate.employmentType = resolvedWork.employmentType;
-            if (resolvedWork.workMode) profileToUpdate.workMode = resolvedWork.workMode;
-            profileToUpdate.salary = salary;
-            profileToUpdate.status = profileToUpdate.status || 'active';
-            profileToUpdate.active = profileToUpdate.active !== false;
-            profileToUpdate.probation = buildEmployeeProbationFromOptIn({
-                onProbation,
-                probationMonths,
-                joiningDate: joiningDateInput || profileToUpdate.joiningDate || new Date(),
-            });
-            if (!profileToUpdate.userId) {
-                profileToUpdate.userId = linkedOrgUser._id;
-            }
-
-            applySystemRoleToEmployee(profileToUpdate, systemRole);
-            await profileToUpdate.save();
-            await linkUserToEmployeeProfile(linkedOrgUser, profileToUpdate);
-            await syncLinkedUserForSystemRole({
-                employee: profileToUpdate,
-                systemRoleId: systemRole,
-                organizationId,
-                existingUser: linkedOrgUser,
-            });
-
-            runInBackground('register-employee-cache-invalidate', async () => {
-                await invalidateEmployeesCache(organizationId);
-            });
-
-            logger.info('Updated existing employee profile linked to org User', {
-                email: normalizedEmail,
-                userId: linkedOrgUser._id,
-                employeeId: profileToUpdate._id,
-                organizationId,
-            });
-
-            return sendSuccess(
-                res,
-                {
-                    linkedToExistingUser: true,
-                    updatedExistingProfile: true,
-                    employee: {
-                        _id: profileToUpdate._id,
-                        name: profileToUpdate.name,
-                        lastName: profileToUpdate.lastName,
-                        email: profileToUpdate.email,
-                        position: profileToUpdate.position,
-                        jobTitle: profileToUpdate.jobTitle,
-                        employeeId: profileToUpdate.employeeId,
-                        unifiedAuth: true,
-                        systemRole,
-                        functionalRoles: profileToUpdate.functionalRoles,
-                    },
-                    message:
-                        'Employee profile updated and linked to your existing admin login. Use the same email and password to sign in.',
-                },
-                'Employee profile updated successfully',
-                200
-            );
         }
 
-        // Unified auth: link first (and only) employee profile to org owner User
+        // Unified auth: new Me Employee links to Admin User; CEO root is left unchanged
         let linkedToExistingUser = false;
-        if (linkedOrgUser) {
+        if (isOrgOwnerMeRegistration && orgOwnerUser) {
             linkedToExistingUser = true;
-            logger.info('Linking new employee profile to org owner account', {
-                email: normalizedEmail,
-                userId: linkedOrgUser._id,
-                organizationId,
-            });
-        } else if (wantLinkAsMe && orgOwnerUser) {
-            linkedToExistingUser = true;
-            logger.info('Linking new employee as org owner Me profile', {
+            logger.info('Creating separate Me employee profile for org owner', {
                 email: normalizedEmail,
                 userId: orgOwnerUser._id,
                 organizationId,
@@ -591,16 +557,12 @@ export const registerEmployee = async (req, res) => {
         // Create the employee (normalize email to lowercase)
         const joiningDate = joiningDateInput ? new Date(joiningDateInput) : new Date();
         const employee = new Employee({
-            organizationId, // Add organizationId
-            ...(linkedToExistingUser && linkedOrgUser
-                ? { userId: linkedOrgUser._id }
-                : wantLinkAsMe && orgOwnerUser
-                  ? { userId: orgOwnerUser._id }
-                  : {}),
+            organizationId,
+            ...(linkedToExistingUser && orgOwnerUser ? { userId: orgOwnerUser._id } : {}),
             name,
-            lastName,
-            email: normalizedEmail, // Use normalized email
-            password: employeePassword, // Will be hashed automatically by model's pre-save hook
+            lastName: lastName || '',
+            email: normalizedEmail,
+            password: employeePassword,
             position: resolvedPosition,
             department: resolvedDepartment,
             manager: managerValue,
@@ -617,6 +579,9 @@ export const registerEmployee = async (req, res) => {
             ...(resolvedWork.workModeId ? { workModeId: resolvedWork.workModeId } : {}),
             employmentType: resolvedWork.employmentType,
             workMode: resolvedWork.workMode,
+            ...(assignedShift
+                ? { shiftId: assignedShift.shiftId, shiftName: assignedShift.shiftName }
+                : {}),
             joiningDate: Number.isNaN(joiningDate.getTime()) ? new Date() : joiningDate,
             probation: buildEmployeeProbationFromOptIn({
                 onProbation,
@@ -626,9 +591,10 @@ export const registerEmployee = async (req, res) => {
             role: 'employee',
             mustResetPassword: mustResetPassword,
             hasCompletedFirstLogin: linkedToExistingUser ? true : false,
-            employeeId: employeeId, // Set the auto-generated ID
-            status: 'active', // ✅ Explicitly set status to active
-            active: true // ✅ Explicitly set active to true for new employees
+            employeeId: employeeId,
+            status: 'active',
+            active: true,
+            isOrgOwnerRoot: false,
         });
 
         applySystemRoleToEmployee(employee, systemRole);
@@ -636,16 +602,17 @@ export const registerEmployee = async (req, res) => {
         // Save employee - this will trigger password hashing
         try {
             await employee.save();
-            if (linkedToExistingUser && linkedOrgUser) {
-                await linkUserToEmployeeProfile(linkedOrgUser, employee);
-                await syncLinkedUserForSystemRole({
-                    employee,
-                    systemRoleId: systemRole,
-                    organizationId,
-                    existingUser: linkedOrgUser,
-                });
-            } else if (wantLinkAsMe && orgOwnerUser) {
-                await linkOrgOwnerMeProfile(orgOwnerUser, employee._id, organizationId);
+            if (linkedToExistingUser && orgOwnerUser) {
+                const linkResult = await linkOrgOwnerMeProfile(orgOwnerUser, employee._id, organizationId);
+                if (!linkResult.ok) {
+                    await Employee.deleteOne({ _id: employee._id, organizationId });
+                    return sendError(
+                        res,
+                        linkResult.message || 'Failed to link Me profile to Admin account.',
+                        400,
+                        linkResult.code || 'ME_LINK_FAILED'
+                    );
+                }
                 await syncLinkedUserForSystemRole({
                     employee,
                     systemRoleId: systemRole,

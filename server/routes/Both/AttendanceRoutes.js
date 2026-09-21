@@ -62,9 +62,9 @@ router.route("/employees-on-break").get(isAdminOrManagerOrHRAuthenticated, cache
 // Employee-only helper endpoint - cache for 1 minute
 router.route("/my-today-status").get(isAuthenticated, cacheMiddleware('attendance:my-today', 60), getMyTodayStatus);
 
-// Get attendance rule for employees (location, radius info) - cache for 5 minutes
-// Allow both admin and employee access
-router.route("/rule").get(isAuthenticatedBoth, cacheMiddleware('attendance:rule', 300), getAttendanceRuleForEmployee);
+// Get attendance rule for employees (location, radius, daySchedule half/WFH locks).
+// Do not cache: daySchedule.currentHalf / lockWfhOnly change through the day.
+router.route("/rule").get(isAuthenticatedBoth, getAttendanceRuleForEmployee);
 
 // PDF Export route
 router.route("/:employeeId/export-pdf")

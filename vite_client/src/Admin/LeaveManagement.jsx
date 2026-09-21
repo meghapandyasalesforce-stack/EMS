@@ -460,7 +460,7 @@ const LeaveManagement = () => {
             </div>
           )}
 
-          <div className="flex min-w-0 max-w-full flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex min-w-0 max-w-full flex-col gap-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:gap-6 sm:p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
               <div className="relative min-w-0 w-full sm:min-w-[200px] flex-1 lg:max-w-md">
                 <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -503,7 +503,7 @@ const LeaveManagement = () => {
               </select>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {monthNames.map((label, idx) => {
                 const active = monthFilter === idx;
                 return (
@@ -511,7 +511,7 @@ const LeaveManagement = () => {
                     key={label}
                     type="button"
                     onClick={() => setMonthFilter(active ? null : idx)}
-                    className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                    className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
                       active
                         ? 'bg-[#20C997]/15 text-[#0a8f6c] ring-2 ring-[#20C997]/35'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -528,7 +528,7 @@ const LeaveManagement = () => {
               })}
             </div>
 
-            <div className="flex gap-2 border-b border-slate-100 pb-0 overflow-x-auto">
+            <div className="flex gap-6 border-b border-slate-100 pb-0 overflow-x-auto sm:gap-8">
               {[
                 { key: 'all', label: formatUiLabel('all') },
                 { key: 'pending', label: formatUiLabel('pending review') },
@@ -539,7 +539,7 @@ const LeaveManagement = () => {
                   key={t.key}
                   type="button"
                   onClick={() => handleTab(t.key)}
-                  className={`relative shrink-0 pb-3 whitespace-nowrap text-xs font-bold tracking-wide transition sm:text-sm ${
+                  className={`relative shrink-0 px-1 pb-3 whitespace-nowrap text-xs font-bold tracking-wide transition sm:px-1.5 sm:text-sm ${
                     filterStatus === t.key ? 'text-[#0a8f6c]' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >

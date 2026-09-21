@@ -12,6 +12,10 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
     const [submitting, setSubmitting] = useState(false);
     const [enums, setEnums] = useState({});
     const [managers, setManagers] = useState([]);
+    const [shiftOptions, setShiftOptions] = useState([
+        { key: 'shift1', name: 'Shift 1', startTime: '09:00', endTime: '17:00' },
+        { key: 'shift2', name: 'Shift 2', startTime: '21:00', endTime: '06:00' },
+    ]);
     const [form, setForm] = useState({});
     const [result, setResult] = useState(null);
 
@@ -22,9 +26,10 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
             try {
                 setLoading(true);
                 setResult(null);
-                const [defaultsRes, empRes] = await Promise.all([
+                const [defaultsRes, empRes, shiftsRes] = await Promise.all([
                     axios.get(`/v1/admin/recruitment/candidates/${candidateId}/hire-defaults`, { withCredentials: true }),
                     axios.get('/v1/admin/employee/managers?limit=500', { withCredentials: true }).catch(() => ({ data: {} })),
+                    axios.get('/v1/admin/attendance-rules/shifts', { withCredentials: true }).catch(() => ({ data: {} })),
                 ]);
                 if (cancelled) return;
                 const d = defaultsRes.data?.data || {};
@@ -35,9 +40,14 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
                         ? new Date(d.defaults.joiningDate).toISOString().slice(0, 10)
                         : new Date().toISOString().slice(0, 10),
                     createEmployee: true,
+                    shiftId: '',
                 });
                 const list = empRes.data?.data || empRes.data?.managers || empRes.data || [];
                 setManagers(Array.isArray(list) ? list : []);
+                const shiftData = shiftsRes.data?.data || shiftsRes.data || {};
+                if (Array.isArray(shiftData.shifts) && shiftData.shifts.length) {
+                    setShiftOptions(shiftData.shifts);
+                }
             } catch (err) {
                 toast.error(err.response?.data?.message || 'Failed to load hire form');
                 onClose?.();
@@ -67,6 +77,10 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
                 salary: Number(form.salary),
                 managerId: form.managerId || undefined,
                 joiningDate: form.joiningDate,
+                shiftId: form.shiftId || '',
+                shiftName: form.shiftId
+                    ? (shiftOptions.find((s) => s.key === form.shiftId) || {}).name || ''
+                    : '',
             };
             const { data } = await axios.post(
                 `/v1/admin/recruitment/candidates/${candidateId}/hire`,
@@ -173,13 +187,34 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
                                 <span className="ats-form-label">Joining date</span>
                                 <input type="date" className="cm-input w-full" value={form.joiningDate || ''} onChange={(e) => set('joiningDate', e.target.value)} />
                             </label>
+                            <label className="block">
+                                <span className="ats-form-label">Shift</span>
+                                <select
+                                    className="cm-select w-full"
+                                    value={form.shiftId || ''}
+                                    onChange={(e) => set('shiftId', e.target.value)}
+                                >
+                                    <option value="">No Shift</option>
+                                    {shiftOptions.map((s) => (
+                                        <option key={s.key} value={s.key}>
+                                            {s.name}
+                                            {s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
                             <label className="block sm:col-span-2">
                                 <span className="ats-form-label">Reporting manager *</span>
                                 <select required={managers.length > 0} className="cm-select w-full" value={form.managerId || ''} onChange={(e) => set('managerId', e.target.value)}>
-                                    <option value="">Select manager</option>
+                                    <option value="">
+                                        {managers.length === 0
+                                            ? 'Admin profile — organization root (no manager)'
+                                            : 'Select manager'}
+                                    </option>
                                     {managers.map((m) => (
                                         <option key={m._id} value={m._id}>
                                             {m.name} {m.lastName} ({m.employeeId || m.email})
+                                            {!m.managerId ? ' — Admin root' : ''}
                                         </option>
                                     ))}
                                 </select>

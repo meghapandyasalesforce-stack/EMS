@@ -242,6 +242,13 @@ export const employeeValidations = {
         body('workModeId')
             .optional({ values: 'falsy' })
             .isMongoId().withMessage('Invalid workModeId'),
+        body('shiftId')
+            .optional({ values: 'falsy' })
+            .isIn(['shift1', 'shift2']).withMessage('shiftId must be shift1 or shift2'),
+        body('shiftName')
+            .optional({ values: 'falsy' })
+            .trim()
+            .isLength({ max: 50 }).withMessage('shiftName must be at most 50 characters'),
         handleValidationErrors
     ],
 

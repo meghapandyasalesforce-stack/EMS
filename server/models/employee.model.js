@@ -91,12 +91,14 @@ const employeeSchema = new mongoose.Schema({
     },
     
     /**
-     * Manager name or ID (optional for first employee e.g. CEO/Manager; default 'CEO')
+     * Manager display label. Top-level Admin root uses "Admin" (managerId: null).
+     * Legacy values "CEO" are still treated as top-level.
      * @type {string}
      */
-    manager: { type: String, required: false, default: 'CEO' },
+    manager: { type: String, required: false, default: 'Admin' },
     /**
-     * Preferred manager reference (ObjectId) for robust team mapping.
+     * Preferred manager reference (ObjectId) for reporting hierarchy.
+     * Null only for the single organization Admin root.
      * Legacy `manager` string is kept for backwards compatibility.
      */
     managerId: {
@@ -342,6 +344,16 @@ const employeeSchema = new mongoose.Schema({
         trim: true,
     },
 
+    /**
+     * True for the single organization-owner Employee used as org-chart root.
+     * Created at registration / ensure; not a second User login.
+     */
+    isOrgOwnerRoot: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+
     /** Organization structure master references (SaaS org chart) */
     departmentId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -381,6 +393,18 @@ const employeeSchema = new mongoose.Schema({
     /** Denormalized labels for reports / legacy consumers */
     employmentType: { type: String, trim: true },
     workMode: { type: String, trim: true },
+
+    /** Assigned work shift (AttendanceRule.shifts key, e.g. shift1 / shift2) */
+    shiftId: {
+        type: String,
+        trim: true,
+        default: undefined,
+    },
+    shiftName: {
+        type: String,
+        trim: true,
+        default: undefined,
+    },
 
     // Optional fields (can be added later)
     phone1: { type: String },
@@ -665,8 +689,25 @@ employeeSchema.methods.toJSON = function() {
 };
 
 // Add database indexes for better query performance
-// Compound unique index: email must be unique per organization
-employeeSchema.index({ email: 1, organizationId: 1 }, { unique: true });
+// Email uniqueness among workforce (non-root) employees per org.
+// Exception: isOrgOwnerRoot may share the org-owner login email with exactly one Me Employee.
+employeeSchema.index(
+  { email: 1, organizationId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isOrgOwnerRoot: { $ne: true } },
+    name: 'email_org_unique_non_root',
+  }
+);
+// At most one permanent Admin/CEO org-chart root per organization
+employeeSchema.index(
+  { organizationId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isOrgOwnerRoot: true },
+    name: 'one_org_owner_root_per_org',
+  }
+);
 employeeSchema.index({ userId: 1, organizationId: 1 }, { sparse: true });
 // Compound unique index: employeeId must be unique per organization
 employeeSchema.index({ employeeId: 1, organizationId: 1 }, { unique: true });

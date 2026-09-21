@@ -146,36 +146,92 @@ export const findOrgOwnerUserForEmployeeEmail = async (normalizedEmail, organiza
   return orgOwner;
 };
 
-/** Existing workforce profile linked to org owner (at most one). */
-export const findOrgOwnerEmployeeProfile = async (orgOwnerUser, organizationId, normalizedEmail) => {
-  if (!orgOwnerUser || !organizationId) return null;
+/**
+ * Permanent Admin/CEO org-chart root (isOrgOwnerRoot). Independent of Me / employeeProfileId.
+ */
+export const findOrgOwnerRootEmployee = async (organizationId) => {
+  if (!organizationId) return null;
+  return Employee.findOne({
+    organizationId,
+    isOrgOwnerRoot: true,
+    status: { $ne: 'terminated' },
+  }).sort({ createdAt: 1 });
+};
 
-  const email = String(normalizedEmail || '').toLowerCase().trim();
+/**
+ * Drop legacy fully-unique email+org index so Admin/CEO root and one Me Employee
+ * may share the org-owner login email. Idempotent.
+ */
+let ownerEmailIndexReady = false;
+async function ensureOwnerEmailDualRecordIndexes() {
+  if (ownerEmailIndexReady) return;
+  ownerEmailIndexReady = true;
+  try {
+    const indexes = await Employee.collection.indexes();
+    const legacy = indexes.find(
+      (idx) =>
+        idx.name === 'email_1_organizationId_1' &&
+        idx.unique === true &&
+        !idx.partialFilterExpression
+    );
+    if (legacy) {
+      await Employee.collection.dropIndex(legacy.name);
+    }
+    await Employee.syncIndexes();
+  } catch (err) {
+    ownerEmailIndexReady = false;
+    // Non-fatal: create may still fail with E11000 until indexes are migrated
+  }
+}
+
+/**
+ * Org owner's Me-tab workforce profile (at most one).
+ * Never returns the permanent isOrgOwnerRoot Employee — that is the chart root, not Me.
+ */
+export const findOrgOwnerEmployeeProfile = async (orgOwnerUser, organizationId) => {
+  if (!orgOwnerUser || !organizationId) return null;
 
   if (orgOwnerUser.employeeProfileId) {
     const byLink = await Employee.findOne({
       _id: orgOwnerUser.employeeProfileId,
       organizationId,
+      isOrgOwnerRoot: { $ne: true },
+      status: { $ne: 'terminated' },
     });
     if (byLink) return byLink;
   }
 
   return Employee.findOne({
     organizationId,
-    $or: [{ userId: orgOwnerUser._id }, ...(email ? [{ email }] : [])],
+    userId: orgOwnerUser._id,
+    isOrgOwnerRoot: { $ne: true },
+    status: { $ne: 'terminated' },
   }).sort({ createdAt: 1 });
 };
 
 /** Resolve org owner's Me-tab workforce profile (read-only). */
 export const resolveOrgOwnerMeProfile = async (orgOwnerUser, organizationId) => {
   if (!orgOwnerUser || !organizationId) return null;
-  const ownerEmail = String(orgOwnerUser.email || '').toLowerCase().trim();
-  return findOrgOwnerEmployeeProfile(orgOwnerUser, organizationId, ownerEmail);
+  return findOrgOwnerEmployeeProfile(orgOwnerUser, organizationId);
 };
 
 /**
- * Link one employee as the org owner's Me profile.
- * Clears prior links so only one profile shares the org owner login.
+ * Count non-root Employees using the org-owner login email (the allowed Me slot).
+ */
+export const countOrgOwnerMeEmailEmployees = async (organizationId, ownerEmail) => {
+  const email = String(ownerEmail || '').toLowerCase().trim();
+  if (!organizationId || !email) return 0;
+  return Employee.countDocuments({
+    organizationId,
+    email,
+    isOrgOwnerRoot: { $ne: true },
+    status: { $ne: 'terminated' },
+  });
+};
+
+/**
+ * Link one Employee as the org owner's Me profile (User.employeeProfileId).
+ * Never modifies the permanent isOrgOwnerRoot Admin/CEO Employee.
  */
 export const linkOrgOwnerMeProfile = async (orgOwnerUser, employeeId, organizationId) => {
   if (!orgOwnerUser?._id || !employeeId || !organizationId) {
@@ -187,6 +243,14 @@ export const linkOrgOwnerMeProfile = async (orgOwnerUser, employeeId, organizati
     return { ok: false, code: 'NOT_FOUND', message: 'Employee not found in this organization.' };
   }
 
+  if (employee.isOrgOwnerRoot === true) {
+    return {
+      ok: false,
+      code: 'CANNOT_LINK_ROOT_AS_ME',
+      message: 'The permanent Admin/CEO root cannot be linked as the Me profile.',
+    };
+  }
+
   const userDoc = await User.findById(orgOwnerUser._id);
   if (!userDoc) {
     return { ok: false, code: 'NOT_FOUND', message: 'Organization owner account not found.' };
@@ -194,14 +258,24 @@ export const linkOrgOwnerMeProfile = async (orgOwnerUser, employeeId, organizati
 
   const previousProfileId = userDoc.employeeProfileId;
   if (previousProfileId && String(previousProfileId) !== String(employeeId)) {
+    // Unlink prior Me only — never touch the org-owner root
     await Employee.updateOne(
-      { _id: previousProfileId, organizationId },
+      {
+        _id: previousProfileId,
+        organizationId,
+        isOrgOwnerRoot: { $ne: true },
+      },
       { $unset: { userId: '' } }
     );
   }
 
   await Employee.updateMany(
-    { organizationId, userId: userDoc._id, _id: { $ne: employeeId } },
+    {
+      organizationId,
+      userId: userDoc._id,
+      _id: { $ne: employeeId },
+      isOrgOwnerRoot: { $ne: true },
+    },
     { $unset: { userId: '' } }
   );
 
@@ -209,3 +283,136 @@ export const linkOrgOwnerMeProfile = async (orgOwnerUser, employeeId, organizati
 
   return { ok: true, employee, user: userDoc };
 };
+
+/**
+ * Generate a unique employeeId for the org-owner root profile.
+ */
+async function generateOrgOwnerRootEmployeeId(organizationId, name) {
+  const namePrefix = String(name || 'ADM').substring(0, 3).toUpperCase() || 'ADM';
+  const joiningYear = new Date().getFullYear();
+  for (let attempts = 0; attempts < 12; attempts += 1) {
+    const random = Math.floor(1000 + Math.random() * 9000);
+    const candidate = `EMP-${namePrefix}-${joiningYear}-${random}`;
+    const existing = await Employee.findOne({ employeeId: candidate, organizationId }).select('_id').lean();
+    if (!existing) return candidate;
+  }
+  return `EMP-${namePrefix}-${joiningYear}-${Date.now().toString().slice(-4)}`;
+}
+
+/**
+ * Ensure a permanent Admin/CEO Employee exists as the org-chart root (isOrgOwnerRoot).
+ * Idempotent. Does NOT set User.employeeProfileId (Me is a separate Employee).
+ * Never overwrites or links the root as the Me profile.
+ */
+export const ensureOrgOwnerEmployeeRoot = async (orgOwnerUser, organizationId, options = {}) => {
+  if (!orgOwnerUser?._id || !organizationId) {
+    return { ok: false, created: false, linked: false, code: 'INVALID_INPUT', message: 'Missing org owner or organization.' };
+  }
+
+  await ensureOwnerEmailDualRecordIndexes();
+
+  const userDoc = await User.findById(orgOwnerUser._id);
+  if (!userDoc) {
+    return { ok: false, created: false, linked: false, code: 'NOT_FOUND', message: 'Organization owner account not found.' };
+  }
+
+  if (!isOrgOwnerUser(userDoc)) {
+    return { ok: false, created: false, linked: false, code: 'NOT_ORG_OWNER', message: 'User is not the organization owner.' };
+  }
+
+  const email = String(userDoc.email || '').toLowerCase().trim();
+  if (!email) {
+    return { ok: false, created: false, linked: false, code: 'INVALID_EMAIL', message: 'Organization owner email is required.' };
+  }
+
+  let existing = await findOrgOwnerRootEmployee(organizationId);
+
+  if (existing) {
+    let dirty = false;
+    if (!existing.isOrgOwnerRoot) {
+      existing.isOrgOwnerRoot = true;
+      dirty = true;
+    }
+    if (existing.managerId) {
+      existing.managerId = null;
+      dirty = true;
+    }
+    if (existing.manager !== 'Admin') {
+      existing.manager = 'Admin';
+      dirty = true;
+    }
+    if (!String(existing.position || '').trim()) {
+      existing.position = 'CEO';
+      dirty = true;
+    }
+    if (!String(existing.jobTitle || '').trim() || existing.jobTitle === 'Organization Admin') {
+      existing.jobTitle = 'CEO';
+      dirty = true;
+    }
+    if (!String(existing.department || '').trim()) {
+      existing.department = 'Administration';
+      dirty = true;
+    }
+    if (!String(existing.jobCategory || '').trim()) {
+      existing.jobCategory = 'Administration';
+      dirty = true;
+    }
+    if (dirty) {
+      await existing.save();
+    }
+
+    return { ok: true, created: false, linked: false, employee: existing };
+  }
+
+  const displayName = String(userDoc.name || '').trim() || 'Admin';
+  const employeeId = await generateOrgOwnerRootEmployeeId(organizationId, displayName);
+
+  const jobTitle =
+    String(options.jobTitle || userDoc.title || '').trim() || 'CEO';
+  const position =
+    String(options.position || userDoc.position || '').trim() || 'CEO';
+  const department = String(options.department || '').trim() || 'Administration';
+  const jobCategory = String(options.jobCategory || '').trim() || 'Administration';
+
+  const employee = new Employee({
+    organizationId,
+    // Root is chart identity only — Me uses userId + employeeProfileId on a separate Employee
+    name: displayName,
+    lastName: '',
+    email,
+    password: unifiedAuthPlaceholderPassword(),
+    phone1: userDoc.phone || undefined,
+    employeeId,
+    joiningDate: new Date(),
+    salary: 0,
+    department,
+    jobTitle,
+    position,
+    jobCategory,
+    manager: 'Admin',
+    managerId: null,
+    role: 'employee',
+    status: 'active',
+    active: true,
+    isOrgOwnerRoot: true,
+    mustResetPassword: false,
+    hasCompletedFirstLogin: true,
+  });
+
+  employee._skipFunctionalRoleInference = true;
+
+  try {
+    await employee.save();
+  } catch (err) {
+    if (err?.code === 11000) {
+      const raced = await findOrgOwnerRootEmployee(organizationId);
+      if (raced) {
+        return { ok: true, created: false, linked: false, employee: raced };
+      }
+    }
+    throw err;
+  }
+
+  return { ok: true, created: true, linked: false, employee };
+};
+

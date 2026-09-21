@@ -283,8 +283,8 @@ const isTech = (department) => {
  */
 const getAdminNavigation = () => [
     { path: "/dashboard-admin", name: "Dashboard", icon: <FaHome /> },
-    { path: "/organization/dashboard", name: "Organization", icon: <FaBuilding />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EXECUTIVE_DASHBOARD] },
-    { path: "/organization/structure", name: "Org Structure", icon: <FaBuilding />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
+    { path: "/organization/chart", name: "Organization", icon: <FaBuilding />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EXECUTIVE_DASHBOARD, PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
+    // { path: "/organization/structure", name: "Org Structure", icon: <FaBuilding />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/employees", name: "Employees", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
     { path: "/onboarding", name: "Employee lifecycle", icon: <FaUserCheck />, permissions: [PERMISSIONS.ONBOARDING_MANAGE, PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/leave-management", name: "Leave management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM] },
@@ -306,7 +306,7 @@ const getAdminNavigation = () => [
 const getExecutiveNavigation = (position) => {
     const baseItems = [
         { path: "/dashboard-administration", name: "Dashboard", icon: <FaCrown /> },
-        { path: "/organization/dashboard", name: "Organization", icon: <FaBuilding /> },
+        { path: "/organization/chart", name: "Organization", icon: <FaBuilding /> },
         { path: "/employees", name: "Employees", icon: <FaUsers /> },
         { path: "/onboarding", name: "Employee lifecycle", icon: <FaUserCheck /> },
         { path: "/projects", name: "Projects", icon: <FaProjectDiagram /> },
@@ -362,6 +362,7 @@ const getManagerNavigation = (profile) => {
     const items = [
     { path: "/dashboard-manager", name: "Dashboard", icon: <FaUserTie /> },
     { path: "/employees", name: "My team", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
+    { path: "/organization/chart", name: "Organization", icon: <FaBuilding />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/leave-management", name: "Leave management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_TEAM, PERMISSIONS.LEAVE_VIEW_ALL] },
     { path: "/employee/leave-attendance", name: "Leave & attendance", icon: <FaChartLine /> },
@@ -396,6 +397,7 @@ const getManagerNavigation = (profile) => {
 const HR_NAV_ITEMS = [
     { path: "/dashboard-hr", name: "Dashboard", icon: <FaUsers /> },
     { path: "/employees", name: "Employees", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
+    { path: "/organization/chart", name: "Organization", icon: <FaBuilding />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
     { path: "/recruitment", name: "Recruitment", icon: <FaHandshake />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/onboarding", name: "Employee lifecycle", icon: <FaUserCheck />, permissions: [PERMISSIONS.ONBOARDING_MANAGE, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/learning", name: "Learning & development", icon: <FaGraduationCap /> },

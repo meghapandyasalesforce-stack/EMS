@@ -18,11 +18,41 @@ import {
   resolveAllowProbationAfterJoining,
   syncWorkflowProbationFromEmployee,
 } from '../../helpers/employeeProbationSyncHelper.js';
+import AttendanceRule from '../../models/attendanceRule.model.js';
+import { parseEmployeeShiftAssignment } from '../../helpers/shiftHelper.js';
+import {
+  isTopLevelManagerLabel,
+  validateManagerAssignment,
+} from '../../helpers/managerAssignmentHelper.js';
+
+const JOB_CATEGORY_BY_DEPARTMENT = {
+  engineering: 'Engineering',
+  hr: 'Human Resources',
+  'human resources': 'Human Resources',
+  finance: 'Finance',
+  marketing: 'Marketing',
+  sales: 'Sales',
+  'it support': 'Information Technology',
+  operations: 'Operations',
+  'customer support': 'Customer Service',
+  'customer service': 'Customer Service',
+  legal: 'Legal',
+  product: 'Product Management',
+  'research & development': 'Research and Development',
+  design: 'Design',
+  administration: 'Administration',
+  management: 'Management',
+};
+
+function resolveJobCategoryFromDepartment(department) {
+  const key = String(department || '').trim().toLowerCase();
+  return JOB_CATEGORY_BY_DEPARTMENT[key] || 'Administration';
+}
 
 async function resolveManagerReference(organizationId, managerInput) {
   const raw = String(managerInput || '').trim();
-  if (!raw || raw === 'CEO') {
-    return { manager: 'CEO', managerId: null };
+  if (isTopLevelManagerLabel(raw)) {
+    return { manager: 'Admin', managerId: null };
   }
 
   const baseQuery = { organizationId, status: 'active' };
@@ -60,7 +90,7 @@ async function resolveManagerReference(organizationId, managerInput) {
 export const updateEmployeeWorkInfo = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote, probation } = req.body;
+    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote, probation, shiftId, shiftName } = req.body;
 
     // Validate employee ID
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
@@ -94,19 +124,60 @@ export const updateEmployeeWorkInfo = async (req, res) => {
 
     // Prepare update data
     const updateData = {};
-    if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
-    if (department !== undefined) updateData.department = department;
-    if (position !== undefined) updateData.position = position;
+    if (jobTitle !== undefined) {
+      const nextTitle = String(jobTitle || '').trim();
+      updateData.jobTitle = nextTitle || employee.jobTitle || 'CEO';
+    }
+    if (department !== undefined) {
+      const nextDept = String(department || '').trim();
+      updateData.department = nextDept || employee.department || 'Administration';
+    }
+    if (position !== undefined) {
+      const nextPos = String(position || '').trim();
+      updateData.position = nextPos || employee.position || 'CEO';
+    }
+    // runValidators re-checks required fields on the whole doc — always keep jobCategory valid
+    const nextDepartment = updateData.department || employee.department;
+    updateData.jobCategory = resolveJobCategoryFromDepartment(nextDepartment);
     if (manager !== undefined) {
-      const resolvedManager = await resolveManagerReference(organizationId, manager);
-      if (!resolvedManager) {
-        return res.status(400).json({
-          success: false,
-          message: 'Selected manager not found in this organization'
+      // Admin Me / org-owner root must stay top-level — never nest under another employee
+      if (employee.isOrgOwnerRoot === true) {
+        const assignmentCheck = await validateManagerAssignment({
+          organizationId,
+          employeeId,
+          managerId: null,
         });
+        if (!assignmentCheck.valid) {
+          return res.status(400).json({
+            success: false,
+            message: assignmentCheck.message,
+          });
+        }
+        updateData.manager = assignmentCheck.manager;
+        updateData.managerId = assignmentCheck.managerId;
+        updateData.isOrgOwnerRoot = true;
+      } else {
+        const resolvedManager = await resolveManagerReference(organizationId, manager);
+        if (!resolvedManager) {
+          return res.status(400).json({
+            success: false,
+            message: 'Selected manager not found in this organization'
+          });
+        }
+        const assignmentCheck = await validateManagerAssignment({
+          organizationId,
+          employeeId,
+          managerId: resolvedManager.managerId,
+        });
+        if (!assignmentCheck.valid) {
+          return res.status(400).json({
+            success: false,
+            message: assignmentCheck.message,
+          });
+        }
+        updateData.manager = assignmentCheck.manager;
+        updateData.managerId = assignmentCheck.managerId;
       }
-      updateData.manager = resolvedManager.manager;
-      updateData.managerId = resolvedManager.managerId;
     }
     if (salary !== undefined) {
       const nextSalary = Math.max(0, Number(salary) || 0);
@@ -146,8 +217,45 @@ export const updateEmployeeWorkInfo = async (req, res) => {
         };
       }
     }
-    if (joiningDate !== undefined) updateData.joiningDate = joiningDate;
+    if (joiningDate !== undefined && joiningDate !== null && joiningDate !== '') {
+      const parsedJoining = new Date(joiningDate);
+      if (Number.isNaN(parsedJoining.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid joining date'
+        });
+      }
+      updateData.joiningDate = parsedJoining;
+    }
     if (performanceScore !== undefined) updateData.performanceScore = performanceScore;
+    if (shiftId !== undefined || shiftName !== undefined) {
+      const rawId = shiftId != null ? String(shiftId).trim() : '';
+      const rawName = shiftName != null ? String(shiftName).trim() : '';
+      if (!rawId && !rawName) {
+        updateData.$unset = { ...(updateData.$unset || {}), shiftId: '', shiftName: '' };
+      } else {
+        try {
+          const activeRuleForShift = await AttendanceRule.findOne({
+            organizationId,
+            isActive: true,
+          })
+            .sort({ priority: -1, updatedAt: -1 })
+            .select('shifts')
+            .lean();
+          const assigned = parseEmployeeShiftAssignment(
+            { shiftId: rawId, shiftName: rawName },
+            activeRuleForShift?.shifts
+          );
+          updateData.shiftId = assigned.shiftId;
+          updateData.shiftName = assigned.shiftName;
+        } catch (shiftErr) {
+          return res.status(400).json({
+            success: false,
+            message: shiftErr.message,
+          });
+        }
+      }
+    }
     if (probation !== undefined && probation !== null && typeof probation === 'object') {
       const nextProbation = {
         ...(employee.probation?.toObject?.() || employee.probation || {}),
@@ -259,9 +367,12 @@ export const updateEmployeeWorkInfo = async (req, res) => {
 
   } catch (error) {
     logger.error('Error updating employee work information', { error: error.message, stack: error.stack });
-    res.status(500).json({
+    const isValidation = error?.name === 'ValidationError';
+    res.status(isValidation ? 400 : 500).json({
       success: false,
-      message: 'Failed to update employee work information',
+      message: isValidation
+        ? (error.message || 'Validation failed while updating work information')
+        : 'Failed to update employee work information',
       error: error.message
     });
   }
@@ -530,6 +641,140 @@ export const updateEmployeePayrollSettings = async (req, res) => {
       success: false,
       message: 'Failed to update payroll settings',
       error: error.message
+    });
+  }
+};
+
+/**
+ * Assign Shift 1 / Shift 2 to selected employees, or clear shift (no shift).
+ * Body: { shiftId: 'shift1'|'shift2'|''|'none', employeeIds: string[] } — employeeIds required.
+ */
+export const bulkAssignEmployeeShift = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID is required',
+      });
+    }
+
+    const { shiftId, shiftName, employeeIds } = req.body || {};
+
+    if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select one or more employees to assign a shift.',
+      });
+    }
+
+    const rawId = shiftId != null ? String(shiftId).trim() : '';
+    const rawName = shiftName != null ? String(shiftName).trim() : '';
+    const clearShift =
+      !rawId ||
+      rawId.toLowerCase() === 'none' ||
+      rawId.toLowerCase() === 'unassigned';
+
+    const validIds = employeeIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    if (!validIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid employee IDs provided',
+      });
+    }
+
+    const filter = {
+      organizationId,
+      _id: { $in: validIds },
+      status: { $ne: 'terminated' },
+      active: { $ne: false },
+    };
+
+    if (clearShift) {
+      const result = await Employee.updateMany(filter, {
+        $unset: { shiftId: '', shiftName: '' },
+      });
+
+      try {
+        await invalidateEmployeesCache(organizationId);
+      } catch (e) {
+        logger.warn('Failed to invalidate employees cache after bulk shift clear', {
+          error: e.message,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Cleared shift for ${result.modifiedCount} selected employee(s).`,
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+        shiftId: null,
+        shiftName: null,
+      });
+    }
+
+    const activeRuleForShift = await AttendanceRule.findOne({
+      organizationId,
+      isActive: true,
+    })
+      .sort({ priority: -1, updatedAt: -1 })
+      .select('shifts')
+      .lean();
+
+    let assigned;
+    try {
+      assigned = parseEmployeeShiftAssignment(
+        { shiftId: rawId, shiftName: rawName },
+        activeRuleForShift?.shifts
+      );
+    } catch (shiftErr) {
+      return res.status(400).json({
+        success: false,
+        message: shiftErr.message,
+      });
+    }
+
+    if (!assigned) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select Shift 1, Shift 2, or No shift.',
+      });
+    }
+
+    const result = await Employee.updateMany(filter, {
+      $set: {
+        shiftId: assigned.shiftId,
+        shiftName: assigned.shiftName,
+      },
+    });
+
+    try {
+      await invalidateEmployeesCache(organizationId);
+    } catch (e) {
+      logger.warn('Failed to invalidate employees cache after bulk shift assign', {
+        error: e.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Assigned ${assigned.shiftName} to ${result.modifiedCount} selected employee(s).`,
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+      shiftId: assigned.shiftId,
+      shiftName: assigned.shiftName,
+    });
+  } catch (error) {
+    logger.error('Error bulk-assigning employee shift', {
+      error: error.message,
+      stack: error.stack,
+    });
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to assign shift to employees',
+      error: error.message,
     });
   }
 };
