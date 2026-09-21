@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiUser } from 'react-icons/fi';
+import { FiEdit, FiUser } from 'react-icons/fi';
 import SectionCard from '../SectionCard';
 import EmployeeFieldGrid from '../EmployeeFieldGrid';
 import SimpleDataTable from '../SimpleDataTable';
@@ -10,7 +10,7 @@ import {
   getEmergencyContactSummary,
 } from '../utils';
 
-const PersonalTab = ({ employee }) => {
+const PersonalTab = ({ employee, canEditName = false, onEditName }) => {
   const personalFields = [
     { label: 'Full Name', value: getFullName(employee) },
     { label: 'Date of Birth', value: formatDate(employee.birthDate) },
@@ -29,7 +29,22 @@ const PersonalTab = ({ employee }) => {
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Personal Information" icon={FiUser}>
+      <SectionCard
+        title="Personal Information"
+        icon={FiUser}
+        action={
+          canEditName && onEditName ? (
+            <button
+              type="button"
+              onClick={onEditName}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#20C997] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#1ba87f]"
+            >
+              <FiEdit className="h-3.5 w-3.5" />
+              Edit name
+            </button>
+          ) : null
+        }
+      >
         <EmployeeFieldGrid fields={personalFields} />
       </SectionCard>
 

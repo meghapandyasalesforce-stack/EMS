@@ -1,4 +1,5 @@
 import Employee from '../../models/employee.model.js';
+import User from '../../models/user.model.js';
 import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import mongoose from 'mongoose';
 import Attendance from '../../models/attendance.model.js';
@@ -90,7 +91,7 @@ async function resolveManagerReference(organizationId, managerInput) {
 export const updateEmployeeWorkInfo = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote, probation, shiftId, shiftName } = req.body;
+    const { name, lastName, jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote, probation, shiftId, shiftName } = req.body;
 
     // Validate employee ID
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
@@ -124,6 +125,32 @@ export const updateEmployeeWorkInfo = async (req, res) => {
 
     // Prepare update data
     const updateData = {};
+    if (name !== undefined) {
+      const nextName = String(name || '').trim();
+      if (!nextName) {
+        return res.status(400).json({
+          success: false,
+          message: 'First name is required',
+        });
+      }
+      if (nextName.length > 80) {
+        return res.status(400).json({
+          success: false,
+          message: 'First name must be 80 characters or less',
+        });
+      }
+      updateData.name = nextName;
+    }
+    if (lastName !== undefined) {
+      const nextLastName = String(lastName || '').trim();
+      if (nextLastName.length > 80) {
+        return res.status(400).json({
+          success: false,
+          message: 'Last name must be 80 characters or less',
+        });
+      }
+      updateData.lastName = nextLastName;
+    }
     if (jobTitle !== undefined) {
       const nextTitle = String(jobTitle || '').trim();
       updateData.jobTitle = nextTitle || employee.jobTitle || 'CEO';
@@ -357,6 +384,26 @@ export const updateEmployeeWorkInfo = async (req, res) => {
   if (updatedEmployee && updatedEmployee.salary === undefined) {
     const employeeWithSalary = await Employee.findById(employeeId).select('salary').lean();
     updatedEmployee.salary = employeeWithSalary?.salary ?? 0;
+  }
+
+  if (
+    updatedEmployee?.userId &&
+    (updateData.name !== undefined || updateData.lastName !== undefined)
+  ) {
+    const displayName = [updatedEmployee.name, updatedEmployee.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (displayName) {
+      try {
+        await User.findByIdAndUpdate(updatedEmployee.userId, { name: displayName });
+      } catch (e) {
+        logger.warn('Failed to sync linked User name after employee name update', {
+          error: e.message,
+          employeeId,
+        });
+      }
+    }
   }
 
   res.status(200).json({

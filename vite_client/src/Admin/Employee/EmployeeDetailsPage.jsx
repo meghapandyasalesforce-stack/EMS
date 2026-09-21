@@ -94,6 +94,7 @@ const EmployeeDetailsPage = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [openTerminateDialog, setOpenTerminateDialog] = useState(false);
   const [openEditWorkDialog, setOpenEditWorkDialog] = useState(false);
+  const [openEditNameDialog, setOpenEditNameDialog] = useState(false);
   const [openEditPerformanceDialog, setOpenEditPerformanceDialog] = useState(false);
   const [openEditPayrollSettingsDialog, setOpenEditPayrollSettingsDialog] = useState(false);
   const [terminatingEmployee, setTerminatingEmployee] = useState(false);
@@ -117,6 +118,7 @@ const EmployeeDetailsPage = () => {
     probationConfirmedAt: '',
     shiftId: '',
   });
+  const [editNameForm, setEditNameForm] = useState({ name: '', lastName: '' });
   const [shiftOptions, setShiftOptions] = useState([
     { key: 'shift1', name: 'Shift 1', startTime: '09:00', endTime: '17:00' },
     { key: 'shift2', name: 'Shift 2', startTime: '21:00', endTime: '06:00' },
@@ -179,6 +181,7 @@ const EmployeeDetailsPage = () => {
       isHrManager ||
       isHrExecutive ||
       hasAnyPermission([PERMISSIONS.EMPLOYEE_EDIT, PERMISSIONS.EMPLOYEE_DELETE]));
+  const canEditEmployeeName = canManageEmployeeActions;
   const visibleTabs = DETAIL_TABS.filter(
     (tab) =>
       (!tab.permissionGated || canManageAccess) &&
@@ -401,6 +404,46 @@ const EmployeeDetailsPage = () => {
     setEditWorkForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
+  const handleEditNameClick = () => {
+    setEditNameForm({
+      name: employee?.name || '',
+      lastName: employee?.lastName || '',
+    });
+    setOpenEditNameDialog(true);
+  };
+
+  const handleEditNameFormChange = (field) => (event) => {
+    setEditNameForm((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const handleSaveEmployeeName = async () => {
+    const nextName = String(editNameForm.name || '').trim();
+    const nextLastName = String(editNameForm.lastName || '').trim();
+    if (!nextName) {
+      setSnackbar({ open: true, message: 'First name is required', severity: 'error' });
+      return;
+    }
+
+    const resultAction = await dispatch(
+      updateEmployeeWorkInfo({
+        employeeId,
+        workData: { name: nextName, lastName: nextLastName },
+      })
+    );
+
+    if (updateEmployeeWorkInfo.fulfilled.match(resultAction)) {
+      setSnackbar({ open: true, message: 'Name updated successfully.', severity: 'success' });
+      setOpenEditNameDialog(false);
+      await refreshAfterRoleChange();
+    } else {
+      setSnackbar({
+        open: true,
+        message: resultAction.payload || 'Failed to update name',
+        severity: 'error',
+      });
+    }
+  };
+
   const refreshAfterRoleChange = async () => {
     const authUser = currentUser;
     const editingSelf =
@@ -573,7 +616,13 @@ const EmployeeDetailsPage = () => {
     if (!employee) return null;
     switch (activeTab) {
       case 'personal':
-        return <PersonalTab employee={employee} />;
+        return (
+          <PersonalTab
+            employee={employee}
+            canEditName={canEditEmployeeName}
+            onEditName={handleEditNameClick}
+          />
+        );
       case 'job':
         return (
           <JobDetailsTab
@@ -619,7 +668,13 @@ const EmployeeDetailsPage = () => {
       case 'timeline':
         return <TimelineTab employee={employee} />;
       default:
-        return <PersonalTab employee={employee} />;
+        return (
+          <PersonalTab
+            employee={employee}
+            canEditName={canEditEmployeeName}
+            onEditName={handleEditNameClick}
+          />
+        );
     }
   };
 
@@ -835,6 +890,55 @@ const EmployeeDetailsPage = () => {
           </Button>
           <Button color="error" variant="contained" onClick={handleConfirmTerminate} disabled={terminatingEmployee}>
             {terminatingEmployee ? 'Terminating…' : 'Confirm'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openEditNameDialog}
+        onClose={() => setOpenEditNameDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            maxWidth: 480,
+          },
+        }}
+      >
+        <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.125rem', fontWeight: 500 }}>
+            <FiEdit size={18} /> Edit name
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ px: 3, pt: '24px !important', pb: 1 }}>
+          <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
+            <TextField
+              label="First name"
+              value={editNameForm.name}
+              onChange={handleEditNameFormChange('name')}
+              size="small"
+              fullWidth
+              required
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Last name"
+              value={editNameForm.lastName}
+              onChange={handleEditNameFormChange('lastName')}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setOpenEditNameDialog(false)} disabled={updatingWorkInfo}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSaveEmployeeName} disabled={updatingWorkInfo}>
+            {updatingWorkInfo ? 'Saving…' : 'Save name'}
           </Button>
         </DialogActions>
       </Dialog>
