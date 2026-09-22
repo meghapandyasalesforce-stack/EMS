@@ -296,6 +296,7 @@ const getAdminNavigation = () => [
     { path: "/admin/approval-workflows", name: "Approval workflows", icon: <FaTasks />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/admin/pending-approvals", name: "Pending approvals", icon: <FaClock />, permissions: [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM] },
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
+    { path: "/one-on-one", name: "One-on-one", icon: <FaUserCheck /> },
     { path: "/salary-structure", name: "Salary structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
     { path: "/admin-settings", name: "Settings", icon: <FaCog />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
 ];
@@ -414,6 +415,7 @@ const HR_NAV_ITEMS = [
     { path: "/attendance-regularization", name: "Regularization/WFH", icon: <FaClock /> },
     // { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/admin/pending-approvals", name: "Pending approvals", icon: <FaClock /> },
+    { path: "/one-on-one", name: "One-on-one", icon: <FaUserCheck /> },
     // { path: "/attendance-regularization", name: "Regularization & WFH", icon: <FaClock /> },
     // { path: "/my-attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },

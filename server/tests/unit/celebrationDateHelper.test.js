@@ -15,6 +15,8 @@ import {
   buildCelebrationEventKey,
   isOrgNineAmWindow,
   hasReachedOrgNineAm,
+  isOrgMorningNotifyWindow,
+  resolveMorningNotifyTimezone,
   formatCelebrationDateLabel,
 } from '../../helpers/celebrationDateHelper.js';
 
@@ -88,6 +90,25 @@ describe('celebrationDateHelper', () => {
       expect(hasReachedOrgNineAm('Asia/Kolkata', eightFiftyNine)).toBe(false);
       expect(hasReachedOrgNineAm('Asia/Kolkata', new Date('2026-08-18T03:30:00.000Z'))).toBe(true);
       expect(hasReachedOrgNineAm('Asia/Kolkata', fourPm)).toBe(true);
+    });
+
+    it('isOrgMorningNotifyWindow is true only during 9:00–9:59 AM', () => {
+      const eightFiftyNine = new Date('2026-08-18T03:29:00.000Z');
+      const nineAm = new Date('2026-08-18T03:30:00.000Z');
+      const nineFiftyNine = new Date('2026-08-18T04:29:00.000Z');
+      const tenAm = new Date('2026-08-18T04:30:00.000Z');
+      const fourPm = new Date('2026-08-18T10:30:00.000Z');
+      expect(isOrgMorningNotifyWindow('Asia/Kolkata', eightFiftyNine)).toBe(false);
+      expect(isOrgMorningNotifyWindow('Asia/Kolkata', nineAm)).toBe(true);
+      expect(isOrgMorningNotifyWindow('Asia/Kolkata', nineFiftyNine)).toBe(true);
+      expect(isOrgMorningNotifyWindow('Asia/Kolkata', tenAm)).toBe(false);
+      expect(isOrgMorningNotifyWindow('Asia/Kolkata', fourPm)).toBe(false);
+    });
+
+    it('resolveMorningNotifyTimezone maps bare UTC to Asia/Kolkata for morning alerts', () => {
+      expect(resolveMorningNotifyTimezone('UTC')).toBe('Asia/Kolkata');
+      expect(resolveMorningNotifyTimezone('Asia/Kolkata')).toBe('Asia/Kolkata');
+      expect(resolveMorningNotifyTimezone('America/New_York')).toBe('America/New_York');
     });
   });
 

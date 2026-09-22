@@ -192,6 +192,21 @@ export const uploadAdminPhoto = async (req, res) => {
     }
 };
 
+function resolveLocalUploadPath(photo) {
+    if (!photo) return null;
+    if (typeof photo.url === 'string' && photo.url.startsWith('/uploads/')) return photo.url;
+    if (typeof photo.thumbnailUrl === 'string' && photo.thumbnailUrl.startsWith('/uploads/')) {
+        return photo.thumbnailUrl;
+    }
+    if (photo.filename) return `/uploads/profile-photos/${photo.filename}`;
+    return null;
+}
+
+function hasUsableProfilePhoto(photo) {
+    if (!photo) return false;
+    return Boolean(resolvePhotoKey(photo) || resolveThumbKey(photo) || resolveLocalUploadPath(photo));
+}
+
 export const getProfilePhoto = async (req, res) => {
     try {
         const { userId, userType } = req.params;
@@ -205,11 +220,27 @@ export const getProfilePhoto = async (req, res) => {
         }
 
         const photo = user.profilePhoto;
-        if (!photo) return res.status(404).json({ message: 'No profile photo found' });
+        // Empty shells ({ uploadedAt, optimized }) are not real photos
+        if (!hasUsableProfilePhoto(photo)) {
+            return res.status(404).json({ message: 'No profile photo found' });
+        }
 
         const key = resolvePhotoKey(photo);
         const thumbKey = resolveThumbKey(photo);
-        if (!key) return res.status(404).json({ message: 'No profile photo found' });
+
+        // Legacy local disk photos (pre-S3)
+        if (!key) {
+            const localPath = resolveLocalUploadPath(photo);
+            if (!localPath) return res.status(404).json({ message: 'No profile photo found' });
+            return res.json({
+                profilePhoto: {
+                    url: localPath,
+                    thumbnailUrl: localPath,
+                    filename: photo.filename,
+                    uploadedAt: photo.uploadedAt,
+                },
+            });
+        }
 
         // Short-lived (15 min) signed URLs are generated only when a photo is displayed.
         const [url, thumbnailUrl] = await Promise.all([

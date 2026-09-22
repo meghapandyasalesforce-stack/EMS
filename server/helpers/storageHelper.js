@@ -111,11 +111,12 @@ export function buildS3Key(type, organizationId, filename, ownerId = null, optio
  */
 export function extractS3Key(urlOrKey) {
     if (!urlOrKey) return null;
+    const raw = String(urlOrKey).split('?')[0].trim();
     // Legacy local disk paths are not S3 keys — signal absence to callers
-    if (urlOrKey.startsWith('/uploads/') || urlOrKey.startsWith('./')) return null;
+    if (raw.startsWith('/uploads/') || raw.startsWith('./')) return null;
     // Full S3 URL: https://bucket.s3.region.amazonaws.com/key
-    const match = urlOrKey.match(/amazonaws\.com\/(.+)$/);
-    if (match) return match[1];
+    const match = raw.match(/amazonaws\.com\/(.+)$/);
+    if (match) return decodeURIComponent(match[1]);
     // Already a raw S3 key
-    return urlOrKey;
+    return raw;
 }

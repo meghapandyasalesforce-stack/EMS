@@ -1,80 +1,260 @@
 import { OneOnOne } from '../../models/oneOnOne.model.js';
 import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
-import { sendNotificationToUsers } from '../../helpers/notificationService.js';
 import { getManagerEmployeeIds } from '../../helpers/managerHelper.js';
-import { calculateFunctionalRoles } from '../../helpers/roleHelper.js';
 import logger from '../../helpers/logger.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
+import {
+    ACTIVE_MEETING_STATUSES,
+    RESPONSE_ELIGIBLE_STATUSES,
+    RESCHEDULE_ELIGIBLE_STATUSES,
+    COMPLETE_ELIGIBLE_STATUSES,
+    CANCEL_ELIGIBLE_STATUSES,
+    displayName,
+    formatMeetingWhen,
+    getActorEmployeeId,
+    idsEqual,
+    isParticipant,
+    isOrganizer,
+    isInvitee,
+    loadEmployeeWithRoles,
+    isEmployeeManagerLike,
+    notifyMeetingParticipants,
+    otherParticipantId,
+    populateMeeting,
+    buildDeepLink
+} from '../../helpers/oneOnOneHelper.js';
+
+const UPDATE_ALLOWLIST = [
+    'scheduledDate',
+    'scheduledTime',
+    'duration',
+    'location',
+    'meetingLink',
+    'agenda',
+    'nextMeetingDate',
+    'actionItems',
+    'goals',
+    'feedback',
+    'recurring'
+];
+
+const pickAllowed = (body) => {
+    const out = {};
+    for (const key of UPDATE_ALLOWLIST) {
+        if (body[key] !== undefined) out[key] = body[key];
+    }
+    return out;
+};
+
+const requireActor = (req, res) => {
+    const actorId = getActorEmployeeId(req);
+    if (!actorId && !req.user) {
+        res.status(403).json({ success: false, message: 'Employee profile required for this action' });
+        return null;
+    }
+    return actorId;
+};
 
 /**
- * Create one-on-one meeting
+ * Eligible participants: team members + peer managers (for manager-to-manager).
  */
-export const createOneOnOne = asyncHandler(async (req, res) => {
+export const getEligibleParticipants = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const managerId = req.employee?._id || req.user?._id;
+    const actorId = getActorEmployeeId(req);
 
-    if (!req.body.employeeId) {
-        return res.status(400).json({
-            success: false,
-            message: 'Employee ID is required'
+    if (!actorId && !req.user) {
+        return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const allActive = await Employee.find({
+        organizationId,
+        status: 'active',
+        ...(actorId ? { _id: { $ne: actorId } } : {})
+    })
+        .select('name lastName email position jobTitle functionalRoles department managerId')
+        .sort({ name: 1 })
+        .lean();
+
+    // Admin sees everyone
+    if (req.user && !req.employee) {
+        const managers = [];
+        const employees = [];
+        for (const emp of allActive) {
+            const enriched = { ...emp, isManager: isEmployeeManagerLike(emp) };
+            if (enriched.isManager) managers.push(enriched);
+            else employees.push(enriched);
+        }
+        return res.json({
+            success: true,
+            data: { teamMembers: employees, peerManagers: managers, all: allActive }
         });
     }
 
+    const actor = await loadEmployeeWithRoles(actorId, organizationId);
+    if (!actor) {
+        return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const teamIds = await getManagerEmployeeIds(Employee, organizationId, actor);
+    const teamIdSet = new Set(teamIds.map(String));
+
+    const teamMembers = [];
+    const peerManagers = [];
+
+    for (const emp of allActive) {
+        const id = String(emp._id);
+        if (id === String(actorId)) continue;
+        const enriched = { ...emp, isManager: isEmployeeManagerLike(emp) };
+        if (teamIdSet.has(id)) {
+            teamMembers.push(enriched);
+        } else if (enriched.isManager && (actor.isManager || actor.isHR || req.user)) {
+            peerManagers.push(enriched);
+        }
+    }
+
+    // HR without manager flag: allow selecting managers org-wide
+    if (actor.isHR && !actor.isManager) {
+        for (const emp of allActive) {
+            if (String(emp._id) === String(actorId)) continue;
+            if (isEmployeeManagerLike(emp) && !peerManagers.some((p) => String(p._id) === String(emp._id))) {
+                peerManagers.push({ ...emp, isManager: true });
+            }
+            if (!teamMembers.some((t) => String(t._id) === String(emp._id)) && !isEmployeeManagerLike(emp)) {
+                teamMembers.push({ ...emp, isManager: false });
+            }
+        }
+    }
+
+    res.json({
+        success: true,
+        data: {
+            teamMembers,
+            peerManagers,
+            all: [...teamMembers, ...peerManagers]
+        }
+    });
+});
+
+/**
+ * Create one-on-one meeting (manager → employee or manager → manager).
+ */
+export const createOneOnOne = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const organizerId = getActorEmployeeId(req);
+
+    if (!organizerId) {
+        return res.status(403).json({
+            success: false,
+            message: 'An employee profile is required to schedule meetings'
+        });
+    }
+
+    const { employeeId, scheduledDate, scheduledTime } = req.body;
+    if (!employeeId || !scheduledDate) {
+        return res.status(400).json({
+            success: false,
+            message: 'Invitee and scheduled date are required'
+        });
+    }
+
+    if (idsEqual(employeeId, organizerId)) {
+        return res.status(400).json({
+            success: false,
+            message: 'You cannot schedule a meeting with yourself'
+        });
+    }
+
+    const [organizer, invitee] = await Promise.all([
+        loadEmployeeWithRoles(organizerId, organizationId),
+        loadEmployeeWithRoles(employeeId, organizationId)
+    ]);
+
+    if (!invitee || invitee.status === 'inactive') {
+        return res.status(400).json({
+            success: false,
+            message: 'Invitee not found or inactive in this organization'
+        });
+    }
+
+    const canSchedule =
+        req.user ||
+        organizer?.isManager ||
+        organizer?.isHR;
+
+    if (!canSchedule) {
+        return res.status(403).json({
+            success: false,
+            message: 'Only managers, HR, or admins can schedule one-on-one meetings'
+        });
+    }
+
+    // Non-admin managers may invite: direct reports OR other managers (peer)
+    if (!req.user && organizer?.isManager && !organizer?.isHR) {
+        const teamIds = await getManagerEmployeeIds(Employee, organizationId, organizer);
+        const isTeamMember = teamIds.some((id) => idsEqual(id, employeeId));
+        const isPeerManager = isEmployeeManagerLike(invitee);
+        if (!isTeamMember && !isPeerManager) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only schedule meetings with your team members or other managers'
+            });
+        }
+    }
+
+    const meetingKind = isEmployeeManagerLike(invitee) && (organizer?.isManager || req.user)
+        ? 'manager_manager'
+        : 'manager_employee';
+
     const oneOnOne = new OneOnOne({
-        ...req.body,
         organizationId,
-        managerId
+        managerId: organizerId,
+        employeeId,
+        meetingKind,
+        scheduledDate,
+        scheduledTime: scheduledTime || '',
+        duration: req.body.duration || 30,
+        location: req.body.location || '',
+        meetingLink: req.body.meetingLink || '',
+        agenda: Array.isArray(req.body.agenda) ? req.body.agenda : [],
+        status: 'Pending',
+        recurring: req.body.recurring
     });
 
     await oneOnOne.save();
+    await populateMeeting(oneOnOne);
 
-    // Populate for notification
-    await oneOnOne.populate('employeeId', 'name lastName email');
-    await oneOnOne.populate('managerId', 'name lastName email');
+    const organizerName = displayName(oneOnOne.managerId);
+    const inviteeName = displayName(oneOnOne.employeeId);
+    const { label } = formatMeetingWhen(oneOnOne);
 
-    // Send notification to employee
     try {
-        const manager = oneOnOne.managerId;
-        const employee = oneOnOne.employeeId;
-        const managerName = manager ? `${manager.name} ${manager.lastName || ''}`.trim() : 'Your Manager';
-        
-        const scheduledDate = new Date(oneOnOne.scheduledDate);
-        const formattedDate = scheduledDate.toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        });
-        const formattedTime = oneOnOne.scheduledTime || 'TBD';
-        
-        const message = `${managerName} has scheduled a one-on-one meeting with you on ${formattedDate} at ${formattedTime}`;
-        
-        await sendNotificationToUsers(
-            [oneOnOne.employeeId._id],
-            req.employee || req.user,
-            message,
-            'general',
-            {
-                oneOnOneId: oneOnOne._id,
-                type: 'one_on_one',
+        await notifyMeetingParticipants({
+            recipientIds: [oneOnOne.employeeId._id],
+            sender: req.employee || req.user,
+            message: `Meeting with ${organizerName} has been scheduled for ${label} by ${organizerName}.`,
+            organizationId,
+            meetingId: oneOnOne._id,
+            extraMetadata: {
                 scheduledDate: oneOnOne.scheduledDate,
-                scheduledTime: oneOnOne.scheduledTime
+                scheduledTime: oneOnOne.scheduledTime,
+                action: 'scheduled'
             }
-        );
-
-        logger.info('One-on-one notification sent', {
-            oneOnOneId: oneOnOne._id,
-            employeeId: oneOnOne.employeeId._id,
-            managerId: managerId
         });
     } catch (notificationError) {
         logger.error('Error sending one-on-one notification', {
             error: notificationError.message,
             oneOnOneId: oneOnOne._id
         });
-        // Don't fail the request if notification fails
     }
+
+    logger.info('One-on-one created', {
+        oneOnOneId: oneOnOne._id,
+        meetingKind,
+        organizerId,
+        inviteeId: employeeId,
+        inviteeName
+    });
 
     res.status(201).json({
         success: true,
@@ -84,60 +264,75 @@ export const createOneOnOne = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get one-on-one meetings
+ * Get one-on-one meetings (both participants always see shared state).
  */
 export const getOneOnOnes = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const { managerId, employeeId, status, startDate, endDate } = req.query;
-    const currentUserId = req.employee?._id || req.user?._id;
+    const { managerId, employeeId, status, startDate, endDate, tab } = req.query;
+    const currentUserId = getActorEmployeeId(req);
 
     const query = addOrganizationFilter(req, {});
 
-    // If user is a manager, show meetings they created or with their team members.
-    // Do not rely on req.employee.isManager here, because isAuthenticatedBoth only
-    // attaches base token fields and does not enrich manager flags.
     if (currentUserId && !req.user) {
-        const currentEmployee = await Employee.findOne({
-            _id: currentUserId,
-            organizationId
-        })
-            .select('name lastName functionalRoles department position jobTitle')
-            .lean();
+        const currentEmployee = await loadEmployeeWithRoles(currentUserId, organizationId);
+        const isManager = !!currentEmployee?.isManager;
+        const isHR = !!currentEmployee?.isHR;
 
-        const storedRoles = Array.isArray(currentEmployee?.functionalRoles) ? currentEmployee.functionalRoles : [];
-        const effectiveRoles = storedRoles.length > 0
-            ? storedRoles
-            : calculateFunctionalRoles(currentEmployee || {});
-        const isManager = effectiveRoles.includes('manager');
-        const isHR = effectiveRoles.includes('hr');
-
-        if (isManager && !isHR) {
+        if (isHR) {
+            // HR: org-wide visibility
+        } else if (isManager) {
             const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, {
                 ...currentEmployee,
                 _id: currentUserId
             });
             query.$or = [
-                { managerId: currentUserId }, // Meetings created by this manager
-                { employeeId: { $in: managerEmployeeIds } } // Meetings with their team members
+                { managerId: currentUserId },
+                { employeeId: currentUserId },
+                { employeeId: { $in: managerEmployeeIds } }
             ];
         } else {
-        // Regular employees see meetings where they are the employee
-            query.employeeId = currentUserId;
+            // Regular employee: meetings they organize (rare) or are invited to
+            query.$or = [
+                { managerId: currentUserId },
+                { employeeId: currentUserId }
+            ];
         }
     }
 
     if (managerId) query.managerId = managerId;
     if (employeeId) query.employeeId = employeeId;
-    if (status) query.status = status;
+    if (status) {
+        if (status === 'Scheduled') {
+            // Include legacy + new pending/accepted for older clients
+            query.status = { $in: ['Scheduled', 'Pending', 'Accepted', 'Rescheduled'] };
+        } else {
+            query.status = status;
+        }
+    }
+
+    if (tab === 'upcoming') {
+        query.status = { $in: ACTIVE_MEETING_STATUSES };
+        query.scheduledDate = { ...(query.scheduledDate || {}), $gte: new Date(new Date().setHours(0, 0, 0, 0)) };
+    } else if (tab === 'pending') {
+        query.status = 'Pending';
+    } else if (tab === 'reschedule') {
+        query.status = 'Reschedule Requested';
+    } else if (tab === 'history') {
+        query.status = { $in: ['Completed', 'Cancelled', 'Declined', 'No Show'] };
+    }
+
     if (startDate || endDate) {
-        query.scheduledDate = {};
+        query.scheduledDate = query.scheduledDate || {};
         if (startDate) query.scheduledDate.$gte = new Date(startDate);
         if (endDate) query.scheduledDate.$lte = new Date(endDate);
     }
 
     const oneOnOnes = await OneOnOne.find(query)
-        .populate('managerId', 'name lastName email')
-        .populate('employeeId', 'name lastName email')
+        .populate('managerId', 'name lastName email position jobTitle functionalRoles')
+        .populate('employeeId', 'name lastName email position jobTitle functionalRoles')
+        .populate('meetingNotes.authorId', 'name lastName')
+        .populate('response.respondedBy', 'name lastName')
+        .populate('rescheduleProposal.proposedBy', 'name lastName')
         .populate('goals.goalId')
         .sort({ scheduledDate: -1 });
 
@@ -148,22 +343,81 @@ export const getOneOnOnes = asyncHandler(async (req, res) => {
 });
 
 /**
- * Update one-on-one
+ * Get single meeting by id (participants / HR / admin).
+ */
+export const getOneOnOneById = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const actorId = getActorEmployeeId(req);
+    const { id } = req.params;
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    const actor = actorId ? await loadEmployeeWithRoles(actorId, organizationId) : null;
+    const allowed = req.user || actor?.isHR || isParticipant(oneOnOne, actorId);
+    if (!allowed) {
+        return res.status(403).json({ success: false, message: 'Not authorized to view this meeting' });
+    }
+
+    await populateMeeting(oneOnOne);
+    res.json({ success: true, data: oneOnOne });
+});
+
+/**
+ * Update meeting details (organizer / admin). Does not change response workflow status.
  */
 export const updateOneOnOne = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
+    const actorId = getActorEmployeeId(req);
 
-    const oneOnOne = await OneOnOne.findOneAndUpdate(
-        { _id: id, organizationId },
-        req.body,
-        { new: true, runValidators: true }
-    );
-
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
     if (!oneOnOne) {
-        return res.status(404).json({
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (['Completed', 'Cancelled', 'Declined'].includes(oneOnOne.status)) {
+        return res.status(400).json({
             success: false,
-            message: 'One-on-one meeting not found'
+            message: `Cannot update a meeting with status ${oneOnOne.status}`
+        });
+    }
+
+    const allowed = req.user || isOrganizer(oneOnOne, actorId);
+    if (!allowed) {
+        return res.status(403).json({
+            success: false,
+            message: 'Only the organizer can update meeting details'
+        });
+    }
+
+    const updates = pickAllowed(req.body);
+    const dateChanged =
+        (updates.scheduledDate && String(new Date(updates.scheduledDate)) !== String(oneOnOne.scheduledDate)) ||
+        (updates.scheduledTime !== undefined && updates.scheduledTime !== oneOnOne.scheduledTime);
+
+    Object.assign(oneOnOne, updates);
+
+    if (dateChanged) {
+        oneOnOne.status = 'Rescheduled';
+        oneOnOne.rescheduleProposal = undefined;
+    }
+
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    if (dateChanged) {
+        const organizerName = displayName(oneOnOne.managerId);
+        const { label } = formatMeetingWhen(oneOnOne);
+        await notifyMeetingParticipants({
+            recipientIds: [oneOnOne.employeeId._id || oneOnOne.employeeId],
+            sender: req.employee || req.user,
+            message: `Your meeting has been rescheduled by ${organizerName} to ${label}.`,
+            organizationId,
+            meetingId: oneOnOne._id,
+            extraMetadata: { action: 'rescheduled' }
         });
     }
 
@@ -175,42 +429,328 @@ export const updateOneOnOne = asyncHandler(async (req, res) => {
 });
 
 /**
- * Cancel one-on-one (soft cancel — keeps record, sets status to Cancelled)
+ * Invitee accepts the meeting.
+ */
+export const acceptOneOnOne = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const actorId = requireActor(req, res);
+    if (actorId === null && !req.user) return;
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (!isInvitee(oneOnOne, actorId)) {
+        return res.status(403).json({ success: false, message: 'Only the invited participant can accept' });
+    }
+
+    if (!RESPONSE_ELIGIBLE_STATUSES.includes(oneOnOne.status)) {
+        return res.status(400).json({
+            success: false,
+            message: `Cannot accept a meeting with status ${oneOnOne.status}`
+        });
+    }
+
+    if (oneOnOne.status === 'Accepted') {
+        return res.status(400).json({ success: false, message: 'Meeting is already accepted' });
+    }
+
+    oneOnOne.status = 'Accepted';
+    oneOnOne.response = {
+        respondedBy: actorId,
+        respondedAt: new Date(),
+        note: req.body?.note || ''
+    };
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    const inviteeName = displayName(oneOnOne.employeeId);
+    await notifyMeetingParticipants({
+        recipientIds: [oneOnOne.managerId._id || oneOnOne.managerId],
+        sender: req.employee || req.user,
+        message: `${inviteeName} accepted your meeting request.`,
+        organizationId,
+        meetingId: oneOnOne._id,
+        extraMetadata: { action: 'accepted' }
+    });
+
+    res.json({ success: true, message: 'Meeting accepted', data: oneOnOne });
+});
+
+/**
+ * Invitee declines the meeting.
+ */
+export const declineOneOnOne = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const actorId = requireActor(req, res);
+    if (actorId === null && !req.user) return;
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (!isInvitee(oneOnOne, actorId)) {
+        return res.status(403).json({ success: false, message: 'Only the invited participant can decline' });
+    }
+
+    if (!RESPONSE_ELIGIBLE_STATUSES.includes(oneOnOne.status) && oneOnOne.status !== 'Accepted') {
+        return res.status(400).json({
+            success: false,
+            message: `Cannot decline a meeting with status ${oneOnOne.status}`
+        });
+    }
+
+    oneOnOne.status = 'Declined';
+    oneOnOne.response = {
+        respondedBy: actorId,
+        respondedAt: new Date(),
+        note: req.body?.note || ''
+    };
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    const inviteeName = displayName(oneOnOne.employeeId);
+    await notifyMeetingParticipants({
+        recipientIds: [oneOnOne.managerId._id || oneOnOne.managerId],
+        sender: req.employee || req.user,
+        message: `${inviteeName} declined your meeting request.`,
+        organizationId,
+        meetingId: oneOnOne._id,
+        extraMetadata: { action: 'declined' }
+    });
+
+    res.json({ success: true, message: 'Meeting declined', data: oneOnOne });
+});
+
+/**
+ * Propose a new date/time (either participant).
+ */
+export const requestRescheduleOneOnOne = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const actorId = requireActor(req, res);
+    if (actorId === null && !req.user) return;
+
+    const { proposedDate, proposedTime, note } = req.body || {};
+    if (!proposedDate) {
+        return res.status(400).json({ success: false, message: 'Proposed date is required' });
+    }
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (!isParticipant(oneOnOne, actorId) && !req.user) {
+        return res.status(403).json({ success: false, message: 'Only participants can request a reschedule' });
+    }
+
+    if (!RESCHEDULE_ELIGIBLE_STATUSES.includes(oneOnOne.status)) {
+        return res.status(400).json({
+            success: false,
+            message: `Cannot reschedule a meeting with status ${oneOnOne.status}`
+        });
+    }
+
+    oneOnOne.status = 'Reschedule Requested';
+    oneOnOne.rescheduleProposal = {
+        proposedDate: new Date(proposedDate),
+        proposedTime: proposedTime || '',
+        proposedBy: actorId,
+        proposedAt: new Date(),
+        note: note || '',
+        status: 'pending'
+    };
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    const actorName = displayName(
+        idsEqual(actorId, oneOnOne.managerId) ? oneOnOne.managerId : oneOnOne.employeeId
+    );
+    const otherId = otherParticipantId(oneOnOne, actorId);
+    const propDate = new Date(proposedDate).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric'
+    });
+    const propTime = proposedTime || 'TBD';
+
+    await notifyMeetingParticipants({
+        recipientIds: [otherId],
+        sender: req.employee || req.user,
+        message: `${actorName} requested a new time for your meeting: ${propDate} at ${propTime}.`,
+        organizationId,
+        meetingId: oneOnOne._id,
+        extraMetadata: { action: 'reschedule_requested' }
+    });
+
+    res.json({ success: true, message: 'Reschedule requested', data: oneOnOne });
+});
+
+/**
+ * Accept a pending reschedule proposal (the other participant / organizer).
+ * Applies the proposed date/time and sets status to Rescheduled.
+ */
+export const acceptRescheduleOneOnOne = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const actorId = requireActor(req, res);
+    if (actorId === null && !req.user) return;
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (oneOnOne.status !== 'Reschedule Requested' || oneOnOne.rescheduleProposal?.status !== 'pending') {
+        return res.status(400).json({ success: false, message: 'No pending reschedule request' });
+    }
+
+    if (!isParticipant(oneOnOne, actorId) && !req.user) {
+        return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    // Proposer cannot accept their own proposal
+    if (idsEqual(oneOnOne.rescheduleProposal.proposedBy, actorId) && !req.user) {
+        return res.status(400).json({
+            success: false,
+            message: 'Wait for the other participant to accept your reschedule proposal'
+        });
+    }
+
+    oneOnOne.scheduledDate = oneOnOne.rescheduleProposal.proposedDate;
+    oneOnOne.scheduledTime = oneOnOne.rescheduleProposal.proposedTime || oneOnOne.scheduledTime;
+    oneOnOne.status = 'Rescheduled';
+    oneOnOne.rescheduleProposal.status = 'accepted';
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    const actorName = displayName(
+        idsEqual(actorId, oneOnOne.managerId) ? oneOnOne.managerId : oneOnOne.employeeId
+    );
+    const { label } = formatMeetingWhen(oneOnOne);
+    const otherId = otherParticipantId(oneOnOne, actorId);
+
+    await notifyMeetingParticipants({
+        recipientIds: [otherId],
+        sender: req.employee || req.user,
+        message: `Your meeting has been rescheduled by ${actorName} to ${label}.`,
+        organizationId,
+        meetingId: oneOnOne._id,
+        extraMetadata: { action: 'reschedule_accepted' }
+    });
+
+    res.json({ success: true, message: 'Reschedule accepted', data: oneOnOne });
+});
+
+/**
+ * Reject a pending reschedule proposal — restores previous Accepted/Pending state.
+ */
+export const rejectRescheduleOneOnOne = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const actorId = requireActor(req, res);
+    if (actorId === null && !req.user) return;
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (oneOnOne.status !== 'Reschedule Requested') {
+        return res.status(400).json({ success: false, message: 'No pending reschedule request' });
+    }
+
+    if (!isParticipant(oneOnOne, actorId) && !req.user) {
+        return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    if (idsEqual(oneOnOne.rescheduleProposal?.proposedBy, actorId) && !req.user) {
+        return res.status(400).json({
+            success: false,
+            message: 'You cannot reject your own reschedule proposal — cancel it by proposing again or contact the other participant'
+        });
+    }
+
+    oneOnOne.rescheduleProposal.status = 'rejected';
+    // Restore to Accepted if previously confirmed, else Pending
+    oneOnOne.status = oneOnOne.response?.respondedAt ? 'Accepted' : 'Pending';
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    const actorName = displayName(
+        idsEqual(actorId, oneOnOne.managerId) ? oneOnOne.managerId : oneOnOne.employeeId
+    );
+    const otherId = otherParticipantId(oneOnOne, actorId);
+    await notifyMeetingParticipants({
+        recipientIds: [otherId],
+        sender: req.employee || req.user,
+        message: `${actorName} declined your reschedule request. The original time remains.`,
+        organizationId,
+        meetingId: oneOnOne._id,
+        extraMetadata: { action: 'reschedule_rejected' }
+    });
+
+    res.json({ success: true, message: 'Reschedule request rejected', data: oneOnOne });
+});
+
+/**
+ * Cancel one-on-one (organizer, invitee, or admin).
  */
 export const cancelOneOnOne = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
-    const currentUserId = req.employee?._id || req.user?._id;
+    const currentUserId = getActorEmployeeId(req);
 
     const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
-
     if (!oneOnOne) {
-        return res.status(404).json({
-            success: false,
-            message: 'One-on-one meeting not found'
-        });
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
     }
 
-    if (!['Scheduled', 'Rescheduled'].includes(oneOnOne.status)) {
+    if (!CANCEL_ELIGIBLE_STATUSES.includes(oneOnOne.status)) {
         return res.status(400).json({
             success: false,
-            message: `Only scheduled or rescheduled meetings can be cancelled (current status: ${oneOnOne.status})`
+            message: `Only active meetings can be cancelled (current status: ${oneOnOne.status})`
         });
     }
 
     const isAdmin = !!req.user;
-    if (!isAdmin && String(oneOnOne.managerId) !== String(currentUserId)) {
+    if (!isAdmin && !isParticipant(oneOnOne, currentUserId)) {
         return res.status(403).json({
             success: false,
-            message: 'Only the meeting organizer can cancel this meeting'
+            message: 'Only meeting participants can cancel this meeting'
         });
     }
 
     oneOnOne.status = 'Cancelled';
+    oneOnOne.cancelledBy = currentUserId || undefined;
+    oneOnOne.cancelledAt = new Date();
+    oneOnOne.cancelReason = req.body?.reason || '';
     await oneOnOne.save();
+    await populateMeeting(oneOnOne);
 
-    await oneOnOne.populate('employeeId', 'name lastName email');
-    await oneOnOne.populate('managerId', 'name lastName email');
+    const actorName = displayName(
+        idsEqual(currentUserId, oneOnOne.managerId)
+            ? oneOnOne.managerId
+            : idsEqual(currentUserId, oneOnOne.employeeId)
+                ? oneOnOne.employeeId
+                : { name: 'Admin' }
+    );
+    const otherId = otherParticipantId(oneOnOne, currentUserId);
+    const recipients = otherId
+        ? [otherId]
+        : [oneOnOne.managerId._id || oneOnOne.managerId, oneOnOne.employeeId._id || oneOnOne.employeeId];
+
+    await notifyMeetingParticipants({
+        recipientIds: recipients,
+        sender: req.employee || req.user,
+        message: `Meeting cancelled by ${actorName}.`,
+        organizationId,
+        meetingId: oneOnOne._id,
+        extraMetadata: { action: 'cancelled' }
+    });
 
     res.json({
         success: true,
@@ -220,33 +760,68 @@ export const cancelOneOnOne = asyncHandler(async (req, res) => {
 });
 
 /**
- * Complete one-on-one
+ * Mark meeting completed (either participant).
  */
 export const completeOneOnOne = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
+    const actorId = getActorEmployeeId(req);
 
-    const oneOnOne = await OneOnOne.findOne({
-        _id: id,
-        organizationId
-    });
-
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
     if (!oneOnOne) {
-        return res.status(404).json({
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (!req.user && !isParticipant(oneOnOne, actorId)) {
+        return res.status(403).json({ success: false, message: 'Only participants can complete this meeting' });
+    }
+
+    if (!COMPLETE_ELIGIBLE_STATUSES.includes(oneOnOne.status)) {
+        return res.status(400).json({
             success: false,
-            message: 'One-on-one meeting not found'
+            message: `Cannot complete a meeting with status ${oneOnOne.status}`
         });
     }
 
     oneOnOne.status = 'Completed';
-    oneOnOne.managerNotes = req.body.managerNotes;
-    oneOnOne.employeeNotes = req.body.employeeNotes;
-    oneOnOne.feedback = req.body.feedback;
-    oneOnOne.agenda = req.body.agenda || oneOnOne.agenda;
-    oneOnOne.actionItems = req.body.actionItems || oneOnOne.actionItems;
-    oneOnOne.nextMeetingDate = req.body.nextMeetingDate;
+    oneOnOne.completedBy = actorId || undefined;
+    oneOnOne.completedAt = new Date();
+
+    if (req.body.managerNotes !== undefined) oneOnOne.managerNotes = req.body.managerNotes;
+    if (req.body.employeeNotes !== undefined) oneOnOne.employeeNotes = req.body.employeeNotes;
+    if (req.body.feedback) oneOnOne.feedback = req.body.feedback;
+    if (req.body.agenda) oneOnOne.agenda = req.body.agenda;
+    if (req.body.actionItems) oneOnOne.actionItems = req.body.actionItems;
+    if (req.body.nextMeetingDate) oneOnOne.nextMeetingDate = req.body.nextMeetingDate;
+
+    // Optional note on complete
+    if (req.body.note && actorId) {
+        const author = await Employee.findById(actorId).select('name lastName').lean();
+        oneOnOne.meetingNotes.push({
+            content: req.body.note,
+            authorId: actorId,
+            authorName: displayName(author),
+            createdAt: new Date()
+        });
+    }
 
     await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    const actorName = displayName(
+        idsEqual(actorId, oneOnOne.managerId) ? oneOnOne.managerId : oneOnOne.employeeId
+    );
+    const otherId = otherParticipantId(oneOnOne, actorId);
+    if (otherId) {
+        await notifyMeetingParticipants({
+            recipientIds: [otherId],
+            sender: req.employee || req.user,
+            message: `${actorName} marked your meeting as completed.`,
+            organizationId,
+            meetingId: oneOnOne._id,
+            extraMetadata: { action: 'completed' }
+        });
+    }
 
     res.json({
         success: true,
@@ -255,3 +830,80 @@ export const completeOneOnOne = asyncHandler(async (req, res) => {
     });
 });
 
+/**
+ * Add a shared meeting note.
+ */
+export const addMeetingNote = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const actorId = requireActor(req, res);
+    if (actorId === null && !req.user) return;
+
+    const content = (req.body?.content || '').trim();
+    if (!content) {
+        return res.status(400).json({ success: false, message: 'Note content is required' });
+    }
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    if (!isParticipant(oneOnOne, actorId) && !req.user) {
+        return res.status(403).json({ success: false, message: 'Only participants can add notes' });
+    }
+
+    if (['Cancelled', 'Declined'].includes(oneOnOne.status)) {
+        return res.status(400).json({ success: false, message: 'Cannot add notes to a cancelled/declined meeting' });
+    }
+
+    const author = await Employee.findById(actorId).select('name lastName').lean();
+    oneOnOne.meetingNotes.push({
+        content,
+        authorId: actorId,
+        authorName: displayName(author),
+        createdAt: new Date()
+    });
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    res.json({ success: true, message: 'Note added', data: oneOnOne });
+});
+
+/**
+ * Update own meeting note.
+ */
+export const updateMeetingNote = asyncHandler(async (req, res) => {
+    const { id, noteId } = req.params;
+    const organizationId = getOrganizationId(req);
+    const actorId = requireActor(req, res);
+    if (actorId === null && !req.user) return;
+
+    const content = (req.body?.content || '').trim();
+    if (!content) {
+        return res.status(400).json({ success: false, message: 'Note content is required' });
+    }
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+    if (!oneOnOne) {
+        return res.status(404).json({ success: false, message: 'One-on-one meeting not found' });
+    }
+
+    const note = oneOnOne.meetingNotes.id(noteId);
+    if (!note) {
+        return res.status(404).json({ success: false, message: 'Note not found' });
+    }
+
+    if (!idsEqual(note.authorId, actorId) && !req.user) {
+        return res.status(403).json({ success: false, message: 'You can only edit your own notes' });
+    }
+
+    note.content = content;
+    note.updatedAt = new Date();
+    await oneOnOne.save();
+    await populateMeeting(oneOnOne);
+
+    res.json({ success: true, message: 'Note updated', data: oneOnOne });
+});
+
+export { buildDeepLink };

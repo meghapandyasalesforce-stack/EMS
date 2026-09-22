@@ -1,3 +1,11 @@
+function isUnreachableIconUrl(url) {
+  if (!url || typeof url !== 'string') return true;
+  return (
+    /^http:\/\//i.test(url) ||
+    /localhost|127\.0\.0\.1/i.test(url)
+  );
+}
+
 self.addEventListener('push', (event) => {
   let data = {};
 
@@ -20,33 +28,60 @@ self.addEventListener('push', (event) => {
   const origin = self.location.origin;
   const defaultIcon = `${origin}/logo192.png`;
   const title = data.title && data.title !== 'Notification' ? data.title : 'Paarsiv';
-
-  const options = {
-    body: data.body || 'You have a new notification',
-    icon: data.icon || defaultIcon,
-    badge: data.badge || defaultIcon,
-    tag: data.tag || `notification-${Date.now()}`,
-    renotify: data.renotify !== false,
-    data: {
-      ...(data.data || {}),
-      url: data.data?.url || data.url || '/notifications',
-    },
-    requireInteraction: false,
-    vibrate: data.vibrate || [200, 100, 200],
-    timestamp: Date.now(),
+  const body = data.body || 'You have a new notification';
+  const tag = data.tag || `notification-${Date.now()}`;
+  const notificationData = {
+    ...(data.data || {}),
+    url: data.data?.url || data.url || '/notifications',
   };
+
+  // Prefer same-origin icons — unreachable localhost icons break Android display
+  const icon = isUnreachableIconUrl(data.icon) ? defaultIcon : data.icon;
+  const badge = isUnreachableIconUrl(data.badge) ? defaultIcon : data.badge;
 
   event.waitUntil(
     (async () => {
-      try {
-        await self.registration.showNotification(title, options);
-      } catch (err) {
-        await self.registration.showNotification(title, {
-          body: options.body,
-          tag: options.tag,
-          data: options.data,
+      // Try full options first, then progressively simpler — Android is picky
+      const attempts = [
+        {
+          body,
+          icon,
+          badge,
+          tag,
+          renotify: data.renotify !== false,
+          data: notificationData,
+          requireInteraction: false,
+          vibrate: Array.isArray(data.vibrate) ? data.vibrate : [200, 100, 200],
+          timestamp: Date.now(),
+        },
+        {
+          body,
+          icon: defaultIcon,
+          tag,
+          data: notificationData,
           renotify: true,
-        });
+        },
+        {
+          body,
+          tag,
+          data: notificationData,
+        },
+      ];
+
+      let lastError;
+      for (const options of attempts) {
+        try {
+          await self.registration.showNotification(title, options);
+          return;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      // Last resort — empty options still surface a tray entry on most Androids
+      try {
+        await self.registration.showNotification(title || 'Paarsiv', { body, tag });
+      } catch (err) {
+        console.error('Push showNotification failed', lastError || err);
       }
     })()
   );

@@ -95,9 +95,15 @@ if (isMetricsEnabled()) {
   app.use(metricsMiddleware);
 }
 
+// Parse cookies BEFORE request logging / auth so jwt is available on req.cookies
+app.use(cookieParser());
+
 // ✅ Logger (except tests)
 if (process.env.NODE_ENV !== "test") app.use(requestLogger);
 app.set("trust proxy", 1);
+
+// Avoid 304 empty-body cache issues on mobile browsers (wipes notification lists)
+app.set("etag", false);
 
 // ✅ Compression middleware (should be early in the middleware stack)
 app.use(compression({
@@ -124,7 +130,7 @@ app.use(express.json({
   },
 }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(cookieParser());
+// cookieParser already applied earlier (before requestLogger)
 
 // ✅ Security Middleware
 app.use(

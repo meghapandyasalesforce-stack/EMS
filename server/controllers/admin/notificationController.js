@@ -477,6 +477,11 @@ const getAllowedOrigins = () => {
 // Get notifications for current user (regular API endpoint)
 export const getUserNotifications = async (req, res) => {
   try {
+    // Prevent mobile browsers from caching empty 304 responses that wipe the list
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     const recipientIds = await resolveNotificationRecipientIds(req);
     
     if (!recipientIds.length) {
@@ -541,6 +546,13 @@ export const getUserNotifications = async (req, res) => {
         joinedAt: announcementJoinedAt,
       })
     );
+
+    logger.info('User notifications fetched', {
+      organizationId: organizationId?.toString?.() || organizationId,
+      recipientCount: recipientIds.length,
+      returned: withReadState.length,
+      total,
+    });
 
     return sendSuccess(res, {
       notifications: withReadState,
@@ -644,6 +656,10 @@ export const markAllAsRead = async (req, res) => {
 // Get unread notification count
 export const getUnreadCount = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     const recipientIds = await resolveNotificationRecipientIds(req);
     
     if (!recipientIds.length) {

@@ -24,7 +24,17 @@ export const fetchUserNotifications = createAsyncThunk(
   'notifications/fetchUserNotifications',
   async (params = { limit: 50, page: 1 }, { rejectWithValue }) => {
     try {
-      const res = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications`, { params });
+      const res = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications`, {
+        params: { ...params, _ts: Date.now() },
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
+      // Axios/browser 304 can return an empty body — treat as a failed refresh, not an empty inbox
+      if (res.status === 304 || (res.data == null || res.data === '')) {
+        return rejectWithValue('STALE_CACHE');
+      }
       return res.data;
     } catch (error) {
       return rejectWithValue(
@@ -39,7 +49,16 @@ export const fetchUnreadCount = createAsyncThunk(
   'notifications/fetchUnreadCount',
   async (_, { rejectWithValue }) => {
     try {
-      const res = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/unread-count`);
+      const res = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/unread-count`, {
+        params: { _ts: Date.now() },
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
+      if (res.status === 304 || (res.data == null || res.data === '')) {
+        return rejectWithValue('STALE_CACHE');
+      }
       return res.data;
     } catch (error) {
       return rejectWithValue(
@@ -110,12 +129,20 @@ export const deleteAllNotifications = createAsyncThunk(
 );
 
 const normalizeNotificationsResponse = (payload) => {
+  if (payload == null || payload === '') return null;
   if (Array.isArray(payload)) return payload;
-  return (
-    payload?.notifications ||
-    payload?.data?.notifications ||
-    (Array.isArray(payload?.data) ? payload.data : [])
-  );
+  if (payload?.notifications && Array.isArray(payload.notifications)) {
+    return payload.notifications;
+  }
+  if (payload?.data?.notifications && Array.isArray(payload.data.notifications)) {
+    return payload.data.notifications;
+  }
+  if (Array.isArray(payload?.data)) return payload.data;
+  // Explicit empty list from API
+  if (payload?.success === true && Array.isArray(payload.notifications)) {
+    return payload.notifications;
+  }
+  return null;
 };
 
 const normalizeUnreadCountResponse = (payload) => {
@@ -208,12 +235,18 @@ const notificationSlice = createSlice({
       .addCase(fetchUserNotifications.fulfilled, (state, action) => {
         const notifications = normalizeNotificationsResponse(action.payload);
         state.loading = false;
-        state.notifications = notifications;
-        state.unreadCount = notifications.filter(isNotificationUnread).length;
+        // Only replace when we received a real payload (avoid wiping on empty/304 bodies)
+        if (Array.isArray(notifications)) {
+          state.notifications = notifications;
+          state.unreadCount = notifications.filter(isNotificationUnread).length;
+        }
       })
       .addCase(fetchUserNotifications.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || 'Failed to fetch notifications';
+        // Keep existing list when refresh failed due to stale cache / network blip
+        if (action.payload !== 'STALE_CACHE') {
+          state.error = action.payload || 'Failed to fetch notifications';
+        }
       })
 
       // fetchUnreadCount
@@ -222,11 +255,16 @@ const notificationSlice = createSlice({
       })
       .addCase(fetchUnreadCount.fulfilled, (state, action) => {
         state.unreadLoading = false;
-        state.unreadCount = Number(normalizeUnreadCountResponse(action.payload)) || 0;
+        const count = Number(normalizeUnreadCountResponse(action.payload));
+        if (!Number.isNaN(count)) {
+          state.unreadCount = count;
+        }
       })
       .addCase(fetchUnreadCount.rejected, (state, action) => {
         state.unreadLoading = false;
-        state.error = action.payload || 'Failed to fetch unread count';
+        if (action.payload !== 'STALE_CACHE') {
+          state.error = action.payload || 'Failed to fetch unread count';
+        }
       })
 
       // markOneNotificationRead

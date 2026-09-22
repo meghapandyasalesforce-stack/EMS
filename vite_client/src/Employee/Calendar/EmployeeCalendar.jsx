@@ -64,23 +64,47 @@ const EmployeeCalendar = () => {
       const mappedMeetings = meetings
         .filter((meeting) => {
           const status = String(meeting?.status || '').toLowerCase();
-          return status !== 'cancelled';
+          // Keep active meetings on calendar; hide declined/cancelled
+          return !['declined', 'cancelled'].includes(status);
         })
         .map((meeting) => {
           const managerName = `${meeting?.managerId?.name || ''} ${meeting?.managerId?.lastName || ''}`.trim();
-          const title = managerName ? `1:1 with ${managerName}` : '1:1 Meeting';
+          const employeeName = `${meeting?.employeeId?.name || ''} ${meeting?.employeeId?.lastName || ''}`.trim();
+          const currentId = String(user?._id || user?.id || employee?._id || employee?.id || '');
+          const isOrganizer = String(meeting?.managerId?._id || meeting?.managerId) === currentId;
+          const counterpartFull = isOrganizer ? employeeName : managerName;
+          const counterpartFirst = (counterpartFull || '1:1').split(/\s+/)[0];
+          const status = meeting.status || 'Pending';
+          const timeLabel = meeting.scheduledTime ? String(meeting.scheduledTime).slice(0, 5) : '';
+          // Short label for month grid; full name kept for detail panels
+          const shortTitle = timeLabel
+            ? `1:1 ${counterpartFirst} · ${timeLabel}`
+            : `1:1 ${counterpartFirst}`;
+          const fullTitle = counterpartFull
+            ? `1:1 with ${counterpartFull}${timeLabel ? ` at ${timeLabel}` : ''}`
+            : '1:1 Meeting';
           return {
-            _id: `meeting-${meeting._id}`,
-            name: title,
+            _id: meeting.calendarEventKey || `meeting-${meeting._id}`,
+            name: shortTitle,
+            fullName: fullTitle,
             date: meeting.scheduledDate,
             type: 'company',
             isActive: true,
             eventKind: 'meeting',
-            meetingStatus: meeting.status,
-            scheduledTime: meeting.scheduledTime
+            meetingStatus: status,
+            scheduledTime: meeting.scheduledTime,
+            meetingId: meeting._id
           };
         });
-      setOneOnOneEvents(mappedMeetings);
+      // De-dupe by calendar event key / meeting id
+      const seen = new Set();
+      const uniqueMeetings = mappedMeetings.filter((ev) => {
+        const key = String(ev._id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setOneOnOneEvents(uniqueMeetings);
       if (calendarData) {
         setCalendar(calendarData);
         return;
@@ -173,7 +197,15 @@ const EmployeeCalendar = () => {
     };
   };
 
-  const getEventTypeColor = (type) => {
+  const getEventTypeColor = (type, event = null) => {
+    if (event?.eventKind === 'meeting') {
+      const status = String(event.meetingStatus || '').toLowerCase();
+      if (status === 'pending') return 'bg-amber-400';
+      if (status === 'accepted' || status === 'scheduled' || status === 'rescheduled') return 'bg-emerald-500';
+      if (status === 'reschedule requested') return 'bg-violet-500';
+      if (status === 'completed') return 'bg-slate-400';
+      return 'bg-teal-500';
+    }
     const key = String(type || '').toLowerCase();
     if (key === 'national') return 'bg-red-500';
     if (key === 'religious') return 'bg-purple-500';
@@ -182,7 +214,11 @@ const EmployeeCalendar = () => {
     return 'bg-slate-400';
   };
 
-  const getEventTypeLabel = (type) => {
+  const getEventTypeLabel = (type, event = null) => {
+    if (event?.eventKind === 'meeting') {
+      const status = event.meetingStatus || 'Pending';
+      return `1:1 · ${status}`;
+    }
     const key = String(type || '').toLowerCase();
     if (key === 'national' || key === 'regional') return 'Holiday';
     if (key === 'company') return 'Meeting';
@@ -503,24 +539,37 @@ const EmployeeCalendar = () => {
                               setShowMobileDateDetails(true);
                             }
                           }}
-                          className={`min-h-[100px] rounded-xl border border-slate-100 p-2 text-left transition ${day ? bgClass : 'bg-slate-50'} ${selected ? 'ring-2 ring-[#20C997]/50' : ''}`}
+                          className={`min-h-[112px] rounded-xl border border-slate-100 p-2 text-left transition ${day ? bgClass : 'bg-slate-50'} ${selected ? 'ring-2 ring-[#20C997]/50' : ''}`}
                         >
-                          <div className="flex items-start justify-between">
+                          <div className="flex items-start justify-between gap-1">
                             <span className={`text-sm font-semibold ${today ? 'text-white' : 'text-slate-700'}`}>{day || ''}</span>
                             {today && (
-                              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide">Today</span>
+                              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">Today</span>
                             )}
                           </div>
                           {day && (
-                            <div className="mt-2 space-y-1">
-                              {holidaysOnDay.slice(0, 2).map((holiday) => (
-                                <div key={holiday._id || holiday.name} className="flex items-center gap-1">
-                                  <span className={`h-2 w-2 rounded-full ${getEventTypeColor(holiday.type)}`} />
-                                  <span className={`truncate text-[10px] font-medium ${today ? 'text-white' : 'text-slate-700'}`}>
-                                    {holiday.name}
-                                  </span>
-                                </div>
-                              ))}
+                            <div className="mt-1.5 space-y-1">
+                              {holidaysOnDay.slice(0, 2).map((holiday) => {
+                                const isMeeting = holiday.eventKind === 'meeting';
+                                return (
+                                  <div
+                                    key={holiday._id || holiday.name}
+                                    title={holiday.fullName || holiday.name}
+                                    className={`flex items-start gap-1 rounded-md px-1 py-0.5 ${
+                                      today
+                                        ? 'bg-white/95 text-slate-800 shadow-sm'
+                                        : isMeeting
+                                          ? 'bg-teal-50 text-teal-900'
+                                          : ''
+                                    }`}
+                                  >
+                                    <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${getEventTypeColor(holiday.type, holiday)}`} />
+                                    <span className={`line-clamp-2 text-[10px] font-semibold leading-tight ${today || isMeeting ? '' : 'text-slate-700'}`}>
+                                      {holiday.name}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                               {holidaysOnDay.length > 2 && (
                                 <p className={`text-[10px] font-semibold ${today ? 'text-white/90' : 'text-slate-500'}`}>
                                   +{holidaysOnDay.length - 2} more
@@ -551,11 +600,11 @@ const EmployeeCalendar = () => {
                           selectedDateEvents.map((event) => (
                             <div key={event._id || event.name} className="rounded-lg border border-slate-200 bg-white p-3">
                               <div className="flex items-center gap-2">
-                                <span className={`h-2.5 w-2.5 rounded-full ${getEventTypeColor(event.type)}`} />
-                                <p className="text-sm font-semibold text-slate-900">{event.name}</p>
+                                <span className={`h-2.5 w-2.5 rounded-full ${getEventTypeColor(event.type, event)}`} />
+                                <p className="text-sm font-semibold text-slate-900">{event.fullName || event.name}</p>
                               </div>
                               <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                {getEventTypeLabel(event.type)}
+                                {getEventTypeLabel(event.type, event)}
                               </p>
                             </div>
                           ))
@@ -607,7 +656,7 @@ const EmployeeCalendar = () => {
                           <p className="mt-1 text-lg font-bold text-slate-800">{day}</p>
                           <div className="mt-2 flex flex-wrap gap-1">
                             {events.slice(0, 3).map((event) => (
-                              <span key={event._id || event.name} className={`h-2 w-2 rounded-full ${getEventTypeColor(event.type)}`} />
+                              <span key={event._id || event.name} className={`h-2 w-2 rounded-full ${getEventTypeColor(event.type, event)}`} />
                             ))}
                           </div>
                         </button>
@@ -625,8 +674,8 @@ const EmployeeCalendar = () => {
                         .slice(0, 8)
                         .map(({ evt, d }, idx) => (
                           <li key={`${evt._id || evt.name}-${idx}`} className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full ${getEventTypeColor(evt.type)}`} />
-                            <span>{d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {evt.name}</span>
+                            <span className={`h-2 w-2 rounded-full ${getEventTypeColor(evt.type, evt)}`} />
+                            <span>{d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {evt.fullName || evt.name}</span>
                           </li>
                         ))}
                     </ul>
@@ -646,11 +695,11 @@ const EmployeeCalendar = () => {
                       getEventsForDateObj(selectedDate).map((event) => (
                         <div key={event._id || event.name} className="rounded-lg border border-slate-200 bg-white p-3">
                           <div className="flex items-center gap-2">
-                            <span className={`h-2.5 w-2.5 rounded-full ${getEventTypeColor(event.type)}`} />
-                            <p className="font-semibold text-slate-900">{event.name}</p>
+                            <span className={`h-2.5 w-2.5 rounded-full ${getEventTypeColor(event.type, event)}`} />
+                            <p className="font-semibold text-slate-900">{event.fullName || event.name}</p>
                           </div>
                           <p className="mt-1 text-xs font-semibold uppercase text-slate-500">
-                            {getEventTypeLabel(event.type)}
+                            {getEventTypeLabel(event.type, event)}
                           </p>
                         </div>
                       ))
@@ -679,7 +728,8 @@ const EmployeeCalendar = () => {
               <div className="mt-6 flex flex-wrap gap-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-yellow-400" /> Leave</span>
                 <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Holiday</span>
-                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Meeting</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-teal-500" /> 1:1 Meeting</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Pending 1:1</span>
                 <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-purple-500" /> Deadline</span>
               </div>
             </div>
@@ -732,10 +782,10 @@ const EmployeeCalendar = () => {
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       {event.dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                     </p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{event.name}</p>
+                    <p className="mt-2 text-base font-semibold text-slate-900">{event.fullName || event.name}</p>
                     <div className="mt-2 flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${getEventTypeColor(event.type)}`} />
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{getEventTypeLabel(event.type)}</span>
+                      <span className={`h-2 w-2 rounded-full ${getEventTypeColor(event.type, event)}`} />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{getEventTypeLabel(event.type, event)}</span>
                     </div>
                   </div>
                 ))}

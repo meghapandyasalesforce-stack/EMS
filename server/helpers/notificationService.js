@@ -8,7 +8,8 @@ import logger from './logger.js';
 import { 
   sendPushNotification, 
   sendBroadcastPushNotification,
-  createPushPayload 
+  createPushPayload,
+  isPushEnabledForUser,
 } from './pushNotificationService.js';
 import { getCachedEffectiveTimezone } from './orgContextCache.js';
 import { formatTimeInTimezone } from './timezoneHelper.js';
@@ -269,10 +270,8 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
         const recipientId = recipientIds[i];
         const notification = notifications[i];
         
-        // Check user's push notification settings
-        const settings = await NotificationSettings.findOne({ user: recipientId });
-        if (settings && settings.pushNotifications === false) {
-          continue; // Skip if user disabled push notifications
+        if (!(await isPushEnabledForUser(recipientId))) {
+          continue;
         }
 
         // Send push notification
@@ -313,7 +312,10 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
     const senderType = sender.constructor.modelName === 'Employee' ? 'Employee' : 'User';
     
     // Get organizationId from sender (both User and Employee have organizationId)
-    const organizationId = sender.organizationId || sender.organization || metadata.organizationId;
+    let organizationId = sender.organizationId || sender.organization || metadata.organizationId;
+    if (organizationId?._id) {
+      organizationId = organizationId._id;
+    }
     
     if (!organizationId) {
       logger.error('OrganizationId missing when sending broadcast notification', {
@@ -353,17 +355,25 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
 
     logger.info('Broadcast notification sent', {
       notificationId: notification._id,
-      message
+      message,
+      organizationId: organizationId.toString?.() || organizationId,
     });
 
-    // Send push notification to all subscribers
+    // Send push notification to all subscribers (same delivery path family as test push)
     try {
       const pushPayload = createPushPayload(message, type, {
-        ...metadata,
-        notificationId: notification._id
+        notificationId: notification._id.toString(),
+        priority: metadata.priority,
+        title: metadata.title,
       });
       
-      await sendBroadcastPushNotification(pushPayload, organizationId);
+      const pushResult = await sendBroadcastPushNotification(pushPayload, organizationId);
+      logger.info('Broadcast push result', {
+        notificationId: notification._id,
+        sent: pushResult.sent,
+        failed: pushResult.failed,
+        reason: pushResult.reason,
+      });
     } catch (pushError) {
       logger.error('Error sending broadcast push notification', {
         error: pushError.message,
@@ -376,7 +386,7 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
     logger.error('Error sending broadcast notification', {
       error: error.message,
       stack: error.stack,
-      title
+      type,
     });
   }
 };
@@ -828,15 +838,18 @@ export const sendNotification = async ({
     
     // Send push notification if enabled
     try {
-      const settings = await NotificationSettings.findOne({ user: userId });
-      if (!settings || settings.pushNotifications !== false) {
+      if (await isPushEnabledForUser(userId)) {
         const pushPayload = createPushPayload(title ? `${title}: ${message}` : message, type, {
-          ...metadata,
-          notificationId: notification._id,
-          title
+          notificationId: notification._id?.toString?.() || notification._id,
+          title,
+          ...(metadata && typeof metadata === 'object' ? metadata : {}),
         });
         
         await sendPushNotification(userId, recipientType, pushPayload, userOrgId);
+      } else {
+        logger.info('Push skipped — disabled in notification settings', {
+          userId: userId?.toString?.() || userId,
+        });
       }
     } catch (pushError) {
       logger.error('Error sending push notification', {
@@ -969,9 +982,8 @@ export const sendBreakNotification = async (employee) => {
         const recipientId = notification.recipient.toString();
         
         // Check recipient's push notification settings
-        const settings = await NotificationSettings.findOne({ user: recipientId });
-        if (settings && settings.pushNotifications === false) {
-          continue; // Skip if recipient disabled push notifications
+        if (!(await isPushEnabledForUser(recipientId))) {
+          continue;
         }
 
         // Determine recipient type
@@ -1138,9 +1150,8 @@ export const sendBreakEndedNotification = async (employee) => {
         const recipientId = notification.recipient.toString();
         
         // Check recipient's push notification settings
-        const settings = await NotificationSettings.findOne({ user: recipientId });
-        if (settings && settings.pushNotifications === false) {
-          continue; // Skip if recipient disabled push notifications
+        if (!(await isPushEnabledForUser(recipientId))) {
+          continue;
         }
 
         // Determine recipient type - check if it's a User (admin) or Employee (HR/CEO)
@@ -1307,9 +1318,8 @@ export const sendPunchOutNotification = async (employee) => {
         const recipientId = notification.recipient.toString();
         
         // Check recipient's push notification settings
-        const settings = await NotificationSettings.findOne({ user: recipientId });
-        if (settings && settings.pushNotifications === false) {
-          continue; // Skip if recipient disabled push notifications
+        if (!(await isPushEnabledForUser(recipientId))) {
+          continue;
         }
 
         // Determine recipient type - check if it's a User (admin) or Employee (HR/CEO)
@@ -1456,11 +1466,9 @@ export const sendNewEmployeeNotification = async (employee) => {
         
         logger.info('Processing recipient for push', { recipientId, index: i });
         
-        // Check recipient's push notification settings
-        const settings = await NotificationSettings.findOne({ user: recipientId });
-        if (settings && settings.pushNotifications === false) {
+        if (!(await isPushEnabledForUser(recipientId))) {
           logger.info('Push disabled for recipient', { recipientId });
-          continue; // Skip if recipient disabled push notifications
+          continue;
         }
 
         // Determine recipient type

@@ -241,21 +241,57 @@ function isPresignedS3Url(url) {
 /**
  * Resolve a displayable, short-lived signed URL for a private profile photo.
  * Fetches via the authorization-aware GET /v1/both/profile-photo/:userType/:userId
- * endpoint and caches the result for 15 minutes. Returns null when the caller
- * lacks a stable userType/userId (components then fall back to initials).
+ * endpoint and caches the result for 15 minutes.
  *
  * Stored https://…amazonaws.com/… object URLs are NOT reused — the bucket is
  * private, so only freshly signed URLs (or cached ones) are returned.
+ *
+ * Local /uploads paths and already-signed URLs are returned immediately.
  */
 export async function resolveProfileSignedUrl(profilePhoto, { userType, userId, preferFull = false } = {}) {
-  if (!profilePhoto) return null;
-  const photo = typeof profilePhoto === 'object' ? profilePhoto : { url: profilePhoto };
-  const existing = photo.url || photo.s3Key || null;
-  // Reuse only an already pre-signed URL (e.g. handed back by this resolver).
-  if (isPresignedS3Url(existing)) return existing;
+  const photo = profilePhoto && typeof profilePhoto === 'object'
+    ? profilePhoto
+    : profilePhoto
+      ? { url: profilePhoto }
+      : null;
+
+  // Prefer an already-signed URL handed back by the server
+  const preSigned =
+    (isPresignedS3Url(photo?.signedUrl) && photo.signedUrl) ||
+    (isPresignedS3Url(photo?.url) && photo.url) ||
+    (isPresignedS3Url(photo?.thumbnailUrl) && photo.thumbnailUrl) ||
+    null;
+  if (preSigned) return preSigned;
+
+  // S3-backed photos (private) — never treat `filename` alone as a local disk path.
+  // New uploads store url/s3Key as the object key plus a filename; local /uploads
+  // must only be used when the stored url is actually under /uploads/.
+  const hasS3Ref = Boolean(
+    photo?.s3Key ||
+      photo?.thumbS3Key ||
+      (typeof photo?.url === 'string' &&
+        photo.url &&
+        !photo.url.startsWith('/') &&
+        photo.url !== '__fetch__' &&
+        !/^https?:\/\//i.test(photo.url)) ||
+      (typeof photo?.url === 'string' && /amazonaws\.com\//i.test(photo.url))
+  );
+
+  if (!hasS3Ref) {
+    const localPath =
+      (typeof photo?.url === 'string' && photo.url.startsWith('/uploads/') && photo.url) ||
+      (typeof photo === 'string' && photo.startsWith('/uploads/') && photo) ||
+      (photo?.filename && !photo?.url
+        ? `/uploads/profile-photos/${photo.filename}`
+        : null);
+    if (localPath) {
+      return getProfilePhotoUrl(photo?.url?.startsWith('/uploads/') ? photo : localPath);
+    }
+  }
+
   if (!userId || !userType) return null;
 
-  const cacheId = `${userType}:${userId}`;
+  const cacheId = `${userType}:${userId}:${preferFull ? 'full' : 'thumb'}`;
   const now = Date.now();
   const cached = _profilePhotoCache[cacheId];
   if (cached && cached.expiresAt > now) return cached.url;
@@ -266,16 +302,30 @@ export async function resolveProfileSignedUrl(profilePhoto, { userType, userId, 
       ? data?.profilePhoto?.url || data?.profilePhoto?.thumbnailUrl
       : data?.profilePhoto?.thumbnailUrl || data?.profilePhoto?.url || null;
     if (url) {
+      const displayUrl = url.startsWith('/uploads/') ? getProfilePhotoUrl(url) : url;
       _profilePhotoCache = {
         ..._profilePhotoCache,
-        [cacheId]: { url, expiresAt: now + 15 * 60 * 1000 },
+        [cacheId]: { url: displayUrl, expiresAt: now + 15 * 60 * 1000 },
       };
+      return displayUrl;
     }
-    return url;
+    return null;
   } catch {
     // No photo found / unauthorized — caller falls back to initials.
     return null;
   }
+}
+
+/** Drop cached signed URLs for a user (call after upload/delete). */
+export function invalidateProfilePhotoCache(userType, userId) {
+  if (!userType || !userId) {
+    _profilePhotoCache = {};
+    return;
+  }
+  const prefix = `${userType}:${userId}:`;
+  _profilePhotoCache = Object.fromEntries(
+    Object.entries(_profilePhotoCache).filter(([key]) => !key.startsWith(prefix))
+  );
 }
 
 /** Employee-specific download (legacy embedded docs + job uploads). */

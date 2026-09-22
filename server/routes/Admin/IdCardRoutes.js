@@ -9,10 +9,20 @@ import {
     downloadIdCard,
     testDatabaseConnection
 } from '../../controllers/admin/idCardController.js';
-import { requireHrIdCardAccess } from '../../middlewares/requirePermission.js';
+import { requireHrIdCardAccess, attachAuthContext } from '../../middlewares/requirePermission.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
+import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
 
 const router = express.Router();
+
+/**
+ * Employee may download own card; HR/admin may download any card.
+ * Do not use employee-only isAuthenticated here — org admins often lack a Me profile.
+ */
+const allowIdCardDownload = [
+    isAuthenticatedBoth,
+    attachAuthContext,
+];
 
 /**
  * @swagger
@@ -56,7 +66,7 @@ router.route('/employee/my-card').get(isAuthenticated, getEmployeeIdCard);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.route('/card/:id/download').get(isAuthenticated, downloadIdCard);
+router.route('/card/:id/download').get(...allowIdCardDownload, downloadIdCard);
 
 /**
  * @swagger

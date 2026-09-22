@@ -459,21 +459,19 @@ const NotificationDropdown = () => {
                         )}
                     </div>
 
-                    {visibleNotifications.length > 0 && (
-                        <div className="p-3 border-t border-gray-200 text-center flex-shrink-0 bg-gray-50">
-                            <button
-                                onClick={() => {
-                                    setIsOpen(false);
-                                    // Navigate to full notifications page
-                                    navigate('/notifications');
-                                }}
-                                className="text-sm font-medium text-theme-secondary hover:opacity-80"
-                                style={{ color: 'var(--color-secondary)' }}
-                            >
-                                View all notifications
-                            </button>
-                        </div>
-                    )}
+                    <div className="p-3 border-t border-gray-200 text-center flex-shrink-0 bg-gray-50">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                navigate('/notifications');
+                            }}
+                            className="text-sm font-medium text-theme-secondary hover:opacity-80"
+                            style={{ color: 'var(--color-secondary)' }}
+                        >
+                            View all notifications
+                        </button>
+                    </div>
                     </div>
                 </>,
                 document.body

@@ -69,9 +69,9 @@ const idCardSchema = new mongoose.Schema({
         default: {
             template: 'standard',
             backgroundColor: '#ffffff',
-            textColor: '#000000',
-            companyName: 'Paarsiv Technologies',
-            companyAddress: ''
+            textColor: '#2D3130',
+            companyName: 'paarsiv',
+            companyAddress: 'www.paarsiv.com'
         }
     },
     qrCode: {

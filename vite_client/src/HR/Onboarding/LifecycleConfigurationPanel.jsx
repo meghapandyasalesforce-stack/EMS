@@ -2,36 +2,38 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 import {
-    FiSave, FiToggleLeft, FiToggleRight, FiPackage, FiShield,
-    FiFileText, FiLayers, FiBell, FiSettings, FiSliders, FiClipboard, FiFolder, FiMessageSquare, FiMail,
+    FiSave, FiToggleLeft, FiToggleRight, FiPackage, FiFileText, FiLayers,
+    FiBell, FiSettings, FiSliders, FiTool,
 } from 'react-icons/fi';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 import { clearLifecycleFeaturesCache } from '../../Hooks/useLifecycleFeatures';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import OfferTemplateManager from '../../components/recruitment/OfferTemplateManager';
 import WorkflowBuilder from './WorkflowBuilder';
 import FormBuilderHub from './FormBuilderHub';
 import DocumentHub from './DocumentHub';
 import ExitInterviewHub from './ExitInterviewHub';
 import LetterGeneratorHub from './LetterGeneratorHub';
 
+/** Top-level Configure sections — lean nav; hubs kept (only entry points). */
 const SECTIONS = [
     { id: 'modules', label: 'Features', icon: FiSettings },
     { id: 'policies', label: 'Policies', icon: FiSliders },
-    { id: 'industry', label: 'Industry', icon: FiPackage },
-    { id: 'compliance', label: 'Compliance', icon: FiShield },
+    { id: 'packs', label: 'Packs', icon: FiPackage },
     { id: 'templates', label: 'Templates', icon: FiLayers },
-    { id: 'forms', label: 'Forms', icon: FiClipboard },
-    { id: 'documents-hub', label: 'Document Hub', icon: FiFolder },
-    { id: 'exit-interview', label: 'Exit Interview', icon: FiMessageSquare },
-    { id: 'letters', label: 'Letter Generator', icon: FiMail },
-    { id: 'documents', label: 'Documents', icon: FiFileText },
+    { id: 'builders', label: 'Builders', icon: FiTool },
+    { id: 'documents', label: 'Document Catalog', icon: FiFileText },
     { id: 'automation', label: 'Rules', icon: FiBell },
+];
+
+const BUILDER_TABS = [
+    { id: 'forms', label: 'Forms', featureKeys: ['digitalForms', 'emergencyContact', 'familyNominee', 'bankDetails'] },
+    { id: 'documents-hub', label: 'Document Hub', featureKeys: ['documentCollection', 'documentApproval'] },
+    { id: 'exit-interview', label: 'Exit Interview', featureKeys: ['exitInterview'] },
+    { id: 'letters', label: 'Letter Generator', featureKeys: ['experienceLetter', 'relievingLetter', 'serviceCertificate', 'offerLetter'] },
 ];
 
 const APPROVAL_ENTITIES = ['Offer', 'Onboarding', 'Offboarding', 'Clearance', 'ExitInterview', 'FnF', 'AssetReturn'];
 const ESCALATION_ROLES = ['hr', 'manager', 'it', 'payroll', 'admin'];
-const CHANNELS = ['email', 'in_app', 'push'];
 const BGV_VENDORS = import.meta.env.PROD ? ['manual'] : ['manual', 'stub_vendor'];
 const ESIGN_PROVIDERS = ['internal', 'docusign', 'adobe_sign', 'aadhaar_esign'];
 
@@ -42,7 +44,6 @@ function normalizeFeatureMap(stored = {}, registryFeatures = []) {
         if (Object.prototype.hasOwnProperty.call(stored, feature.key)) {
             map[feature.key] = stored[feature.key] === true;
         } else if (feature.category === 'compliance' || feature.category === 'industry') {
-            // Pack features stay off until explicitly enabled (never inherit core defaults)
             map[feature.key] = false;
         } else {
             map[feature.key] = feature.defaultEnabled !== false;
@@ -72,6 +73,7 @@ const Toggle = ({ checked, onChange, disabled = false }) => (
 
 const LifecycleConfigurationPanel = () => {
     const [activeSection, setActiveSection] = useState('modules');
+    const [builderTab, setBuilderTab] = useState('forms');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [snapshot, setSnapshot] = useState(null);
@@ -144,24 +146,29 @@ const LifecycleConfigurationPanel = () => {
     const industryPacks = snapshot?.registry?.industryPacks || [];
     const compliancePacks = snapshot?.registry?.compliancePacks || [];
 
-    const visibleSections = useMemo(() => {
-        const featOn = (key) => enabledFeatures[key] === true;
-        return SECTIONS.filter((s) => {
-            if (s.id === 'forms') return featOn('digitalForms') || featOn('emergencyContact') || featOn('familyNominee') || featOn('bankDetails');
-            if (s.id === 'documents-hub') return featOn('documentCollection') || featOn('documentApproval');
-            if (s.id === 'exit-interview') return featOn('exitInterview');
-            if (s.id === 'letters') {
-                return featOn('experienceLetter') || featOn('relievingLetter') || featOn('serviceCertificate') || featOn('offerLetter');
-            }
-            return true;
-        });
-    }, [enabledFeatures]);
+    const featOn = useCallback((key) => enabledFeatures[key] === true, [enabledFeatures]);
+
+    const visibleBuilderTabs = useMemo(
+        () => BUILDER_TABS.filter((t) => (t.featureKeys || []).some((k) => featOn(k))),
+        [featOn]
+    );
+
+    const visibleSections = useMemo(() => SECTIONS.filter((s) => {
+        if (s.id === 'builders') return visibleBuilderTabs.length > 0;
+        return true;
+    }), [visibleBuilderTabs]);
 
     useEffect(() => {
         if (!visibleSections.some((s) => s.id === activeSection)) {
             setActiveSection(visibleSections[0]?.id || 'modules');
         }
     }, [visibleSections, activeSection]);
+
+    useEffect(() => {
+        if (!visibleBuilderTabs.some((t) => t.id === builderTab)) {
+            setBuilderTab(visibleBuilderTabs[0]?.id || 'forms');
+        }
+    }, [visibleBuilderTabs, builderTab]);
 
     const handleSave = async () => {
         try {
@@ -189,7 +196,6 @@ const LifecycleConfigurationPanel = () => {
             if (saved.modules) setModules(saved.modules);
             if (saved.documentOverrides) setDocumentOverrides(saved.documentOverrides);
             toast.success('Configuration saved — feature status updated for your organization');
-            // Soft refresh registry snapshot without blanking the toggles
             const registryRes = await axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/registry`, { withCredentials: true });
             if (registryRes.data?.success) {
                 setSnapshot(registryRes.data.data);
@@ -219,7 +225,6 @@ const LifecycleConfigurationPanel = () => {
     };
 
     const togglePack = async (type, pack, enable) => {
-        // Optimistic UI so Status/toggle flip immediately (and Save won't re-send stale trues)
         setEnabledFeatures((prev) => applyPackFeatureState(prev, pack, enable));
         setSnapshot((prev) => {
             if (!prev?.settings) return prev;
@@ -248,7 +253,6 @@ const LifecycleConfigurationPanel = () => {
             if (savedFeatures) {
                 setEnabledFeatures(normalizeFeatureMap(savedFeatures, registryFeatures));
             }
-            // Soft-refresh settings (no full-page spinner — avoids wipe/race with Save)
             const registryRes = await axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/registry`, { withCredentials: true });
             if (registryRes.data?.success) {
                 setSnapshot(registryRes.data.data);
@@ -261,7 +265,6 @@ const LifecycleConfigurationPanel = () => {
 
             toast.success(`${type === 'industry' ? 'Industry' : 'Compliance'} pack ${enable ? 'enabled' : 'disabled'}`);
         } catch (error) {
-            // Roll back optimistic flip
             setEnabledFeatures((prev) => applyPackFeatureState(prev, pack, !enable));
             toast.error(error.response?.data?.message || error.message || (enable ? 'Enable failed' : 'Disable failed'));
             try { await load(); } catch { /* ignore */ }
@@ -286,26 +289,48 @@ const LifecycleConfigurationPanel = () => {
                         <div key={feature.key} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
                             <div className="min-w-0 pr-3">
                                 <p className="font-medium text-gray-900 text-sm">{feature.label}</p>
-                                <p className="text-xs text-gray-500 truncate">{feature.key}</p>
                             </div>
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                                <p className={`text-xs font-semibold ${enabled ? 'text-emerald-700' : 'text-red-600'}`}>
-                                    Status: {enabled ? 'Enabled' : 'Disabled'}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Toggle
-                                        checked={enabled}
-                                        onChange={(v) => setEnabledFeatures((prev) => ({ ...prev, [feature.key]: v }))}
-                                    />
-                                    <span className="text-xs text-gray-600 whitespace-nowrap">
-                                        {enabled ? 'Disable Feature' : 'Enable Feature'}
-                                    </span>
-                                </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <span className={`text-xs font-semibold ${enabled ? 'text-emerald-700' : 'text-red-600'}`}>
+                                    {enabled ? 'On' : 'Off'}
+                                </span>
+                                <Toggle
+                                    checked={enabled}
+                                    onChange={(v) => setEnabledFeatures((prev) => ({ ...prev, [feature.key]: v }))}
+                                />
                             </div>
                         </div>
                     );
                 })}
             </div>
+        </div>
+    );
+
+    const renderPackGrid = (packs, type, emptyLabel) => (
+        <div className="grid sm:grid-cols-2 gap-3">
+            {packs.length === 0 ? (
+                <p className="col-span-full rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
+                    {emptyLabel}
+                </p>
+            ) : packs.map((pack) => {
+                const enabled = isPackEnabled(pack);
+                return (
+                    <div key={pack.key} className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex items-start justify-between gap-2">
+                            <div>
+                                <p className="font-semibold text-sm">{pack.label}</p>
+                                <p className="text-xs text-gray-600 mt-1">{pack.description}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <span className={`text-xs font-medium ${enabled ? 'text-emerald-700' : 'text-gray-500'}`}>
+                                    {enabled ? 'On' : 'Off'}
+                                </span>
+                                <Toggle checked={enabled} onChange={(v) => togglePack(type, pack, v)} />
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 
@@ -315,7 +340,7 @@ const LifecycleConfigurationPanel = () => {
                 <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm text-gray-600">
-                            Enable features, configure policies, and manage templates. Changes apply to your organization only.
+                            Organization lifecycle settings. Changes apply to your organization only.
                         </p>
                         <button
                             type="button"
@@ -361,7 +386,7 @@ const LifecycleConfigurationPanel = () => {
                             </div>
                             {renderFeatureGroup('Onboarding Features', featuresByModule.onboarding)}
                             {renderFeatureGroup('Offboarding Features', featuresByModule.offboarding)}
-                            {renderFeatureGroup('Automation', featuresByModule.shared)}
+                            {renderFeatureGroup('Shared / Automation', featuresByModule.shared)}
                         </div>
                     )}
 
@@ -402,8 +427,7 @@ const LifecycleConfigurationPanel = () => {
                                 <div className="mt-3 space-y-2">
                                     <ToggleRow label="Block joining until BGV clear" checked={bgvPolicy.blockJoiningUntilClear} onChange={(v) => setBgvPolicy((p) => ({ ...p, blockJoiningUntilClear: v }))} />
                                     <p className="text-xs text-gray-500 pt-1">
-                                        Core checks (Address, Criminal, Identity) always run when Background Verification is on.
-                                        Turn on extra check types below — they appear on open BGV cases after save.
+                                        Core checks always run when BGV is on. Extra check types below appear on open cases after save.
                                     </p>
                                     <ToggleRow
                                         label="Employment Verification"
@@ -456,112 +480,54 @@ const LifecycleConfigurationPanel = () => {
                         </div>
                     )}
 
-                    {activeSection === 'industry' && (
-                        <div className="space-y-4">
-                            <p className="text-sm text-gray-600">
-                                Enable an industry pack to turn on sector-specific workflows. Features like <code className="text-xs bg-gray-100 px-1 rounded">industry.it.nda</code> stay off until you enable the matching pack.
-                            </p>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                            {industryPacks.length === 0 ? (
-                                <p className="col-span-full rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
-                                    No industry packs loaded. Refresh the page or check that the backend is running.
-                                </p>
-                            ) : industryPacks.map((pack) => {
-                                const enabled = isPackEnabled(pack);
-                                return (
-                                    <div key={pack.key} className="p-4 border border-gray-200 rounded-lg">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div>
-                                                <p className="font-semibold text-sm">{pack.label}</p>
-                                                <p className="text-xs text-gray-600 mt-1">{pack.description}</p>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-1 shrink-0">
-                                                <p className={`text-xs font-medium ${enabled ? 'text-emerald-700' : 'text-gray-500'}`}>
-                                                    Status: {enabled ? 'Enabled' : 'Disabled'}
-                                                </p>
-                                                <div className="flex items-center gap-2">
-                                                    <Toggle checked={enabled} onChange={(v) => togglePack('industry', pack, v)} />
-                                                    <span className="text-xs text-gray-600 whitespace-nowrap">
-                                                        {enabled ? 'Disable Feature' : 'Enable Feature'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        </div>
-                    )}
-
-                    {activeSection === 'compliance' && (
-                        <div className="space-y-4">
-                            <p className="text-sm text-gray-600">
-                                Enable India compliance packs to turn on statutory workflows (Aadhaar, PAN, EPF, ESI, etc.). These are managed here—not in the Features tab.
-                            </p>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                            {compliancePacks.length === 0 ? (
-                                <p className="col-span-full rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
-                                    No compliance packs loaded. Refresh the page or check that the backend is running.
-                                </p>
-                            ) : compliancePacks.map((pack) => {
-                                const enabled = isPackEnabled(pack);
-                                return (
-                                    <div key={pack.key} className="p-4 border border-gray-200 rounded-lg">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div>
-                                                <p className="font-semibold text-sm">{pack.label}</p>
-                                                <p className="text-xs text-gray-600 mt-1">{pack.description}</p>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-1 shrink-0">
-                                                <p className={`text-xs font-medium ${enabled ? 'text-emerald-700' : 'text-gray-500'}`}>
-                                                    Status: {enabled ? 'Enabled' : 'Disabled'}
-                                                </p>
-                                                <div className="flex items-center gap-2">
-                                                    <Toggle checked={enabled} onChange={(v) => togglePack('compliance', pack, v)} />
-                                                    <span className="text-xs text-gray-600 whitespace-nowrap">
-                                                        {enabled ? 'Disable Feature' : 'Enable Feature'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        </div>
-                    )}
-
-                    {activeSection === 'templates' && (
+                    {activeSection === 'packs' && (
                         <div className="space-y-8">
-                            <WorkflowBuilder />
-                            <div className="border-t pt-6">
-                                <OfferTemplateManager />
+                            <div className="space-y-3">
+                                <h3 className="text-sm font-semibold text-gray-900">Industry packs</h3>
+                                <p className="text-sm text-gray-600">Sector-specific workflows. Pack features stay off until enabled here.</p>
+                                {renderPackGrid(industryPacks, 'industry', 'No industry packs loaded.')}
+                            </div>
+                            <div className="space-y-3 border-t border-gray-100 pt-6">
+                                <h3 className="text-sm font-semibold text-gray-900">Compliance packs</h3>
+                                <p className="text-sm text-gray-600">Statutory packs (e.g. India Aadhaar, PAN, EPF, ESI). Managed here — not under Features.</p>
+                                {renderPackGrid(compliancePacks, 'compliance', 'No compliance packs loaded.')}
                             </div>
                         </div>
                     )}
 
-                    {activeSection === 'forms' && (
-                        <FormBuilderHub />
+                    {activeSection === 'templates' && (
+                        <WorkflowBuilder />
                     )}
 
-                    {activeSection === 'documents-hub' && (
-                        <DocumentHub />
-                    )}
-
-                    {activeSection === 'exit-interview' && (
-                        <ExitInterviewHub />
-                    )}
-
-                    {activeSection === 'letters' && (
-                        <LetterGeneratorHub />
+                    {activeSection === 'builders' && (
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap gap-1.5 border-b border-gray-100 pb-3">
+                                {visibleBuilderTabs.map((t) => (
+                                    <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => setBuilderTab(t.id)}
+                                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                                            builderTab === t.id
+                                                ? 'bg-theme-primary text-white'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                            {builderTab === 'forms' && <FormBuilderHub />}
+                            {builderTab === 'documents-hub' && <DocumentHub />}
+                            {builderTab === 'exit-interview' && <ExitInterviewHub />}
+                            {builderTab === 'letters' && <LetterGeneratorHub />}
+                        </div>
                     )}
 
                     {activeSection === 'documents' && (
                         <div className="space-y-6">
                             <p className="text-sm text-gray-500">
-                                Enable or require onboarding documents for your organization. Passport, Non-Disclosure Agreement,
-                                Offer Acknowledgement, and Other are available under Document Collection.
+                                Enable or require catalog documents for onboarding and offboarding.
                             </p>
                             <div className="grid sm:grid-cols-2 gap-6">
                                 <ConfigurableDocumentList
@@ -666,7 +632,6 @@ function ToggleRow({ label, checked, onChange }) {
     );
 }
 
-
 function ConfigurableDocumentList({ title, docs, preferredKeys = [], overrides, onChange }) {
     const preferredSet = new Set(preferredKeys);
     const overrideMap = useMemo(() => {
@@ -715,7 +680,6 @@ function ConfigurableDocumentList({ title, docs, preferredKeys = [], overrides, 
                             <div className="flex justify-between gap-2">
                                 <div className="min-w-0">
                                     <p className="font-medium text-sm">{doc.label}</p>
-                                    <p className="text-xs text-gray-500 truncate">{key}</p>
                                 </div>
                                 {isPreferred && (
                                     <span className="text-[10px] uppercase tracking-wide text-theme-secondary shrink-0 font-semibold">

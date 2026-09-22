@@ -55,11 +55,13 @@ export async function resolveCelebrationEventViewers(subjectEmployee, organizati
 /**
  * Resolve notification recipients for upcoming/today celebration alerts.
  * Same pool as event viewers, excluding the subject employee (they get the event, not a "your birthday" push).
+ * Prefer linked User ids so push subscriptions saved under User._id are found.
  */
 export async function resolveCelebrationNotificationRecipients(subjectEmployee, organizationId) {
   const viewers = await resolveCelebrationEventViewers(subjectEmployee, organizationId);
   const subjectId = subjectEmployee._id.toString();
-  return viewers.filter((id) => id !== subjectId);
+  const filtered = viewers.filter((id) => id !== subjectId);
+  return normalizeLifecycleRecipientIds(filtered, organizationId);
 }
 
 /**

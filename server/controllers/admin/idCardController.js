@@ -9,13 +9,72 @@ import { generateEmployeeQRCode, generateQRCodeBuffer } from '../../helpers/qrCo
 import {
     getOrganizationId,
     addOrganizationFilter,
-    formatOrganizationAddress,
     isPlaceholderIdCardAddress
 } from '../../helpers/organizationHelper.js';
-import Organization from '../../models/organization.model.js';
+import { extractS3Key, getSignedUrl } from '../../helpers/storageHelper.js';
 
 /** Actor running admin/HR ID-card actions (JWT sets req.user for admin, req.employee for employee). */
 const getActorId = (req) => req.user?._id || req.employee?._id;
+
+/**
+ * Attach a short-lived display URL onto populated employee.profilePhoto so ID card
+ * UI can render without a separate profile-photo round-trip.
+ */
+const attachSignedProfilePhoto = async (employee) => {
+    if (!employee || typeof employee !== 'object') return employee;
+    const photo = employee.profilePhoto || employee.profilePicture;
+    if (!photo || typeof photo !== 'object') return employee;
+
+    try {
+        const fullKey = photo.s3Key || extractS3Key(photo.url);
+        const thumbKey = photo.thumbS3Key || extractS3Key(photo.thumbnailUrl);
+
+        if (fullKey) {
+            const [url, thumbnailUrl] = await Promise.all([
+                getSignedUrl(fullKey, 900),
+                thumbKey ? getSignedUrl(thumbKey, 900) : Promise.resolve(null),
+            ]);
+            employee.profilePhoto = {
+                ...photo,
+                url,
+                thumbnailUrl: thumbnailUrl || url,
+                signedUrl: url,
+            };
+            return employee;
+        }
+
+        // Legacy local disk path
+        const localPath =
+            (typeof photo.url === 'string' && photo.url.startsWith('/uploads/') && photo.url) ||
+            (photo.filename ? `/uploads/profile-photos/${photo.filename}` : null);
+        if (localPath) {
+            employee.profilePhoto = {
+                ...photo,
+                url: localPath,
+                thumbnailUrl: localPath,
+                signedUrl: localPath,
+            };
+        }
+    } catch (err) {
+        logger.warn('ID card: failed to sign profile photo', {
+            employeeId: employee._id,
+            error: err.message,
+        });
+    }
+    return employee;
+};
+
+const attachSignedProfilePhotosToCards = async (idCards) => {
+    if (!Array.isArray(idCards)) return idCards;
+    await Promise.all(
+        idCards.map(async (card) => {
+            if (card?.employeeId && typeof card.employeeId === 'object') {
+                card.employeeId = await attachSignedProfilePhoto(card.employeeId);
+            }
+        })
+    );
+    return idCards;
+};
 
 // Helper to generate QR code image and save it
 const generateAndSaveQRCode = async (employee, employeeCode) => {
@@ -106,15 +165,12 @@ export const autoGenerateIdCard = async (employeeId, organizationId, generatedBy
             // Continue without QR code
         }
 
-        const org = await Organization.findById(organizationId).select('name address').lean();
-        const orgAddress = formatOrganizationAddress(org?.address);
-
         const defaultCardDesign = {
             template: 'standard',
             backgroundColor: '#ffffff',
-            textColor: '#000000',
-            companyName: org?.name?.trim() || 'Paarsiv Technologies',
-            companyAddress: orgAddress || 'Your Company Address'
+            textColor: '#2D3130',
+            companyName: 'paarsiv',
+            companyAddress: 'www.paarsiv.com'
         };
 
         // Generate card number
@@ -257,15 +313,13 @@ export const generateIdCard = async (req, res) => {
             qrData = null;
         }
 
-        const org = await Organization.findById(organizationId).select('name address').lean();
-        const orgAddress = formatOrganizationAddress(org?.address);
         const explicitName = String(cardDesign?.companyName ?? '').trim();
         const explicitAddr = String(cardDesign?.companyAddress ?? '').trim();
-        const resolvedName = explicitName || org?.name?.trim() || 'Paarsiv Technologies';
+        const resolvedName = explicitName || 'paarsiv';
         const resolvedAddress =
             explicitAddr && !isPlaceholderIdCardAddress(explicitAddr)
                 ? explicitAddr
-                : orgAddress || explicitAddr || 'Your Company Address';
+                : 'www.paarsiv.com';
 
         const allowedTemplates = new Set([
             'standard', 'premium', 'executive', 'custom',
@@ -278,7 +332,7 @@ export const generateIdCard = async (req, res) => {
         const defaultCardDesign = {
             template,
             backgroundColor: cardDesign?.backgroundColor || '#ffffff',
-            textColor: cardDesign?.textColor || '#000000',
+            textColor: cardDesign?.textColor || '#2D3130',
             companyName: resolvedName,
             companyAddress: resolvedAddress
         };
@@ -352,6 +406,8 @@ export const getAllIdCards = async (req, res) => {
             .sort({ updatedAt: -1 })
             .lean();
 
+        await attachSignedProfilePhotosToCards(idCards);
+
         res.status(200).json({ success: true, data: idCards });
     } catch (error) {
         res.status(500).json({ message: 'Failed to retrieve ID cards', error: error.message });
@@ -363,9 +419,17 @@ export const getIdCardByEmployeeId = async (req, res) => {
     try {
         const { employeeId } = req.params;
         const query = addOrganizationFilter(req, { employeeId });
-        const idCard = await IdCard.findOne(query).populate('employeeId', 'name lastName email employeeId');
+        const idCard = await IdCard.findOne(query)
+            .populate(
+                'employeeId',
+                'name lastName email employeeId department position jobTitle profilePhoto phone1 phone2 address bloodGroup joiningDate'
+            )
+            .lean();
         if (!idCard) {
             return res.status(404).json({ message: 'ID card not found for this employee' });
+        }
+        if (idCard.employeeId && typeof idCard.employeeId === 'object') {
+            idCard.employeeId = await attachSignedProfilePhoto(idCard.employeeId);
         }
         res.status(200).json({ idCard });
     } catch (error) {
@@ -444,10 +508,19 @@ export const getEmployeeIdCard = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized. Please log in.' });
         }
         
-        const idCard = await IdCard.findOne({ employeeId }).populate('employeeId', 'name lastName email employeeId profilePhoto phone1 phone2 address bloodGroup jobTitle department joiningDate');
+        const idCard = await IdCard.findOne({ employeeId })
+            .populate(
+                'employeeId',
+                'name lastName email employeeId profilePhoto phone1 phone2 address bloodGroup jobTitle department joiningDate'
+            )
+            .lean();
         
         if (!idCard) {
             return res.status(404).json({ message: 'ID card not found for this employee. Please contact your administrator.' });
+        }
+
+        if (idCard.employeeId && typeof idCard.employeeId === 'object') {
+            idCard.employeeId = await attachSignedProfilePhoto(idCard.employeeId);
         }
         
         res.status(200).json({ success: true, idCard });
@@ -482,10 +555,11 @@ export const downloadIdCard = async (req, res) => {
         const isOwnCard = requesterEmployeeId && cardEmployeeId
             && String(cardEmployeeId) === String(requesterEmployeeId);
 
-        if (requesterEmployeeId && !isOwnCard) {
-            const { loadRequesterHrStaff } = await import('../../helpers/functionalRolesHelper.js');
-            const isHrStaff = await loadRequesterHrStaff(req);
-            if (!isHrStaff) {
+        // Own card OR HR/admin ID-card managers (same gate as list/generate)
+        if (!isOwnCard) {
+            const { canAccessHrDocumentManagement } = await import('../../helpers/functionalRolesHelper.js');
+            const canManage = await canAccessHrDocumentManagement(req);
+            if (!canManage) {
                 return res.status(403).json({ message: 'You can only download your own ID card' });
             }
         }
