@@ -9,6 +9,11 @@ import { isValidTimezone } from '../../constants/timezoneOptions.js';
 import { invalidateActiveAttendanceRuleCache } from '../../helpers/attendanceSecurityHelper.js';
 import { invalidateOrgContextCache } from '../../helpers/organizationTimezoneService.js';
 import { normalizeRegularizationRulesInput } from '../../helpers/regularizationLimitHelper.js';
+import {
+    normalizeShiftSettings,
+    buildShiftsFromTimingPayload,
+    shiftsToTimingResponse,
+} from '../../helpers/shiftHelper.js';
 
 const invalidateAttendanceRuleCaches = async (organizationId) => {
     await invalidateActiveAttendanceRuleCache(organizationId);
@@ -268,7 +273,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
             if (req.body.checkInOutTimes) attendanceRule.checkInOutTimes = req.body.checkInOutTimes;
             if (req.body.autoCheckOut) attendanceRule.autoCheckOut = req.body.autoCheckOut;
             if (req.body.timeStop) attendanceRule.timeStop = req.body.timeStop;
-            if (req.body.shifts) attendanceRule.shifts = req.body.shifts;
+            if (req.body.shifts) attendanceRule.shifts = normalizeShiftSettings(req.body.shifts);
             if (req.body.exceptions) attendanceRule.exceptions = req.body.exceptions;
             if (req.body.security) attendanceRule.security = req.body.security;
             if (req.body.priority) attendanceRule.priority = req.body.priority;
@@ -381,7 +386,9 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                     time: '20:00',
                     action: 'auto_checkout'
                 },
-                shifts: req.body.shifts || [],
+                shifts: req.body.shifts
+                    ? normalizeShiftSettings(req.body.shifts)
+                    : normalizeShiftSettings([]),
                 exceptions: req.body.exceptions || {},
                 security: req.body.security || {
                     enableGPSValidation: true,
@@ -505,12 +512,19 @@ export const getAttendanceRule = async (req, res) => {
                         enabled: false,
                         time: '20:00',
                         action: 'auto_checkout'
-                    }
+                    },
+                    shifts: normalizeShiftSettings([]),
                 }
             }, 'Default attendance rule retrieved');
         }
 
-        return sendSuccess(res, { rule: attendanceRule }, 'Attendance rule retrieved successfully');
+        // Ensure Shift 1 / Shift 2 exist for clients (do not persist unless admin saves)
+        const ruleWithShifts = {
+            ...attendanceRule,
+            shifts: normalizeShiftSettings(attendanceRule.shifts),
+        };
+
+        return sendSuccess(res, { rule: ruleWithShifts }, 'Attendance rule retrieved successfully');
     } catch (error) {
         logger.error('Error fetching attendance rule', {
             error: error.message,
@@ -648,6 +662,121 @@ export const checkAttendanceRadius = async (req, res) => {
             employeeId: req.employee?._id || req.user?._id
         });
         return sendInternalError(res, 'Failed to check attendance radius', error);
+    }
+};
+
+/**
+ * GET Shift 1 / Shift 2 timings from the active attendance rule (single source of truth).
+ */
+export const getShiftSettings = async (req, res) => {
+    try {
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const query = addOrganizationFilter(req, { isActive: true });
+        const attendanceRule = await AttendanceRule.findOne(query)
+            .sort({ priority: -1, updatedAt: -1 })
+            .select('shifts officeHours enableShifts')
+            .lean();
+
+        const timing = shiftsToTimingResponse(attendanceRule?.shifts);
+        return sendSuccess(res, {
+            ...timing,
+            enableShifts: attendanceRule ? attendanceRule.enableShifts !== false : true,
+            hasAttendanceRule: Boolean(attendanceRule),
+        }, 'Shift settings retrieved successfully');
+    } catch (error) {
+        logger.error('Error fetching shift settings', {
+            error: error.message,
+            stack: error.stack,
+        });
+        return sendInternalError(res, 'Failed to fetch shift settings', error);
+    }
+};
+
+/**
+ * PUT/PATCH Shift 1 / Shift 2 timings only (does not change other attendance rule fields).
+ * Requires an existing active attendance rule.
+ */
+export const updateShiftSettings = async (req, res) => {
+    try {
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const query = addOrganizationFilter(req, { isActive: true });
+        let attendanceRule = await AttendanceRule.findOne(query).sort({ priority: -1, updatedAt: -1 });
+
+        if (!attendanceRule) {
+            return sendError(
+                res,
+                'Create Attendance Rules first, then configure Shift Settings.',
+                400,
+                'ATTENDANCE_RULE_REQUIRED'
+            );
+        }
+
+        const hasTimingPayload =
+            Array.isArray(req.body.shifts) ||
+            req.body.shift1StartTime != null ||
+            req.body.shift1EndTime != null ||
+            req.body.shift2StartTime != null ||
+            req.body.shift2EndTime != null ||
+            req.body.shift1 != null ||
+            req.body.shift2 != null;
+
+        let shifts = attendanceRule.shifts;
+        if (hasTimingPayload) {
+            try {
+                if (Array.isArray(req.body.shifts) && req.body.shifts.length) {
+                    shifts = normalizeShiftSettings(req.body.shifts);
+                } else {
+                    shifts = buildShiftsFromTimingPayload(req.body);
+                }
+            } catch (err) {
+                return sendValidationError(res, err.message);
+            }
+        }
+
+        const previousState = attendanceRule.toObject();
+        attendanceRule.shifts = shifts;
+        if (typeof req.body.enableShifts === 'boolean') {
+            attendanceRule.enableShifts = req.body.enableShifts;
+        }
+        attendanceRule.version = (attendanceRule.version || 1) + 1;
+        await attendanceRule.save();
+        await invalidateAttendanceRuleCaches(organizationId);
+
+        const changedBy = req.user?._id || req.employee?._id;
+        const changedByRole = req.user?.role || (req.employee ? 'hr' : 'admin');
+        await createAuditLog(
+            attendanceRule._id,
+            organizationId,
+            'updated',
+            changedBy,
+            changedByRole,
+            previousState,
+            attendanceRule.toObject(),
+            detectFieldChanges(previousState, attendanceRule.toObject()),
+            req.body.changeReason || 'Shift settings updated',
+            req
+        );
+
+        const timing = shiftsToTimingResponse(attendanceRule.shifts);
+        return sendSuccess(res, {
+            ...timing,
+            enableShifts: attendanceRule.enableShifts !== false,
+            ruleId: attendanceRule._id,
+        }, 'Shift settings updated successfully');
+    } catch (error) {
+        logger.error('Error updating shift settings', {
+            error: error.message,
+            stack: error.stack,
+        });
+        return sendInternalError(res, 'Failed to update shift settings', error);
     }
 };
 

@@ -59,6 +59,16 @@ const calendarSchema = new mongoose.Schema({
             type: Boolean,
             default: true
         },
+        /** Optional half-day holiday (attendance treats other half as working). */
+        isHalfDay: {
+            type: Boolean,
+            default: false
+        },
+        halfDayType: {
+            type: String,
+            enum: ['first_half', 'second_half'],
+            default: undefined
+        },
         source: {
             type: String,
             enum: ['manual', 'upload', 'import'],

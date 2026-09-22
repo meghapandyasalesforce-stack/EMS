@@ -224,7 +224,14 @@ export const ORG_ONBOARDING_STEPS = [
 ];
 
 export const DEFAULT_ORG_DEPARTMENTS = [
-    'Engineering', 'Human Resources', 'Finance', 'Sales', 'Marketing', 'Operations', 'IT Support',
+    'Administration',
+    'Engineering',
+    'Human Resources',
+    'Finance',
+    'Sales',
+    'Marketing',
+    'Operations',
+    'IT Support',
 ];
 
 /**
@@ -254,6 +261,15 @@ export const DEFAULT_ORG_DESIGNATIONS = [
  * Includes titles previously mis-seeded as designations.
  */
 export const DEFAULT_ORG_JOB_ROLES = [
+    'Chief Executive Officer',
+    'Chief Technology Officer',
+    'Chief Financial Officer',
+    'VP Engineering',
+    'VP Finance',
+    'VP Human Resources',
+    'VP Sales',
+    'VP Operations',
+    'VP Marketing',
     'Software Engineer',
     'Senior Software Engineer',
     'Frontend Developer',
@@ -264,10 +280,14 @@ export const DEFAULT_ORG_JOB_ROLES = [
     'UX/UI Designer',
     'Product Manager',
     'Project Manager',
+    'IT Support Engineer',
+    'HR Director',
     'HR Manager',
     'HR Executive',
+    'Recruiter',
     'Finance Manager',
     'Financial Analyst',
+    'Accountant',
     'Marketing Manager',
     'Marketing Executive',
     'Sales Executive',

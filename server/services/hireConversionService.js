@@ -18,6 +18,9 @@ import Organization from '../models/organization.model.js';
 import Employee from '../models/employee.model.js';
 import { Recruitment } from '../models/recruitment.model.js';
 import { invalidateEmployeesCache } from '../helpers/cacheHelper.js';
+import AttendanceRule from '../models/attendanceRule.model.js';
+import { parseEmployeeShiftAssignment } from '../helpers/shiftHelper.js';
+import { validateManagerAssignment } from '../helpers/managerAssignmentHelper.js';
 export const EMPLOYEE_DEPARTMENTS = [
     'Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations',
     'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration',
@@ -31,8 +34,8 @@ export const EMPLOYEE_JOB_TITLES = [
     'MCP', 'SFMC',
 ];
 export const EMPLOYEE_POSITIONS = [
-    'Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager',
-    'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO', 'Developer',
+    'Intern', 'Trainee', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager',
+    'Senior Manager', 'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO',
 ];
 export const EMPLOYEE_JOB_CATEGORIES = [
     'Information Technology', 'Human Resources', 'Finance', 'Marketing', 'Sales', 'Operations',
@@ -146,28 +149,40 @@ export async function convertCandidateToEmployee({
 
     const orgHasEmployees = await Employee.exists({ organizationId });
     let managerId = hirePayload.managerId || job?.hiringManager || null;
-    let managerValue = 'CEO';
+    let managerValue = 'Admin';
 
     if (orgHasEmployees) {
         if (!managerId) {
             throw Object.assign(
-                new Error('Manager is required. Select a reporting manager to complete hire.'),
+                new Error('Manager is required. Select a reporting manager to complete hire. Only the organization Admin root can have no manager.'),
                 { status: 400, code: 'MANAGER_REQUIRED' }
             );
         }
-        const managerEmployee = await Employee.findOne({
-            _id: managerId,
+        const assignmentCheck = await validateManagerAssignment({
             organizationId,
-            status: 'active',
-        }).select('_id name lastName employeeId').lean();
-        if (!managerEmployee) {
-            throw Object.assign(new Error('Selected manager not found'), { status: 400, code: 'MANAGER_NOT_FOUND' });
+            managerId,
+        });
+        if (!assignmentCheck.valid) {
+            throw Object.assign(new Error(assignmentCheck.message), {
+                status: 400,
+                code: 'INVALID_MANAGER',
+            });
         }
-        managerId = managerEmployee._id;
-        managerValue = `${managerEmployee.name || ''} ${managerEmployee.lastName || ''}`.trim();
+        managerId = assignmentCheck.managerId;
+        managerValue = assignmentCheck.manager;
     } else {
-        managerId = null;
-        managerValue = 'CEO';
+        const assignmentCheck = await validateManagerAssignment({
+            organizationId,
+            managerId: null,
+        });
+        if (!assignmentCheck.valid) {
+            throw Object.assign(new Error(assignmentCheck.message), {
+                status: 400,
+                code: 'INVALID_MANAGER',
+            });
+        }
+        managerId = assignmentCheck.managerId;
+        managerValue = assignmentCheck.manager;
     }
 
     let systemRole = hirePayload.systemRole;
@@ -177,6 +192,23 @@ export async function convertCandidateToEmployee({
 
     const employeePassword = hirePayload.password || generateSecurePassword(16);
     const employeeId = await generateEmployeeId(organizationId, name);
+
+    let assignedShift = null;
+    try {
+        const activeRuleForShift = await AttendanceRule.findOne({
+            organizationId,
+            isActive: true,
+        })
+            .sort({ priority: -1, updatedAt: -1 })
+            .select('shifts')
+            .lean();
+        assignedShift = parseEmployeeShiftAssignment(
+            { shiftId: hirePayload.shiftId, shiftName: hirePayload.shiftName },
+            activeRuleForShift?.shifts
+        );
+    } catch (shiftErr) {
+        throw Object.assign(new Error(shiftErr.message), { status: 400, code: 'INVALID_SHIFT' });
+    }
 
     const employee = new Employee({
         organizationId,
@@ -201,6 +233,9 @@ export async function convertCandidateToEmployee({
         phone1: hirePayload.phone || candidate.phone || undefined,
         ...(hirePayload.salaryStructureId
             ? { salaryStructure: hirePayload.salaryStructureId }
+            : {}),
+        ...(assignedShift
+            ? { shiftId: assignedShift.shiftId, shiftName: assignedShift.shiftName }
             : {}),
     });
 

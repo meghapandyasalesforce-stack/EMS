@@ -6,7 +6,11 @@ import {
     deleteBenefitPlan,
     getBenefitPlanEnrollments,
     updateEnrollmentStatus,
-    getAllEnrollments
+    getAllEnrollments,
+    getEmployeeBenefitsOverview,
+    getBenefitsReportsSummary,
+    updateEnrollmentDependents,
+    enrollEmployeeByHR
 } from '../../controllers/benefits/benefitsController.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
@@ -25,12 +29,22 @@ router.route('/benefit-plans/:id')
 router.route('/benefit-plans/:id/enrollments')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getBenefitPlanEnrollments);
 
+// Employee overview + reports (same Benefits module, no new nav)
+router.route('/employee-overview')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getEmployeeBenefitsOverview);
+
+router.route('/reports/summary')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getBenefitsReportsSummary);
+
 // Enrollments
 router.route('/enrollments')
-    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAllEnrollments);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAllEnrollments)
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, enrollEmployeeByHR);
 
 router.route('/enrollments/:id')
     .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateEnrollmentStatus);
 
-export default router;
+router.route('/enrollments/:id/dependents')
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateEnrollmentDependents);
 
+export default router;

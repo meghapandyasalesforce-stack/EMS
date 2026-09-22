@@ -1,10 +1,12 @@
 import DocumentTemplate from '../models/documentTemplate.model.js';
 import { getOrganizationId } from '../helpers/organizationHelper.js';
+import { getDocumentModeSettings } from '../helpers/documentModeSettings.js';
 import logger from '../helpers/logger.js';
 import {
   detectFieldsFromContent,
   convertToPlaceholderSyntax,
   buildHrmsPrePopulationMap,
+  isSignatureOrStampPlaceholder,
 } from '../helpers/templateFieldDetector.js';
 
 /**
@@ -93,7 +95,7 @@ export const createTemplate = async (req, res) => {
       description: (description || '').trim(),
       country: country.trim(),
       bodyContent: convertedBody,
-      dynamicFields: mergedDynamicFields.filter(f => f.key && f.key.length > 0 && f.label && f.label.length > 0),
+      dynamicFields: mergedDynamicFields.filter(f => f.key && f.key.length > 0 && f.label && f.label.length > 0 && !isSignatureOrStampPlaceholder(f.key) && !isSignatureOrStampPlaceholder(f.label)),
       systemPlaceholders: (systemPlaceholders || []).filter(sp => sp && sp.key),
       signature: signature || {},
       formatting: formatting || {},
@@ -187,7 +189,7 @@ export const updateTemplate = async (req, res) => {
         placeholder: f.placeholder || '',
       });
     }
-    template.dynamicFields = mergedFields.filter(f => f.key);
+    template.dynamicFields = mergedFields.filter(f => f.key && !isSignatureOrStampPlaceholder(f.key) && !isSignatureOrStampPlaceholder(f.label));
 
     template.updatedBy = actorId(req);
 
@@ -284,6 +286,22 @@ export const deleteTemplate = async (req, res) => {
 // ─── Employee: Self-Service Template Access ──────────────────────────────────
 
 /**
+ * Org document mode flags (Raise a Request / Self-Service).
+ * Readable by any authenticated user so employee UI can hide disabled tabs.
+ */
+export const getDocumentMode = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    if (!organizationId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const mode = await getDocumentModeSettings(organizationId);
+    return res.json({ success: true, data: mode });
+  } catch (error) {
+    logger.error('Failed to get document mode settings', { error: error.message });
+    return res.status(500).json({ success: false, message: 'Failed to get document mode settings' });
+  }
+};
+
+/**
  * List available templates for the current employee (self-service)
  * Filters by: active, self-service enabled, employee's country/department/role
  * @access Any authenticated employee
@@ -293,6 +311,11 @@ export const listAvailableTemplates = async (req, res) => {
     const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
     const employeeId = req.employee?._id;
     if (!organizationId || !employeeId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const mode = await getDocumentModeSettings(organizationId);
+    if (!mode.enableSelfServiceDocuments) {
+      return res.json({ success: true, data: [] });
+    }
 
     // Get employee details for access filtering
     const Employee = (await import('../models/employee.model.js')).default;
@@ -408,9 +431,10 @@ export const getTemplateForEmployee = async (req, res) => {
       .select('name legalName email phone website domain address')
       .lean();
 
-    // Use the stored dynamicFields — exclude stamp placeholder (it's handled automatically)
-    const STAMP_KEYS = new Set(['companyStamp', 'companystamp', 'stamp', 'companyStampImage']);
-    const effectiveDynamicFields = (template.dynamicFields || []).filter(f => !STAMP_KEYS.has(f.key));
+    // Use the stored dynamicFields — exclude stamp/signature placeholders (filled from Signature settings)
+    const effectiveDynamicFields = (template.dynamicFields || []).filter(
+      (f) => !isSignatureOrStampPlaceholder(f.key) && !isSignatureOrStampPlaceholder(f.label)
+    );
 
     // Build pre-populated values using the shared HRMS mapping utility
     const hrmsMap = buildHrmsPrePopulationMap(fullEmployee, org);

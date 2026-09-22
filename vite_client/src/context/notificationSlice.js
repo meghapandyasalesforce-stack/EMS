@@ -94,6 +94,21 @@ export const deleteNotificationById = createAsyncThunk(
   }
 );
 
+// Delete / hide all notifications for current user
+export const deleteAllNotifications = createAsyncThunk(
+  'notifications/deleteAllNotifications',
+  async (_, { rejectWithValue }) => {
+    try {
+      await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/delete-all`);
+      return true;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to delete all notifications'
+      );
+    }
+  }
+);
+
 const normalizeNotificationsResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
   return (
@@ -250,6 +265,12 @@ const notificationSlice = createSlice({
         if (wasUnread) {
           state.unreadCount = Math.max(0, state.unreadCount - 1);
         }
+      })
+
+      // deleteAllNotifications
+      .addCase(deleteAllNotifications.fulfilled, (state) => {
+        state.notifications = [];
+        state.unreadCount = 0;
       });
   },
 });

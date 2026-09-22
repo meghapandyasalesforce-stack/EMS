@@ -240,8 +240,17 @@ const attendanceRuleSchema = new mongoose.Schema({
             default: 'auto_checkout'
         }
     },
+    // When false, shift timings / employee shift assignments are ignored (office hours apply)
+    enableShifts: {
+        type: Boolean,
+        default: true
+    },
     // Shift support (for multi-shift operations)
     shifts: [{
+        key: {
+            type: String, // e.g. shift1 | shift2
+            trim: true
+        },
         name: {
             type: String,
             required: true

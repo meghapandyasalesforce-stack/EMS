@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { FaCheck, FaTrash } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import EnablePushNotificationsButton from '../components/EnablePushNotificationsButton';
 import {
   fetchUserNotifications,
@@ -8,6 +9,7 @@ import {
   markOneNotificationRead,
   markAllNotificationsRead,
   deleteNotificationById,
+  deleteAllNotifications,
 } from '../context/notificationSlice';
 
 const Notifications = () => {
@@ -16,6 +18,7 @@ const Notifications = () => {
   const unreadCount = useSelector((state) => state.notifications.unreadCount || 0);
   const loading = useSelector((state) => state.notifications.loading || false);
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'unread'
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const load = () => {
     dispatch(fetchUserNotifications({ limit: 50, page: 1 }));
@@ -29,19 +32,39 @@ const Notifications = () => {
   const markAll = async () => {
     try {
       await dispatch(markAllNotificationsRead()).unwrap();
-    } catch {}
+    } catch (error) {
+      toast.error(typeof error === 'string' ? error : 'Failed to mark all as read');
+    }
   };
 
   const markOne = async (id) => {
     try {
       await dispatch(markOneNotificationRead(id)).unwrap();
-    } catch {}
+    } catch (error) {
+      toast.error(typeof error === 'string' ? error : 'Failed to mark as read');
+    }
   };
 
   const removeOne = async (id) => {
     try {
       await dispatch(deleteNotificationById(id)).unwrap();
-    } catch {}
+    } catch (error) {
+      toast.error(typeof error === 'string' ? error : 'Failed to delete notification');
+    }
+  };
+
+  const removeAll = async () => {
+    if (!notifications.length || deletingAll) return;
+    setDeletingAll(true);
+    try {
+      await dispatch(deleteAllNotifications()).unwrap();
+      toast.success('All notifications deleted');
+      load();
+    } catch (error) {
+      toast.error(typeof error === 'string' ? error : 'Failed to delete all notifications');
+    } finally {
+      setDeletingAll(false);
+    }
   };
 
   const displayedNotifications = activeTab === 'unread'
@@ -79,6 +102,18 @@ const Notifications = () => {
               }`}
             >
               Mark all read
+            </button>
+            <button
+              type="button"
+              onClick={removeAll}
+              disabled={notifications.length === 0 || deletingAll}
+              className={`px-3 py-2 text-sm sm:text-base rounded transition text-white ${
+                notifications.length === 0 || deletingAll
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
+            >
+              {deletingAll ? 'Deleting...' : 'Delete all'}
             </button>
           </div>
         </div>
@@ -161,8 +196,3 @@ const Notifications = () => {
 };
 
 export default Notifications;
-
-
-
-
-

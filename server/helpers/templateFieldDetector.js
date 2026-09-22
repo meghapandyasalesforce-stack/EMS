@@ -62,14 +62,43 @@ function normalizeForMatch(text) {
  */
 function findHrmsMapping(label) {
   const normalized = normalizeForMatch(label);
+  // Exact pattern match first
   for (const mapping of HRMS_MAPPINGS) {
     for (const pattern of mapping.patterns) {
-      if (normalized === pattern || normalized.includes(pattern) || pattern.includes(normalized)) {
-        return mapping;
-      }
+      if (normalized === pattern) return mapping;
     }
   }
+  // Then longer substring matches only (avoid "name" matching "authorized person name")
+  const sorted = [...HRMS_MAPPINGS].flatMap((mapping) =>
+    mapping.patterns.map((pattern) => ({ pattern, mapping }))
+  ).sort((a, b) => b.pattern.length - a.pattern.length);
+
+  for (const { pattern, mapping } of sorted) {
+    if (pattern.length < 4) continue;
+    if (normalized.includes(pattern)) return mapping;
+  }
   return null;
+}
+
+/** Signature / stamp placeholders — resolved from template.signature, not employee fillable fields. */
+export function isSignatureOrStampPlaceholder(labelOrKey) {
+  const raw = String(labelOrKey || '').trim();
+  if (!raw) return false;
+  if ([
+    'authorizedPersonName',
+    'authorizedPersonDesignation',
+    'authorizedPersonDepartment',
+    'companyStamp',
+    'signatoryName',
+    'signatoryDesignation',
+    'signatoryDepartment',
+  ].includes(raw)) return true;
+  const normalized = normalizeForMatch(raw);
+  return (
+    /^company\s*stamp$/.test(normalized) ||
+    /^authorized\s+person(\s+(name|designation|department))?$/.test(normalized) ||
+    /^signatory(\s+(name|designation|department))?$/.test(normalized)
+  );
 }
 
 /**
@@ -110,8 +139,10 @@ export function detectFieldsFromContent(bodyContent) {
     const rawKey = match[1].trim();
     // Skip stamp placeholder — it's not an employee-fillable field
     if (/^company\s*stamp$/i.test(rawKey) || rawKey === 'companyStamp') continue;
+    if (isSignatureOrStampPlaceholder(rawKey)) continue;
     const mapping = findHrmsMapping(rawKey);
     const key = mapping?.key || rawKey;
+    if (isSignatureOrStampPlaceholder(key)) continue;
     if (!detected.has(key)) {
       detected.set(key, {
         key,
@@ -139,9 +170,11 @@ export function detectFieldsFromContent(bodyContent) {
     if (['x', 'X', ' '].includes(label)) continue;
     // Skip [Company Stamp] — it's a special document placeholder, not a data field
     if (/^company\s*stamp$/i.test(label)) continue;
+    if (isSignatureOrStampPlaceholder(label)) continue;
 
     const mapping = findHrmsMapping(label);
     const key = mapping?.key || labelToKey(label);
+    if (isSignatureOrStampPlaceholder(key)) continue;
     if (!detected.has(key)) {
       detected.set(key, {
         key,
@@ -166,22 +199,24 @@ export function detectFieldsFromContent(bodyContent) {
     const colonMatch = line.match(/^[\s*]*([A-Za-z][A-Za-z\s/()]{1,35}):\s*[_.\-\s]*$/);
     if (colonMatch) {
       const label = colonMatch[1].trim();
-      const mapping = findHrmsMapping(label);
-      const key = mapping?.key || labelToKey(label);
-      if (!detected.has(key)) {
-        detected.set(key, {
-          key,
-          label: mapping?.label || label,
-          fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
-          required: true,
-          source: mapping?.source || 'manual',
-          hrmsField: mapping?.field || '',
-          autoMapped: !!mapping,
-          detectedAs: colonMatch[0].trim(),
-          options: [],
-          defaultValue: '',
-          placeholder: '',
-        });
+      if (!isSignatureOrStampPlaceholder(label)) {
+        const mapping = findHrmsMapping(label);
+        const key = mapping?.key || labelToKey(label);
+        if (!isSignatureOrStampPlaceholder(key) && !detected.has(key)) {
+          detected.set(key, {
+            key,
+            label: mapping?.label || label,
+            fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
+            required: true,
+            source: mapping?.source || 'manual',
+            hrmsField: mapping?.field || '',
+            autoMapped: !!mapping,
+            detectedAs: colonMatch[0].trim(),
+            options: [],
+            defaultValue: '',
+            placeholder: '',
+          });
+        }
       }
     }
 
@@ -189,22 +224,24 @@ export function detectFieldsFromContent(bodyContent) {
     const colonBracketMatch = line.match(/^[\s*]*([A-Za-z][A-Za-z\s/()]{1,35}):\s*\[([^\]]+)\]/);
     if (colonBracketMatch) {
       const label = colonBracketMatch[1].trim();
-      const mapping = findHrmsMapping(label);
-      const key = mapping?.key || labelToKey(label);
-      if (!detected.has(key)) {
-        detected.set(key, {
-          key,
-          label: mapping?.label || label,
-          fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
-          required: true,
-          source: mapping?.source || 'manual',
-          hrmsField: mapping?.field || '',
-          autoMapped: !!mapping,
-          detectedAs: colonBracketMatch[0].trim(),
-          options: [],
-          defaultValue: '',
-          placeholder: '',
-        });
+      if (!isSignatureOrStampPlaceholder(label)) {
+        const mapping = findHrmsMapping(label);
+        const key = mapping?.key || labelToKey(label);
+        if (!isSignatureOrStampPlaceholder(key) && !detected.has(key)) {
+          detected.set(key, {
+            key,
+            label: mapping?.label || label,
+            fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
+            required: true,
+            source: mapping?.source || 'manual',
+            hrmsField: mapping?.field || '',
+            autoMapped: !!mapping,
+            detectedAs: colonBracketMatch[0].trim(),
+            options: [],
+            defaultValue: '',
+            placeholder: '',
+          });
+        }
       }
     }
   }

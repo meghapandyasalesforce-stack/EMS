@@ -100,7 +100,7 @@ export default function OrgStructurePage() {
                             <h1 className="text-2xl font-bold text-gray-900">Organization Structure</h1>
                             <p className="mt-1 text-sm text-gray-600 max-w-2xl">
                                 Build your company catalog: departments, teams, job roles, and designations.
-                                These are labels for hiring and org chart — they do not choose login dashboards.
+                                These are labels for hiring and org chart they do not choose login dashboards.
                                 Access &amp; home screen is set with System Role when you add an employee.
                             </p>
                         </div>

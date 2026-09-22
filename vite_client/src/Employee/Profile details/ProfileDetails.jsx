@@ -134,9 +134,18 @@ function ProfileDetails() {
   };
 
   const handlePersonalDetailsSave = async () => {
+    const firstName = String(formValues.firstName || '').trim();
+    const lastName = String(formValues.lastName || '').trim();
+    if (!firstName) {
+      toast.error('First name is required.');
+      return;
+    }
+
     setIsSavingPersonalDetails(true);
     try {
       const payload = {
+        name: firstName,
+        lastName,
         ...(formValues.dateOfBirth ? { birthDate: formValues.dateOfBirth } : {}),
         ...(formValues.gender ? { gender: formValues.gender } : {}),
         professionalBio: formValues.professionalBio || ''
@@ -150,6 +159,8 @@ function ProfileDetails() {
       if (freshEmployee && user) {
         dispatch(setUser({
           ...user,
+          name: freshEmployee.name,
+          lastName: freshEmployee.lastName,
           birthDate: freshEmployee.birthDate,
           gender: freshEmployee.gender,
           professionalBio: freshEmployee.professionalBio,
@@ -275,7 +286,9 @@ function ProfileDetails() {
                         onEditClick={() => setShowPhotoUpload(true)}
                       />
                   </div>
-                  <h2 className="truncate text-base font-bold text-gray-900">{profileSource?.name || user?.name || 'Employee'}</h2>
+                  <h2 className="truncate text-base font-bold text-gray-900">
+                    {[profileSource?.name, profileSource?.lastName].filter(Boolean).join(' ') || user?.name || 'Employee'}
+                  </h2>
                   <p className="mt-0.5 truncate text-xs font-medium text-[var(--color-primary)]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
                   <div className="mt-4 w-full min-w-0 text-left">
@@ -338,11 +351,23 @@ function ProfileDetails() {
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">First name</label>
-                            <input value={formValues.firstName} readOnly className="w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed" />
+                            <input
+                              value={formValues.firstName}
+                              onChange={(e) => handleChange('firstName', e.target.value)}
+                              className={inputCls}
+                              placeholder="First name"
+                              autoComplete="given-name"
+                            />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Last name</label>
-                            <input value={formValues.lastName} readOnly className="w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed" />
+                            <input
+                              value={formValues.lastName}
+                              onChange={(e) => handleChange('lastName', e.target.value)}
+                              className={inputCls}
+                              placeholder="Last name"
+                              autoComplete="family-name"
+                            />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Date of birth</label>

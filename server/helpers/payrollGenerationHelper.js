@@ -506,6 +506,87 @@ export function buildPaidLeaveByDayMapForOrg(
     return paidLeaveByDay;
 }
 
+/**
+ * Map dateKey → LOP unpaid fraction (0.5 or 1) for approved loss_of_pay leaves.
+ * Mirrors paid-leave day mapping; used only to cap attendance when leave+punch overlap.
+ */
+export function buildLopUnpaidByDayMapForOrg(
+    approvedLeaves,
+    walkStartKey,
+    walkEndKey,
+    timezone,
+    isWorkingDayKeyFn
+) {
+    const lopByDay = new Map();
+
+    for (const lv of approvedLeaves || []) {
+        const isLop = (lv.leaveType || '').toString().toLowerCase() === 'loss_of_pay';
+        if (!isLop) continue;
+
+        const isHalf = lv.isHalfDay === true || Number(lv.duration) === 0.5;
+        const leaveStartKey = getDateKeyInTimezone(new Date(lv.startDate), timezone);
+        const leaveEndKey = getDateKeyInTimezone(new Date(lv.endDate), timezone);
+        const overlapStartKey = leaveStartKey > walkStartKey ? leaveStartKey : walkStartKey;
+        const overlapEndKey = leaveEndKey < walkEndKey ? leaveEndKey : walkEndKey;
+        if (overlapStartKey > overlapEndKey) continue;
+
+        if (isHalf) {
+            let credited = false;
+            eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+                if (credited) return;
+                if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+                    return;
+                }
+                lopByDay.set(key, Math.min(1, (lopByDay.get(key) || 0) + 0.5));
+                credited = true;
+            });
+            continue;
+        }
+
+        eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+            if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+                return;
+            }
+            lopByDay.set(key, Math.min(1, (lopByDay.get(key) || 0) + 1));
+        });
+    }
+
+    return lopByDay;
+}
+
+/**
+ * When approved leave and an attendance credit exist on the same date, leave takes
+ * precedence for the leave portion: full-day leave zeros attendance credit; half-day
+ * leave caps attendance at the remaining working half (0.5). Days with only leave or
+ * only attendance are unchanged. Pending/rejected leaves are never passed in.
+ *
+ * @param {Map<string, number>} attByDay
+ * @param {Map<string, number>} paidLeaveByDay
+ * @param {Map<string, number>} lopUnpaidByDay
+ * @returns {Map<string, number>}
+ */
+export function applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopUnpaidByDay) {
+    if (!attByDay || typeof attByDay.entries !== 'function') {
+        return attByDay || new Map();
+    }
+    const paid = paidLeaveByDay && typeof paidLeaveByDay.get === 'function' ? paidLeaveByDay : new Map();
+    const lop = lopUnpaidByDay && typeof lopUnpaidByDay.get === 'function' ? lopUnpaidByDay : new Map();
+    const result = new Map(attByDay);
+
+    for (const [key, attRaw] of result.entries()) {
+        const paidLev = Number(paid.get(key)) || 0;
+        const lopFrac = Number(lop.get(key)) || 0;
+        if (paidLev <= 0 && lopFrac <= 0) continue;
+
+        const leaveCoverage = Math.min(1, paidLev + lopFrac);
+        const maxAtt = Math.max(0, 1 - leaveCoverage);
+        const att = Number(attRaw) || 0;
+        result.set(key, Math.min(att, maxAtt));
+    }
+
+    return result;
+}
+
 /** Count leave working days overlapping a period using org date keys. */
 export function leaveWorkingDaysInDateKeyRange(lv, walkStartKey, walkEndKey, timezone, isWorkingDayKeyFn) {
     const leaveStartKey = getDateKeyInTimezone(new Date(lv.startDate), timezone);
@@ -893,12 +974,25 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         orgTimezone,
         isWorkingDayKeyFn
     );
+    const lopUnpaidByDay = buildLopUnpaidByDayMapForOrg(
+        approvedLeaves,
+        effStartKey,
+        effEndKey,
+        orgTimezone,
+        isWorkingDayKeyFn
+    );
+    // Retroactive approved leave + existing punch: leave portion wins; do not rewrite Attendance rows.
+    const attByDayForPay = applyApprovedLeaveAttendanceOverlapCap(
+        attByDay,
+        paidLeaveByDay,
+        lopUnpaidByDay
+    );
     const paidLeaveDays = sumPaidLeaveDaysFromMap(paidLeaveByDay);
     // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
     const effectivePresent = sumEffectivePresentDaysByKeys(
         effStartKey,
         effEndKey,
-        attByDay,
+        attByDayForPay,
         paidLeaveByDay,
         orgTimezone,
         isWorkingDayKeyFn

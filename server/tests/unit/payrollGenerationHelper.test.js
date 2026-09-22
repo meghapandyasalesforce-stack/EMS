@@ -18,7 +18,11 @@ import {
     computePayrollProration,
     resolvePayrollServiceDateKeys,
     resolvePayslipSalaryPaidDays,
-    attendanceDayCreditDayBased
+    attendanceDayCreditDayBased,
+    buildLopUnpaidByDayMapForOrg,
+    applyApprovedLeaveAttendanceOverlapCap,
+    buildPaidLeaveByDayMapForOrg,
+    sumPaidLeaveDaysFromMap
 } from '../../helpers/payrollGenerationHelper.js';
 
 const TZ = 'Asia/Kolkata';
@@ -235,6 +239,192 @@ describe('payrollGenerationHelper', () => {
                 dayKey
             );
             expect(total).toBe(1);
+        });
+    });
+
+    describe('approved leave + attendance overlap precedence', () => {
+        const walkStartKey = '2026-06-01';
+        const walkEndKey = '2026-06-30';
+        const monFriKeyFn = (key) => {
+            const d = DateTime.fromISO(key, { zone: TZ });
+            const wd = d.weekday; // 1=Mon … 7=Sun
+            return wd >= 1 && wd <= 5;
+        };
+        const tueKey = '2026-06-02'; // Tuesday
+
+        it('full-day paid leave + full punch: leave credit only (no double credit)', () => {
+            const leaves = [{
+                leaveType: 'casual',
+                status: 'approved',
+                startDate: new Date(2026, 5, 2),
+                endDate: new Date(2026, 5, 2)
+            }];
+            const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const lopByDay = buildLopUnpaidByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const attByDay = new Map([[tueKey, 1]]);
+
+            // Before: min(1, 1+1)=1 but attendance still counted alongside leave
+            expect(Math.min(1, (attByDay.get(tueKey) || 0) + (paidLeaveByDay.get(tueKey) || 0))).toBe(1);
+
+            const capped = applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopByDay);
+            expect(paidLeaveByDay.get(tueKey)).toBe(1);
+            expect(capped.get(tueKey)).toBe(0);
+            expect(
+                sumEffectivePresentDaysByKeys(
+                    walkStartKey, walkEndKey, capped, paidLeaveByDay, TZ, monFriKeyFn
+                )
+            ).toBe(1);
+            expect(sumPaidLeaveDaysFromMap(paidLeaveByDay)).toBe(1);
+        });
+
+        it('full-day LOP + full punch: attendance zeroed so LOP deduction applies', () => {
+            const leaves = [{
+                leaveType: 'loss_of_pay',
+                status: 'approved',
+                startDate: new Date(2026, 5, 2),
+                endDate: new Date(2026, 5, 2)
+            }];
+            const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const lopByDay = buildLopUnpaidByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const attByDay = new Map([[tueKey, 1]]);
+
+            // Before bug: effective day credit stayed 1 from punch
+            expect(Math.min(1, (attByDay.get(tueKey) || 0) + (paidLeaveByDay.get(tueKey) || 0))).toBe(1);
+
+            const capped = applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopByDay);
+            expect(paidLeaveByDay.get(tueKey)).toBeUndefined();
+            expect(lopByDay.get(tueKey)).toBe(1);
+            expect(capped.get(tueKey)).toBe(0);
+            expect(
+                sumEffectivePresentDaysByKeys(
+                    walkStartKey, walkEndKey, capped, paidLeaveByDay, TZ, monFriKeyFn
+                )
+            ).toBe(0);
+        });
+
+        it('half-day paid leave + full punch: 0.5 leave + 0.5 attendance = 1', () => {
+            const leaves = [{
+                leaveType: 'sick',
+                status: 'approved',
+                isHalfDay: true,
+                duration: 0.5,
+                startDate: new Date(2026, 5, 2),
+                endDate: new Date(2026, 5, 2)
+            }];
+            const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const lopByDay = buildLopUnpaidByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const attByDay = new Map([[tueKey, 1]]);
+
+            const capped = applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopByDay);
+            expect(paidLeaveByDay.get(tueKey)).toBe(0.5);
+            expect(capped.get(tueKey)).toBe(0.5);
+            expect(
+                sumEffectivePresentDaysByKeys(
+                    walkStartKey, walkEndKey, capped, paidLeaveByDay, TZ, monFriKeyFn
+                )
+            ).toBe(1);
+        });
+
+        it('half-day LOP + full punch: attendance capped at 0.5 (leave half unpaid)', () => {
+            const leaves = [{
+                leaveType: 'loss_of_pay',
+                status: 'approved',
+                isHalfDay: true,
+                duration: 0.5,
+                startDate: new Date(2026, 5, 2),
+                endDate: new Date(2026, 5, 2)
+            }];
+            const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const lopByDay = buildLopUnpaidByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const attByDay = new Map([[tueKey, 1]]);
+
+            // Before bug: full punch kept day at 1.0 paid
+            expect(Math.min(1, (attByDay.get(tueKey) || 0) + (paidLeaveByDay.get(tueKey) || 0))).toBe(1);
+
+            const capped = applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopByDay);
+            expect(lopByDay.get(tueKey)).toBe(0.5);
+            expect(capped.get(tueKey)).toBe(0.5);
+            expect(
+                sumEffectivePresentDaysByKeys(
+                    walkStartKey, walkEndKey, capped, paidLeaveByDay, TZ, monFriKeyFn
+                )
+            ).toBe(0.5);
+        });
+
+        it('pending/rejected leave + punch: attendance unchanged (no approved leave maps)', () => {
+            const attByDay = new Map([[tueKey, 1]]);
+            const paidLeaveByDay = new Map(); // approvedLeaves query excludes pending/rejected
+            const lopByDay = new Map();
+            const capped = applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopByDay);
+            expect(capped.get(tueKey)).toBe(1);
+            expect(
+                sumEffectivePresentDaysByKeys(
+                    walkStartKey, walkEndKey, capped, paidLeaveByDay, TZ, monFriKeyFn
+                )
+            ).toBe(1);
+        });
+
+        it('approved leave with no attendance: leave-only credit unchanged', () => {
+            const leaves = [{
+                leaveType: 'annual',
+                status: 'approved',
+                startDate: new Date(2026, 5, 2),
+                endDate: new Date(2026, 5, 2)
+            }];
+            const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const lopByDay = buildLopUnpaidByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const attByDay = new Map(); // no punch
+
+            const capped = applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopByDay);
+            expect(capped.size).toBe(0);
+            expect(paidLeaveByDay.get(tueKey)).toBe(1);
+            expect(
+                sumEffectivePresentDaysByKeys(
+                    walkStartKey, walkEndKey, capped, paidLeaveByDay, TZ, monFriKeyFn
+                )
+            ).toBe(1);
+        });
+
+        it('does not alter attendance on dates without leave', () => {
+            const wedKey = '2026-06-03';
+            const leaves = [{
+                leaveType: 'casual',
+                startDate: new Date(2026, 5, 2),
+                endDate: new Date(2026, 5, 2)
+            }];
+            const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const lopByDay = buildLopUnpaidByDayMapForOrg(
+                leaves, walkStartKey, walkEndKey, TZ, monFriKeyFn
+            );
+            const attByDay = new Map([
+                [tueKey, 1],
+                [wedKey, 1]
+            ]);
+            const capped = applyApprovedLeaveAttendanceOverlapCap(attByDay, paidLeaveByDay, lopByDay);
+            expect(capped.get(tueKey)).toBe(0);
+            expect(capped.get(wedKey)).toBe(1);
         });
     });
 

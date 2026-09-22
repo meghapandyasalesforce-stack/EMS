@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 import { useSelector, useDispatch } from "react-redux";
@@ -66,6 +67,14 @@ const Header = () => {
             document.body.style.overflow = previous;
         };
     }, [isMobile, mobileMenuOpen]);
+
+    // Close nav overlays on route change so leftover backdrops cannot block sidebar clicks
+    useEffect(() => {
+        setMobileMenuOpen(false);
+        setDropdownOpen(false);
+        setLogoutModalOpen(false);
+        document.body.style.overflow = '';
+    }, [location.pathname]);
 
     const closeProfileDropdown = useCallback(() => setDropdownOpen(false), []);
     useHrmsPopupDismiss(closeProfileDropdown, dropdownOpen);
@@ -198,6 +207,19 @@ const Header = () => {
                 ? location.pathname === '/'
                 : location.pathname === path || location.pathname.startsWith(path + '/'),
         [location.pathname]
+    );
+
+    // Use button + navigate only (no <a href>). flushSync keeps the React
+    // tree in lockstep with the URL (RR7 otherwise uses startTransition).
+    const goTo = useCallback(
+        (path) => {
+            flushSync(() => {
+                setDropdownOpen(false);
+                setMobileMenuOpen(false);
+            });
+            navigate(path);
+        },
+        [navigate]
     );
 
     const isCareerRoute = location.pathname.startsWith('/careers/');
@@ -387,19 +409,19 @@ const Header = () => {
                             <div className="shrink-0">
                                 <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
                             </div>
-                            <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-2 pb-4">
+                            <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-2 pb-4" data-hrms-sidebar-nav>
                                 {navItems.map((item, index) => (
-                                    <Link
+                                    <button
                                         key={item.path}
-                                        to={item.path}
-                                        className={`mx-2 flex items-center rounded-xl px-3 py-3 transition-all duration-300 ${
+                                        type="button"
+                                        onClick={() => goTo(item.path)}
+                                        className={`mx-2 flex w-[calc(100%-1rem)] items-center rounded-xl px-3 py-3 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                                             isActive(item.path)
-                                                ? 'scale-[1.02] text-white shadow-lg'
+                                                ? 'text-white shadow-md'
                                                 : useLightEmployeeNav
                                                     ? 'text-gray-600 hover:bg-gray-100'
                                                     : 'text-gray-300 hover:bg-gray-700/50'
                                         }`}
-                                        onClick={() => setMobileMenuOpen(false)}
                                         style={{
                                             animationDelay: `${index * 50}ms`,
                                             ...(isActive(item.path)
@@ -407,14 +429,14 @@ const Header = () => {
                                                 : {}),
                                         }}
                                     >
-                                        <span className={`mr-3 text-lg transition-transform ${isActive(item.path) ? 'scale-110' : ''}`}>
+                                        <span className="mr-3 text-lg">
                                             {item.icon}
                                         </span>
                                         <span className="font-medium">{item.name}</span>
                                         {isActive(item.path) && (
-                                            <div className="ml-auto h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                                            <div className="ml-auto h-1.5 w-1.5 rounded-full bg-white" />
                                         )}
-                                    </Link>
+                                    </button>
                                 ))}
                             </nav>
                         </div>
@@ -423,10 +445,11 @@ const Header = () => {
             ) : (
                 /* ── Desktop Sidebar ── */
                 <div
+                    data-hrms-sidebar
                     className={
                         useLightEmployeeNav
-                            ? 'fixed top-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-gray-200 bg-white text-gray-700 shadow-sm'
-                            : 'fixed top-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-gray-700/50 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white shadow-2xl'
+                            ? 'fixed top-0 left-0 z-[10050] flex h-screen w-64 flex-col overflow-hidden border-r border-gray-200 bg-white text-gray-700 shadow-sm'
+                            : 'fixed top-0 left-0 z-[10050] flex h-screen w-64 flex-col overflow-hidden border-r border-gray-700/50 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white shadow-2xl'
                     }
                 >
                     {/* Logo */}
@@ -467,6 +490,7 @@ const Header = () => {
 
                     {/* Nav links */}
                     <nav
+                        data-hrms-sidebar-nav
                         className={
                             useLightEmployeeNav
                                 ? 'scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-3 py-4'
@@ -474,15 +498,16 @@ const Header = () => {
                         }
                     >
                         {navItems.map((item, index) => (
-                            <Link
+                            <button
                                 key={item.path}
-                                to={item.path}
-                                className={`group mb-1 flex items-center rounded-xl p-3.5 mx-2 transition-all duration-300 ${
+                                type="button"
+                                onClick={() => goTo(item.path)}
+                                className={`group mb-1 flex w-[calc(100%-1rem)] items-center rounded-xl p-3.5 mx-2 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-1 ${
                                     isActive(item.path)
-                                        ? 'scale-105 text-white shadow-lg'
+                                        ? 'text-white shadow-md'
                                         : useLightEmployeeNav
-                                            ? 'text-gray-600 hover:translate-x-1 hover:bg-gray-100/90 hover:text-gray-900'
-                                            : 'text-gray-300 hover:translate-x-1 hover:bg-gray-700/50 hover:text-white'
+                                            ? 'text-gray-600 hover:bg-gray-100/90 hover:text-gray-900'
+                                            : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                                 }`}
                                 style={{
                                     animationDelay: `${index * 50}ms`,
@@ -491,14 +516,14 @@ const Header = () => {
                                         : {}),
                                 }}
                             >
-                                <span className={`text-lg flex-shrink-0 transition-transform duration-300 ${isActive(item.path) ? 'scale-110' : 'group-hover:scale-110'}`}>
+                                <span className={`text-lg flex-shrink-0 transition-transform duration-200 ${isActive(item.path) ? '' : 'group-hover:scale-105'}`}>
                                     {item.icon}
                                 </span>
                                 <span className="ml-3 truncate font-medium">{item.name}</span>
                                 {isActive(item.path) && (
-                                    <div className="ml-auto h-1.5 w-1.5 animate-pulse rounded-full bg-white"></div>
+                                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-white"></div>
                                 )}
-                            </Link>
+                            </button>
                         ))}
                     </nav>
 
@@ -552,7 +577,7 @@ const Header = () => {
 
             {/* Logout Confirmation Modal */}
             <Transition appear show={logoutModalOpen} as={Fragment}>
-                <Dialog as="div" className="relative z-50" onClose={closeLogoutModal}>
+                <Dialog as="div" className="relative z-[11000]" onClose={closeLogoutModal}>
                     <Transition.Child
                         as={Fragment}
                         enter="ease-out duration-300"

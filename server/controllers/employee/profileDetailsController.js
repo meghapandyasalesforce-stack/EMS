@@ -105,8 +105,8 @@ export const updateEmployeeInfo = async (req, res) => {
 
         // Fields that cannot be updated through this endpoint
         const restrictedFields = [
-            'name', 'lastName', 'email', 'password', 'position', 
-            'department', 'manager', 'jobTitle', 'jobCategory', 
+            'email', 'password', 'position',
+            'department', 'manager', 'jobTitle', 'jobCategory',
             'salary', 'role', 'active', 'guarantors', 'nextOfKins',
             'familyDetails', 'academicRecords', 'professionalQualifications', 'professionalExperience'
         ];
@@ -120,6 +120,25 @@ export const updateEmployeeInfo = async (req, res) => {
             return res.status(400).json({
                 message: `Cannot update restricted fields: ${invalidUpdates.join(', ')}`
             });
+        }
+
+        // Allow employees (and HR using Me profile) to update their own name
+        if (Object.prototype.hasOwnProperty.call(updateData, 'name')) {
+            const nextName = String(updateData.name || '').trim();
+            if (!nextName) {
+                return res.status(400).json({ message: 'First name is required' });
+            }
+            if (nextName.length > 80) {
+                return res.status(400).json({ message: 'First name must be 80 characters or less' });
+            }
+            updateData.name = nextName;
+        }
+        if (Object.prototype.hasOwnProperty.call(updateData, 'lastName')) {
+            const nextLastName = String(updateData.lastName || '').trim();
+            if (nextLastName.length > 80) {
+                return res.status(400).json({ message: 'Last name must be 80 characters or less' });
+            }
+            updateData.lastName = nextLastName;
         }
 
         // Validate phone numbers if provided
@@ -275,6 +294,17 @@ export const updateEmployeeInfo = async (req, res) => {
 
         if (!updatedEmployee) {
             return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        // Keep linked login User display name in sync when name changes
+        if (updatedEmployee.userId && (updateData.name !== undefined || updateData.lastName !== undefined)) {
+            const displayName = [updatedEmployee.name, updatedEmployee.lastName]
+                .filter(Boolean)
+                .join(' ')
+                .trim();
+            if (displayName) {
+                await User.findByIdAndUpdate(updatedEmployee.userId, { name: displayName });
+            }
         }
 
         res.status(200).json({

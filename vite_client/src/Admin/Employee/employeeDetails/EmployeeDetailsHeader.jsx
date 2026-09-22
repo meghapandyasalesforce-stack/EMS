@@ -58,7 +58,18 @@ const EmployeeDetailsHeader = ({
                 </span>
               ) : null}
             </div>
-            {employee.manager ? (
+            {employee.managerId ? (
+              <p className="mt-3 text-sm text-slate-500">
+                <span className="font-medium text-slate-700">Reports to:</span> {employee.manager}
+              </p>
+            ) : employee.isOrgOwnerRoot ||
+              !employee.manager ||
+              ['Admin', 'CEO'].includes(String(employee.manager || '').trim()) ? (
+              <p className="mt-3 text-sm text-slate-500">
+                <span className="font-medium text-slate-700">Reports to:</span> Organization root
+                (no manager)
+              </p>
+            ) : employee.manager ? (
               <p className="mt-3 text-sm text-slate-500">
                 <span className="font-medium text-slate-700">Reports to:</span> {employee.manager}
               </p>

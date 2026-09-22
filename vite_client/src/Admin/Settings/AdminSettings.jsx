@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave, FaUserCheck } from 'react-icons/fa';
+import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave, FaUserCheck, FaFileAlt, FaClock } from 'react-icons/fa';
 import { FiToggleLeft, FiToggleRight, FiX } from 'react-icons/fi';
 import AttendanceRules from '../Attendance/AttendanceRules';
+import ShiftSettings from './ShiftSettings';
 import NotificationSettings from './NotificationSettings';
 import EmailSettings from './EmailSettings';
 import LeavePolicyManagement from '../../HR/Leave/LeavePolicyManagement';
 import ThemeSettings from './ThemeSettings';
 import PayrollSettings from './PayrollSettings';
+import DocumentSettings from './DocumentSettings';
 import { toast } from 'react-toastify';
 import {
     fetchOrganizationProfile,
@@ -29,6 +31,12 @@ const AdminSettings = () => {
             name: 'Attendance Rules',
             icon: <FaRuler />,
             component: <AttendanceRules />
+        },
+        {
+            id: 'shift-settings',
+            name: 'Shift Settings',
+            icon: <FaClock />,
+            component: <ShiftSettings />
         },
         {
             id: 'leave-policy',
@@ -71,6 +79,12 @@ const AdminSettings = () => {
             name: 'Reports & Analytics',
             icon: <FaChartLine />,
             component: <ReportsSettings />
+        },
+        {
+            id: 'document-settings',
+            name: 'Document Management Settings',
+            icon: <FaFileAlt />,
+            component: <DocumentSettings />
         },
         {
             id: 'theme',

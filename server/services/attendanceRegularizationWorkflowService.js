@@ -1,9 +1,11 @@
 import AttendanceRegularization from '../models/attendanceRegularization.model.js';
 import Attendance from '../models/attendance.model.js';
 import AttendanceRule from '../models/attendanceRule.model.js';
+import Employee from '../models/employee.model.js';
 import { ApprovalInstance } from '../models/approvalWorkflow.model.js';
 import logger from '../helpers/logger.js';
 import { ensureClockOutAfterClockIn } from '../helpers/attendanceRegularizationTimeHelper.js';
+import { applyEmployeeShiftToRule } from '../helpers/shiftHelper.js';
 import {
     getAttendanceDayContext,
     buildTodayAttendanceFilter,
@@ -30,22 +32,24 @@ function setClockWithTime(anchorDay, timeValue, fallbackTime) {
     return out;
 }
 
-async function getDefaultOfficeDateTimes(organizationId, anchorDay) {
+async function getDefaultOfficeDateTimes(organizationId, anchorDay, employee = null) {
     const activeRule = await AttendanceRule.findOne({
         organizationId,
         isActive: true
     })
         .sort({ priority: -1, updatedAt: -1 })
-        .select('officeHours checkInOutTimes')
+        .select('officeHours checkInOutTimes shifts')
         .lean();
 
+    const timingRule = applyEmployeeShiftToRule(activeRule, employee);
+
     const startTime =
-        activeRule?.officeHours?.startTime ||
-        activeRule?.checkInOutTimes?.checkInStartTime ||
+        timingRule?.officeHours?.startTime ||
+        timingRule?.checkInOutTimes?.checkInStartTime ||
         DEFAULT_OFFICE_START;
     const endTime =
-        activeRule?.officeHours?.endTime ||
-        activeRule?.checkInOutTimes?.checkOutStartTime ||
+        timingRule?.officeHours?.endTime ||
+        timingRule?.checkInOutTimes?.checkOutStartTime ||
         DEFAULT_OFFICE_END;
 
     return {
@@ -91,7 +95,12 @@ export async function applyRegularizationApproval({
         ...buildTodayAttendanceFilter(dayContext),
     });
 
-    const { defaultClockIn, defaultClockOut } = await getDefaultOfficeDateTimes(organizationId, startOfDay);
+    const employeeDoc = await Employee.findById(employeeRef).select('shiftId shiftName').lean();
+    const { defaultClockIn, defaultClockOut } = await getDefaultOfficeDateTimes(
+        organizationId,
+        startOfDay,
+        employeeDoc
+    );
 
     let clockInTime = regularizationRequest.requestedClockIn || attendanceRecord?.clockIn || defaultClockIn;
     let clockOutTime = regularizationRequest.requestedClockOut || attendanceRecord?.clockOut || defaultClockOut;

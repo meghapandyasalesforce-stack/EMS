@@ -1143,6 +1143,7 @@ const AllAttendanceStatsComponent = () => {
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-slate-50/90 border-b border-slate-100">
                   <th className="px-4 py-4 pl-6">Team member</th>
+                  <th className="px-4 py-4">Shift</th>
                   <th className="px-4 py-4">Date</th>
                   <th className="px-4 py-4">Check in / out</th>
                   <th className="px-4 py-4">Hours</th>
@@ -1179,6 +1180,9 @@ const AllAttendanceStatsComponent = () => {
                             <p className="text-xs text-slate-500">{title}</p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-slate-700">
+                        {row.shiftName || emp?.shiftName || '—'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-slate-700">
                         {formatRowDate(row)}

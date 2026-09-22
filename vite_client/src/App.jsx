@@ -212,7 +212,10 @@ function App() {
 
 function AppWrapper() {
     return (
-        <Router future={{ v7_relativeSplatPath: true }}>
+        // React Router 7 defaults to startTransition for location updates. That can
+        // update the browser URL while React keeps rendering the previous page when
+        // other high-priority updates (sockets/redux) interrupt the transition.
+        <Router future={{ v7_relativeSplatPath: true }} useTransitions={false}>
             <App />
         </Router>
     );

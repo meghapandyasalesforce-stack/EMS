@@ -1055,6 +1055,22 @@ const LeaveAttendanceHub = () => {
                       const mobileSession = selectedMobileCell.session;
                       const mobileIsLate = Boolean(mobileSession?.isLateArrival) || selectedMobileCell.status === 'late';
                       const mobileNotPunchedOut = Boolean(mobileSession?.clockIn) && !mobileSession?.clockOut;
+                      const mobileDate = mobileSession?.date
+                        || new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), selectedMobileCell.day);
+                      const regularizationRow = {
+                        ...(mobileSession || {}),
+                        date: mobileDate,
+                        status: mobileIsLate ? 'late' : (mobileSession?.status || selectedMobileCell.status),
+                        clockIn: mobileSession?.clockIn,
+                        clockOut: mobileSession?.clockOut,
+                        isLateArrival: mobileIsLate,
+                      };
+                      const todayKey = toDateInput(new Date());
+                      const selectedDateKey = toDateInput(mobileDate);
+                      const showRegularizeAction =
+                        selectedMobileCell.status !== 'weekend' &&
+                        selectedMobileCell.status !== 'holiday' &&
+                        selectedDateKey <= todayKey;
                       return (
                         <>
                     <div className="flex items-start justify-between gap-3">
@@ -1101,6 +1117,11 @@ const LeaveAttendanceHub = () => {
                         {selectedMobileCell.status === 'weekend' ? 'Weekend - no attendance required.' : 'No attendance data for this date.'}
                       </p>
                     )}
+                    {showRegularizeAction && (
+                      <div className="mt-3 flex items-center justify-end border-t border-[#E2E8F0] pt-2">
+                        {renderRegularizationAction(regularizationRow)}
+                      </div>
+                    )}
                         </>
                       );
                     })()}
@@ -1146,6 +1167,10 @@ const LeaveAttendanceHub = () => {
                           </span>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#475569]">
+                          <div className="rounded-lg bg-[#F8FAFC] px-2.5 py-2 col-span-2">
+                            <p className="text-[11px] text-[#64748B]">Shift</p>
+                            <p className="mt-0.5 font-semibold text-[#1E293B]">{row?.shiftName || '—'}</p>
+                          </div>
                           <div className="rounded-lg bg-[#F8FAFC] px-2.5 py-2">
                             <p className="text-[11px] text-[#64748B]">Check-in</p>
                             <p className="mt-0.5 font-semibold text-[#1E293B]">{formatTime(row?.clockIn)}</p>
@@ -1187,6 +1212,7 @@ const LeaveAttendanceHub = () => {
                     <thead>
                       <tr className="border-b border-[#E2E8F0] text-left text-[11px] uppercase text-[#64748B]">
                         <th className="px-4 py-3">Date</th>
+                        <th className="px-4 py-3">Shift</th>
                         <th className="px-4 py-3">Check-in</th>
                         <th className="px-4 py-3">Check-out</th>
                         <th className="px-4 py-3">Hours</th>
@@ -1198,13 +1224,14 @@ const LeaveAttendanceHub = () => {
                     <tbody>
                       {paginatedLogs.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-4 py-6 text-center text-sm text-[#64748B]">No attendance logs found.</td>
+                          <td colSpan={8} className="px-4 py-6 text-center text-sm text-[#64748B]">No attendance logs found.</td>
                         </tr>
                       ) : paginatedLogs.map((row) => {
                         const s = String(row?.status || '').toLowerCase();
                         return (
                           <tr key={row._id || `${row.date}-${row.clockIn || 'x'}`} className="border-b border-[#F1F5F9] text-sm text-[#1E293B] last:border-b-0">
                             <td className="px-4 py-3">{row?.date ? new Date(row.date).toLocaleDateString() : '--'}</td>
+                            <td className="px-4 py-3">{row?.shiftName || '—'}</td>
                             <td className="px-4 py-3">{formatTime(row?.clockIn)}</td>
                             <td className="px-4 py-3">{formatTime(row?.clockOut)}</td>
                             <td className="px-4 py-3">{formatHours(row?.grossHours || row?.effectiveHours)}</td>

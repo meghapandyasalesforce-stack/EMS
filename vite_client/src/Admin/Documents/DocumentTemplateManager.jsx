@@ -76,6 +76,29 @@ const HRMS_FIELD_MAP = {
   'letter date': { key: 'currentDate', source: 'system', label: 'Date', fieldType: 'date' },
 };
 
+/** Signature / stamp placeholders — filled from template Signature settings, not employee Additional Fields. */
+const SIGNATURE_PLACEHOLDER_KEYS = new Set([
+  'authorizedPersonName',
+  'authorizedPersonDesignation',
+  'authorizedPersonDepartment',
+  'companyStamp',
+  'signatoryName',
+  'signatoryDesignation',
+  'signatoryDepartment',
+]);
+
+const isSignatureOrStampPlaceholder = (labelOrKey) => {
+  const raw = String(labelOrKey || '').trim();
+  if (!raw) return false;
+  if (SIGNATURE_PLACEHOLDER_KEYS.has(raw)) return true;
+  const normalized = raw.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  return (
+    /^company\s*stamp$/.test(normalized) ||
+    /^authorized\s+person(\s+(name|designation|department))?$/.test(normalized) ||
+    /^signatory(\s+(name|designation|department))?$/.test(normalized)
+  );
+};
+
 /**
  * Detect fields from template body content.
  * Supports multiple formats — matches backend templateFieldDetector.js logic:
@@ -89,11 +112,14 @@ function detectFieldsFromBody(bodyContent) {
   if (!bodyContent) return [];
   const detected = new Map();
 
-  // Helper: find HRMS mapping for a label
+  // Prefer exact match; avoid short patterns (e.g. "name") matching "Authorized Person Name"
   const findMapping = (label) => {
     const normalized = label.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
-    for (const [pattern, mapping] of Object.entries(HRMS_FIELD_MAP)) {
-      if (normalized === pattern || normalized.includes(pattern) || pattern.includes(normalized)) {
+    if (HRMS_FIELD_MAP[normalized]) return HRMS_FIELD_MAP[normalized];
+    const entries = Object.entries(HRMS_FIELD_MAP).sort((a, b) => b[0].length - a[0].length);
+    for (const [pattern, mapping] of entries) {
+      if (pattern.length < 4) continue; // skip ambiguous shorts like name/role/date/title
+      if (normalized === pattern || normalized.includes(pattern)) {
         return mapping;
       }
     }
@@ -112,8 +138,10 @@ function detectFieldsFromBody(bodyContent) {
   let match;
   while ((match = placeholderRegex.exec(bodyContent)) !== null) {
     const rawKey = match[1].trim();
+    if (isSignatureOrStampPlaceholder(rawKey)) continue;
     const mapping = findMapping(rawKey);
     const key = mapping?.key || rawKey;
+    if (isSignatureOrStampPlaceholder(key)) continue;
     if (!detected.has(key)) {
       detected.set(key, {
         key,
@@ -135,8 +163,10 @@ function detectFieldsFromBody(bodyContent) {
   while ((match = bracketRegex.exec(bodyContent)) !== null) {
     const label = match[1].trim();
     if (label.startsWith('http') || label.startsWith('/') || ['x', 'X', ' '].includes(label)) continue;
+    if (isSignatureOrStampPlaceholder(label)) continue;
     const mapping = findMapping(label);
     const key = mapping?.key || labelToKey(label);
+    if (isSignatureOrStampPlaceholder(key)) continue;
     if (!detected.has(key)) {
       detected.set(key, {
         key,
@@ -160,21 +190,23 @@ function detectFieldsFromBody(bodyContent) {
     const colonMatch = line.match(/^[\s*]*([A-Za-z][A-Za-z\s/()]{1,35}):\s*[_.\-\s]*$/);
     if (colonMatch) {
       const label = colonMatch[1].trim();
-      const mapping = findMapping(label);
-      const key = mapping?.key || labelToKey(label);
-      if (!detected.has(key)) {
-        detected.set(key, {
-          key,
-          label: mapping?.label || label,
-          fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
-          required: true,
-          source: mapping?.source || 'manual',
-          autoMapped: !!mapping,
-          detectedAs: colonMatch[0].trim(),
-          options: [],
-          defaultValue: '',
-          placeholder: '',
-        });
+      if (!isSignatureOrStampPlaceholder(label)) {
+        const mapping = findMapping(label);
+        const key = mapping?.key || labelToKey(label);
+        if (!isSignatureOrStampPlaceholder(key) && !detected.has(key)) {
+          detected.set(key, {
+            key,
+            label: mapping?.label || label,
+            fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
+            required: true,
+            source: mapping?.source || 'manual',
+            autoMapped: !!mapping,
+            detectedAs: colonMatch[0].trim(),
+            options: [],
+            defaultValue: '',
+            placeholder: '',
+          });
+        }
       }
     }
 
@@ -182,21 +214,23 @@ function detectFieldsFromBody(bodyContent) {
     const colonBracketMatch = line.match(/^[\s*]*([A-Za-z][A-Za-z\s/()]{1,35}):\s*\[([^\]]+)\]/);
     if (colonBracketMatch) {
       const label = colonBracketMatch[1].trim();
-      const mapping = findMapping(label);
-      const key = mapping?.key || labelToKey(label);
-      if (!detected.has(key)) {
-        detected.set(key, {
-          key,
-          label: mapping?.label || label,
-          fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
-          required: true,
-          source: mapping?.source || 'manual',
-          autoMapped: !!mapping,
-          detectedAs: colonBracketMatch[0].trim(),
-          options: [],
-          defaultValue: '',
-          placeholder: '',
-        });
+      if (!isSignatureOrStampPlaceholder(label)) {
+        const mapping = findMapping(label);
+        const key = mapping?.key || labelToKey(label);
+        if (!isSignatureOrStampPlaceholder(key) && !detected.has(key)) {
+          detected.set(key, {
+            key,
+            label: mapping?.label || label,
+            fieldType: mapping?.fieldType || (label.toLowerCase().includes('date') ? 'date' : 'text'),
+            required: true,
+            source: mapping?.source || 'manual',
+            autoMapped: !!mapping,
+            detectedAs: colonBracketMatch[0].trim(),
+            options: [],
+            defaultValue: '',
+            placeholder: '',
+          });
+        }
       }
     }
   }
@@ -232,6 +266,7 @@ export default function DocumentTemplateManager() {
   // Company stamp state
   const [stampPreview, setStampPreview] = useState(null); // base64 data URL
   const [stampFileName, setStampFileName] = useState('');
+  const [pendingStampFile, setPendingStampFile] = useState(null);
 
   const handleStampUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -243,6 +278,7 @@ export default function DocumentTemplateManager() {
       reader.onload = (ev) => {
         setStampPreview(ev.target.result);
         setStampFileName(file.name);
+        setPendingStampFile(file);
         setForm(p => ({ ...p, signature: { ...p.signature, stampEnabled: true } }));
       };
       reader.readAsDataURL(file);
@@ -276,6 +312,7 @@ export default function DocumentTemplateManager() {
     }
     setStampPreview(null);
     setStampFileName('');
+    setPendingStampFile(null);
     setForm(p => ({ ...p, signature: { ...p.signature, stampEnabled: false } }));
   };
 
@@ -317,6 +354,7 @@ export default function DocumentTemplateManager() {
     setManualFields([]);
     setStampPreview(null);
     setStampFileName('');
+    setPendingStampFile(null);
     setEditingId(null);
   };
 
@@ -337,12 +375,19 @@ export default function DocumentTemplateManager() {
         formatting: tpl.formatting || { paperSize: 'A4', orientation: 'portrait', includeLetterhead: true, includeDate: true, includeReferenceNumber: true },
       });
       // Separate detected vs manual fields from saved dynamicFields
+      // Never show signature/stamp placeholders in Additional Fields (filled from Signature settings)
       const bodyDetected = detectFieldsFromBody(tpl.bodyContent || '');
       const bodyKeys = new Set(bodyDetected.map(f => f.key));
-      const savedManual = (tpl.dynamicFields || []).filter(f => !bodyKeys.has(f.key));
+      const savedManual = (tpl.dynamicFields || []).filter((f) => {
+        if (!f?.key && !f?.label) return false;
+        if (isSignatureOrStampPlaceholder(f.key) || isSignatureOrStampPlaceholder(f.label)) return false;
+        if (bodyKeys.has(f.key)) return false;
+        return true;
+      });
       setManualFields(savedManual);
       setEditingId(id);
       setShowForm(true);
+      setPendingStampFile(null);
       // Load stamp preview if exists
       if (tpl.signature?.stampEnabled) {
         loadStampPreview(id);
@@ -363,6 +408,7 @@ export default function DocumentTemplateManager() {
     }
 
     // Merge detected fields + manual fields → dynamicFields for storage
+    // Drop signature/stamp placeholders — they come from Signature settings, not employee input
     const allFields = [
       ...detectedFields.map(f => ({
         key: f.key,
@@ -382,7 +428,7 @@ export default function DocumentTemplateManager() {
         defaultValue: f.defaultValue || '',
         placeholder: f.placeholder || '',
       })),
-    ];
+    ].filter((f) => f.key && !isSignatureOrStampPlaceholder(f.key) && !isSignatureOrStampPlaceholder(f.label));
 
     // Build systemPlaceholders from auto-mapped fields
     const systemPlaceholders = detectedFields
@@ -406,7 +452,13 @@ export default function DocumentTemplateManager() {
         await axios.put(`${BOTH_DOCUMENT_TEMPLATES_ENDPOINT}/admin/${editingId}`, payload, { withCredentials: true });
         toast.success('Template updated');
       } else {
-        await axios.post(`${BOTH_DOCUMENT_TEMPLATES_ENDPOINT}/`, payload, { withCredentials: true });
+        const { data } = await axios.post(`${BOTH_DOCUMENT_TEMPLATES_ENDPOINT}/`, payload, { withCredentials: true });
+        const newId = data?.data?._id;
+        if (newId && pendingStampFile) {
+          const fd = new FormData();
+          fd.append('stamp', pendingStampFile);
+          await axios.post(`${BOTH_DOCUMENT_TEMPLATES_ENDPOINT}/admin/${newId}/stamp`, fd, { withCredentials: true });
+        }
         toast.success('Template created');
       }
       setShowForm(false);
@@ -468,16 +520,20 @@ export default function DocumentTemplateManager() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 sm:p-4 lg:p-6">
+    <div className="p-3 sm:p-4 lg:p-6">
       <div className="space-y-5">
 
         {/* Header */}
-        <div className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Document Templates</h1>
-            <p className="mt-1 text-sm text-slate-500">Create and manage predefined templates for employee self-service document generation.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#20C997]">Self-service</p>
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">Templates</h2>
+            <p className="mt-1 max-w-xl text-sm text-slate-500">
+              Create and manage predefined templates for employee self-service document generation.
+            </p>
           </div>
           <button
+            type="button"
             onClick={() => { resetForm(); setShowForm(true); }}
             className="shrink-0 rounded-xl bg-[#20C997] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1bae83]"
           >
@@ -486,11 +542,11 @@ export default function DocumentTemplateManager() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 rounded-2xl bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
           <select
             value={filters.documentType}
             onChange={(e) => setFilters(prev => ({ ...prev, documentType: e.target.value }))}
-            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#20C997] focus:outline-none"
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#20C997] focus:outline-none focus:ring-2 focus:ring-[#20C997]/15"
           >
             <option value="">All Document Types</option>
             {DOCUMENT_TYPES.map(dt => <option key={dt} value={dt}>{dt}</option>)}
@@ -499,27 +555,27 @@ export default function DocumentTemplateManager() {
             value={filters.country}
             onChange={(e) => setFilters(prev => ({ ...prev, country: e.target.value }))}
             placeholder="Filter by country..."
-            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#20C997] focus:outline-none"
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#20C997] focus:outline-none focus:ring-2 focus:ring-[#20C997]/15"
           />
-          <div className="ml-auto text-xs text-slate-400 self-center">
+          <div className="ml-auto self-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
             {templates.length} template{templates.length !== 1 ? 's' : ''}
           </div>
         </div>
 
         {/* Template List */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-white py-16 shadow-sm">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#20C997]" />
             <p className="mt-3 text-sm text-slate-400">Loading templates...</p>
           </div>
         ) : templates.length === 0 ? (
-          <div className="rounded-2xl bg-white px-8 py-16 text-center shadow-sm">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
-              <svg className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-8 py-16 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#20C997]/10 text-[#20C997]">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
             </div>
             <h3 className="text-base font-semibold text-slate-700">No templates yet</h3>
             <p className="mt-1 text-sm text-slate-500">Create your first document template to enable employee self-service.</p>
-            <button onClick={() => { resetForm(); setShowForm(true); }} className="mt-4 rounded-lg bg-[#20C997] px-4 py-2 text-sm font-medium text-white hover:bg-[#1bae83]">
+            <button type="button" onClick={() => { resetForm(); setShowForm(true); }} className="mt-4 rounded-xl bg-[#20C997] px-4 py-2 text-sm font-medium text-white hover:bg-[#1bae83]">
               Create Template
             </button>
           </div>
@@ -531,12 +587,12 @@ export default function DocumentTemplateManager() {
                 ? tpl.createdBy.functionalRoles[0].charAt(0).toUpperCase() + tpl.createdBy.functionalRoles[0].slice(1)
                 : (tpl.createdBy?.jobTitle || tpl.createdBy?.position || '');
               return (
-                <div key={tpl._id} className="rounded-xl bg-white p-5 shadow-sm transition hover:shadow-md">
+                <div key={tpl._id} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-[#20C997]/25 hover:shadow-md">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     {/* Left: Template info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5">
-                        <h3 className="text-base font-semibold text-slate-900 truncate">{tpl.name}</h3>
+                        <h3 className="truncate text-base font-semibold text-slate-900">{tpl.name}</h3>
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${tpl.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                           {tpl.isActive ? 'Active' : 'Disabled'}
                         </span>
@@ -547,7 +603,7 @@ export default function DocumentTemplateManager() {
                         <span>{tpl.country}</span>
                         <span className="text-slate-300">·</span>
                         <span>{(tpl.dynamicFields || []).length} fields</span>
-                        {tpl.signature?.stampEnabled && (
+                        {tpl.signature?.stampEnabled && tpl.signature?.stampFileName && (
                           <>
                             <span className="text-slate-300">·</span>
                             <span className="text-blue-600">Stamp attached</span>
@@ -595,9 +651,16 @@ export default function DocumentTemplateManager() {
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-2 pt-4 sm:p-4 sm:pt-10">
             <div className="w-full max-w-4xl rounded-2xl bg-white p-4 shadow-xl sm:p-6">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">{editingId ? 'Edit Template' : 'Create Template'}</h2>
-                <button onClick={() => { setShowForm(false); resetForm(); }} className="text-2xl text-slate-400 hover:text-slate-600">&times;</button>
+              <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#20C997]">
+                    {editingId ? 'Edit' : 'Create'}
+                  </p>
+                  <h2 className="mt-0.5 text-lg font-bold text-slate-900">
+                    {editingId ? 'Edit Template' : 'Create Template'}
+                  </h2>
+                </div>
+                <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600">&times;</button>
               </div>
 
               <form onSubmit={handleSave} className="space-y-5 max-h-[75vh] overflow-y-auto pr-2">

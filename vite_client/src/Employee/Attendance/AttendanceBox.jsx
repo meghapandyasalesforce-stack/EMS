@@ -82,6 +82,9 @@ const AttendanceBox = ({ variant = 'default' }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [cachedLocation, setCachedLocation] = useState(null);
   const [workLocation, setWorkLocation] = useState('office');
+  /** UI-only schedule hint: null | { type:'full_day' } | { type:'half_day', halfDayType } */
+  const [todayWfhSchedule, setTodayWfhSchedule] = useState(null);
+  const [wfhNoticeDismissed, setWfhNoticeDismissed] = useState(false);
   const [showAllEmployeesModal, setShowAllEmployeesModal] = useState(false);
   const [selectedAllEmployeesDate, setSelectedAllEmployeesDate] = useState(new Date());
   const [allEmployeesBreaksData, setAllEmployeesBreaksData] = useState([]);
@@ -92,11 +95,200 @@ const AttendanceBox = ({ variant = 'default' }) => {
   const wfhAllowed = attendanceRule?.allowWorkFromHome !== false;
   const isWfhSelected = wfhAllowed && workLocation === 'work_from_home';
 
+  const parseHmToMinutes = (hm) => {
+    const parts = String(hm || '').split(':');
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    if (!Number.isFinite(h)) return null;
+    return h * 60 + (Number.isFinite(m) ? m : 0);
+  };
+
+  // Office hours from employee rule API (rule → employee shift if assigned → calendar → 09:00–17:00)
+  const officeHoursForUi = useMemo(() => ({
+    startTime: attendanceRule?.officeHours?.startTime || '09:00',
+    endTime: attendanceRule?.officeHours?.endTime || '17:00',
+  }), [attendanceRule]);
+
+  const shiftLabel = useMemo(() => {
+    const fromSession = currentSession?.shiftName;
+    const fromRule = attendanceRule?.assignedShift?.name;
+    const name = fromSession || fromRule;
+    if (!name) return null;
+    const start =
+      currentSession?.shiftStartTime ||
+      attendanceRule?.assignedShift?.startTime ||
+      officeHoursForUi.startTime;
+    const end =
+      currentSession?.shiftEndTime ||
+      attendanceRule?.assignedShift?.endTime ||
+      officeHoursForUi.endTime;
+    return start && end ? `${name} (${start}–${end})` : name;
+  }, [currentSession, attendanceRule, officeHoursForUi]);
+
+  const shiftCheckInHint = useMemo(() => {
+    const win = attendanceRule?.shiftCheckInWindow;
+    if (!win?.enforced || !win.windowStart || !win.windowEnd) return null;
+    return `Punch-in during your shift only (${win.windowStart}–${win.windowEnd})`;
+  }, [attendanceRule]);
+
+  const halfDaySplitMinutes = useMemo(() => {
+    const fromServer = attendanceRule?.daySchedule?.midpointHHmm;
+    if (fromServer) {
+      const mid = parseHmToMinutes(fromServer);
+      if (mid != null) return mid;
+    }
+    const start = parseHmToMinutes(officeHoursForUi.startTime) ?? 9 * 60;
+    const end = parseHmToMinutes(officeHoursForUi.endTime) ?? 17 * 60;
+    if (end <= start) return start + 4 * 60;
+    return Math.floor((start + end) / 2);
+  }, [officeHoursForUi, attendanceRule]);
+
+  // Same timezone the server used for daySchedule. If org TZ is still default UTC,
+  // fall back to the browser zone so afternoon IST is not treated as morning UTC.
+  const punchHalfTimezone = useMemo(() => {
+    const scheduled = attendanceRule?.daySchedule?.timezone;
+    if (scheduled && scheduled !== 'UTC') return scheduled;
+    if (orgTimezone && orgTimezone !== 'UTC') return orgTimezone;
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || orgTimezone || 'UTC';
+    } catch {
+      return orgTimezone || 'UTC';
+    }
+  }, [attendanceRule?.daySchedule?.timezone, orgTimezone]);
+
+  const nowMinutes = useMemo(() => {
+    const hm = formatInOrgTimezone(currentTime, 'HH:mm', punchHalfTimezone);
+    return parseHmToMinutes(hm) ?? 0;
+  }, [currentTime, punchHalfTimezone]);
+
+  // Browser-local half: if org TZ is UTC, afternoon IST still looks like morning — use both clocks for WFH lock
+  const inFirstHalfBrowser = useMemo(() => {
+    let browserTz = 'UTC';
+    try {
+      browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {
+      browserTz = 'UTC';
+    }
+    const hm = formatInOrgTimezone(currentTime, 'HH:mm', browserTz);
+    const mins = parseHmToMinutes(hm) ?? 0;
+    const mid = halfDaySplitMinutes;
+    return mins < mid;
+  }, [currentTime, halfDaySplitMinutes]);
+
+  const inFirstHalfOfDay = useMemo(() => {
+    const start =
+      parseHmToMinutes(
+        attendanceRule?.daySchedule?.dayStartHHmm || officeHoursForUi.startTime
+      ) ?? 9 * 60;
+    const end =
+      parseHmToMinutes(
+        attendanceRule?.daySchedule?.dayEndHHmm || officeHoursForUi.endTime
+      ) ?? 17 * 60;
+    const mid = halfDaySplitMinutes;
+    const overnight = end <= start;
+    if (!overnight) {
+      return nowMinutes < mid;
+    }
+    // Overnight first half: [start → mid], mid may be after midnight
+    if (mid > start) {
+      return nowMinutes >= start && nowMinutes < mid;
+    }
+    return nowMinutes >= start || nowMinutes < mid;
+  }, [
+    nowMinutes,
+    halfDaySplitMinutes,
+    officeHoursForUi.startTime,
+    officeHoursForUi.endTime,
+    attendanceRule?.daySchedule?.dayStartHHmm,
+    attendanceRule?.daySchedule?.dayEndHHmm,
+  ]);
+
+  const canContinueSecondHalf = useMemo(() => {
+    if (!currentSession || currentSession.clockOut) return false;
+    const ds = attendanceRule?.daySchedule;
+    if (!ds || inFirstHalfOfDay) return false;
+    if (currentSession.secondaryWorkLocation) return false;
+    const primary =
+      currentSession.workLocation === 'home' ? 'work_from_home' : currentSession.workLocation;
+    const expected = ds.expectedWorkLocationSecondHalf || ds.expectedWorkLocation;
+    if (!expected || expected === primary) return false;
+    return (
+      expected === 'work_from_home' ||
+      ds.wfhType === 'second_half' ||
+      ds.wfhType === 'full' ||
+      ds.firstHalfOff
+    );
+  }, [currentSession, attendanceRule, inFirstHalfOfDay]);
+
+  // Prefer server daySchedule.wfhType when present (approved only)
+  useEffect(() => {
+    const ds = attendanceRule?.daySchedule;
+    if (!ds) return;
+    if (ds.wfhType === 'full') {
+      setTodayWfhSchedule({ type: 'full_day' });
+    } else if (ds.wfhType === 'first_half' || ds.wfhType === 'second_half') {
+      setTodayWfhSchedule({ type: 'half_day', halfDayType: ds.wfhType });
+    }
+  }, [attendanceRule?.daySchedule]);
+
+  // Hide Office when approved WFH covers the current working half/day
+  const lockWfhOnly = useMemo(() => {
+    if (!wfhAllowed) return false;
+    const ds = attendanceRule?.daySchedule;
+    if (ds?.lockWfhOnly === true) return true;
+    if (ds?.expectedWorkLocation === 'work_from_home') return true;
+    if (ds?.wfhType === 'full') return true;
+
+    const schedule =
+      todayWfhSchedule ||
+      (ds?.wfhType === 'first_half' || ds?.wfhType === 'second_half'
+        ? { type: 'half_day', halfDayType: ds.wfhType }
+        : ds?.wfhType === 'full'
+          ? { type: 'full_day' }
+          : null);
+    if (!schedule) return false;
+    if (schedule.type === 'full_day') return true;
+    if (schedule.type === 'half_day') {
+      // Require BOTH clocks to agree it's still first half before allowing Office during second-half WFH
+      const stillFirstHalfEverywhere = inFirstHalfOfDay && inFirstHalfBrowser;
+      if (schedule.halfDayType === 'first_half') {
+        if (ds?.secondHalfOff) return true;
+        // Lock Home-only while either clock still says first half
+        return inFirstHalfOfDay || inFirstHalfBrowser;
+      }
+      if (schedule.halfDayType === 'second_half') {
+        if (ds?.firstHalfOff) return true;
+        if (ds?.currentHalf === 'second_half') return true;
+        return !stillFirstHalfEverywhere;
+      }
+    }
+    return false;
+  }, [
+    wfhAllowed,
+    todayWfhSchedule,
+    inFirstHalfOfDay,
+    inFirstHalfBrowser,
+    attendanceRule?.daySchedule,
+  ]);
+
+  // Half leave/holiday with no approved WFH on the working half → Office only
+  const lockOfficeOnly = useMemo(() => {
+    if (lockWfhOnly) return false;
+    const ds = attendanceRule?.daySchedule;
+    if (!ds) return false;
+    if (ds.wfhType && ds.wfhType !== 'none') return false;
+    if (ds.firstHalfOff && !ds.secondHalfOff) return true;
+    if (ds.secondHalfOff && !ds.firstHalfOff) return true;
+    return false;
+  }, [lockWfhOnly, attendanceRule?.daySchedule]);
+
   // Non-working day punch: blocked unless admin enables allowNonWorkingDayPunch
   const allowNonWorkingDayPunch = attendanceRule?.allowNonWorkingDayPunch === true;
   const isWorkingDayToday = attendanceRule?.isWorkingDay !== false;
+  const punchBlockedByDayPlan = attendanceRule?.daySchedule?.punchAllowed === false;
   const punchBlockedByNonWorkingDay =
-    attendanceRule != null && !isWorkingDayToday && !allowNonWorkingDayPunch;
+    (attendanceRule != null && !isWorkingDayToday && !allowNonWorkingDayPunch) ||
+    punchBlockedByDayPlan;
   const showNonWorkingDayNotice =
     attendanceRule != null && !isWorkingDayToday;
 
@@ -109,12 +301,110 @@ const AttendanceBox = ({ variant = 'default' }) => {
     return 'Non-working day';
   })();
 
+  const isHolidayToday = attendanceRule?.nonWorkingReason === 'holiday';
+
+  // Informational only — does not change punch APIs or attendance calculation
+  const halfDayWfhNotice = useMemo(() => {
+    if (!todayWfhSchedule || todayWfhSchedule.type !== 'half_day') return null;
+    const half = todayWfhSchedule.halfDayType === 'second_half' ? 'second_half' : 'first_half';
+
+    if (isHolidayToday && half === 'second_half') {
+      return {
+        title: 'Half-day schedule',
+        body: 'Today is a holiday and you have approved WFH for the second half. No first-half punch-in is required. You can punch in for second-half WFH when your organization allows punch on this day. Attendance calculation is unchanged.',
+      };
+    }
+    if (isHolidayToday && half === 'first_half') {
+      return {
+        title: 'Half-day schedule',
+        body: 'Today is a holiday and you have approved WFH for the first half. Punch-in follows your organization holiday rules. Attendance calculation is unchanged.',
+      };
+    }
+    if (half === 'second_half') {
+      if (currentSession && !currentSession.clockOut) {
+        return {
+          title: 'Second-half WFH scheduled',
+          body: 'Second-half WFH is scheduled for today. Your first-half attendance will remain unchanged. You can continue your attendance from home.',
+        };
+      }
+      return {
+        title: 'Half-day schedule',
+        body: 'You are scheduled to work normally during the first half and work from home during the second half. Your first-half attendance will remain unchanged.',
+      };
+    }
+    return {
+      title: 'Half-day schedule',
+      body: 'You are scheduled to work from home during the first half and attend normally during the second half.',
+    };
+  }, [todayWfhSchedule, isHolidayToday, currentSession]);
+
+  // Load approved WFH for today (UI schedule only — no attendance/payroll impact)
+  useEffect(() => {
+    let cancelled = false;
+    setWfhNoticeDismissed(false);
+    (async () => {
+      try {
+        const { data } = await axios.get('/v1/both/wfh-requests/my', { withCredentials: true });
+        if (cancelled) return;
+        const todayKey = todayDateKeyInTimezone(orgTimezone);
+        const covering = (data?.requests || []).filter((req) => {
+          if (req?.status !== 'approved' || !req?.wfhDate) return false;
+          const fromKey = formatInOrgTimezone(req.wfhDate, 'yyyy-MM-dd', orgTimezone);
+          if (!fromKey) return false;
+          const toKey = req.wfhDateTo
+            ? formatInOrgTimezone(req.wfhDateTo, 'yyyy-MM-dd', orgTimezone) || fromKey
+            : fromKey;
+          return todayKey >= fromKey && todayKey <= toKey;
+        });
+        const fullDay = covering.find((req) => (req.wfhType || 'full_day') === 'full_day');
+        const halfDay = covering.find((req) => req.wfhType === 'half_day');
+        if (fullDay) {
+          setTodayWfhSchedule({ type: 'full_day' });
+        } else if (halfDay) {
+          setTodayWfhSchedule({
+            type: 'half_day',
+            halfDayType: halfDay.halfDayType === 'second_half' ? 'second_half' : 'first_half',
+          });
+        } else {
+          // Do not clear schedule already set from daySchedule (server approved WFH)
+          setTodayWfhSchedule((prev) => {
+            const ds = attendanceRule?.daySchedule;
+            if (ds?.wfhType === 'full') return { type: 'full_day' };
+            if (ds?.wfhType === 'first_half' || ds?.wfhType === 'second_half') {
+              return { type: 'half_day', halfDayType: ds.wfhType };
+            }
+            return prev;
+          });
+        }
+      } catch {
+        // Keep daySchedule-derived schedule on fetch failure
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgTimezone, attendanceRule?.daySchedule?.wfhType]);
+
   // If org disables WFH, fall back to office selection
   useEffect(() => {
     if (!wfhAllowed && workLocation !== 'office') {
       setWorkLocation('office');
     }
   }, [wfhAllowed, workLocation]);
+
+  // When WFH-only window is active, force Home (same existing punch path)
+  useEffect(() => {
+    if (wfhAllowed && lockWfhOnly && workLocation !== 'work_from_home') {
+      setWorkLocation('work_from_home');
+    }
+  }, [wfhAllowed, lockWfhOnly, workLocation]);
+
+  // When office-only working half (leave/holiday other half, no approved WFH), force Office
+  useEffect(() => {
+    if (lockOfficeOnly && workLocation !== 'office') {
+      setWorkLocation('office');
+    }
+  }, [lockOfficeOnly, workLocation]);
 
   // Permission management (do not block GPS before browser prompt)
   usePermissions();
@@ -222,7 +512,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
     };
   }, [currentSession]);
 
-  // Fetch attendance rule on component mount
+  // Fetch attendance rule on mount; refetch when org TZ resolves or half-boundary flips
   useEffect(() => {
     const fetchAttendanceRule = async () => {
       try {
@@ -235,7 +525,10 @@ const AttendanceBox = ({ variant = 'default' }) => {
       }
     };
     fetchAttendanceRule();
-  }, []);
+    // Refresh so second-half WFH lock updates after midpoint without a full page reload
+    const id = setInterval(fetchAttendanceRule, 60_000);
+    return () => clearInterval(id);
+  }, [orgTimezone, inFirstHalfBrowser]);
 
   const mapGeolocationError = (error) => {
     const errorCode = error?.code;
@@ -351,6 +644,15 @@ const AttendanceBox = ({ variant = 'default' }) => {
         return;
       }
 
+      // Hard stop: approved WFH for this half/day → never submit Office
+      if (lockWfhOnly && workLocation === 'office' && !canContinueSecondHalf) {
+        setWorkLocation('work_from_home');
+        toast.error(
+          'Office punch is not allowed during your approved Work From Home period. Please punch in as Home.'
+        );
+        return;
+      }
+
       // Check if user already has an active session
       const openSession = sessions.find(session => {
         if (session.clockOut) return false;
@@ -359,7 +661,37 @@ const AttendanceBox = ({ variant = 'default' }) => {
         return belongsToUser && isSessionForToday(session, orgTimezone);
       });
 
-      if (openSession) {
+      const ds = attendanceRule?.daySchedule;
+      const requestedLocation = canContinueSecondHalf
+        ? (ds?.expectedWorkLocationSecondHalf ||
+            ds?.expectedWorkLocation ||
+            (lockWfhOnly ? 'work_from_home' : 'office'))
+        : lockWfhOnly
+          ? 'work_from_home'
+          : isWfhSelected
+            ? 'work_from_home'
+            : 'office';
+
+      if (lockWfhOnly && requestedLocation === 'office') {
+        toast.error(
+          'Office punch is not allowed during your approved Work From Home period. Please punch in as Home.'
+        );
+        return;
+      }
+      const primaryLocation =
+        openSession?.workLocation === 'home' ? 'work_from_home' : openSession?.workLocation;
+      const allowContinue =
+        openSession &&
+        !openSession.clockOut &&
+        (canContinueSecondHalf ||
+          (ds?.currentHalf === 'second_half' &&
+            requestedLocation !== primaryLocation &&
+            (ds.expectedWorkLocation === requestedLocation ||
+              ds.wfhType === 'second_half' ||
+              ds.wfhType === 'full' ||
+              ds.firstHalfOff)));
+
+      if (openSession && !allowContinue) {
         try {
           await dispatch(fetchMyTodayStatus()).unwrap();
         } catch {
@@ -374,7 +706,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
       const requiresLocation = isLocationRequiredForPunch(attendanceRule);
 
       const clockInData = {
-        workLocation: isWfhSelected ? 'work_from_home' : 'office',
+        workLocation: requestedLocation,
       };
 
       if (isWfhSelected) {
@@ -496,7 +828,9 @@ const AttendanceBox = ({ variant = 'default' }) => {
       setIsProcessing(true);
 
       const requiresLocation = isLocationRequiredForPunch(attendanceRule);
-      const isWfhSession = currentSession?.workLocation === 'work_from_home';
+      const isWfhSession =
+        currentSession?.workLocation === 'work_from_home' ||
+        currentSession?.secondaryWorkLocation === 'work_from_home';
       const clockOutData = {};
 
       if (isWfhSession) {
@@ -797,6 +1131,24 @@ const AttendanceBox = ({ variant = 'default' }) => {
             </p>
           </div>
         )}
+        {halfDayWfhNotice && !wfhNoticeDismissed && (
+          <div className="mx-4 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">{halfDayWfhNotice.title}</p>
+                <p className="mt-0.5 text-xs leading-relaxed opacity-90">{halfDayWfhNotice.body}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWfhNoticeDismissed(true)}
+                className="shrink-0 rounded-md px-2 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
+                aria-label="Dismiss"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        )}
         <div className="relative p-5 md:p-6">
           {punchBlockedByNonWorkingDay && !currentSession && (
             <div
@@ -824,6 +1176,9 @@ const AttendanceBox = ({ variant = 'default' }) => {
                         <p className="text-sm text-slate-500">
                           In {formatTime(currentSession.clockIn)} · Out {formatTime(currentSession.clockOut)}
                         </p>
+                        {shiftLabel ? (
+                          <p className="mt-0.5 text-xs font-medium text-slate-500">{shiftLabel}</p>
+                        ) : null}
                       </div>
                     </div>
                     <div className="text-right">
@@ -857,12 +1212,30 @@ const AttendanceBox = ({ variant = 'default' }) => {
                             WFH
                           </span>
                         )}
+                        {shiftLabel ? (
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+                            {shiftLabel}
+                          </span>
+                        ) : null}
                         <span className="text-sm text-slate-500">
                           Since {formatTime(currentSession.clockIn)}
                         </span>
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
+                      {canContinueSecondHalf ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkLocation('work_from_home');
+                            handleClockIn();
+                          }}
+                          disabled={isProcessing || loading || isOnBreak}
+                          className="rounded-full border-2 border-sky-500 px-5 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-50 disabled:opacity-40"
+                        >
+                          Continue · WFH
+                        </button>
+                      ) : null}
                       {!isOnBreak ? (
                         <button
                           type="button"
@@ -926,34 +1299,51 @@ const AttendanceBox = ({ variant = 'default' }) => {
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Attendance</p>
                 <p className="text-lg font-semibold text-slate-800">Ready to start your day?</p>
                 <p className="text-sm text-slate-500">Punch in to begin tracking your hours.</p>
+                {attendanceRule?.assignedShift?.name || shiftLabel ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {shiftLabel ||
+                      `${attendanceRule.assignedShift.name}${
+                        attendanceRule.officeHours?.startTime && attendanceRule.officeHours?.endTime
+                          ? ` · ${attendanceRule.officeHours.startTime}–${attendanceRule.officeHours.endTime}`
+                          : ''
+                      }`}
+                  </p>
+                ) : null}
+                {shiftCheckInHint ? (
+                  <p className="mt-0.5 text-xs font-medium text-[#0F766E]">{shiftCheckInHint}</p>
+                ) : null}
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
                 {wfhAllowed && (
                   <div className="flex w-full sm:w-auto rounded-full border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Work location">
-                    <button
-                      type="button"
-                      onClick={() => setWorkLocation('office')}
-                      className={`flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                        workLocation === 'office'
-                          ? 'bg-white text-[#006D4E] shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      <FiMapPin className="h-3.5 w-3.5" />
-                      Office
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWorkLocation('work_from_home')}
-                      className={`flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                        workLocation === 'work_from_home'
-                          ? 'bg-white text-[#006D4E] shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      <FiHome className="h-3.5 w-3.5" />
-                      Home
-                    </button>
+                    {!lockWfhOnly && (
+                      <button
+                        type="button"
+                        onClick={() => setWorkLocation('office')}
+                        className={`flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                          workLocation === 'office'
+                            ? 'bg-white text-[#006D4E] shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        <FiMapPin className="h-3.5 w-3.5" />
+                        Office
+                      </button>
+                    )}
+                    {!lockOfficeOnly && (
+                      <button
+                        type="button"
+                        onClick={() => setWorkLocation('work_from_home')}
+                        className={`flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                          workLocation === 'work_from_home'
+                            ? 'bg-white text-[#006D4E] shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        <FiHome className="h-3.5 w-3.5" />
+                        Home
+                      </button>
+                    )}
                   </div>
                 )}
                 <button
@@ -1054,6 +1444,24 @@ const AttendanceBox = ({ variant = 'default' }) => {
               </p>
             </div>
           )}
+          {halfDayWfhNotice && !wfhNoticeDismissed && (
+            <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-left">
+                  <p className="font-semibold">{halfDayWfhNotice.title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed opacity-90">{halfDayWfhNotice.body}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWfhNoticeDismissed(true)}
+                  className="shrink-0 rounded-md px-2 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
+                  aria-label="Dismiss"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
           {punchBlockedByNonWorkingDay && !currentSession && (
             <div
               className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[1px]"
@@ -1105,6 +1513,9 @@ const AttendanceBox = ({ variant = 'default' }) => {
                         ? `Punch-Out Time: ${formatTime(currentSession.clockOut)}` 
                         : `Punch-In Time: ${formatTime(currentSession.clockIn)}`}
                     </p>
+                    {shiftLabel ? (
+                      <p className="mt-1 text-xs font-medium text-slate-600">{shiftLabel}</p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="text-right">
@@ -1245,30 +1656,34 @@ const AttendanceBox = ({ variant = 'default' }) => {
             {/* Work Location Selection (Office / Work From Home) */}
             {wfhAllowed && (
               <div className="flex justify-center gap-3 mb-6" role="group" aria-label="Work location">
-                <button
-                  type="button"
-                  onClick={() => setWorkLocation('office')}
-                  className={`flex items-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
-                    workLocation === 'office'
-                      ? 'border-theme-primary bg-theme-primary/10 text-theme-primary'
-                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                  }`}
-                >
-                  <FiMapPin className="w-4 h-4" />
-                  Punch In – Office
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setWorkLocation('work_from_home')}
-                  className={`flex items-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
-                    workLocation === 'work_from_home'
-                      ? 'border-theme-primary bg-theme-primary/10 text-theme-primary'
-                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                  }`}
-                >
-                  <FiHome className="w-4 h-4" />
-                  Punch In – Work From Home
-                </button>
+                {!lockWfhOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setWorkLocation('office')}
+                    className={`flex items-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
+                      workLocation === 'office'
+                        ? 'border-theme-primary bg-theme-primary/10 text-theme-primary'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    <FiMapPin className="w-4 h-4" />
+                    Punch In – Office
+                  </button>
+                )}
+                {!lockOfficeOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setWorkLocation('work_from_home')}
+                    className={`flex items-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
+                      workLocation === 'work_from_home'
+                        ? 'border-theme-primary bg-theme-primary/10 text-theme-primary'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    <FiHome className="w-4 h-4" />
+                    Punch In – Work From Home
+                  </button>
+                )}
               </div>
             )}
 

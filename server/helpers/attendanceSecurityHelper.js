@@ -14,6 +14,7 @@ import { DateTime } from 'luxon';
 import { combineDateAndTimeInTimezone, normalizeTimezone } from './timezoneHelper.js';
 import { resolveEffectiveTimezone } from './organizationTimezoneService.js';
 import Organization from '../models/organization.model.js';
+import { applyEmployeeShiftToRule } from './shiftHelper.js';
 
 // Cache active rules for 5 minutes
 const RULE_CACHE_TTL = 5 * 60; // 5 minutes
@@ -422,15 +423,20 @@ const parseHHmmParts = (timeStr, fallbackHour, fallbackMinute = 0) => {
  * Scheduled open/close for a calendar day from attendance rule (office hours,
  * with sensible fallbacks to check-in/out config then defaults).
  * If end is not after start on the same day, end is moved to the next day (night shift).
+ * Optional employee: when assigned to a shift, that shift's times are used first.
  * @param {Object|null|undefined} rule - Attendance rule (lean doc or null)
  * @param {Date} date - Reference day
+ * @param {string|null} timezoneOverride
+ * @param {Object|null} employee - optional employee with shiftId/shiftName
  * @returns {{ startTime: Date, endTime: Date, timezone: string }}
  */
-export const resolveScheduledWorkWindow = (rule, date = new Date(), timezoneOverride = null) => {
+export const resolveScheduledWorkWindow = (rule, date = new Date(), timezoneOverride = null, employee = null) => {
     const timezone = normalizeTimezone(timezoneOverride || rule?.timezone || 'UTC');
 
-    const oh = rule?.officeHours || {};
-    const cit = rule?.checkInOutTimes || {};
+    const effectiveRule = employee ? applyEmployeeShiftToRule(rule, employee) : rule;
+
+    const oh = effectiveRule?.officeHours || {};
+    const cit = effectiveRule?.checkInOutTimes || {};
     const startStr = oh.startTime || cit.checkInStartTime || DEFAULT_START;
     const endStr = oh.endTime || cit.checkOutStartTime || DEFAULT_END;
 
@@ -465,8 +471,8 @@ export const resolveScheduledWorkWindow = (rule, date = new Date(), timezoneOver
  * @param {Date} date
  * @returns {number}
  */
-export const getExpectedWorkingHoursFromRule = (rule, date = new Date(), timezoneOverride = null) => {
-    const { startTime, endTime } = resolveScheduledWorkWindow(rule, date, timezoneOverride);
+export const getExpectedWorkingHoursFromRule = (rule, date = new Date(), timezoneOverride = null, employee = null) => {
+    const { startTime, endTime } = resolveScheduledWorkWindow(rule, date, timezoneOverride, employee);
     const hours = (endTime - startTime) / (1000 * 60 * 60);
     if (!Number.isFinite(hours) || hours <= 0) {
         return 8;
@@ -477,8 +483,8 @@ export const getExpectedWorkingHoursFromRule = (rule, date = new Date(), timezon
 /**
  * Latest clock-in time that still counts as on time (office start + grace when configured).
  */
-export const getEffectiveOfficeStartForLate = (rule, date = new Date(), timezoneOverride = null) => {
-    const { startTime: officeStart } = resolveScheduledWorkWindow(rule, date, timezoneOverride);
+export const getEffectiveOfficeStartForLate = (rule, date = new Date(), timezoneOverride = null, employee = null) => {
+    const { startTime: officeStart } = resolveScheduledWorkWindow(rule, date, timezoneOverride, employee);
     if (rule?.enablePenaltyRules && rule?.penaltyRules?.lateArrival?.enabled) {
         const graceMinutes = Number(
             rule.penaltyRules.lateArrival.gracePeriod ||
@@ -497,8 +503,8 @@ export const getEffectiveOfficeStartForLate = (rule, date = new Date(), timezone
 /**
  * Earliest clock-out that is not flagged as early departure (office end − grace when configured).
  */
-export const getEffectiveOfficeEndForEarlyDeparture = (rule, date = new Date(), timezoneOverride = null) => {
-    const { endTime: officeEnd } = resolveScheduledWorkWindow(rule, date, timezoneOverride);
+export const getEffectiveOfficeEndForEarlyDeparture = (rule, date = new Date(), timezoneOverride = null, employee = null) => {
+    const { endTime: officeEnd } = resolveScheduledWorkWindow(rule, date, timezoneOverride, employee);
     if (rule?.enablePenaltyRules && rule?.penaltyRules?.earlyDeparture?.enabled) {
         const graceMinutes = Number(rule.penaltyRules.earlyDeparture.gracePeriod || 0);
         return new Date(officeEnd.getTime() - graceMinutes * 60 * 1000);

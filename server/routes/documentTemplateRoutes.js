@@ -14,6 +14,7 @@ import {
   uploadStamp,
   removeStamp,
   getStamp,
+  getDocumentMode,
 } from '../controllers/documentTemplateController.js';
 
 // Multer memory storage for stamp uploads (stored in DB as binary)
@@ -44,6 +45,7 @@ router.get('/admin/:id/stamp', getStamp);
 router.delete('/admin/:id/stamp', removeStamp);
 
 // ─── Employee: Self-Service Access ───────────────────────────────────────────
+router.get('/mode-settings', getDocumentMode);
 router.get('/available', listAvailableTemplates);
 router.get('/countries', getAvailableCountries);
 router.get('/employee/:id', getTemplateForEmployee);

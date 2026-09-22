@@ -378,8 +378,9 @@ export const terminateEmployee = async (req, res) => {
 };
 
 /**
- * Get managers for assignment dropdown: only employees with management positions (CEO, CTO, CFO, VP, Director, Manager).
- * When the org has exactly one employee, that person is included so the second employee can be assigned under them.
+ * Get employees eligible as reporting managers for the hierarchy dropdown.
+ * Includes the Admin root (managerId: null) and all other active employees so
+ * department chains (e.g. Lead → Senior → Junior) can be assigned via managerId.
  * GET /api/v1/admin/employee/managers
  * Query: limit - optional, use for dropdown (e.g. limit=500 to get full list)
  */
@@ -394,24 +395,11 @@ export const getManagers = async (req, res) => {
         const { page, limit, skip } = parsePagination(req, { defaultLimit: 100, maxLimit: 500 });
 
         const organizationId = getOrganizationId(req);
-        const baseQuery = addOrganizationFilter(req, { status: 'active' });
-
-        const managementPositions = ['CEO', 'CTO', 'CFO', 'VP', 'Director', 'Manager', 'Lead', 'Supervisor'];
-        const managementRoles = ['manager', 'ceo', 'cto', 'cfo', 'vp', 'executive'];
-        const employeeCount = await Employee.countDocuments(baseQuery);
-
-        let query = { ...baseQuery };
-        // Include: (1) management positions, or (2) management functionalRoles, or (3) when org has exactly 1 employee, that person
-        if (employeeCount !== 1) {
-            query.$or = [
-                { position: { $in: managementPositions } },
-                { functionalRoles: { $in: managementRoles } }
-            ];
-        }
+        const query = addOrganizationFilter(req, { status: 'active' });
 
         const [managers, total] = await Promise.all([
             Employee.find(query)
-                .select('name lastName email position department employeeId')
+                .select('name lastName email position department employeeId managerId')
                 .skip(skip)
                 .limit(limit)
                 .sort('name lastName')
@@ -419,10 +407,27 @@ export const getManagers = async (req, res) => {
             Employee.countDocuments(query)
         ]);
 
-        const positionOrder = { 'CEO': 1, 'CTO': 2, 'CFO': 3, 'VP': 4, 'Director': 5, 'Manager': 6, 'Lead': 7, 'Supervisor': 8 };
+        const positionOrder = {
+            CEO: 1,
+            CTO: 2,
+            CFO: 3,
+            VP: 4,
+            Executive: 5,
+            Director: 6,
+            Manager: 7,
+            Supervisor: 8,
+            Lead: 9,
+            Senior: 10,
+            'Mid-Level': 11,
+            Junior: 12,
+            Intern: 13,
+        };
         managers.sort((a, b) => {
-            const orderA = positionOrder[a.position] || 99;
-            const orderB = positionOrder[b.position] || 99;
+            const aIsRoot = !a.managerId;
+            const bIsRoot = !b.managerId;
+            if (aIsRoot !== bIsRoot) return aIsRoot ? -1 : 1;
+            const orderA = positionOrder[a.position] || 50;
+            const orderB = positionOrder[b.position] || 50;
             if (orderA !== orderB) return orderA - orderB;
             const nameA = `${a.name} ${a.lastName || ''}`.trim();
             const nameB = `${b.name} ${b.lastName || ''}`.trim();

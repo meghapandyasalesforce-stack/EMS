@@ -89,6 +89,12 @@ const attendanceSchema = new mongoose.Schema({
         enum: ["office", "work_from_home"],
         default: "office",
     },
+    /** Second-half work mode when day is split (e.g. office AM + WFH PM). */
+    secondaryWorkLocation: {
+        type: String,
+        enum: ["office", "work_from_home"],
+        default: null,
+    },
     
     // Image capture for clock in/out
     clockInImage: {
@@ -141,6 +147,12 @@ const attendanceSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+
+    /** Snapshot of employee shift at clock-in (history stays correct if assignment changes later) */
+    shiftId: { type: String, trim: true },
+    shiftName: { type: String, trim: true },
+    shiftStartTime: { type: String, trim: true },
+    shiftEndTime: { type: String, trim: true },
 }, {
     timestamps: true,
 });
@@ -201,6 +213,18 @@ attendanceSchema.pre("save", async function (next) {
                 })
                     .sort({ priority: -1, updatedAt: -1 })
                     .lean();
+            }
+
+            // Prefer stamped shift window from clock-in so history stays correct
+            if (this.shiftStartTime && this.shiftEndTime) {
+                rule = {
+                    ...(rule || {}),
+                    officeHours: {
+                        ...(rule?.officeHours || {}),
+                        startTime: this.shiftStartTime,
+                        endTime: this.shiftEndTime,
+                    },
+                };
             }
 
             const referenceDate = this.date || this.clockIn;

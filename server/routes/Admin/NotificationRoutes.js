@@ -9,6 +9,7 @@ import {
   markAllAsRead,
   getUnreadCount,
   deleteNotification,
+  deleteAllNotifications,
   notifyAdminsOnEmployeeBack
 } from '../../controllers/admin/notificationController.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
@@ -40,6 +41,9 @@ router.route("/sent-announcements/:notificationId/receipts").get(
 
 // Mark all notifications as read (before :notificationId routes)
 router.route("/mark-all-read").patch(isUserAuthenticated, markAllAsRead);
+
+// Delete / hide all notifications (before :notificationId routes)
+router.route("/delete-all").delete(isUserAuthenticated, deleteAllNotifications);
 
 // Mark notification as read
 router.route("/:notificationId/read").patch(isUserAuthenticated, markAsRead);

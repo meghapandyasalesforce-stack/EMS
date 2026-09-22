@@ -18,7 +18,18 @@ const JobDetailsTab = ({
     { label: 'Job Title', value: employee.jobTitle },
     { label: 'Department', value: employee.department },
     { label: 'Position', value: employee.position },
-    { label: 'Manager', value: employee.manager },
+    {
+      label: 'Manager',
+      value:
+        !employee.managerId &&
+        (!employee.manager || ['Admin', 'CEO'].includes(String(employee.manager).trim()))
+          ? 'Organization root (no manager)'
+          : employee.manager,
+    },
+    {
+      label: 'Shift',
+      value: employee.shiftName || employee.shiftId || 'No Shift',
+    },
     ...(hidePayrollFields ? [] : [{ label: 'Salary', value: formatSalary(employee.salary) }]),
     { label: 'Joining Date', value: formatDate(employee.joiningDate) },
     {

@@ -11,6 +11,10 @@ const benefitPlanSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    benefitCode: {
+        type: String,
+        trim: true
+    },
     category: {
         type: String,
         enum: ['Health Insurance', 'Dental', 'Vision', 'Life Insurance', 
@@ -28,6 +32,11 @@ const benefitPlanSchema = new mongoose.Schema({
         type: String,
         enum: ['Full', 'Partial', 'Employee Contribution'],
         required: true
+    },
+    enrollmentType: {
+        type: String,
+        enum: ['Optional', 'Required', 'Automatic'],
+        default: 'Optional'
     },
     employeeContribution: {
         amount: Number,
@@ -51,6 +60,8 @@ const benefitPlanSchema = new mongoose.Schema({
             default: 0
         },
         departments: [String],
+        positionLevels: [String],
+        locations: [String],
         roles: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Role'
@@ -61,7 +72,7 @@ const benefitPlanSchema = new mongoose.Schema({
         endDate: Date,
         isOpen: {
             type: Boolean,
-            default: false
+            default: true
         }
     },
     effectiveDate: Date,
@@ -81,6 +92,31 @@ const benefitPlanSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+const enrollmentHistorySchema = new mongoose.Schema({
+    type: {
+        type: String,
+        enum: [
+            'Enrollment Created',
+            'Enrollment Approved',
+            'Enrollment Rejected',
+            'Enrollment Cancelled',
+            'Benefit Updated',
+            'Dependent Added',
+            'Dependent Removed'
+        ],
+        required: true
+    },
+    message: String,
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: false });
 
 const employeeBenefitSchema = new mongoose.Schema({
     organizationId: {
@@ -138,7 +174,8 @@ const employeeBenefitSchema = new mongoose.Schema({
         url: String,
         uploadedAt: Date
     }],
-    notes: String
+    notes: String,
+    history: [enrollmentHistorySchema]
 }, {
     timestamps: true
 });
@@ -151,4 +188,3 @@ employeeBenefitSchema.index({ organizationId: 1, benefitPlanId: 1 });
 
 export const BenefitPlan = mongoose.model('BenefitPlan', benefitPlanSchema);
 export const EmployeeBenefit = mongoose.model('EmployeeBenefit', employeeBenefitSchema);
-

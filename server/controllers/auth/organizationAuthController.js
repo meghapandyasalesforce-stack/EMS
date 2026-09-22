@@ -235,6 +235,35 @@ export const registerOrganization = asyncHandler(async (req, res) => {
             organizationId: organization._id 
         });
 
+        // Create linked Admin Employee as org-chart root (managerId: null). Idempotent; no second User.
+        let adminEmployeeProfile = null;
+        try {
+            const { ensureOrgOwnerEmployeeRoot } = await import('../../helpers/identityService.js');
+            const ensureResult = await ensureOrgOwnerEmployeeRoot(adminUser, organization._id, {
+                jobTitle: adminTitle?.trim() || undefined,
+                position: adminPosition?.trim() || undefined,
+            });
+            if (ensureResult.ok) {
+                adminEmployeeProfile = ensureResult.employee;
+                logger.info('Admin employee root ensured at registration', {
+                    organizationId: organization._id,
+                    employeeId: adminEmployeeProfile?._id,
+                    created: ensureResult.created,
+                });
+            } else {
+                logger.warn('Admin employee root ensure failed at registration', {
+                    organizationId: organization._id,
+                    code: ensureResult.code,
+                    message: ensureResult.message,
+                });
+            }
+        } catch (ensureError) {
+            logger.error('Admin employee root ensure threw at registration', {
+                organizationId: organization._id,
+                error: ensureError.message,
+            });
+        }
+
         // Enable enterprise lifecycle for the new org (org-level, not employee-dependent)
         try {
             const { bootstrapEnterpriseLifecycle } = await import('../../services/lifecycleEnterpriseBootstrap.js');
@@ -272,9 +301,18 @@ export const registerOrganization = asyncHandler(async (req, res) => {
             });
         }
 
-        // Generate tokens
+        // Generate tokens — employeeProfileId is Me only (separate from permanent CEO root)
         const passwordChangedAt = adminUser.passwordChangedAt || adminUser.createdAt;
-        const tokens = generateToken(adminUser._id, adminUser.role, organization._id, res, passwordChangedAt);
+        const tokens = generateToken(
+            adminUser._id,
+            adminUser.role,
+            organization._id,
+            res,
+            passwordChangedAt,
+            adminUser.employeeProfileId
+                ? { employeeProfileId: adminUser.employeeProfileId }
+                : null
+        );
 
         return sendSuccess(res, {
             organization: {
@@ -287,8 +325,17 @@ export const registerOrganization = asyncHandler(async (req, res) => {
                 id: adminUser._id,
                 name: adminUser.name,
                 email: adminUser.email,
-                role: adminUser.role
+                role: adminUser.role,
+                employeeProfileId: adminUser.employeeProfileId || null,
             },
+            employee: adminEmployeeProfile
+                ? {
+                    id: adminEmployeeProfile._id,
+                    employeeId: adminEmployeeProfile.employeeId,
+                    managerId: adminEmployeeProfile.managerId ?? null,
+                    isOrgOwnerRoot: true,
+                }
+                : null,
             token: tokens.token || tokens.accessToken,
             refreshToken: tokens.refreshToken,
             csrfToken: tokens.csrfToken,
@@ -463,9 +510,42 @@ export const loginOrganization = asyncHandler(async (req, res) => {
     // Reset login attempts on successful login
     await resetLoginAttempts(user);
 
+    // One-time idempotent ensure: permanent Admin/CEO root if missing (does not set Me)
+    let employeeProfileId = user.employeeProfileId || null;
+    try {
+        const { ensureOrgOwnerEmployeeRoot, isOrgOwnerUser, findOrgOwnerEmployeeProfile } = await import('../../helpers/identityService.js');
+        if (isOrgOwnerUser(user)) {
+            const ensureResult = await ensureOrgOwnerEmployeeRoot(user, organization._id);
+            if (ensureResult.ok && ensureResult.created) {
+                logger.info('Created org-owner employee root on login', {
+                    requestId,
+                    userId: user._id,
+                    employeeId: ensureResult.employee?._id,
+                    organizationId: organization._id,
+                });
+            }
+            // JWT Me claim = linked Me Employee only (never the CEO root)
+            const meProfile = await findOrgOwnerEmployeeProfile(user, organization._id);
+            employeeProfileId = meProfile?._id || user.employeeProfileId || null;
+        }
+    } catch (ensureError) {
+        logger.warn('Org-owner employee root ensure failed on login', {
+            requestId,
+            userId: user._id,
+            error: ensureError.message,
+        });
+    }
+
     // Generate tokens
     const passwordChangedAt = user.passwordChangedAt || user.createdAt;
-    const tokens = generateToken(user._id, user.role, organization._id, res, passwordChangedAt);
+    const tokens = generateToken(
+        user._id,
+        user.role,
+        organization._id,
+        res,
+        passwordChangedAt,
+        employeeProfileId ? { employeeProfileId } : null
+    );
 
     // Get dashboard route based on role, position, and department
     let dashboardRoute = '/organization/dashboard'; // Default for organization login

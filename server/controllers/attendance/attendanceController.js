@@ -17,9 +17,18 @@ import { buildManagerMatchQuery, getManagerEmployeeIds, isEmployeeLinkedToManage
 import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingService.js";
 import {
   getExpectedWorkingHoursFromRule,
-  getEffectiveOfficeEndForEarlyDeparture,
-  getEffectiveOfficeStartForLate,
 } from "../../helpers/attendanceSecurityHelper.js";
+import { resolveEmployeeShift, applyEmployeeShiftToRule, getAssignedShiftCheckInWindow, isClockInWithinShiftWindow } from "../../helpers/shiftHelper.js";
+import {
+  loadAttendanceDayPlan,
+  getLateThresholdFromPlan,
+  getEarlyDepartureThresholdFromPlan,
+  getExpectedHoursFromPlan,
+  combinePlanInstant,
+  parseHmToMinutes,
+  isWfhOnlyPunchPeriod,
+  isOfficeOnlyPunchPeriod,
+} from "../../helpers/attendanceDayContextHelper.js";
 import {
   getEffectiveTimezone,
 } from "../../helpers/organizationTimezoneService.js";
@@ -132,15 +141,29 @@ async function resolveWorkingDayStatus(organizationId, attendanceDateKey, timezo
     return getDateKey(h.date) === dateKey;
   });
 
-  const isHoliday = Boolean(holiday);
+  const isHalfDayHoliday = Boolean(holiday) && holiday.isHalfDay === true;
+  const holidayHalfType =
+    isHalfDayHoliday && (holiday.halfDayType === 'second_half' ? 'second_half' : 'first_half');
+
+  // Full-day holiday → non-working. Half-day holiday → still a working day (other half works).
+  const isHoliday = Boolean(holiday) && !isHalfDayHoliday;
   const isWorkingDay = isConfiguredWorkingDay && !isHoliday;
 
   return {
     isWorkingDay,
     isHoliday,
+    isHalfDayHoliday,
+    holidayHalfType: holidayHalfType || null,
+    holiday: holiday || null,
     isConfiguredWorkingDay,
     dayName,
-    reason: isHoliday ? 'holiday' : (isConfiguredWorkingDay ? 'working_day' : 'non_working_day'),
+    reason: isHoliday
+      ? 'holiday'
+      : isHalfDayHoliday
+        ? 'half_day_holiday'
+        : isConfiguredWorkingDay
+          ? 'working_day'
+          : 'non_working_day',
     holidayName: holiday?.name || null,
   };
 }
@@ -372,14 +395,6 @@ export const clockIn = async (req, res) => {
       userId,
       dayContext,
     });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "Already clocked in for today",
-        code: 'ALREADY_CLOCKED_IN',
-        session: existing
-      });
-    }
 
     // Work From Home punch: office geofence is NOT enforced (location captured for record only).
     // Office punches keep the existing verification flow unchanged.
@@ -400,41 +415,237 @@ export const clockIn = async (req, res) => {
 
     // Block punch-in on weekends / configured off-days / holidays unless admin allows it
     const allowNonWorkingDayPunch = org?.settings?.allowNonWorkingDayPunch === true;
-    if (!allowNonWorkingDayPunch) {
-      const workingDayStatus = await resolveWorkingDayStatus(
-        organizationId,
-        attendanceDateKey,
-        orgTimezone
-      );
-      if (!workingDayStatus.isWorkingDay) {
-        const message = workingDayStatus.isHoliday
-          ? `Cannot punch in on a holiday${workingDayStatus.holidayName ? ` (${workingDayStatus.holidayName})` : ''}.`
-          : 'Cannot punch in on a non-working day.';
-        return res.status(403).json({
-          success: false,
-          message,
-          code: 'NON_WORKING_DAY',
-          reason: workingDayStatus.reason,
-          holidayName: workingDayStatus.holidayName,
-        });
-      }
+    const workingDayStatus = await resolveWorkingDayStatus(
+      organizationId,
+      attendanceDateKey,
+      orgTimezone
+    );
+    if (!allowNonWorkingDayPunch && !workingDayStatus.isWorkingDay) {
+      const message = workingDayStatus.isHoliday
+        ? `Cannot punch in on a holiday${workingDayStatus.holidayName ? ` (${workingDayStatus.holidayName})` : ''}.`
+        : 'Cannot punch in on a non-working day.';
+      return res.status(403).json({
+        success: false,
+        message,
+        code: 'NON_WORKING_DAY',
+        reason: workingDayStatus.reason,
+        holidayName: workingDayStatus.holidayName,
+      });
     }
 
     const clockInTime = new Date();
+
+    // Resolve employee shift timings (Shift 1 / Shift 2) when assigned; else keep rule officeHours
+    const shiftEmployee = {
+      shiftId: req.employee?.shiftId,
+      shiftName: req.employee?.shiftName,
+    };
+    const resolvedShift = resolveEmployeeShift(activeRule, shiftEmployee);
+    const timingRule = applyEmployeeShiftToRule(activeRule, shiftEmployee);
+
+    // Day plan: approved leave + approved WFH + optional half-day holiday
+    const dayPlan = await loadAttendanceDayPlan({
+      organizationId,
+      employeeId: req.employee?._id || userId,
+      attendanceDateKey,
+      timezone: orgTimezone,
+      rule: activeRule,
+      employee: shiftEmployee,
+      holiday: workingDayStatus.holiday,
+      allowNonWorkingDayPunch,
+      now: clockInTime,
+    });
+
+    if (!dayPlan.punchAllowed) {
+      return res.status(403).json({
+        success: false,
+        message: dayPlan.punchBlockedReason || 'Punch-in is not allowed for today.',
+        code: dayPlan.punchBlockedCode || 'PUNCH_NOT_ALLOWED',
+        dayPlan: {
+          leaveType: dayPlan.leaveType,
+          wfhType: dayPlan.wfhType,
+          holidayType: dayPlan.holidayType,
+          workStartHHmm: dayPlan.workStartHHmm,
+          workEndHHmm: dayPlan.workEndHHmm,
+        },
+      });
+    }
+
+    // Approved WFH for current working half/day → Home punch only (block Office via API)
+    if (isWfhOnlyPunchPeriod(dayPlan) && !isWfhPunch) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Office punch is not allowed during your approved Work From Home period. Please punch in as Work From Home.',
+        code: 'OFFICE_NOT_ALLOWED_DURING_WFH',
+        wfhType: dayPlan.wfhType,
+        currentHalf: dayPlan.currentHalf,
+      });
+    }
+
+    // Half leave/holiday with no approved WFH on the working half → Office punch only
+    if (isOfficeOnlyPunchPeriod(dayPlan) && isWfhPunch) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Work From Home punch is not available for this working half. Please punch in from the office.',
+        code: 'WFH_NOT_ALLOWED_FOR_SCHEDULE',
+        leaveType: dayPlan.leaveType,
+        holidayType: dayPlan.holidayType,
+      });
+    }
+
+    // Mid-day continue: same attendance day, switch/record second-half work mode (no duplicate row)
+    if (existing && !existing.clockOut) {
+      const requestedLocation = isWfhPunch ? 'work_from_home' : 'office';
+      const primary = existing.workLocation === 'home' ? 'work_from_home' : existing.workLocation;
+      const canContinue =
+        dayPlan.currentHalf === 'second_half' &&
+        requestedLocation !== primary &&
+        (dayPlan.expectedWorkLocationSecondHalf === requestedLocation ||
+          dayPlan.wfhType === 'second_half' ||
+          dayPlan.wfhType === 'full' ||
+          dayPlan.firstHalfOff);
+
+      if (canContinue) {
+        if (isWfhOnlyPunchPeriod(dayPlan) && requestedLocation !== 'work_from_home') {
+          return res.status(403).json({
+            success: false,
+            message:
+              'Office punch is not allowed during your approved Work From Home period. Please continue as Work From Home.',
+            code: 'OFFICE_NOT_ALLOWED_DURING_WFH',
+          });
+        }
+        if (isOfficeOnlyPunchPeriod(dayPlan) && requestedLocation === 'work_from_home') {
+          return res.status(403).json({
+            success: false,
+            message:
+              'Work From Home punch is not available for this working half. Please continue from the office.',
+            code: 'WFH_NOT_ALLOWED_FOR_SCHEDULE',
+          });
+        }
+        existing.secondaryWorkLocation = requestedLocation;
+        await existing.save();
+        invalidateAttendanceCachesAsync();
+        emitAttendanceTodayChangedAsync(organizationId);
+        const sessionObj = existing.toObject ? existing.toObject() : existing;
+        return res.status(200).json({
+          ...sessionObj,
+          success: true,
+          message: 'Continued attendance for second half',
+          code: 'ATTENDANCE_CONTINUED',
+          session: sessionObj,
+          attendance: sessionObj,
+          dayPlan: {
+            leaveType: dayPlan.leaveType,
+            wfhType: dayPlan.wfhType,
+            currentHalf: dayPlan.currentHalf,
+            secondaryWorkLocation: requestedLocation,
+          },
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: "Already clocked in for today",
+        code: 'ALREADY_CLOCKED_IN',
+        session: existing
+      });
+    }
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Already clocked in for today",
+        code: 'ALREADY_CLOCKED_IN',
+        session: existing
+      });
+    }
+
+    // Full shift window: punch-in only during assigned shift hours (day vs night),
+    // adjusted to effective work window when first/second half is leave/holiday.
+    const shiftCheckInWindow = getAssignedShiftCheckInWindow(activeRule, shiftEmployee);
+    if (shiftCheckInWindow) {
+      const windowStartHHmm = dayPlan.firstHalfOff
+        ? dayPlan.workStartHHmm
+        : shiftCheckInWindow.windowStartHHmm;
+      const windowEndHHmm = dayPlan.secondHalfOff
+        ? dayPlan.workEndHHmm
+        : shiftCheckInWindow.windowEndHHmm;
+
+      const dayStartMins = parseHmToMinutes(dayPlan.dayStartHHmm);
+      const dayEndMins = parseHmToMinutes(dayPlan.dayEndHHmm);
+      const overnightShift =
+        dayStartMins != null && dayEndMins != null && dayEndMins <= dayStartMins;
+      const halfDayAdjusted = Boolean(dayPlan.firstHalfOff || dayPlan.secondHalfOff);
+
+      let within;
+      if (overnightShift && halfDayAdjusted) {
+        // Half-day on overnight shift can yield a morning-only window (e.g. 01:00–06:00)
+        // that must be anchored on the post-midnight segment, not the attendance date alone.
+        const windowStart = combinePlanInstant(
+          startOfDay,
+          windowStartHHmm,
+          dayPlan,
+          orgTimezone
+        );
+        const windowEnd = combinePlanInstant(
+          startOfDay,
+          windowEndHHmm,
+          dayPlan,
+          orgTimezone
+        );
+        const allowed = clockInTime >= windowStart && clockInTime <= windowEnd;
+        within = { allowed, windowStart, windowEnd };
+      } else {
+        within = isClockInWithinShiftWindow({
+          clockInTime,
+          startOfDay,
+          windowStartHHmm,
+          windowEndHHmm,
+          orgTimezone,
+          combineDateAndTimeInTimezone,
+        });
+      }
+
+      if (!within.allowed) {
+        const shiftLabel = shiftCheckInWindow.shift.name || 'your shift';
+        const tooEarly = clockInTime < within.windowStart;
+        return res.status(403).json({
+          success: false,
+          code: 'SHIFT_CHECKIN_WINDOW',
+          message: tooEarly
+            ? `${shiftLabel} starts at ${windowStartHHmm}. Punch-in is only allowed during ${windowStartHHmm}–${windowEndHHmm}.`
+            : `${shiftLabel} has ended (${windowEndHHmm}). Punch-in is only allowed during ${windowStartHHmm}–${windowEndHHmm}.`,
+          shiftCheckInWindow: {
+            shiftName: shiftCheckInWindow.shift.name,
+            shiftId: shiftCheckInWindow.shift.key,
+            windowStart: windowStartHHmm,
+            windowEnd: windowEndHHmm,
+            isOvernight: Boolean(shiftCheckInWindow.isOvernight || overnightShift),
+          },
+        });
+      }
+    }
     
     // Get office start time from rule or use default — use org timezone to avoid server-local-time drift
     let officeStartTime;
-    if (activeRule?.officeHours?.startTime) {
-      officeStartTime = combineDateAndTimeInTimezone(startOfDay, activeRule.officeHours.startTime, orgTimezone);
-    } else if (activeRule?.checkInOutTimes?.checkInStartTime) {
-      officeStartTime = combineDateAndTimeInTimezone(startOfDay, activeRule.checkInOutTimes.checkInStartTime, orgTimezone);
+    if (timingRule?.officeHours?.startTime) {
+      officeStartTime = combineDateAndTimeInTimezone(startOfDay, timingRule.officeHours.startTime, orgTimezone);
+    } else if (timingRule?.checkInOutTimes?.checkInStartTime) {
+      officeStartTime = combineDateAndTimeInTimezone(startOfDay, timingRule.checkInOutTimes.checkInStartTime, orgTimezone);
     } else {
       officeStartTime = combineDateAndTimeInTimezone(startOfDay, `${OFFICE_START_TIME}:00`, orgTimezone);
     }
 
-    // Validate check-in time window if configured (warning only, don't block)
+    // Org-wide check-in window: warning only, and only when employee has no assigned shift
+    // (assigned-shift staff already hard-blocked by SHIFT_CHECKIN_WINDOW above)
     let checkInWindowWarning = null;
-    if (activeRule?.checkInOutTimes?.checkInStartTime && activeRule?.checkInOutTimes?.checkInEndTime) {
+    if (
+      !shiftCheckInWindow &&
+      activeRule?.checkInOutTimes?.checkInStartTime &&
+      activeRule?.checkInOutTimes?.checkInEndTime
+    ) {
       const checkInWindowStart = combineDateAndTimeInTimezone(startOfDay, activeRule.checkInOutTimes.checkInStartTime, orgTimezone);
       const checkInWindowEnd = combineDateAndTimeInTimezone(startOfDay, activeRule.checkInOutTimes.checkInEndTime, orgTimezone);
       
@@ -456,7 +667,7 @@ export const clockIn = async (req, res) => {
       }
     }
 
-    // Determine late arrival: penalty rules and/or day-based "half day if late"
+    // Determine late arrival: use day-plan late baseline (second-half start when first half is leave/holiday)
     let isLateArrival = false;
     const orgPayrollSettings = await Organization.findById(organizationId)
       .select('settings.payrollSettings')
@@ -466,11 +677,20 @@ export const clockIn = async (req, res) => {
       payrollSettings.calculationMode === 'day_based' && !!payrollSettings.markHalfDayIfLate;
 
     if (activeRule?.enablePenaltyRules || markHalfDayIfLate) {
-      const effectiveStartTime = getEffectiveOfficeStartForLate(activeRule, startOfDay, orgTimezone);
+      const effectiveStartTime = getLateThresholdFromPlan(
+        dayPlan,
+        startOfDay,
+        orgTimezone,
+        activeRule
+      );
       isLateArrival = clockInTime > effectiveStartTime;
     }
 
-    const initialStatus = markHalfDayIfLate && isLateArrival ? 'half-day' : 'present';
+    const initialStatus = markHalfDayIfLate && isLateArrival
+      ? 'half-day'
+      : dayPlan.expectedHoursFactor === 0.5
+        ? 'half-day'
+        : 'present';
 
     // Get real IP address
     const clientIP = getClientIP(req);
@@ -711,7 +931,15 @@ export const clockIn = async (req, res) => {
       workLocation: req.body.workLocation === 'home' ? 'work_from_home' : (req.body.workLocation || "office"),
       clockInImage: imageInfo,
       clockInLocation: locationInfo,
-      clockInNetwork: networkInfo
+      clockInNetwork: networkInfo,
+      ...(resolvedShift
+        ? {
+            shiftId: resolvedShift.key,
+            shiftName: resolvedShift.name,
+            shiftStartTime: resolvedShift.startTime,
+            shiftEndTime: resolvedShift.endTime,
+          }
+        : {}),
     });
 
     runInBackground('clock-in-notify-admins', async () => {
@@ -1189,7 +1417,8 @@ export const clockOut = async (req, res) => {
     }
 
     // WFH session: clock-out is allowed from anywhere (location recorded for reference only).
-    const isWfhSession = attendance.workLocation === 'work_from_home' || attendance.workLocation === 'home';
+    const isWfhSession = attendance.workLocation === 'work_from_home' || attendance.workLocation === 'home'
+      || attendance.secondaryWorkLocation === 'work_from_home';
 
     // Validate check-out is near check-in (strict mode only). Simple punches: independent locations.
     const checkInLocation = attendance.clockInLocation;
@@ -1370,9 +1599,47 @@ export const clockOut = async (req, res) => {
     attendance.grossHours = grossHours / (1000 * 60 * 60); // convert ms to hours
     attendance.effectiveHours = effectiveHours / (1000 * 60 * 60);
 
-    const expectedHours = getExpectedWorkingHoursFromRule(activeRule, startOfDay, orgTimezone);
-    const effectiveEndTime = getEffectiveOfficeEndForEarlyDeparture(activeRule, startOfDay, orgTimezone);
-    attendance.isEarlyDeparture = now < effectiveEndTime;
+    const shiftEmployeeForOut = {
+      shiftId: attendance.shiftId || req.employee?.shiftId,
+      shiftName: attendance.shiftName || req.employee?.shiftName,
+    };
+    const ruleForOut =
+      attendance.shiftStartTime && attendance.shiftEndTime
+        ? {
+            ...(activeRule || {}),
+            officeHours: {
+              ...(activeRule?.officeHours || {}),
+              startTime: attendance.shiftStartTime,
+              endTime: attendance.shiftEndTime,
+            },
+          }
+        : activeRule;
+
+    const dayPlanOut = await loadAttendanceDayPlan({
+      organizationId,
+      employeeId: req.employee?._id || attendance.userId,
+      attendanceDateKey: attendance.attendanceDateKey || dayContext.attendanceDateKey,
+      timezone: orgTimezone,
+      rule: ruleForOut || activeRule,
+      employee: shiftEmployeeForOut,
+      holiday: (await resolveWorkingDayStatus(
+        organizationId,
+        attendance.attendanceDateKey || dayContext.attendanceDateKey,
+        orgTimezone
+      )).holiday,
+      allowNonWorkingDayPunch: false,
+      now,
+    });
+
+    const fullExpectedHours = getExpectedWorkingHoursFromRule(ruleForOut, startOfDay, orgTimezone, shiftEmployeeForOut);
+    const expectedHours = getExpectedHoursFromPlan(dayPlanOut, fullExpectedHours);
+    const effectiveEndTime = getEarlyDepartureThresholdFromPlan(
+      dayPlanOut,
+      startOfDay,
+      orgTimezone,
+      activeRule
+    );
+    attendance.isEarlyDeparture = expectedHours > 0 && now < effectiveEndTime;
 
     if (attendance.effectiveHours > expectedHours) {
       attendance.overtimeHours = parseFloat(
@@ -1382,7 +1649,7 @@ export const clockOut = async (req, res) => {
       attendance.overtimeHours = 0;
     }
 
-    const halfDayThreshold = expectedHours / 2;
+    const halfDayThreshold = expectedHours > 0 ? expectedHours / 2 : 0;
     const orgPayrollDoc = await Organization.findById(organizationId)
       .select('settings.payrollSettings')
       .lean();
@@ -1390,7 +1657,10 @@ export const clockOut = async (req, res) => {
     const markHalfDayIfLateOut =
       payrollSettingsOut.calculationMode === 'day_based' && !!payrollSettingsOut.markHalfDayIfLate;
 
-    if (attendance.effectiveHours < halfDayThreshold) {
+    if (dayPlanOut.expectedHoursFactor === 0.5) {
+      // Half-day leave/holiday mix: worked half counts as half-day attendance
+      attendance.status = "half-day";
+    } else if (expectedHours > 0 && attendance.effectiveHours < halfDayThreshold) {
       attendance.status = "half-day";
     } else if (markHalfDayIfLateOut && attendance.isLateArrival) {
       // Preserve late → half-day even when worked hours would otherwise be a full day
@@ -1777,7 +2047,7 @@ export const getTodayStatus = async (req, res) => {
     
     const allEmployees = await Employee.find(
       employeeQuery,
-      '_id name lastName email department position employeeId profilePhoto'
+      '_id name lastName email department position employeeId profilePhoto shiftId shiftName'
     );
     
     // 2. Get today's attendance records with breaks populated for this organization
@@ -1852,7 +2122,9 @@ export const getTodayStatus = async (req, res) => {
           email: employee.email,
           department: employee.department,
           position: employee.position,
-          profilePhoto: employee.profilePhoto
+          profilePhoto: employee.profilePhoto,
+          shiftId: employee.shiftId || null,
+          shiftName: employee.shiftName || null,
         },
         status: isOnBreak ? 'onBreak' : (record.status || 'present'),
         clockIn: record.clockIn,
@@ -1866,7 +2138,11 @@ export const getTodayStatus = async (req, res) => {
           Math.floor((now - new Date(record.breaks[record.breaks.length - 1].breakIn)) / (1000 * 60)) : 
           null,
         clockInNetwork: record.clockInNetwork,
-        clockInLocation: record.clockInLocation
+        clockInLocation: record.clockInLocation,
+        shiftId: record.shiftId || employee.shiftId || null,
+        shiftName: record.shiftName || employee.shiftName || null,
+        shiftStartTime: record.shiftStartTime || null,
+        shiftEndTime: record.shiftEndTime || null,
       });
     });
 
@@ -1881,7 +2157,9 @@ export const getTodayStatus = async (req, res) => {
           email: emp.email,
           department: emp.department,
           position: emp.position,
-          profilePhoto: emp.profilePhoto
+          profilePhoto: emp.profilePhoto,
+          shiftId: emp.shiftId || null,
+          shiftName: emp.shiftName || null,
         },
         status: 'absent',
         clockIn: null,
@@ -1891,7 +2169,9 @@ export const getTodayStatus = async (req, res) => {
         effectiveHours: 0,
         workLocation: null,
         isOnBreak: false,
-        currentBreakDuration: null
+        currentBreakDuration: null,
+        shiftId: emp.shiftId || null,
+        shiftName: emp.shiftName || null,
       }));
 
     // 6. Combine all results
@@ -2455,7 +2735,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
 
     let employees = await Employee.find(query)
       .select(
-        '_id name lastName email department position employeeId active profilePhoto joiningDate lastWorkingDate terminationDate status'
+        '_id name lastName email department position employeeId active profilePhoto joiningDate lastWorkingDate terminationDate status shiftId shiftName'
       )
       .sort({ name: 1 })
       .lean();
@@ -2556,7 +2836,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
     });
 
     const rawRecords = await Attendance.find(attQuery)
-      .populate('userId', 'name lastName email department position employeeId profilePhoto')
+      .populate('userId', 'name lastName email department position employeeId profilePhoto shiftId shiftName')
       .sort({ date: -1, createdAt: -1 })
       .lean();
 
@@ -2603,6 +2883,10 @@ export const getTeamAttendanceHistory = async (req, res) => {
         workLocation: record.workLocation,
         locationVerified: record.clockInLocation?.locationMatch === true,
         isLateArrival: record.isLateArrival,
+        shiftId: record.shiftId || pop.shiftId || null,
+        shiftName: record.shiftName || pop.shiftName || null,
+        shiftStartTime: record.shiftStartTime || null,
+        shiftEndTime: record.shiftEndTime || null,
         employee: {
           _id: pop._id,
           name: pop.name,
@@ -2611,7 +2895,9 @@ export const getTeamAttendanceHistory = async (req, res) => {
           department: pop.department,
           position: pop.position,
           employeeId: pop.employeeId,
-          profilePhoto: resolveProfilePhoto(pop.profilePhoto)
+          profilePhoto: resolveProfilePhoto(pop.profilePhoto),
+          shiftId: pop.shiftId || null,
+          shiftName: pop.shiftName || null,
         }
       });
     }
@@ -2628,7 +2914,9 @@ export const getTeamAttendanceHistory = async (req, res) => {
         department: employee.department,
         position: employee.position,
         employeeId: employee.employeeId,
-        profilePhoto: resolveProfilePhoto(employee.profilePhoto)
+        profilePhoto: resolveProfilePhoto(employee.profilePhoto),
+        shiftId: employee.shiftId || null,
+        shiftName: employee.shiftName || null,
       };
 
       let eligibleStartKey = startDateKey;
@@ -2674,6 +2962,8 @@ export const getTeamAttendanceHistory = async (req, res) => {
               workLocation: null,
               locationVerified: false,
               isLateArrival: false,
+              shiftId: employee.shiftId || null,
+              shiftName: employee.shiftName || null,
               employee: employeePayload
             });
           }
@@ -2822,12 +3112,124 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
       dayContext.timezone
     );
 
+    // Expose office hours for UI half-day split only (no attendance calc change).
+    // Fallback: Attendance Rules → Calendar workingHours → 09:00–17:00
+    let calendarWorkingHours = null;
+    try {
+      const year = Number(String(dayContext.attendanceDateKey || '').slice(0, 10).slice(0, 4));
+      if (Number.isFinite(year)) {
+        const calendar = await Calendar.findOne({ organizationId, year })
+          .select('workingHours')
+          .lean();
+        calendarWorkingHours = calendar?.workingHours || null;
+      }
+    } catch {
+      calendarWorkingHours = null;
+    }
+
+    const officeHoursBase = {
+      startTime:
+        activeRule?.officeHours?.startTime ||
+        calendarWorkingHours?.startTime ||
+        '09:00',
+      endTime:
+        activeRule?.officeHours?.endTime ||
+        calendarWorkingHours?.endTime ||
+        '17:00',
+    };
+
+    const employeeShift = resolveEmployeeShift(activeRule, {
+      shiftId: req.employee?.shiftId,
+      shiftName: req.employee?.shiftName,
+    });
+    const officeHours = employeeShift
+      ? { startTime: employeeShift.startTime, endTime: employeeShift.endTime }
+      : officeHoursBase;
+
+    const shiftCheckInWindow = getAssignedShiftCheckInWindow(activeRule, {
+      shiftId: req.employee?.shiftId,
+      shiftName: req.employee?.shiftName,
+    });
+
+    let daySchedule = null;
+    if (req.employee?._id) {
+      try {
+        daySchedule = await loadAttendanceDayPlan({
+          organizationId,
+          employeeId: req.employee._id,
+          attendanceDateKey: dayContext.attendanceDateKey,
+          timezone: dayContext.timezone,
+          rule: activeRule,
+          employee: {
+            shiftId: req.employee?.shiftId,
+            shiftName: req.employee?.shiftName,
+          },
+          holiday: workingDayStatus.holiday,
+          allowNonWorkingDayPunch,
+          now: new Date(),
+        });
+      } catch (err) {
+        logger.warn('Failed to load attendance day schedule', { error: err.message });
+        daySchedule = null;
+      }
+    }
+
     const workingDayFields = {
       allowWorkFromHome,
       allowNonWorkingDayPunch,
       isWorkingDay: workingDayStatus.isWorkingDay,
       nonWorkingReason: workingDayStatus.isWorkingDay ? null : workingDayStatus.reason,
       holidayName: workingDayStatus.holidayName,
+      officeHours,
+      ...(daySchedule
+        ? {
+            daySchedule: {
+              leaveType: daySchedule.leaveType,
+              wfhType: daySchedule.wfhType,
+              holidayType: daySchedule.holidayType,
+              midpointHHmm: daySchedule.midpointHHmm,
+              workStartHHmm: daySchedule.workStartHHmm,
+              workEndHHmm: daySchedule.workEndHHmm,
+              currentHalf: daySchedule.currentHalf,
+              expectedWorkLocation: daySchedule.expectedWorkLocation,
+              expectedWorkLocationSecondHalf: daySchedule.expectedWorkLocationSecondHalf,
+              expectedHoursFactor: daySchedule.expectedHoursFactor,
+              punchAllowed: daySchedule.punchAllowed,
+              firstHalfOff: daySchedule.firstHalfOff,
+              secondHalfOff: daySchedule.secondHalfOff,
+              lockWfhOnly: isWfhOnlyPunchPeriod(daySchedule),
+              lockOfficeOnly: isOfficeOnlyPunchPeriod(daySchedule),
+              // Org TZ used to build this plan — client WFH half-lock must use the same zone
+              timezone: dayContext.timezone,
+              dayStartHHmm: daySchedule.dayStartHHmm,
+              dayEndHHmm: daySchedule.dayEndHHmm,
+            },
+          }
+        : {}),
+      ...(employeeShift
+        ? {
+            assignedShift: {
+              key: employeeShift.key,
+              name: employeeShift.name,
+              startTime: employeeShift.startTime,
+              endTime: employeeShift.endTime,
+            },
+          }
+        : {}),
+      ...(shiftCheckInWindow
+        ? {
+            shiftCheckInWindow: {
+              windowStart: daySchedule?.firstHalfOff
+                ? daySchedule.workStartHHmm
+                : shiftCheckInWindow.windowStartHHmm,
+              windowEnd: daySchedule?.secondHalfOff
+                ? daySchedule.workEndHHmm
+                : shiftCheckInWindow.windowEndHHmm,
+              isOvernight: Boolean(shiftCheckInWindow.isOvernight),
+              enforced: true,
+            },
+          }
+        : {}),
     };
 
     if (!activeRule) {

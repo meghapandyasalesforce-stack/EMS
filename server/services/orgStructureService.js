@@ -92,47 +92,169 @@ const isMisplacedDesignationName = (name) =>
     MISPLACED_DESIGNATION_KEYS.has(String(name || '').toLowerCase().trim());
 
 const guessJobRoleDepartmentIds = (name, deptIdByName) => {
-    const engDeptId = deptIdByName.get('engineering') || [...deptIdByName.values()][0];
-    let departmentIds = engDeptId ? [engDeptId] : [];
-    const lower = String(name || '').toLowerCase();
-    if (lower.includes('hr')) {
-        const hrId = deptIdByName.get('hr') || deptIdByName.get('human resources');
-        if (hrId) departmentIds = [hrId];
-    } else if (lower.includes('financ') || lower.includes('account')) {
-        const finId = deptIdByName.get('finance');
-        if (finId) departmentIds = [finId];
-    } else if (lower.includes('sales')) {
-        const sId = deptIdByName.get('sales');
-        if (sId) departmentIds = [sId];
-    } else if (lower.includes('marketing')) {
-        const mId = deptIdByName.get('marketing');
-        if (mId) departmentIds = [mId];
-    } else if (lower.includes('operation')) {
-        const oId = deptIdByName.get('operations');
-        if (oId) departmentIds = [oId];
+    const lower = String(name || '').toLowerCase().trim();
+    const resolve = (...keys) => {
+        for (const key of keys) {
+            const id = deptIdByName.get(key);
+            if (id) return [id];
+        }
+        return [];
+    };
+
+    // Explicit leadership / specialty mappings (do not default everything to Engineering)
+    if (
+        lower === 'chief executive officer' ||
+        lower === 'ceo' ||
+        (lower.includes('chief executive') && !lower.includes('technology') && !lower.includes('financial'))
+    ) {
+        return resolve('administration');
     }
-    return departmentIds;
+    if (lower.includes('chief technology') || lower === 'cto') {
+        return resolve('engineering');
+    }
+    if (lower.includes('chief financial') || lower === 'cfo') {
+        return resolve('finance');
+    }
+    if (lower.startsWith('vp engineering')) {
+        return resolve('engineering');
+    }
+    if (lower.startsWith('vp finance')) {
+        return resolve('finance');
+    }
+    if (lower.startsWith('vp human') || lower.startsWith('vp hr')) {
+        return resolve('human resources', 'hr');
+    }
+    if (lower.startsWith('vp sales')) {
+        return resolve('sales');
+    }
+    if (lower.startsWith('vp operations')) {
+        return resolve('operations');
+    }
+    if (lower.startsWith('vp marketing')) {
+        return resolve('marketing');
+    }
+    if (lower.includes('it support')) {
+        return resolve('it support');
+    }
+    if (lower.includes('legal')) {
+        // No dedicated Legal department in defaults — leave unscoped (visible for any department filter)
+        return [];
+    }
+    if (lower.includes('customer support') || lower.includes('customer service')) {
+        return resolve('operations');
+    }
+    if (lower.includes('recruiter') || lower.includes('hr ') || lower.startsWith('hr') || lower.includes('human resource')) {
+        return resolve('human resources', 'hr');
+    }
+    if (lower.includes('financ') || lower.includes('account')) {
+        return resolve('finance');
+    }
+    if (lower.includes('sales')) {
+        return resolve('sales');
+    }
+    if (lower.includes('marketing')) {
+        return resolve('marketing');
+    }
+    if (lower.includes('operation')) {
+        return resolve('operations');
+    }
+    if (
+        lower.includes('engineer') ||
+        lower.includes('developer') ||
+        lower.includes('devops') ||
+        lower.includes('qa ') ||
+        lower.startsWith('qa') ||
+        lower.includes('ux') ||
+        lower.includes('product manager') ||
+        lower.includes('project manager')
+    ) {
+        return resolve('engineering');
+    }
+
+    // Unknown roles: unscoped rather than incorrectly pinning to Engineering
+    return [];
 };
 
-async function ensureJobRoleExists(organizationId, name, deptIdByName) {
-    const trimmed = String(name || '').trim();
-    if (!trimmed) return null;
-    const existing = await OrgJobRole.findOne({
-        organizationId,
-        name: { $regex: `^${trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
-    });
-    if (existing) {
+/** Roles whose department link should be corrected on sync for existing orgs. */
+const ROLE_DEPARTMENT_REMAP_KEYS = new Set(
+    [
+        'Legal Advisor',
+        'Customer Support Specialist',
+        'Chief Executive Officer',
+        'Chief Technology Officer',
+        'Chief Financial Officer',
+        'VP Engineering',
+        'VP Finance',
+        'VP Human Resources',
+        'VP Sales',
+        'VP Operations',
+        'VP Marketing',
+        'HR Director',
+        'IT Support Engineer',
+        'Recruiter',
+        'Accountant',
+    ].map((n) => n.toLowerCase())
+);
+
+async function ensureDefaultDepartments(organizationId) {
+    let created = 0;
+    for (let i = 0; i < DEFAULT_ORG_DEPARTMENTS.length; i += 1) {
+        const name = DEFAULT_ORG_DEPARTMENTS[i];
+        const existing = await OrgDepartment.findOne({
+            organizationId,
+            name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+        });
+        if (!existing) {
+            await OrgDepartment.create({
+                organizationId,
+                name,
+                code: slugCode(name, i),
+                status: 'active',
+            });
+            created += 1;
+            continue;
+        }
         if (existing.status !== 'active') {
             existing.status = 'active';
             await existing.save();
         }
+    }
+    return created;
+}
+
+async function ensureJobRoleExists(organizationId, name, deptIdByName) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return null;
+    const key = trimmed.toLowerCase();
+    const existing = await OrgJobRole.findOne({
+        organizationId,
+        name: { $regex: `^${trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+    });
+    const desiredDeptIds = guessJobRoleDepartmentIds(trimmed, deptIdByName);
+
+    if (existing) {
+        let dirty = false;
+        if (existing.status !== 'active') {
+            existing.status = 'active';
+            dirty = true;
+        }
+        const currentIds = (existing.departmentIds || []).map((id) => String(id)).sort();
+        const desiredIds = desiredDeptIds.map((id) => String(id)).sort();
+        const shouldRemap =
+            ROLE_DEPARTMENT_REMAP_KEYS.has(key) ||
+            (currentIds.length === 0 && desiredIds.length > 0);
+        if (shouldRemap && currentIds.join(',') !== desiredIds.join(',')) {
+            existing.departmentIds = desiredDeptIds;
+            dirty = true;
+        }
+        if (dirty) await existing.save();
         return existing;
     }
     return OrgJobRole.create({
         organizationId,
         name: trimmed,
         code: slugCode(trimmed),
-        departmentIds: guessJobRoleDepartmentIds(trimmed, deptIdByName),
+        departmentIds: desiredDeptIds,
         status: 'active',
     });
 }
@@ -142,6 +264,9 @@ async function ensureJobRoleExists(organizationId, name, deptIdByName) {
  * Role-like designations are soft-deactivated and recreated as job roles.
  */
 export const normalizeOrgDesignationCatalog = async (organizationId) => {
+    // Keep default departments (incl. Administration) and job roles available for existing orgs
+    await ensureDefaultDepartments(organizationId);
+
     const departments = await OrgDepartment.find({ organizationId, status: 'active' })
         .select('_id name')
         .lean();
@@ -185,9 +310,24 @@ export const normalizeOrgDesignationCatalog = async (organizationId) => {
         if (dirty) await existing.save();
     }
 
-    // Default job roles always available
+    // Default job roles always available (creates missing leadership roles for existing orgs)
     for (const roleName of DEFAULT_ORG_JOB_ROLES) {
         await ensureJobRoleExists(organizationId, roleName, deptIdByName);
+    }
+
+    // Remove roles dropped from defaults (hide from Add Employee catalogs)
+    const retiredJobRoleNames = ['Engineering Manager', 'Engineering Lead'];
+    let retiredJobRoles = 0;
+    for (const roleName of retiredJobRoleNames) {
+        const result = await OrgJobRole.updateMany(
+            {
+                organizationId,
+                status: 'active',
+                name: { $regex: `^${roleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+            },
+            { $set: { status: 'inactive' } }
+        );
+        retiredJobRoles += result.modifiedCount || result.nModified || 0;
     }
 
     const activeDesignations = await OrgDesignation.find({ organizationId, status: 'active' });
@@ -203,13 +343,14 @@ export const normalizeOrgDesignationCatalog = async (organizationId) => {
         deactivated += 1;
     }
 
-    if (createdLevels || reactivatedLevels || deactivated) {
+    if (createdLevels || reactivatedLevels || deactivated || retiredJobRoles) {
         logger.info('Normalized org designations to levels-only', {
             organizationId: String(organizationId),
             createdLevels,
             reactivatedLevels,
             deactivated,
             movedToJobRoles,
+            retiredJobRoles,
         });
     }
 
@@ -353,6 +494,8 @@ export const seedOrgStructureFromOrganization = async (organizationId) => {
     }
 
     logger.info('Seeded organization structure masters', { organizationId, departments: deptSources.length });
+    // Ensure Administration + leadership job roles exist even when org onboarding supplied a custom dept list
+    await normalizeOrgDesignationCatalog(organizationId);
     return { seeded: true };
 };
 
