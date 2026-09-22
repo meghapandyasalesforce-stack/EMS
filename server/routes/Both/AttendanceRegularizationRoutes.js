@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createRegularizationRequest,
     getMyRegularizationRequests,
@@ -24,6 +26,8 @@ const requireRegularizationApprover = requireAnyPermission(
 );
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.ATTENDANCE));
 
 // Employee routes - create and view their own requests
 router.route("/limits")

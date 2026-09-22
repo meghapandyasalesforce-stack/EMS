@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createGoal,
     getGoals,
@@ -15,6 +17,8 @@ import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.PERFORMANCE));
 
 // Employee routes (authenticated)
 router.get('/', isAuthenticated, getGoals);

@@ -8,6 +8,7 @@ import HrmsPopupDismissListener from './components/HrmsPopupDismissListener';
 import RouteErrorBoundary from './components/RouteErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import { checkAuthSession } from './context/Auth/authSlice';
+import { checkPlatformSession } from './context/platformSlice';
 import store from './context/store';
 import { clearEmployeeDetails, setEmployeeProfile } from './context/employeeDetailsSlice';
 import { fetchOrganizationTimezone, setTimezoneContext, clearTimezoneContext } from './context/timezoneSlice';
@@ -25,12 +26,10 @@ import {
   otherRoutes,
   renderRoutes,
   renderProtectedRoutes,
-  renderProfileRoutes
+  renderProfileRoutes,
+  renderPlatformRoutes,
 } from './routes/index.jsx';
 import { isHrmsAuthenticatedUser } from './utils/authSessionUtils';
-
-// All routes are now defined in routes/index.jsx
-// Components are lazy-loaded through the route configuration
 
 function ScrollToTop() {
     const { pathname } = useLocation();
@@ -44,12 +43,14 @@ function App() {
     const location = useLocation();
     const dispatch = useDispatch();
     const sessionValidated = useSelector((state) => state.auth.sessionValidated);
+    const platformSessionChecked = useSelector((state) => state.platform.sessionChecked);
     const authUser = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const permissions = useSelector((state) => state.auth.permissions) || [];
     const roleBuckets = useSelector((state) => state.auth.roleBuckets) || [];
     const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
-    const hideHeaderRoutes = ['/', '/login', '/register', '/organization/register', '/organization/login', '/forgot-password'];
+    const isPlatformRoute = location.pathname.startsWith('/platform');
+    const hideHeaderRoutes = ['/', '/login', '/register', '/organization/register', '/organization/login', '/forgot-password', '/platform/login'];
     const isCareerRoute = location.pathname.startsWith('/careers/');
     const isCareerJobApply = /\/careers\/[^/]+\/jobs\//.test(location.pathname);
     const isHrmsUser = sessionValidated && isHrmsAuthenticatedUser({
@@ -63,10 +64,33 @@ function App() {
     const shouldHideLayout = hideHeaderRoutes.includes(location.pathname)
         || location.pathname.startsWith('/reset-password')
         || location.pathname.startsWith('/offer/')
-        || location.pathname.startsWith('/application/');
+        || location.pathname.startsWith('/application/')
+        || isPlatformRoute;
     const useHrmsShell = !shouldHideLayout && (!isCareerRoute || isHrmsUser);
     const sessionBootstrapped = useRef(false);
+    const platformBootstrapped = useRef(false);
+
     useEffect(() => {
+        if (!isPlatformRoute) return undefined;
+        let cancelled = false;
+        const bootstrapPlatform = async () => {
+            if (platformBootstrapped.current) return;
+            platformBootstrapped.current = true;
+            try {
+                await dispatch(checkPlatformSession());
+            } catch {
+                // sessionChecked is set in the slice on reject
+            }
+            if (cancelled) return;
+        };
+        bootstrapPlatform();
+        return () => {
+            cancelled = true;
+        };
+    }, [dispatch, isPlatformRoute]);
+
+    useEffect(() => {
+        if (isPlatformRoute) return undefined;
         let cancelled = false;
         const bootstrapSession = async () => {
             try {
@@ -105,7 +129,21 @@ function App() {
         return () => {
             cancelled = true;
         };
-    }, [dispatch]);
+    }, [dispatch, isPlatformRoute]);
+
+    if (isPlatformRoute) {
+        if (!platformSessionChecked) {
+            return <LoadingSpinner message="Initializing platform session..." />;
+        }
+        return (
+            <div className="min-h-screen w-full bg-slate-100 text-slate-900">
+                <Routes>
+                    {renderRoutes(authRoutes.filter((r) => r.path.startsWith('/platform')))}
+                    {renderPlatformRoutes()}
+                </Routes>
+            </div>
+        );
+    }
 
     if (!sessionValidated) {
         return <LoadingSpinner message="Initializing session..." />;
@@ -138,7 +176,7 @@ function App() {
                     >
                         <ScrollToTop />
                         <Routes>
-                            {renderRoutes(authRoutes)}
+                            {renderRoutes(authRoutes.filter((r) => !r.path.startsWith('/platform')))}
                             {renderProtectedRoutes(dashboardRoutes)}
                             {renderProtectedRoutes(employeeRoutes)}
                             {renderProtectedRoutes(projectRoutes)}
@@ -164,7 +202,7 @@ function App() {
                     }
                 >
                     <Routes>
-                        {renderRoutes(authRoutes)}
+                        {renderRoutes(authRoutes.filter((r) => !r.path.startsWith('/platform')))}
                     </Routes>
                 </div>
             )}

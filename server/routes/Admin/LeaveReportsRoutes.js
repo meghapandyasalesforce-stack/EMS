@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     getLeaveUsageTrends,
     getLeaveBalanceReport,
@@ -7,6 +9,8 @@ import {
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LEAVE));
 
 router.route('/usage-trends')
     .get(isAdminOrHROrExecutiveAuthenticated, getLeaveUsageTrends);

@@ -18,6 +18,7 @@ import { mergeSessionProfile } from './profileUtils';
 import { isProjectManager } from './projectManagerHelper';
 import { PERMISSIONS, filterNavByPermissions } from './permissions';
 import { SYSTEM_ROLE_IDS } from './systemRoles';
+import { filterNavBySaasFeatures } from '../constants/saasFeatures';
 
 /**
  * Get navigation items based on user role, department, and position
@@ -163,7 +164,8 @@ export const getNavigationItems = (
     employee,
     permissions = [],
     permissionFlags = {},
-    activePortal = null
+    activePortal = null,
+    saasFeatures = {}
 ) => {
     const profile = mergeSessionProfile(user, employee);
     const role = profile?.role || 'employee';
@@ -172,14 +174,17 @@ export const getNavigationItems = (
     const jobTitle = (profile?.jobTitle || '').toLowerCase().trim();
 
     if (activePortal) {
-        return getNavigationForPortal(activePortal, {
-            position,
-            department,
-            jobTitle,
-            profile,
-            permissions,
-            permissionFlags,
-        });
+        return filterNavBySaasFeatures(
+            getNavigationForPortal(activePortal, {
+                position,
+                department,
+                jobTitle,
+                profile,
+                permissions,
+                permissionFlags,
+            }),
+            saasFeatures
+        );
     }
 
     let items =
@@ -215,7 +220,10 @@ export const getNavigationItems = (
         }
     }
 
-    return filterNavByPermissions(items, permissions);
+    return filterNavBySaasFeatures(
+        filterNavByPermissions(items, permissions),
+        saasFeatures
+    );
 };
 
 /**
@@ -298,6 +306,8 @@ const getAdminNavigation = () => [
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/one-on-one", name: "One-on-one", icon: <FaUserCheck /> },
     { path: "/salary-structure", name: "Salary structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
+    { path: "/admin/document-management", name: "Document management", icon: <FaFileAlt /> },
+    { path: "/organization/subscription", name: "Subscription", icon: <FaCreditCard />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/admin-settings", name: "Settings", icon: <FaCog />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
 ];
 
@@ -317,6 +327,7 @@ const getExecutiveNavigation = (position) => {
         { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
         { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
         { path: "/admin/reports", name: "Reports & analytics", icon: <FaChartBar /> },
+        { path: "/organization/subscription", name: "Subscription", icon: <FaCreditCard /> },
         { path: "/admin-settings", name: "Settings", icon: <FaCog /> }
     ];
 

@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import { applyForJob } from '../../controllers/recruitment/recruitmentController.js';
 import {
     getInternalJobs,
@@ -18,6 +20,8 @@ import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.RECRUITMENT));
 
 // Legacy authenticated apply
 router.route('/jobs/:jobPostingId/apply')

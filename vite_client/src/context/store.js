@@ -56,6 +56,7 @@ import employeePayrollReducer from "./employeePayrollSlice"
 import adminEmployeePayrollReducer from "./adminEmployeePayrollSlice"
 import organizationReducer from "./organizationSlice"
 import timezoneReducer from "./timezoneSlice"
+import platformReducer from "./platformSlice"
 
 // Combine reducers
 const rootReducer = combineReducers({
@@ -74,6 +75,7 @@ const rootReducer = combineReducers({
   adminEmployeePayroll: adminEmployeePayrollReducer,
   organization: organizationReducer,
   timezone: timezoneReducer,
+  platform: platformReducer,
 });
 
 const authSessionTransform = createTransform(

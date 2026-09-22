@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     getLifecycleForm,
     submitLifecycleFormResponse,
@@ -11,6 +13,8 @@ import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import { getOrgFeatureFlags } from '../../services/lifecycleFeatureRuntimeService.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.LIFECYCLE));
 
 /** Read-only org feature flags — Configure is SSOT for HR and employees */
 router.route('/features')

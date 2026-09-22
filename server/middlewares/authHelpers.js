@@ -107,6 +107,18 @@ export const handleAuthError = (error, res) => {
 export const attachUserToRequest = (req, decoded) => {
     const tokenOrgId = decoded.organizationId || null;
 
+    if (decoded.role === 'platform') {
+        req.user = {
+            ...(req.user || {}),
+            _id: decoded.userId,
+            role: 'platform',
+            organizationId: null,
+            platformRoles: decoded.platformRoles || ['platform_operator'],
+        };
+        req.organizationId = undefined;
+        return;
+    }
+
     if (decoded.role === 'admin') {
         req.user = {
             ...(req.user || {}),

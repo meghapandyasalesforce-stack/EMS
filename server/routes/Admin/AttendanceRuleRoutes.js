@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createOrUpdateAttendanceRule,
     getAttendanceRule,
@@ -13,6 +15,8 @@ import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import { attendanceRadiusCheckLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.ATTENDANCE));
 
 // Admin, HR, and Executive routes (create/update/deactivate - sensitive operations)
 // Allow HR and Executives to manage attendance rules as they need to configure them

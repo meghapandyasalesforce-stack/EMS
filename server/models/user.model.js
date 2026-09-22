@@ -2,13 +2,16 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import logger from "../helpers/logger.js";
 import { BCRYPT_SALT_ROUNDS } from "../config/constants.js";
+import { SAAS_OPERATOR_ROLES, ALL_SAAS_OPERATOR_ROLES } from "../config/identity.constants.js";
 
 const userSchema = new mongoose.Schema({
-    // Organization reference (multi-tenancy)
+    // Organization reference (multi-tenancy). Optional for SaaS platform operators.
     organizationId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Organization',
-        required: true,
+        required: function requiredOrganizationId() {
+            return !(this.roles || []).some((r) => ALL_SAAS_OPERATOR_ROLES.includes(r));
+        },
         index: true
     },
     
@@ -46,17 +49,25 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: [ 'admin', 'employee'],
+        enum: ['admin', 'employee', 'platform'],
         default: 'admin'
     },
     /**
-     * Platform roles (SaaS-style): org_owner, hr_admin, manager, employee.
-     * Legacy `role` field remains for JWT routing (admin vs employee portal).
+     * Org-scoped platform roles + SaaS operator role (platform_operator).
+     * Legacy `role` field remains for JWT routing (admin / employee / platform).
      */
     roles: {
         type: [{
             type: String,
-            enum: ['org_owner', 'hr_admin', 'hr_executive', 'payroll_admin', 'manager', 'employee']
+            enum: [
+                'org_owner',
+                'hr_admin',
+                'hr_executive',
+                'payroll_admin',
+                'manager',
+                'employee',
+                ...ALL_SAAS_OPERATOR_ROLES,
+            ]
         }],
         default: []
     },

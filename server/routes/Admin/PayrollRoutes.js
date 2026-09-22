@@ -1,5 +1,7 @@
 
 import express from "express";
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     getAllEmployeesPayroll,
     getAllPayrolls,
@@ -32,8 +34,6 @@ import { payrollLimiter, exportLimiter } from "../../middlewares/endpointRateLim
 import { writeLimiter } from "../../middlewares/rateLimiter.js";
 import { payrollValidations, payrollValidationsExtended } from "../../middlewares/inputValidation.js";
 import { cacheMiddleware } from "../../helpers/cache.js";
-import { requireFeature } from "../../middlewares/tenantMiddleware.js";
-import { SAAS_FEATURES } from "../../constants/saasFeatures.js";
 
 const router = express.Router();
 

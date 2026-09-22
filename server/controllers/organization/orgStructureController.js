@@ -83,13 +83,22 @@ export const deleteOrgMaster = asyncHandler(async (req, res) => {
 export const getTenantFeaturesAndUsage = asyncHandler(async (req, res) => {
     const organizationId = requireOrganizationId(req);
     const usage = await getTenantUsageSnapshot(organizationId, req.tenant);
+    const Organization = (await import('../../models/organization.model.js')).default;
+    const { resolveEffectiveEntitlement } = await import('../../helpers/entitlementService.js');
+    const org = await Organization.findById(organizationId)
+        .select('subscriptionPlan subscriptionStatus maxEmployees settings.features isActive')
+        .lean();
+    const entitlement = org ? resolveEffectiveEntitlement(org) : null;
+
     return sendSuccess(res, {
         usage,
         featureLabels: SAAS_FEATURE_LABELS,
-        features: req.tenant?.features || {},
-        planId: req.tenant?.planId,
-        planName: req.tenant?.planName,
-        subscriptionStatus: req.tenant?.subscriptionStatus,
+        features: req.tenant?.features || entitlement?.features || {},
+        planId: req.tenant?.planId || entitlement?.planId,
+        planName: req.tenant?.planName || entitlement?.planName,
+        subscriptionStatus: req.tenant?.subscriptionStatus || entitlement?.subscriptionStatus,
+        entitlement,
+        effectiveAccess: entitlement?.effectiveAccess || [],
     }, 'Tenant features and usage');
 });
 

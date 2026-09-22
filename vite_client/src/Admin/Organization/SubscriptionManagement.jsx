@@ -1,267 +1,391 @@
-import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
-import { ORGANIZATION_SUBSCRIPTION_ENDPOINT, ORGANIZATION_ENDPOINT } from '../../utils/constant';
-import { FiCheck, FiArrowUp, FiArrowDown, FiCreditCard, FiCalendar, FiUsers } from 'react-icons/fi';
+import { ORGANIZATION_SUBSCRIPTION_ENDPOINT } from '../../utils/constant';
+import {
+  FiCheck,
+  FiArrowUp,
+  FiArrowDown,
+  FiCreditCard,
+  FiCalendar,
+  FiUsers,
+  FiExternalLink,
+} from 'react-icons/fi';
 import logger from '../../utils/logger';
 
+const formatDate = (value) => {
+  if (!value) return '—';
+  try {
+    return new Date(value).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+};
+
+const statusTone = (status) => {
+  switch (status) {
+    case 'active':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'trial':
+      return 'bg-sky-100 text-sky-800';
+    case 'past_due':
+      return 'bg-amber-100 text-amber-800';
+    case 'expired':
+    case 'cancelled':
+      return 'bg-rose-100 text-rose-800';
+    default:
+      return 'bg-slate-100 text-slate-700';
+  }
+};
+
 const SubscriptionManagement = () => {
-    const dispatch = useDispatch();
-    const { user } = useSelector((state) => state.auth || {});
-    const [plans, setPlans] = useState([]);
-    const [currentPlan, setCurrentPlan] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [upgrading, setUpgrading] = useState(false);
-    const [selectedPlan, setSelectedPlan] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [plans, setPlans] = useState([]);
+  const [subscription, setSubscription] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busyPlan, setBusyPlan] = useState(null);
 
-    useEffect(() => {
-        fetchPlans();
-        fetchCurrentPlan();
-    }, []);
+  const load = useCallback(async () => {
+    try {
+      const res = await axios.get(`${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/current`, {
+        withCredentials: true,
+      });
+      setSubscription(res.data.subscription || null);
+      setPlans(res.data.availablePlans || []);
+    } catch (error) {
+      logger.error('Failed to load subscription', { error: error.message });
+      toast.error(error.response?.data?.message || 'Failed to load subscription');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    const fetchPlans = async () => {
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Handle return from Stripe checkout / cancel (mock uses /organization/checkout page)
+  useEffect(() => {
+    const checkout = searchParams.get('checkout');
+    const sessionId = searchParams.get('session_id');
+
+    const finishParams = () => {
+      const next = new URLSearchParams(searchParams);
+      ['checkout', 'token', 'session_id', 'portal'].forEach((k) => next.delete(k));
+      setSearchParams(next, { replace: true });
+    };
+
+    const run = async () => {
+      if (checkout === 'paid') {
+        toast.success('Subscription updated after payment');
+        await load();
+        finishParams();
+        return;
+      }
+
+      if (checkout === 'success' && sessionId) {
         try {
-            const response = await axios.get(`${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/plans`);
-            if (response.data.success && response.data.plans) {
-                setPlans(response.data.plans);
-            }
+          setBusyPlan('sync');
+          await axios.get(
+            `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/checkout/session/${sessionId}`,
+            { withCredentials: true }
+          );
+          toast.success('Payment successful — subscription updated');
+          await load();
         } catch (error) {
-            logger.error('Failed to fetch subscription plans', { error: error.message });
-            toast.error('Failed to load subscription plans');
+          toast.error(error.response?.data?.message || 'Could not sync payment');
         } finally {
-            setLoading(false);
+          setBusyPlan(null);
+          finishParams();
         }
+        return;
+      }
+
+      if (checkout === 'cancelled') {
+        toast.info('Checkout cancelled');
+        finishParams();
+      }
+
+      if (searchParams.get('portal') === 'mock') {
+        toast.info('Mock billing portal — manage your plan on this page');
+        finishParams();
+      }
     };
 
-    const fetchCurrentPlan = async () => {
-        try {
-            const response = await axios.get(`${ORGANIZATION_ENDPOINT}/details`);
-            if (response.data.success && response.data.organization) {
-                setCurrentPlan(response.data.organization.subscriptionPlan);
-            }
-        } catch (error) {
-            logger.error('Failed to fetch current plan', { error: error.message });
-        }
-    };
+    if (checkout || searchParams.get('portal')) {
+      run();
+    }
+  }, [searchParams, setSearchParams, load]);
 
-    const handleUpgrade = async (planId) => {
-        if (upgrading) return;
-        
-        try {
-            setUpgrading(true);
-            const response = await axios.put(`${ORGANIZATION_ENDPOINT}/subscription`, {
-                subscriptionPlan: planId
-            });
-            
-            if (response.data.success) {
-                toast.success(`Successfully upgraded to ${planId} plan!`);
-                setCurrentPlan(planId);
-                setSelectedPlan(null);
-                await fetchCurrentPlan();
-            }
-        } catch (error) {
-            const errorMessage = error.response?.data?.message || 'Failed to upgrade plan';
-            toast.error(errorMessage);
-            logger.error('Upgrade error', { error: error.message });
-        } finally {
-            setUpgrading(false);
-        }
-    };
+  const handleSelectPlan = async (planId) => {
+    if (busyPlan) return;
+    const id = String(planId).toLowerCase();
 
-    const getPlanComparison = () => {
-        const planOrder = ['free', 'basic', 'premium', 'enterprise'];
-        return planOrder.map(planId => plans.find(p => p.id === planId)).filter(Boolean);
-    };
-
-    const isCurrentPlan = (planId) => currentPlan === planId;
-    const canUpgrade = (planId) => {
-        const planOrder = ['free', 'basic', 'premium', 'enterprise'];
-        const currentIndex = planOrder.indexOf(currentPlan);
-        const targetIndex = planOrder.indexOf(planId);
-        return targetIndex > currentIndex;
-    };
-    const canDowngrade = (planId) => {
-        const planOrder = ['free', 'basic', 'premium', 'enterprise'];
-        const currentIndex = planOrder.indexOf(currentPlan);
-        const targetIndex = planOrder.indexOf(planId);
-        return targetIndex < currentIndex;
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
-            </div>
-        );
+    if (id === 'free') {
+      if (!window.confirm('Switch to the Free plan? Paid features will be limited.')) return;
+      try {
+        setBusyPlan(id);
+        await axios.post(`${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/switch-free`, {}, { withCredentials: true });
+        toast.success('Switched to Free plan');
+        await load();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Failed to switch plan');
+      } finally {
+        setBusyPlan(null);
+      }
+      return;
     }
 
-    const sortedPlans = getPlanComparison();
+    try {
+      setBusyPlan(id);
+      const res = await axios.post(
+        `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/checkout`,
+        { planId: id },
+        { withCredentials: true }
+      );
+      const checkout = res.data.checkout;
+      if (checkout?.url) {
+        if (checkout.mode === 'mock') {
+          toast.info('Opening development checkout…');
+        }
+        window.location.href = checkout.url;
+        return;
+      }
+      toast.error('No checkout URL returned');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to start checkout');
+      setBusyPlan(null);
+    }
+  };
 
+  const openPortal = async () => {
+    try {
+      setBusyPlan('portal');
+      const res = await axios.post(
+        `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/portal`,
+        {},
+        { withCredentials: true }
+      );
+      const url = res.data.portal?.url;
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+      toast.info(res.data.portal?.message || 'Portal unavailable');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to open billing portal');
+    } finally {
+      setBusyPlan(null);
+    }
+  };
+
+  if (loading) {
     return (
-        <div className="page-shell min-h-screen bg-gray-50">
-            <div className="page-shell-inner hrms-stack">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Subscription Management</h1>
-                    <p className="mt-2 text-gray-600">
-                        Manage your subscription plan and billing information
-                    </p>
-                </div>
-
-                {/* Current Plan Banner */}
-                {currentPlan && (
-                    <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-6 mb-8">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-[var(--color-text)]">Current Plan</h3>
-                                <p className="text-theme-secondary">
-                                    You are currently on the <strong>{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</strong> plan
-                                </p>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <FiCalendar className="w-5 h-5 text-theme-secondary" />
-                                <span className="text-theme-secondary">Active</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Plan Comparison */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    {sortedPlans.map((plan) => {
-                        const isCurrent = isCurrentPlan(plan.id);
-                        const canUp = canUpgrade(plan.id);
-                        const canDown = canDowngrade(plan.id);
-                        
-                        return (
-                            <div
-                                key={plan.id}
-                                className={`relative bg-white rounded-lg shadow-lg border-2 overflow-hidden ${
-                                    isCurrent
-                                        ? 'border-theme-secondary ring-2 ring-blue-200'
-                                        : 'border-gray-200'
-                                }`}
-                            >
-                                {isCurrent && (
-                                    <div className="absolute top-0 left-0 right-0 bg-theme-primary text-white text-center py-1 text-sm font-semibold">
-                                        Current Plan
-                                    </div>
-                                )}
-                                
-                                <div className={`p-6 ${isCurrent ? 'pt-10' : ''}`}>
-                                    <div className="text-center mb-6">
-                                        <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                                        <div className="mb-4">
-                                            <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
-                                            <span className="text-gray-600">/month</span>
-                                        </div>
-                                        <div className="flex items-center justify-center text-sm text-gray-600">
-                                            <FiUsers className="w-4 h-4 mr-1" />
-                                            <span>Up to {plan.maxEmployees} employees</span>
-                                        </div>
-                                    </div>
-
-                                    <ul className="space-y-3 mb-6">
-                                        {plan.features.map((feature, idx) => (
-                                            <li key={idx} className="flex items-start">
-                                                <FiCheck className="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                                                <span className="text-sm text-gray-700">{feature}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-
-                                    <div className="mt-6">
-                                        {isCurrent ? (
-                                            <button
-                                                disabled
-                                                className="w-full px-4 py-2 bg-gray-200 text-gray-600 rounded-md cursor-not-allowed"
-                                            >
-                                                Current Plan
-                                            </button>
-                                        ) : canUp ? (
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedPlan(plan.id);
-                                                    handleUpgrade(plan.id);
-                                                }}
-                                                disabled={upgrading}
-                                                className="w-full px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50 flex items-center justify-center"
-                                            >
-                                                {upgrading && selectedPlan === plan.id ? (
-                                                    <>
-                                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                        </svg>
-                                                        Upgrading...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <FiArrowUp className="mr-2" />
-                                                        Upgrade
-                                                    </>
-                                                )}
-                                            </button>
-                                        ) : canDown ? (
-                                            <button
-                                                onClick={() => {
-                                                    if (window.confirm(`Are you sure you want to downgrade to ${plan.name}?`)) {
-                                                        setSelectedPlan(plan.id);
-                                                        handleUpgrade(plan.id);
-                                                    }
-                                                }}
-                                                disabled={upgrading}
-                                                className="w-full px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50 flex items-center justify-center"
-                                            >
-                                                <FiArrowDown className="mr-2" />
-                                                Downgrade
-                                            </button>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleUpgrade(plan.id)}
-                                                disabled={upgrading}
-                                                className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
-                                            >
-                                                Select Plan
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Billing Information */}
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">Billing Information</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Payment Method
-                            </label>
-                            <div className="flex items-center space-x-2 p-4 border border-gray-300 rounded-md">
-                                <FiCreditCard className="w-5 h-5 text-gray-400" />
-                                <span className="text-gray-600">No payment method on file</span>
-                            </div>
-                            <button className="mt-2 text-sm text-theme-secondary hover:text-theme-secondary">
-                                Add Payment Method
-                            </button>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Billing History
-                            </label>
-                            <div className="p-4 border border-gray-300 rounded-md">
-                                <p className="text-gray-600 text-sm">No billing history available</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-theme-secondary" />
+      </div>
     );
+  }
+
+  const currentPlan = subscription?.subscriptionPlan;
+  const planOrder = ['free', 'basic', 'premium', 'enterprise'];
+  const sortedPlans = planOrder
+    .map((id) => plans.find((p) => p.id === id))
+    .filter(Boolean);
+
+  return (
+    <div className="page-shell min-h-screen bg-gray-50">
+      <div className="page-shell-inner hrms-stack space-y-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Subscription & billing</h1>
+            <p className="mt-2 text-gray-600">
+              View your plan, seats, renewal dates, and upgrade with checkout
+              {subscription?.billingMode === 'mock' ? ' (development / mock mode)' : ''}.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openPortal}
+            disabled={!!busyPlan}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <FiExternalLink /> Manage billing
+          </button>
+        </div>
+
+        {subscription && (
+          <div className="rounded-xl border border-theme-secondary/30 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Current subscription</h2>
+                <p className="mt-1 text-2xl font-bold text-theme-secondary">
+                  {subscription.planName || currentPlan}
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  ${subscription.planPrice ?? 0}/month
+                  {subscription.billingMode === 'mock' && ' · Mock billing'}
+                  {subscription.stripeConfigured && ' · Stripe connected'}
+                </p>
+              </div>
+              <span
+                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusTone(
+                  subscription.subscriptionStatus
+                )}`}
+              >
+                {subscription.subscriptionStatus}
+              </span>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <FiUsers /> Seats
+                </div>
+                <div className="mt-2 text-lg font-semibold text-gray-900">
+                  {subscription.usage?.employees?.current ?? 0} /{' '}
+                  {subscription.maxEmployees || '∞'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <FiCalendar /> Trial ends
+                </div>
+                <div className="mt-2 text-lg font-semibold text-gray-900">
+                  {formatDate(subscription.trialEndDate)}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <FiCalendar /> Period ends
+                </div>
+                <div className="mt-2 text-lg font-semibold text-gray-900">
+                  {formatDate(subscription.subscriptionEndDate)}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <FiCreditCard /> Payment
+                </div>
+                <div className="mt-2 text-lg font-semibold capitalize text-gray-900">
+                  {subscription.paymentMethod || 'none'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {sortedPlans.map((plan) => {
+            const isCurrent = currentPlan === plan.id;
+            const currentIdx = planOrder.indexOf(currentPlan);
+            const targetIdx = planOrder.indexOf(plan.id);
+            const isUpgrade = targetIdx > currentIdx;
+            const isDowngrade = targetIdx < currentIdx;
+
+            return (
+              <div
+                key={plan.id}
+                className={`relative overflow-hidden rounded-lg border-2 bg-white shadow-lg ${
+                  isCurrent ? 'border-theme-secondary ring-2 ring-blue-200' : 'border-gray-200'
+                }`}
+              >
+                {isCurrent && (
+                  <div className="absolute left-0 right-0 top-0 bg-theme-primary py-1 text-center text-sm font-semibold text-white">
+                    Current plan
+                  </div>
+                )}
+                <div className={`p-6 ${isCurrent ? 'pt-10' : ''}`}>
+                  <div className="mb-6 text-center">
+                    <h3 className="mb-2 text-2xl font-bold text-gray-900">{plan.name}</h3>
+                    <div className="mb-4">
+                      <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
+                      <span className="text-gray-600">/month</span>
+                    </div>
+                    <div className="flex items-center justify-center text-sm text-gray-600">
+                      <FiUsers className="mr-1 h-4 w-4" />
+                      <span>Up to {plan.maxEmployees} employees</span>
+                    </div>
+                  </div>
+
+                  <ul className="mb-6 space-y-3">
+                    {(plan.features || []).map((feature) => (
+                      <li key={feature} className="flex items-start">
+                        <FiCheck className="mr-2 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
+                        <span className="text-sm text-gray-700">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-6">
+                    {isCurrent ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full cursor-not-allowed rounded-md bg-gray-200 px-4 py-2 text-gray-600"
+                      >
+                        Current plan
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPlan(plan.id)}
+                        disabled={!!busyPlan}
+                        className={`flex w-full items-center justify-center rounded-md px-4 py-2 text-white disabled:opacity-50 ${
+                          isUpgrade
+                            ? 'bg-theme-primary hover:opacity-90'
+                            : isDowngrade
+                              ? 'bg-amber-600 hover:bg-amber-700'
+                              : 'bg-gray-700 hover:bg-gray-800'
+                        }`}
+                      >
+                        {busyPlan === plan.id ? (
+                          'Please wait…'
+                        ) : plan.id === 'free' ? (
+                          <>
+                            <FiArrowDown className="mr-2" /> Switch to Free
+                          </>
+                        ) : isUpgrade ? (
+                          <>
+                            <FiArrowUp className="mr-2" />{' '}
+                            {plan.requiresCheckout ? 'Upgrade & checkout' : 'Upgrade'}
+                          </>
+                        ) : (
+                          <>
+                            <FiArrowDown className="mr-2" /> Change plan
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">How billing works</h2>
+          <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-gray-600">
+            <li>
+              Paid plans open a <strong>checkout payment page</strong> (like Razorpay/Stripe). Enter test card{' '}
+              <code className="text-xs">4242 4242 4242 4242</code> — no real money is charged in test/mock mode.
+            </li>
+            <li>Free plan never requires payment.</li>
+            <li>
+              For live Stripe Checkout, set <code className="text-xs">STRIPE_SECRET_KEY=sk_test_…</code> and{' '}
+              <code className="text-xs">STRIPE_BILLING_MODE=stripe</code>.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default SubscriptionManagement;
-

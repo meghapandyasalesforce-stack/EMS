@@ -7,7 +7,7 @@ import {
   verifyEmployeeLoginPassword,
   getEmployeeLoginAuthRecord,
 } from './identityService.js';
-import { PLATFORM_ROLES } from '../config/identity.constants.js';
+import { PLATFORM_ROLES, isPlatformOperatorRoles } from '../config/identity.constants.js';
 import { getDashboardRouteForUser } from './dashboardRouteHelper.js';
 import { getCachedTimezoneContext } from './orgContextCache.js';
 import { resolveAuthContext, getDataScope } from './permissionService.js';
@@ -89,6 +89,11 @@ const findUserAndEmployee = async (normalizedEmail, organizationId) => {
     );
   }
   if (linkLookups.length) await Promise.all(linkLookups);
+
+  // Platform operators must use /platform/login — never unified HRMS login
+  if (user && (user.role === 'platform' || isPlatformOperatorRoles(user.roles))) {
+    user = null;
+  }
 
   return { user, employee };
 };

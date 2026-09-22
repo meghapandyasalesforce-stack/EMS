@@ -1,4 +1,6 @@
 import express from "express";
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import { 
     getEmployeePayrollHistory, 
     getPayrollDetails, 
@@ -9,6 +11,8 @@ import {
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.PAYROLL));
 
 // Get employee's payroll history
 router.route("/history").get(isAuthenticated, getEmployeePayrollHistory);

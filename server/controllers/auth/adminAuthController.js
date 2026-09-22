@@ -4,9 +4,9 @@ import logger from "../../helpers/logger.js";
 import sendWelcomeEmail from "../../helpers/emailSender.js";
 import asyncHandler from "../../helpers/asyncHandler.js";
 import { sendSuccess, sendError, sendValidationError, sendInternalError, sendUnauthorized, sendForbidden } from "../../helpers/responseHelper.js";
+import { PLATFORM_ROLES, isPlatformOperatorRoles } from "../../config/identity.constants.js";
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from "../../helpers/authHelpers.js";
 import { getDashboardRouteForUser } from "../../helpers/dashboardRouteHelper.js";
-import { PLATFORM_ROLES } from "../../config/identity.constants.js";
 
 
 /**
@@ -304,6 +304,11 @@ export const loginUser = asyncHandler(async (req, res) => {
     if (!user) {
         logger.warn('Admin login failed: User not found', { requestId, email: normalizedEmail });
         // CODE QUALITY FIX: Standardized error message across all login endpoints
+        return sendUnauthorized(res, 'Invalid email or password');
+    }
+
+    if (user.role === 'platform' || isPlatformOperatorRoles(user.roles)) {
+        logger.warn('Admin login blocked for platform operator', { requestId, email: normalizedEmail });
         return sendUnauthorized(res, 'Invalid email or password');
     }
 

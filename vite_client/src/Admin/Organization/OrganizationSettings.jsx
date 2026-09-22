@@ -355,21 +355,25 @@ const OrganizationSettings = () => {
                         <FiCreditCard className="mr-2" />
                         Subscription Management
                     </h2>
-                    <button
-                        onClick={handleSaveSubscription}
-                        disabled={isSaving}
-                        className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                    <a
+                        href="/organization/subscription"
+                        className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90"
                     >
-                        <FiSave className="mr-2" />
-                        {isSaving ? 'Saving...' : 'Update Plan'}
-                    </button>
+                        <FiCreditCard className="mr-2" />
+                        Open billing & checkout
+                    </a>
                 </div>
 
                 <div className="space-y-6">
+                    <p className="text-sm text-gray-600">
+                        Current plan: <strong className="capitalize">{subscription.subscriptionPlan}</strong>
+                        {' · '}Up to {subscription.maxEmployees} employees. Use Subscription &amp; billing for upgrades,
+                        dates, and payment (includes development mock checkout).
+                    </p>
                     {/* Subscription Plan */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Subscription Plan
+                            Quick plan (Free / mock only)
                         </label>
                         <select
                             name="subscriptionPlan"
@@ -383,7 +387,7 @@ const OrganizationSettings = () => {
                             <option value="enterprise">Enterprise (1000 employees)</option>
                         </select>
                         <p className="text-sm text-gray-500 mt-1">
-                            Select your organization's subscription plan
+                            Prefer the Subscription page for paid checkout. Direct save works in mock mode / Free.
                         </p>
                     </div>
 
@@ -400,10 +404,17 @@ const OrganizationSettings = () => {
                             min="1"
                             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                         />
-                        <p className="text-sm text-gray-500 mt-1">
-                            Maximum number of employees allowed in your organization
-                        </p>
                     </div>
+
+                    <button
+                        type="button"
+                        onClick={handleSaveSubscription}
+                        disabled={isSaving}
+                        className="flex items-center px-4 py-2 border border-gray-300 bg-white text-gray-800 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        <FiSave className="mr-2" />
+                        {isSaving ? 'Saving…' : 'Save plan (mock / free)'}
+                    </button>
 
                     {/* Plan Features */}
                     <div className="bg-gray-50 p-4 rounded-lg">
@@ -415,7 +426,6 @@ const OrganizationSettings = () => {
                                 {subscription.subscriptionPlan === 'enterprise' && 'All features + Dedicated support'}
                             </li>
                             <li>• Up to {subscription.maxEmployees} employees</li>
-                            <li>• Full access to all modules</li>
                         </ul>
                     </div>
                 </div>

@@ -19,13 +19,16 @@ export default async function csrfProtection(req, res, next) {
         '/api/v1/employee/auth/login',
         '/api/v1/admin/auth/login',
         '/api/v1/both/auth/login', // Unified login (must work even when stale session cookies exist)
+        '/api/v1/platform/auth/login',
         '/api/v1/employee/auth/register',
         '/api/v1/admin/auth/register',
         '/api/v1/organization/auth/register',
         '/api/v1/organization/auth/login',
         '/api/v1/employee/auth/refresh-token', // Refresh token endpoint (no CSRF needed)
         '/api/v1/admin/auth/refresh-token', // Refresh token endpoint (no CSRF needed)
+        '/api/v1/platform/auth/refresh-token',
         '/api/v1/both/password', // forgot/reset password endpoints under this prefix
+        '/api/v1/webhooks/stripe', // Stripe signed webhooks
     ].some((path) => normalizedUrl.startsWith(path));
     
     if (allowlisted) {

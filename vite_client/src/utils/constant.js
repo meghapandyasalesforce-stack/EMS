@@ -56,7 +56,7 @@ export const BOTH_DOCUMENT_TEMPLATES_ENDPOINT = `${BASE_URL}/both/document-templ
 /** Self-service document generation (preview, generate PDF, download) */
 export const BOTH_SELF_SERVICE_DOCUMENTS_ENDPOINT = `${BASE_URL}/both/self-service-documents`
 
-
-
-
+//==================Platform (SaaS control panel)===================//
+export const PLATFORM_AUTH_ENDPOINT = `${BASE_URL}/platform/auth`
+export const PLATFORM_ENDPOINT = `${BASE_URL}/platform`
 

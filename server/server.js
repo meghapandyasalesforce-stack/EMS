@@ -124,7 +124,12 @@ app.use(express.json({
   limit: "10mb",
   verify: (req, _res, buf) => {
     // Preserve raw body for HMAC webhook verification (DocuSign Connect, etc.)
-    if (req.originalUrl?.includes('/webhooks/esign/') || req.url?.includes('/webhooks/esign/')) {
+    if (
+      req.originalUrl?.includes('/webhooks/esign/') ||
+      req.url?.includes('/webhooks/esign/') ||
+      req.originalUrl?.includes('/webhooks/stripe') ||
+      req.url?.includes('/webhooks/stripe')
+    ) {
       req.rawBody = Buffer.from(buf);
     }
   },
@@ -285,6 +290,12 @@ const startServer = async () => {
     if (process.env.MONGO_URI) {
       await connectDB();
       logger.info("MongoDB connected successfully");
+      try {
+        const { ensurePlansSeeded } = await import('./helpers/planCatalog.js');
+        await ensurePlansSeeded();
+      } catch (planSeedError) {
+        logger.warn('Subscription plan seed/cache skipped', { error: planSeedError.message });
+      }
       try {
         const Employee = (await import('./models/employee.model.js')).default;
         const { dropGlobalEmployeeIdUniqueIndex } = await import('./helpers/employeeIdHelper.js');

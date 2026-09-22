@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createSalaryStructure,
     getAllSalaryStructures,
@@ -13,6 +15,8 @@ import {
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.PAYROLL));
 
 // Static paths must come before /:id to avoid being swallowed by the param route
 router.route('/apply')

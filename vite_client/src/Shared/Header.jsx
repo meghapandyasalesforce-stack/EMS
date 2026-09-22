@@ -126,15 +126,18 @@ const Header = () => {
         [user, permissionFlags, roleBuckets, availablePortals, activePortal, location.pathname]
     );
 
+    const saasFeatures = useSelector((state) => state.auth.saasFeatures) || {};
+
     const navItems = useMemo(() => {
         return getNavigationItems(
             user,
             employee,
             permissions,
             permissionFlags,
-            effectivePortal
+            effectivePortal,
+            saasFeatures
         );
-    }, [user, employee, permissions, permissionFlags, effectivePortal]);
+    }, [user, employee, permissions, permissionFlags, effectivePortal, saasFeatures]);
 
     const handleLogout = async () => {
         try {

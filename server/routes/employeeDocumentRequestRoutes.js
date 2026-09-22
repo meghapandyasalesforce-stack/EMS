@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../constants/saasFeatures.js';
 import multer from 'multer';
 import {
   createEmployeeDocumentRequest,
@@ -19,6 +21,8 @@ const upload = multer({
 });
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.DOCUMENTS));
 
 router.post('/request', createEmployeeDocumentRequest);
 router.get('/my', listMyEmployeeDocumentRequests);

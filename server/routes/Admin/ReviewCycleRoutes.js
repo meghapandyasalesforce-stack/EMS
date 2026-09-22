@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createReviewCycle,
     getReviewCycles,
@@ -13,6 +15,8 @@ import {
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.PERFORMANCE));
 
 // All routes require admin authentication
 router.post('/', isAdminAuthenticated, createReviewCycle);

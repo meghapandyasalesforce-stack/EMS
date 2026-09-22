@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createJobPosting,
     getJobPostings,
@@ -74,8 +76,6 @@ import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROr
 import { attachAuthContext } from '../../middlewares/requirePermission.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 import { blockFailedScreeningActions } from '../../middlewares/blockFailedScreening.js';
-import { requireFeature } from '../../middlewares/tenantMiddleware.js';
-import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 
 const router = express.Router();
 

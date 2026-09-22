@@ -5,6 +5,7 @@ import { generateToken } from "../../helpers/utils.js";
 import { sendSuccess, sendError, sendUnauthorized } from "../../helpers/responseHelper.js";
 import logger from "../../helpers/logger.js";
 import { verifyPasswordNotChanged } from "../../middlewares/authHelpers.js";
+import { isPlatformOperatorRoles } from "../../config/identity.constants.js";
 
 /**
  * Refresh access token using refresh token
@@ -14,23 +15,23 @@ import { verifyPasswordNotChanged } from "../../middlewares/authHelpers.js";
 export const refreshToken = async (req, res) => {
     try {
         // Get refresh token from cookie or Authorization header
-        let refreshToken = req.cookies?.refreshToken;
+        let refreshTokenValue = req.cookies?.refreshToken;
         
-        if (!refreshToken && req.headers.authorization) {
+        if (!refreshTokenValue && req.headers.authorization) {
             const authHeader = req.headers.authorization;
             if (authHeader.startsWith('Bearer ')) {
-                refreshToken = authHeader.substring(7);
+                refreshTokenValue = authHeader.substring(7);
             }
         }
 
-        if (!refreshToken) {
+        if (!refreshTokenValue) {
             return sendUnauthorized(res, 'Refresh token is required');
         }
 
         // Verify refresh token
         let decoded;
         try {
-            decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+            decoded = jwt.verify(refreshTokenValue, process.env.JWT_SECRET);
             
             // Ensure this is a refresh token
             if (decoded.type !== 'refresh') {
@@ -59,16 +60,32 @@ export const refreshToken = async (req, res) => {
             return sendUnauthorized(res, 'User not found');
         }
 
-        const extraClaims = {};
-        if (decoded.employeeProfileId) {
-            extraClaims.employeeProfileId = decoded.employeeProfileId;
-        } else if (userType === 'admin' && user.employeeProfileId) {
-            extraClaims.employeeProfileId = String(user.employeeProfileId);
+        const isPlatformSession =
+            decoded.role === 'platform' ||
+            user.role === 'platform' ||
+            isPlatformOperatorRoles(user.roles);
+
+        if (isPlatformSession) {
+            if (!isPlatformOperatorRoles(user.roles) || user.role !== 'platform') {
+                return sendUnauthorized(res, 'Platform operator access required');
+            }
+            userType = 'platform';
         }
-        if (decoded.platformRoles) {
-            extraClaims.platformRoles = decoded.platformRoles;
-        } else if (Array.isArray(user.roles) && user.roles.length) {
-            extraClaims.platformRoles = user.roles;
+
+        const extraClaims = {};
+        if (!isPlatformSession) {
+            if (decoded.employeeProfileId) {
+                extraClaims.employeeProfileId = decoded.employeeProfileId;
+            } else if (userType === 'admin' && user.employeeProfileId) {
+                extraClaims.employeeProfileId = String(user.employeeProfileId);
+            }
+            if (decoded.platformRoles) {
+                extraClaims.platformRoles = decoded.platformRoles;
+            } else if (Array.isArray(user.roles) && user.roles.length) {
+                extraClaims.platformRoles = user.roles;
+            }
+        } else {
+            extraClaims.platformRoles = ['platform_operator'];
         }
 
         // Check if user is active
@@ -82,9 +99,11 @@ export const refreshToken = async (req, res) => {
             return sendUnauthorized(res, 'Session expired due to password change. Please login again.');
         }
 
-        // Generate new access token with organizationId
-        const role = decoded.role || userType;
-        const organizationId = decoded.organizationId || user.organizationId;
+        // Generate new access token with organizationId (null for platform operators)
+        const role = isPlatformSession ? 'platform' : (decoded.role || userType);
+        const organizationId = isPlatformSession
+            ? null
+            : (decoded.organizationId || user.organizationId);
         const passwordChangedAt = user.passwordChangedAt || user.createdAt;
         const tokenResult = generateToken(
             user._id,
@@ -113,4 +132,3 @@ export const refreshToken = async (req, res) => {
         return sendError(res, 'Failed to refresh token', 500, 'REFRESH_ERROR');
     }
 };
-

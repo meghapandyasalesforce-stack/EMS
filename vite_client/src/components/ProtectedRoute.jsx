@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import LoadingSpinner from './LoadingSpinner';
 import { isManager, isHR } from '../utils/managerHelper';
@@ -7,6 +7,7 @@ import { isProjectManager } from '../utils/projectManagerHelper';
 import { isExecutive } from '../utils/navigationConfig';
 import { getDefaultDashboardRoute } from '../utils/dashboardRedirect';
 import { canAccess } from '../utils/permissions';
+import { featureKeyForPath, isSaasFeatureEnabled } from '../constants/saasFeatures';
 
 /**
  * Protects routes by RBAC permissions (preferred) or legacy role strings.
@@ -17,11 +18,14 @@ const ProtectedRoute = ({
   requiredPermissions = [],
   redirectTo,
   orgOwnerOnly = false,
+  requiredFeature,
 }) => {
+  const location = useLocation();
   const user = useSelector((state) => state.auth.user);
   const authChecked = useSelector((state) => state.auth.authChecked);
   const permissions = useSelector((state) => state.auth.permissions) || [];
   const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+  const saasFeatures = useSelector((state) => state.auth.saasFeatures) || {};
   const employee = useSelector((state) => state.employeeDetails.employee);
 
   if (!authChecked) {
@@ -98,6 +102,16 @@ const ProtectedRoute = ({
         ? redirectTo
         : getDefaultDashboardRoute(user, employee);
     return <Navigate to={targetRedirect} replace />;
+  }
+
+  const featureKey = requiredFeature || featureKeyForPath(location.pathname);
+  if (!isSaasFeatureEnabled(saasFeatures, featureKey)) {
+    return (
+      <Navigate
+        to={redirectTo || getDefaultDashboardRoute(user, employee)}
+        replace
+      />
+    );
   }
 
   return <>{children}</>;

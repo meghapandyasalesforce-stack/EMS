@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireFeature } from '../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../constants/saasFeatures.js';
 import multer from 'multer';
 import {
   createTemplate,
@@ -27,6 +29,8 @@ const stampUpload = multer({
 });
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.DOCUMENTS));
 
 // ─── Admin/HR: Template Management ───────────────────────────────────────────
 router.post('/', createTemplate);
