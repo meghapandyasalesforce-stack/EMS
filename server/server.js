@@ -118,7 +118,12 @@ app.use(express.json({
   limit: "10mb",
   verify: (req, _res, buf) => {
     // Preserve raw body for HMAC webhook verification (DocuSign Connect, etc.)
-    if (req.originalUrl?.includes('/webhooks/esign/') || req.url?.includes('/webhooks/esign/')) {
+    if (
+      req.originalUrl?.includes('/webhooks/esign/') ||
+      req.url?.includes('/webhooks/esign/') ||
+      req.originalUrl?.includes('/webhooks/stripe') ||
+      req.url?.includes('/webhooks/stripe')
+    ) {
       req.rawBody = Buffer.from(buf);
     }
   },

@@ -286,6 +286,7 @@ export const organizationRoutes = [
   { path: '/organization/structure', component: lazy(() => import('../Admin/Organization/OrgStructurePage')), message: 'Loading organization structure...', allowedRoles: ['admin', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.orgSettings },
   { path: '/organization/onboarding', component: lazy(() => import('../Admin/Organization/OrganizationOnboarding')), message: 'Loading onboarding...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/subscription', component: lazy(() => import('../Admin/Organization/SubscriptionManagement')), message: 'Loading subscription...', allowedRoles: ['admin', 'executive'] },
+  { path: '/organization/checkout', component: lazy(() => import('../Admin/Organization/CheckoutPaymentPage')), message: 'Loading checkout...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/verification', component: lazy(() => import('../Admin/Organization/OrganizationVerification')), message: 'Loading verification...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/analytics', component: lazy(() => import('../Admin/Organization/OrganizationAnalytics')), message: 'Loading analytics...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/referrals', component: lazy(() => import('../Admin/Organization/ReferralProgram')), message: 'Loading referrals...', allowedRoles: ['admin', 'executive'] },

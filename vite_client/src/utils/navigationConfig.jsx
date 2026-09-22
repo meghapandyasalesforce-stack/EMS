@@ -306,6 +306,7 @@ const getAdminNavigation = () => [
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/salary-structure", name: "Salary structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
     { path: "/admin/document-management", name: "Document management", icon: <FaFileAlt /> },
+    { path: "/organization/subscription", name: "Subscription", icon: <FaCreditCard />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/admin-settings", name: "Settings", icon: <FaCog />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
 ];
 
@@ -325,6 +326,7 @@ const getExecutiveNavigation = (position) => {
         { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
         { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
         { path: "/admin/reports", name: "Reports & analytics", icon: <FaChartBar /> },
+        { path: "/organization/subscription", name: "Subscription", icon: <FaCreditCard /> },
         { path: "/admin-settings", name: "Settings", icon: <FaCog /> }
     ];
 

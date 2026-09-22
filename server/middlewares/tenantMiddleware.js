@@ -11,7 +11,43 @@ import {
     assertSubscriptionActive,
     TenantError,
 } from '../services/tenantService.js';
+import {
+    extractToken,
+    verifyToken,
+    handleAuthError,
+    hydrateRequestIdentity,
+} from './authHelpers.js';
+import { resolveAuthContext } from '../helpers/permissionService.js';
 import logger from '../helpers/logger.js';
+
+/**
+ * Ensure req.organizationId / identity exist so requireFeature can run
+ * before route-level auth middleware (e.g. router.use(requireFeature(...))).
+ */
+const ensureOrganizationContextForFeatureGate = async (req) => {
+    if (getOrganizationId(req)) {
+        req.organizationId = req.organizationId || getOrganizationId(req);
+        return;
+    }
+
+    let decoded = req.decoded;
+    if (!decoded) {
+        const token = extractToken(req);
+        if (!token) return;
+        decoded = verifyToken(token);
+        req.decoded = decoded;
+    }
+
+    if (decoded.organizationId) {
+        req.organizationId = decoded.organizationId;
+        return;
+    }
+
+    if (!req.authContext) {
+        req.authContext = await resolveAuthContext(decoded, req);
+    }
+    await hydrateRequestIdentity(req, decoded, req.authContext);
+};
 
 /** Paths that never require tenant context */
 const TENANT_EXEMPT_PREFIXES = [
@@ -21,6 +57,7 @@ const TENANT_EXEMPT_PREFIXES = [
     '/api/v1/both/auth',
     '/api/v1/admin/auth',
     '/api/v1/platform/',
+    '/api/v1/webhooks/',
     '/api/v1/employee/auth/login',
     '/api/v1/employee/auth/refresh-token',
     '/api/push',
@@ -112,6 +149,11 @@ export const requireFeature = (featureKey) => async (req, res, next) => {
             return next();
         }
         if (!req.tenant) {
+            try {
+                await ensureOrganizationContextForFeatureGate(req);
+            } catch (authError) {
+                return handleAuthError(authError, res);
+            }
             await attachTenantToRequest(req);
         }
         if (!req.tenant) {

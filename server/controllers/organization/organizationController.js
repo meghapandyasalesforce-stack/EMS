@@ -504,6 +504,8 @@ export const updateOrganizationSettings = async (req, res) => {
 
 /**
  * Update subscription plan
+ * Paid plans should use Stripe Checkout (/organization/subscription/checkout).
+ * Direct PUT remains for Free plan switches and mock-mode convenience.
  */
 export const updateSubscriptionPlan = async (req, res) => {
     try {
@@ -516,42 +518,49 @@ export const updateSubscriptionPlan = async (req, res) => {
             return sendError(res, 'Organization not found', 404);
         }
 
-        // Validate subscription plan
         const validPlans = ['free', 'basic', 'premium', 'enterprise'];
         if (subscriptionPlan && !validPlans.includes(subscriptionPlan)) {
             return sendError(res, 'Invalid subscription plan', 400);
         }
 
-        // Update subscription plan
-        if (subscriptionPlan) {
-            organization.subscriptionPlan = subscriptionPlan;
+        const planId = subscriptionPlan ? String(subscriptionPlan).toLowerCase() : null;
+        const billingMode = (await import('../../services/stripeBillingService.js')).getStripeBillingMode();
+        const { isPaidPlan, applyPlanToOrganization } = await import('../../services/stripeBillingService.js');
 
-            // Set employee limits based on plan
-            const planLimits = {
-                free: 10,
-                basic: 50,
-                premium: 200,
-                enterprise: 1000
-            };
-            organization.maxEmployees = maxEmployees || planLimits[subscriptionPlan] || organization.maxEmployees;
+        if (planId && isPaidPlan(planId) && billingMode === 'stripe') {
+            return sendError(
+                res,
+                'Paid plan changes require Checkout. Use POST /organization/subscription/checkout.',
+                400,
+                'CHECKOUT_REQUIRED'
+            );
         }
 
-        if (maxEmployees !== undefined && subscriptionPlan) {
+        if (planId) {
+            applyPlanToOrganization(organization, planId, {
+                maxEmployees: maxEmployees || undefined,
+                subscriptionStatus: planId === 'free' ? organization.subscriptionStatus || 'active' : 'active',
+                isTrialActive: planId === 'free' ? organization.isTrialActive : false,
+                clearTrial: planId !== 'free',
+                paymentMethod: planId === 'free' ? organization.paymentMethod || 'none' : 'stripe',
+            });
+        } else if (maxEmployees !== undefined) {
             organization.maxEmployees = maxEmployees;
         }
 
         await organization.save();
 
-        logger.info('Subscription plan updated', { 
+        logger.info('Subscription plan updated', {
             organizationId: organization._id,
-            plan: organization.subscriptionPlan
+            plan: organization.subscriptionPlan,
         });
 
         return sendSuccess(res, {
             organization: {
                 subscriptionPlan: organization.subscriptionPlan,
-                maxEmployees: organization.maxEmployees
-            }
+                maxEmployees: organization.maxEmployees,
+                subscriptionStatus: organization.subscriptionStatus,
+            },
         }, 'Subscription plan updated successfully');
     } catch (error) {
         logger.error('Error updating subscription plan', { error: error.message });
