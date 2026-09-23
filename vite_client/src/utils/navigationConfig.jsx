@@ -427,7 +427,6 @@ const HR_NAV_ITEMS = [
     { path: "/attendance-regularization", name: "Regularization/WFH", icon: <FaClock /> },
     // { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/admin/pending-approvals", name: "Pending approvals", icon: <FaClock /> },
-    { path: "/one-on-one", name: "One-on-one", icon: <FaUserCheck /> },
     // { path: "/attendance-regularization", name: "Regularization & WFH", icon: <FaClock /> },
     // { path: "/my-attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },

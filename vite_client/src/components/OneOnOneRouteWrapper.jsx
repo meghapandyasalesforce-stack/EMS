@@ -3,25 +3,19 @@ import { useSelector } from 'react-redux';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 
-const OneOnOneMeetingHub = React.lazy(() => import('./OneOnOne/OneOnOneMeetingHub'));
+// Module-level lazy — creating React.lazy inside render remounts Suspense forever.
+const ScheduleComponent = React.lazy(() => import('../Manager/OneOnOne/OneOnOnePage'));
 
 /**
- * Unified one-on-one experience for Employee, Manager, HR, and Admin.
- * Scheduling controls are gated inside the hub based on role.
+ * Organizer / sender page at /one-on-one.
+ * Any authenticated user with a session can schedule 1:1s.
  */
 const OneOnOneRouteWrapper = () => {
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const [searchParams] = useSearchParams();
 
-    React.useEffect(() => {
-        const timer = setTimeout(() => setIsLoading(false), 50);
-        return () => clearTimeout(timer);
-    }, []);
-
-    if (isLoading) {
-        return <LoadingSpinner message="Loading..." />;
-    }
+    const meetingId = searchParams.get('meetingId') || '';
 
     if (!user && !employee) {
         return <Navigate to="/login" replace />;
@@ -29,7 +23,7 @@ const OneOnOneRouteWrapper = () => {
 
     return (
         <Suspense fallback={<LoadingSpinner message="Loading one-on-one meetings..." />}>
-            <OneOnOneMeetingHub />
+            <ScheduleComponent focusMeetingId={meetingId} />
         </Suspense>
     );
 };

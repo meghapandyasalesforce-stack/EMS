@@ -1,16 +1,60 @@
 import mongoose from "mongoose";
 
-const MEETING_STATUSES = [
-    'Pending',
-    'Accepted',
-    'Declined',
-    'Reschedule Requested',
-    'Rescheduled',
-    'Scheduled', // legacy — treat as Accepted/Pending for filters
-    'Completed',
-    'Cancelled',
-    'No Show'
-];
+const statusHistorySchema = new mongoose.Schema({
+    status: String,
+    action: String,
+    actorId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    },
+    note: String,
+    at: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: false });
+
+const meetingNoteSchema = new mongoose.Schema({
+    author: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+        required: true
+    },
+    content: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: true });
+
+const rescheduleProposalSchema = new mongoose.Schema({
+    proposedDate: Date,
+    proposedTime: String,
+    reason: String,
+    requestedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    },
+    requestedByRole: {
+        type: String,
+        enum: ['Organizer', 'Invitee']
+    },
+    status: {
+        type: String,
+        enum: ['none', 'pending', 'accepted', 'rejected'],
+        default: 'none'
+    },
+    respondedAt: Date,
+    responseNote: String
+}, { _id: false });
 
 const oneOnOneSchema = new mongoose.Schema({
     organizationId: {
@@ -19,24 +63,19 @@ const oneOnOneSchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    /** Organizer (typically a manager). */
+    // Organizer (manager / HR / admin who scheduled)
     managerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',
         required: true,
         index: true
     },
-    /** Invitee (employee or another manager). */
+    // Invitee
     employeeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',
         required: true,
         index: true
-    },
-    meetingKind: {
-        type: String,
-        enum: ['manager_employee', 'manager_manager'],
-        default: 'manager_employee'
     },
     scheduledDate: {
         type: Date,
@@ -51,8 +90,33 @@ const oneOnOneSchema = new mongoose.Schema({
     meetingLink: String,
     status: {
         type: String,
-        enum: MEETING_STATUSES,
-        default: 'Pending'
+        enum: [
+            'Pending Response',
+            'Scheduled',
+            'Completed',
+            'Cancelled',
+            'Declined',
+            'Rescheduled',
+            'No Show'
+        ],
+        default: 'Pending Response'
+    },
+    inviteeResponse: {
+        status: {
+            type: String,
+            enum: ['pending', 'accepted', 'declined'],
+            default: 'pending'
+        },
+        respondedAt: Date,
+        reason: String
+    },
+    rescheduleProposal: {
+        type: rescheduleProposalSchema,
+        default: () => ({ status: 'none' })
+    },
+    statusHistory: {
+        type: [statusHistorySchema],
+        default: []
     },
     agenda: [{
         topic: String,
@@ -62,50 +126,11 @@ const oneOnOneSchema = new mongoose.Schema({
             default: false
         }
     }],
-    /** Legacy single-field notes (kept for backward compatibility). */
     managerNotes: String,
     employeeNotes: String,
-    /** Shared notes visible to both participants. */
-    meetingNotes: [{
-        content: {
-            type: String,
-            required: true,
-            trim: true
-        },
-        authorId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Employee',
-            required: true
-        },
-        authorName: String,
-        createdAt: {
-            type: Date,
-            default: Date.now
-        },
-        updatedAt: Date
-    }],
-    response: {
-        respondedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Employee'
-        },
-        respondedAt: Date,
-        note: String
-    },
-    rescheduleProposal: {
-        proposedDate: Date,
-        proposedTime: String,
-        proposedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Employee'
-        },
-        proposedAt: Date,
-        note: String,
-        status: {
-            type: String,
-            enum: ['pending', 'accepted', 'rejected'],
-            default: undefined
-        }
+    meetingNotes: {
+        type: [meetingNoteSchema],
+        default: []
     },
     actionItems: [{
         item: String,
@@ -153,37 +178,14 @@ const oneOnOneSchema = new mongoose.Schema({
             type: String,
             enum: ['Email', 'Notification', 'SMS']
         }
-    }],
-    cancelledBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Employee'
-    },
-    cancelledAt: Date,
-    cancelReason: String,
-    completedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Employee'
-    },
-    completedAt: Date,
-    /** Stable key so calendar overlays stay de-duplicated across updates. */
-    calendarEventKey: {
-        type: String,
-        index: true
-    }
+    }]
 }, {
     timestamps: true
 });
 
+// Indexes
 oneOnOneSchema.index({ organizationId: 1, managerId: 1, scheduledDate: 1 });
 oneOnOneSchema.index({ organizationId: 1, employeeId: 1, scheduledDate: 1 });
 oneOnOneSchema.index({ organizationId: 1, status: 1 });
 
-oneOnOneSchema.pre('save', function (next) {
-    if (!this.calendarEventKey) {
-        this.calendarEventKey = `one-on-one-${this._id}`;
-    }
-    next();
-});
-
-export const ONE_ON_ONE_STATUSES = MEETING_STATUSES;
 export const OneOnOne = mongoose.model('OneOnOne', oneOnOneSchema);
