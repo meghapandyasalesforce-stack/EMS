@@ -481,10 +481,14 @@
 
 .org-chart-page .chart-layout {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: 1fr;
   gap: 0.625rem;
   flex: 1;
   min-height: min(62vh, 640px);
+}
+
+.org-chart-page .chart-layout:has(.employee-panel) {
+  grid-template-columns: 1fr 280px;
 }
 
 @media (max-width: 960px) {
@@ -1049,9 +1053,8 @@
 }
 
 @media (min-width: 961px) {
-  /* Higher specificity than .icon-button { display: inline-flex } */
   .org-chart-page .panel-topline .mobile-close {
-    display: none;
+    display: inline-flex;
   }
 }
 
