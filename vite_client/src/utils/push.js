@@ -220,9 +220,10 @@ export async function subscribeUser() {
     throw new Error('Service worker is not active or available in this browser');
   }
 
-  // Mobile devices often keep a dead FCM endpoint — force a fresh one when enabling
+  // Always create a fresh endpoint on explicit Enable so a stale browser
+  // subscription cannot leave the UI "on" while the server cannot deliver.
   const subscription = await ensurePushSubscription(registration, keyData.publicKey, {
-    forceNew: isLikelyMobileDevice(),
+    forceNew: true,
   });
   await saveSubscriptionToServer(subscription);
 
@@ -232,6 +233,9 @@ export async function subscribeUser() {
 /**
  * If permission is already granted, re-sync this device's subscription with the server.
  * Safe to call on every login / page load.
+ * Does not recreate a working endpoint (avoids interrupting delivery).
+ * If the browser still has a local subscription but the server does not (e.g. cleaned
+ * after 410 Gone), recreate once so the UI cannot show "enabled" with no delivery.
  */
 export async function syncPushSubscriptionIfGranted() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -252,7 +256,27 @@ export async function syncPushSubscriptionIfGranted() {
       return null;
     }
 
-    const subscription = await ensurePushSubscription(registration, keyData.publicKey);
+    const existing = await registration.pushManager.getSubscription();
+    if (!existing) {
+      return null;
+    }
+
+    let endpointOnServer = false;
+    try {
+      const { data: status } = await axios.get(
+        `${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscription-status`
+      );
+      const endpoints = (status?.subscriptions || []).map((s) => s.endpoint).filter(Boolean);
+      endpointOnServer = endpoints.includes(existing.endpoint);
+    } catch {
+      // If status check fails, keep existing behavior: re-save local sub (do not drop push).
+      endpointOnServer = true;
+    }
+
+    const subscription = endpointOnServer
+      ? await ensurePushSubscription(registration, keyData.publicKey)
+      : await ensurePushSubscription(registration, keyData.publicKey, { forceNew: true });
+
     if (!subscription) {
       return null;
     }

@@ -8,7 +8,6 @@ import {
   syncPushSubscriptionIfGranted,
   getServiceWorkerRegistration,
   getMobilePushGuidance,
-  isLikelyMobileDevice,
 } from '../utils/push';
 
 /**
@@ -78,8 +77,9 @@ export const usePushNotification = () => {
 
       let sub;
       try {
+        // Explicit Enable: always refresh endpoint (safe — user opted in again)
         sub = await ensurePushSubscription(registration, vapidPublicKey, {
-          forceNew: isLikelyMobileDevice(),
+          forceNew: true,
         });
       } catch (subscribeError) {
         logger.error('Failed to subscribe to push', subscribeError);

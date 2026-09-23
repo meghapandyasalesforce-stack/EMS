@@ -236,6 +236,7 @@ export const getAnnouncementReceipts = async (req, res) => {
       .lean();
 
     const sentAt = announcement.createdAt ? new Date(announcement.createdAt) : null;
+    const senderId = announcement.sender ? String(announcement.sender) : null;
 
     const receiptById = new Map();
     for (const receipt of announcement.readReceipts || []) {
@@ -256,6 +257,10 @@ export const getAnnouncementReceipts = async (req, res) => {
       }
       const empId = String(emp._id);
       const userId = emp.userId ? String(emp.userId) : null;
+      // Sender is not an audience member for seen / not-seen tracking
+      if (senderId && (empId === senderId || (userId && userId === senderId))) {
+        continue;
+      }
       const receipt = receiptById.get(empId) || (userId ? receiptById.get(userId) : null);
       const person = {
         _id: emp._id,
