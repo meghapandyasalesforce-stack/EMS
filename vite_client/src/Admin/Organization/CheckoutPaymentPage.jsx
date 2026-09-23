@@ -53,7 +53,17 @@ const CheckoutPaymentPage = () => {
 
   const amountLabel = useMemo(() => {
     if (!preview) return '';
-    return `$${Number(preview.amount || 0).toFixed(2)} ${preview.currency || 'USD'}`;
+    const currency = preview.currency || 'INR';
+    const amount = Number(preview.amount || 0);
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch {
+      return `${currency} ${amount.toFixed(2)}`;
+    }
   }, [preview]);
 
   const fillTestCard = () => {
@@ -73,7 +83,7 @@ const CheckoutPaymentPage = () => {
 
     setPaying(true);
     setStep('processing');
-    // Simulate gateway processing (like Razorpay/Stripe spinner)
+    // Simulate gateway processing spinner
     await new Promise((r) => setTimeout(r, 1400));
 
     try {

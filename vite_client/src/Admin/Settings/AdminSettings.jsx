@@ -10,6 +10,7 @@ import LeavePolicyManagement from '../../HR/Leave/LeavePolicyManagement';
 import ThemeSettings from './ThemeSettings';
 import PayrollSettings from './PayrollSettings';
 import DocumentSettings from './DocumentSettings';
+import ChangePasswordForm from '../../components/ChangePasswordForm';
 import { toast } from 'react-toastify';
 import {
     fetchOrganizationProfile,
@@ -163,13 +164,16 @@ const AdminSettings = () => {
 const SecuritySettings = () => (
     <div className="p-4 sm:p-5 md:p-6">
         <h2 className="mb-4 text-xl font-bold text-gray-800 sm:mb-6 sm:text-2xl">Security Settings</h2>
-        <div className="space-y-4">
+        <div className="space-y-6">
+            <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
+                <ChangePasswordForm />
+            </div>
             <div className="rounded-lg bg-gray-50 p-4">
                 <h3 className="mb-2 font-medium">Password Policy</h3>
-                <p className="text-sm text-gray-600">Configure password requirements for all users</p>
-                <button type="button" className="mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
-                    Configure
-                </button>
+                <p className="text-sm text-gray-600">
+                    Organization-wide password requirements (uppercase, number, special character, min 8 characters)
+                    are enforced when you change your password.
+                </p>
             </div>
         </div>
     </div>

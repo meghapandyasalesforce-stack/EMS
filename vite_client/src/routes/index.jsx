@@ -217,7 +217,8 @@ export const profileDetailRoutes = [
   { path: '/professional-experience', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/family-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/job-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
-  { path: '/financial-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] }
+  { path: '/financial-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
+  { path: '/profile-security', component: ProfileDetailsPage, message: 'Loading profile security...', allowedRoles: [] },
 ];
 
 export const renderProfileRoutes = () => {
@@ -229,6 +230,7 @@ export const renderProfileRoutes = () => {
     '/family-details',
     '/job-details',
     '/financial-details',
+    '/profile-security',
   ];
 
   return paths.map((path) => (

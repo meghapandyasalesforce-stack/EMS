@@ -268,8 +268,26 @@ const organizationSchema = new mongoose.Schema({
     // Payment and billing
     paymentMethod: {
         type: String,
-        enum: ['none', 'stripe', 'paypal', 'bank_transfer']
+        enum: ['none', 'razorpay', 'stripe', 'paypal', 'bank_transfer'],
+        default: 'none',
     },
+    razorpayCustomerId: {
+        type: String,
+        sparse: true,
+    },
+    razorpaySubscriptionId: {
+        type: String,
+        sparse: true,
+    },
+    razorpayOrderId: {
+        type: String,
+        sparse: true,
+    },
+    razorpayPaymentId: {
+        type: String,
+        sparse: true,
+    },
+    // Legacy Stripe fields (kept for historical orgs)
     stripeCustomerId: {
         type: String,
         sparse: true

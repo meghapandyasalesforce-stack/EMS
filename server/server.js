@@ -121,8 +121,8 @@ app.use(express.json({
     if (
       req.originalUrl?.includes('/webhooks/esign/') ||
       req.url?.includes('/webhooks/esign/') ||
-      req.originalUrl?.includes('/webhooks/stripe') ||
-      req.url?.includes('/webhooks/stripe')
+      req.originalUrl?.includes('/webhooks/razorpay') ||
+      req.url?.includes('/webhooks/razorpay')
     ) {
       req.rawBody = Buffer.from(buf);
     }

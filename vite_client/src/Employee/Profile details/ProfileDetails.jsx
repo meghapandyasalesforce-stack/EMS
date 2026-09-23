@@ -14,6 +14,7 @@ import { setUser } from '../../context/Auth/authSlice';
 import { mergeSessionProfile } from '../../utils/profileUtils';
 import { toast } from 'react-toastify';
 import { FiUser, FiEdit2, FiCalendar, FiX } from 'react-icons/fi';
+import ChangePasswordForm from '../../components/ChangePasswordForm';
 
 function ProfileDetails() {
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
@@ -183,7 +184,8 @@ function ProfileDetails() {
     { id: 'professionalExperience', label: 'Professional Experience' },
     { id: 'familyDetails', label: 'Family Details' },
     { id: 'jobDetails', label: 'Documents' },
-    { id: 'financialDetails', label: 'Financial Details' }
+    { id: 'financialDetails', label: 'Financial Details' },
+    { id: 'security', label: 'Security' },
   ];
 
   const tabPathMap = {
@@ -193,7 +195,8 @@ function ProfileDetails() {
     professionalExperience: '/professional-experience',
     familyDetails: '/family-details',
     jobDetails: '/job-details',
-    financialDetails: '/financial-details'
+    financialDetails: '/financial-details',
+    security: '/profile-security',
   };
 
   const pathTabMap = {
@@ -203,7 +206,8 @@ function ProfileDetails() {
     '/professional-experience': 'professionalExperience',
     '/family-details': 'familyDetails',
     '/job-details': 'jobDetails',
-    '/financial-details': 'financialDetails'
+    '/financial-details': 'financialDetails',
+    '/profile-security': 'security',
   };
 
   useEffect(() => {
@@ -249,13 +253,18 @@ function ProfileDetails() {
 
   if (!hasLinkedProfile) {
     return (
-      <div className="mx-auto max-w-xl space-y-4 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">No employee profile linked yet</h2>
-        <p className="text-sm text-slate-600">
-          {permissionFlags.isOrgOwner
-            ? 'Open Admin → Employees, find your profile row, and click the Me button to link it to your Me tab. Or add a new employee and check “Show on my Me tab”.'
-            : 'Your personal employee profile is not set up yet. Please contact your organization administrator.'}
-        </p>
+      <div className="mx-auto max-w-xl space-y-6">
+        <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">No employee profile linked yet</h2>
+          <p className="text-sm text-slate-600">
+            {permissionFlags.isOrgOwner
+              ? 'Open Admin → Employees, find your profile row, and click the Me button to link it to your Me tab. Or add a new employee and check “Show on my Me tab”.'
+              : 'Your personal employee profile is not set up yet. Please contact your organization administrator.'}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
+          <ChangePasswordForm />
+        </div>
       </div>
     );
   }
@@ -438,6 +447,12 @@ function ProfileDetails() {
 
                 {activeTab === 'financialDetails' && (
                   <FinancialDetails />
+                )}
+
+                {activeTab === 'security' && (
+                  <div className="max-w-lg">
+                    <ChangePasswordForm />
+                  </div>
                 )}
 
                 </div>

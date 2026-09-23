@@ -54,6 +54,8 @@ const serializeOrgSummary = (org) => ({
     verificationStatus: org.verificationStatus || 'pending',
     platformTags: org.platformTags || [],
     paymentMethod: org.paymentMethod || 'none',
+    razorpayCustomerId: org.razorpayCustomerId || null,
+    razorpayOrderId: org.razorpayOrderId || null,
     stripeCustomerId: org.stripeCustomerId || null,
     deletedAt: org.deletedAt || null,
     createdAt: org.createdAt,
@@ -190,7 +192,7 @@ export const listOrganizations = asyncHandler(async (req, res) => {
     const [organizations, total] = await Promise.all([
         Organization.find(filter)
             .select(
-                'name email phone website domain subscriptionPlan subscriptionStatus maxEmployees isActive isTrialActive trialEndDate subscriptionStartDate subscriptionEndDate verificationStatus platformTags paymentMethod stripeCustomerId deletedAt createdAt'
+                'name email phone website domain subscriptionPlan subscriptionStatus maxEmployees isActive isTrialActive trialEndDate subscriptionStartDate subscriptionEndDate verificationStatus platformTags paymentMethod razorpayCustomerId stripeCustomerId deletedAt createdAt'
             )
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -364,7 +366,7 @@ export const getOrganization = asyncHandler(async (req, res) => {
     const { orgId } = req.params;
     const org = await Organization.findById(orgId)
         .select(
-            'name email phone website domain subscriptionPlan subscriptionStatus maxEmployees isActive isTrialActive trialStartDate trialEndDate trialDays subscriptionStartDate subscriptionEndDate verificationStatus verifiedAt settings.features platformNotes platformTags paymentMethod stripeCustomerId stripeSubscriptionId deletedAt createdAt updatedAt'
+            'name email phone website domain subscriptionPlan subscriptionStatus maxEmployees isActive isTrialActive trialStartDate trialEndDate trialDays subscriptionStartDate subscriptionEndDate verificationStatus verifiedAt settings.features platformNotes platformTags paymentMethod razorpayCustomerId razorpaySubscriptionId razorpayOrderId razorpayPaymentId stripeCustomerId stripeSubscriptionId deletedAt createdAt updatedAt'
         )
         .lean();
 
@@ -419,6 +421,10 @@ export const getOrganization = asyncHandler(async (req, res) => {
             effectiveFeatures,
             entitlement,
             verifiedAt: org.verifiedAt || null,
+            razorpayCustomerId: org.razorpayCustomerId || null,
+            razorpaySubscriptionId: org.razorpaySubscriptionId || null,
+            razorpayOrderId: org.razorpayOrderId || null,
+            razorpayPaymentId: org.razorpayPaymentId || null,
             stripeSubscriptionId: org.stripeSubscriptionId || null,
             updatedAt: org.updatedAt,
         },
@@ -464,6 +470,8 @@ export const updateOrganization = asyncHandler(async (req, res) => {
         platformNotes,
         platformTags,
         paymentMethod,
+        razorpayCustomerId,
+        razorpaySubscriptionId,
         stripeCustomerId,
         stripeSubscriptionId,
     } = req.body;
@@ -503,10 +511,14 @@ export const updateOrganization = asyncHandler(async (req, res) => {
             .slice(0, 20);
     }
     if (paymentMethod !== undefined) {
-        if (!['none', 'stripe', 'paypal', 'bank_transfer'].includes(paymentMethod)) {
+        if (!['none', 'razorpay', 'stripe', 'paypal', 'bank_transfer'].includes(paymentMethod)) {
             return sendValidationError(res, { paymentMethod: 'Invalid payment method' });
         }
         org.paymentMethod = paymentMethod;
+    }
+    if (razorpayCustomerId !== undefined) org.razorpayCustomerId = razorpayCustomerId || undefined;
+    if (razorpaySubscriptionId !== undefined) {
+        org.razorpaySubscriptionId = razorpaySubscriptionId || undefined;
     }
     if (stripeCustomerId !== undefined) org.stripeCustomerId = stripeCustomerId || undefined;
     if (stripeSubscriptionId !== undefined) {

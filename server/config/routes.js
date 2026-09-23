@@ -89,7 +89,7 @@ import platformRolesRouter from "../routes/Admin/PlatformRolesRoutes.js";
 import orgStructureRouter from "../routes/Admin/OrgStructureRoutes.js";
 import platformAuthRouter from "../routes/Platform/PlatformAuthRoutes.js";
 import platformOrgRouter from "../routes/Platform/PlatformOrgRoutes.js";
-import stripeWebhookRouter from "../routes/Public/StripeWebhookRoutes.js";
+import razorpayWebhookRouter from "../routes/Public/RazorpayWebhookRoutes.js";
 
 import employeeDocumentRequestRouter from "../routes/employeeDocumentRequestRoutes.js";
 import documentTemplateRouter from "../routes/documentTemplateRoutes.js";
@@ -113,7 +113,7 @@ export const registerRoutes = (app) => {
   // SaaS platform control panel (cross-tenant; tenant middleware exempt)
   app.use("/api/v1/platform/auth", platformAuthRouter);
   app.use("/api/v1/platform", platformOrgRouter);
-  app.use("/api/v1/webhooks", stripeWebhookRouter);
+  app.use("/api/v1/webhooks", razorpayWebhookRouter);
   
   // Organization routes (public - for registration and login)
   app.use("/api/v1/organization/auth", organizationAuthRouter);
