@@ -290,19 +290,12 @@ const EmployeeOneOnOnePage = ({
     const handleAccept = async (meeting) => {
         try {
             setActionBusyId(meeting._id);
-            const response = await axios.patch(
+            await axios.patch(
                 `/v1/both/one-on-one/one-on-ones/${meeting._id}/accept`,
                 {},
                 { withCredentials: true }
             );
-            const updated = response.data?.data || {
-                ...meeting,
-                status: 'Scheduled',
-                meetingLink: meeting.meetingLink || resolveJoinLink(meeting)
-            };
-            // Defer so the ICS download still fires after the async accept
-            setTimeout(() => downloadCalendarInvite(updated, { silent: true }), 0);
-            toast.success('Meeting accepted — calendar invite downloaded');
+            toast.success('Meeting accepted');
             await fetchMeetings();
             setSelectedMeetingId(meeting._id);
         } catch (error) {
@@ -371,15 +364,13 @@ const EmployeeOneOnOnePage = ({
         }
         try {
             setActionBusyId(meeting._id);
-            const response = await axios.patch(
+            await axios.patch(
                 `/v1/both/one-on-one/one-on-ones/${meeting._id}/respond-reschedule`,
                 { action },
                 { withCredentials: true }
             );
-            const updated = response.data?.data || meeting;
             if (action === 'accept') {
-                setTimeout(() => downloadCalendarInvite(updated, { silent: true }), 0);
-                toast.success('New time confirmed — calendar invite downloaded');
+                toast.success('New time confirmed');
             } else {
                 toast.success('Proposal declined');
             }
@@ -419,67 +410,6 @@ const EmployeeOneOnOnePage = ({
         setSelectedMeetingId(meetingId);
         setShowHistoryModal(true);
         setOpenActionMenuId(null);
-    };
-
-    const formatICSDate = (date) =>
-        date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-
-    const downloadCalendarInvite = (meeting, { silent = false } = {}) => {
-        try {
-            const start = getMeetingStartAt(meeting) || new Date(meeting.scheduledDate);
-            if (Number.isNaN(start.getTime())) {
-                if (!silent) toast.error('Invalid meeting date');
-                return;
-            }
-
-            const durationMinutes = Number(meeting.duration) || 30;
-            const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
-            const title = `1:1 with ${getOtherPersonName(meeting)}`;
-            const joinLink = resolveJoinLink(meeting);
-            const description = [
-                meeting.agenda?.map((item) => item.topic).filter(Boolean).join(', ') || 'One-on-one meeting',
-                joinLink ? `Join: ${joinLink}` : ''
-            ]
-                .filter(Boolean)
-                .join(' — ');
-            const location = meeting.location || joinLink || 'Online';
-
-            const icsContent = [
-                'BEGIN:VCALENDAR',
-                'VERSION:2.0',
-                'PRODID:-//Paarsiv//EMS//EN',
-                'CALSCALE:GREGORIAN',
-                'METHOD:PUBLISH',
-                'BEGIN:VEVENT',
-                `UID:${meeting._id}@paarsiv-ems`,
-                `DTSTAMP:${formatICSDate(new Date())}`,
-                `DTSTART:${formatICSDate(start)}`,
-                `DTEND:${formatICSDate(end)}`,
-                `SUMMARY:${title}`,
-                `DESCRIPTION:${description.replace(/\n/g, ' ')}`,
-                `LOCATION:${String(location).replace(/\n/g, ' ')}`,
-                joinLink ? `URL:${joinLink}` : '',
-                'END:VEVENT',
-                'END:VCALENDAR'
-            ]
-                .filter(Boolean)
-                .join('\r\n');
-
-            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.download = `one-on-one-${meeting._id}.ics`;
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-            URL.revokeObjectURL(url);
-            if (!silent) toast.success('Calendar invite downloaded');
-        } catch {
-            if (!silent) toast.error('Unable to create calendar invite');
-        } finally {
-            setOpenActionMenuId(null);
-        }
     };
 
     const formatMeetingDate = (dateObj) => format(dateObj, 'MMM dd, yyyy');

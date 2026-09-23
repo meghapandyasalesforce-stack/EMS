@@ -5,15 +5,11 @@ import {
     FaClipboardList,
     FaComments,
     FaAward,
-    FaLightbulb,
     FaPlus,
     FaTimes,
     FaHeart,
     FaChevronRight,
     FaSearch,
-    FaStream,
-    FaBirthdayCake,
-    FaShieldAlt,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -24,50 +20,35 @@ const MINT = '#20C997';
 const inputClass =
     'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20';
 
-const ActionCard = ({ label, count, hint, icon: Icon, accent, onClick }) => (
+const ActionCard = ({ label, count, icon: Icon, accent, onClick }) => (
     <button
         type="button"
         onClick={onClick}
-        className="group w-full rounded-2xl border border-slate-100 bg-slate-50/80 p-4 text-left transition hover:border-[#20C997]/30 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#20C997]/25"
+        className="group w-full rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-left transition hover:border-[#20C997]/30 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#20C997]/25 sm:rounded-2xl sm:p-4"
     >
         <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-                <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: `${accent}18`, color: accent }}
-                >
-                    <Icon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
-                    <p className="mt-0.5 text-2xl font-bold text-slate-900">{count}</p>
-                    {hint && (
-                        <p className="mt-1 text-xs leading-snug text-slate-600 group-hover:text-[#0d9488]">
-                            {hint}
-                        </p>
-                    )}
-                </div>
+            <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl"
+                style={{ backgroundColor: `${accent}18`, color: accent }}
+            >
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
-            <FaChevronRight className="mt-2 h-3 w-3 shrink-0 text-slate-300 transition group-hover:text-[#20C997]" />
+            <FaChevronRight className="mt-1 hidden h-3 w-3 shrink-0 text-slate-300 transition group-hover:text-[#20C997] sm:block" />
         </div>
+        <p className="mt-2 text-xl font-bold tabular-nums text-slate-900 sm:mt-3 sm:text-2xl">{count}</p>
+        <p className="mt-0.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+            {label}
+        </p>
     </button>
 );
 
 const RECOGNITION_TYPES = RECOGNITION_CATEGORIES;
 
-const SUGGESTION_STATUSES = [
-    'Submitted',
-    'Under Review',
-    'Accepted',
-    'Rejected',
-    'In Progress',
-    'Implemented',
-];
-
 const EmployeeEngagementPage = () => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('surveys');
+    const [feedbackSub, setFeedbackSub] = useState('feedback');
     const [loading, setLoading] = useState(true);
     const [surveys, setSurveys] = useState([]);
     const [feedback, setFeedback] = useState([]);
@@ -178,7 +159,8 @@ const EmployeeEngagementPage = () => {
 
     const openSuggestionDetail = useCallback(async (id) => {
         if (!id) return;
-        setActiveTab('suggestions');
+        setActiveTab('feedback');
+        setFeedbackSub('suggestions');
         setLoadingSuggestionDetail(true);
         try {
             const { data } = await axios.get(`/v1/both/engagement/feedback/${id}`, {
@@ -196,6 +178,7 @@ const EmployeeEngagementPage = () => {
     const openFeedbackDetail = useCallback(async (id) => {
         if (!id) return;
         setActiveTab('feedback');
+        setFeedbackSub('feedback');
         setLoadingFeedbackDetail(true);
         try {
             const { data } = await axios.get(`/v1/both/engagement/feedback/${id}`, {
@@ -216,6 +199,13 @@ const EmployeeEngagementPage = () => {
         const suggestionId = searchParams.get('suggestion');
         if (suggestionId) {
             openSuggestionDetail(suggestionId);
+        }
+        const tab = searchParams.get('tab');
+        if (tab === 'suggestions') {
+            setActiveTab('feedback');
+            setFeedbackSub('suggestions');
+        } else if (tab === 'feedback' || tab === 'surveys' || tab === 'recognition') {
+            setActiveTab(tab);
         }
     }, [searchParams, openSuggestionDetail]);
 
@@ -359,6 +349,30 @@ const EmployeeEngagementPage = () => {
         );
     }, [wall, searchQuery]);
 
+    const filteredReceived = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return received;
+        return received.filter((r) =>
+            [r.title, r.type, r.description, r.givenBy?.name]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+                .includes(q)
+        );
+    }, [received, searchQuery]);
+
+    const filteredGiven = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return given;
+        return given.filter((r) =>
+            [r.title, r.type, r.description, r.recipientId?.name]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+                .includes(q)
+        );
+    }, [given, searchQuery]);
+
     const closeRecognitionDetail = () => {
         setRecognitionDetail(null);
         if (searchParams.get('recognition')) {
@@ -395,19 +409,6 @@ const EmployeeEngagementPage = () => {
     const pendingSurveys = useMemo(
         () => surveys.filter((s) => s.completionState === 'pending' || s.canRespond),
         [surveys]
-    );
-
-    const suggestionsUnderReview = useMemo(
-        () =>
-            suggestions.filter((s) =>
-                ['Submitted', 'Under Review', 'In Progress'].includes(s.status)
-            ),
-        [suggestions]
-    );
-
-    const openFeedbackCount = useMemo(
-        () => feedback.filter((f) => ['Open', 'In Review'].includes(f.status)).length,
-        [feedback]
     );
 
     const submitFeedback = async (e) => {
@@ -510,73 +511,46 @@ const EmployeeEngagementPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
-            <div className="page-shell-inner hrms-stack">
-                <header className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
-                    <div className="flex items-center gap-4">
+        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-[#F5F7FB]">
+            <div className="page-shell-inner hrms-stack min-w-0">
+                <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                         <div
-                            className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-md"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-md sm:h-14 sm:w-14 sm:rounded-2xl"
                             style={{ background: MINT_GRADIENT }}
                         >
-                            <FaBell className="h-7 w-7" />
+                            <FaBell className="h-5 w-5 sm:h-7 sm:w-7" />
                         </div>
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 sm:text-xs">
                                 My Workspace
                             </p>
-                            <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">My Engagement</h1>
-                            <p className="mt-0.5 text-sm text-slate-500">
-                                Surveys, feedback, suggestions, recognition, activity, and privacy
-                            </p>
+                            <h1 className="truncate text-xl font-bold text-slate-900 sm:text-2xl md:text-3xl">
+                                My Engagement
+                            </h1>
                         </div>
                     </div>
-                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
                         <ActionCard
-                            label="Pending surveys"
+                            label="Surveys"
                             count={pendingSurveys.length}
-                            hint={
-                                pendingSurveys.length === 1
-                                    ? '1 survey awaiting your response'
-                                    : pendingSurveys.length > 0
-                                      ? `${pendingSurveys.length} surveys awaiting your response`
-                                      : 'No pending surveys'
-                            }
                             icon={FaClipboardList}
                             accent={MINT}
                             onClick={() => setActiveTab('surveys')}
                         />
                         <ActionCard
-                            label="My feedback"
-                            count={feedback.length}
-                            hint={
-                                openFeedbackCount > 0
-                                    ? `${openFeedbackCount} open item${openFeedbackCount === 1 ? '' : 's'}`
-                                    : 'View your feedback'
-                            }
+                            label="Feedback"
+                            count={feedback.length + suggestions.length}
                             icon={FaComments}
                             accent="#8b5cf6"
-                            onClick={() => setActiveTab('feedback')}
-                        />
-                        <ActionCard
-                            label="Suggestions"
-                            count={suggestions.length}
-                            hint={
-                                suggestionsUnderReview.length > 0
-                                    ? `${suggestionsUnderReview.length} suggestion${suggestionsUnderReview.length === 1 ? '' : 's'} under review`
-                                    : 'View my suggestions'
-                            }
-                            icon={FaLightbulb}
-                            accent="#6366f1"
-                            onClick={() => setActiveTab('suggestions')}
+                            onClick={() => {
+                                setActiveTab('feedback');
+                                setFeedbackSub('feedback');
+                            }}
                         />
                         <ActionCard
                             label="Recognition"
                             count={received.length}
-                            hint={
-                                received.length > 0
-                                    ? `${received.length} recognition${received.length === 1 ? '' : 's'} received`
-                                    : 'View recognition wall'
-                            }
                             icon={FaAward}
                             accent="#f59e0b"
                             onClick={() => {
@@ -585,68 +559,88 @@ const EmployeeEngagementPage = () => {
                             }}
                         />
                     </div>
-                    {(given.length > 0 || received.length > 0) && (
-                        <p className="mt-3 text-xs text-slate-500">
-                            You have given {given.length} recognition{given.length === 1 ? '' : 's'}.
-                            {' '}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setActiveTab('recognition');
-                                    setRecognitionSubTab('given');
-                                }}
-                                className="font-semibold text-[#0d9488] hover:underline"
-                            >
-                                View given
-                            </button>
-                        </p>
-                    )}
                 </header>
 
-                <div className="rounded-2xl border border-slate-100 bg-white p-2 shadow-sm">
-                    <div className="mb-2 px-2">
-                        <label className="relative block">
-                            <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <nav
+                    aria-label="Engagement sections"
+                    className="min-w-0 overflow-visible rounded-2xl border border-slate-100 bg-white p-2 shadow-sm sm:p-2.5"
+                >
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                        {[
+                            {
+                                id: 'surveys',
+                                label: 'Surveys',
+                                icon: FaClipboardList,
+                                show:
+                                    engSettings?.features?.surveys !== false ||
+                                    engSettings?.features?.pulse !== false,
+                            },
+                            {
+                                id: 'feedback',
+                                label: 'Feedback',
+                                icon: FaComments,
+                                show:
+                                    engSettings?.features?.feedback !== false ||
+                                    engSettings?.features?.suggestions !== false,
+                            },
+                            {
+                                id: 'recognition',
+                                label: 'Recognition',
+                                icon: FaAward,
+                                show: engSettings?.features?.recognition !== false,
+                            },
+                        ]
+                            .filter((tab) => tab.show !== false)
+                            .map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setActiveTab(tab.id);
+                                        if (tab.id === 'feedback') setFeedbackSub('feedback');
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
+                                        activeTab === tab.id
+                                            ? 'bg-[#20C997]/10 text-[#0d9488] ring-1 ring-[#20C997]/30'
+                                            : 'text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <tab.icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+                                    <span className="whitespace-nowrap">{tab.label}</span>
+                                </button>
+                            ))}
+                    </div>
+                </nav>
+
+                <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                    <div className="mb-4 flex flex-col gap-2 sm:mb-5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+                            {activeTab === 'surveys' && 'Surveys'}
+                            {activeTab === 'feedback' &&
+                                (feedbackSub === 'suggestions' ? 'Suggestions' : 'Feedback')}
+                            {activeTab === 'recognition' && 'Recognition'}
+                        </h2>
+                        <label className="relative block w-full sm:max-w-xs sm:flex-1">
+                            <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                             <input
                                 type="search"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search this tab..."
-                                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20"
+                                placeholder={
+                                    activeTab === 'surveys'
+                                        ? 'Search surveys...'
+                                        : activeTab === 'feedback'
+                                          ? feedbackSub === 'suggestions'
+                                              ? 'Search suggestions...'
+                                              : 'Search feedback...'
+                                          : 'Search recognition...'
+                                }
+                                className="h-9 w-full rounded-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-[#20C997] focus:bg-white focus:ring-2 focus:ring-[#20C997]/20 sm:h-10"
                             />
                         </label>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        {[
-                            { id: 'surveys', label: 'My Surveys', icon: FaClipboardList, show: engSettings?.features?.surveys !== false || engSettings?.features?.pulse !== false },
-                            { id: 'feedback', label: 'Feedback', icon: FaComments, show: engSettings?.features?.feedback !== false },
-                            { id: 'recognition', label: 'Recognition', icon: FaAward, show: engSettings?.features?.recognition !== false },
-                            { id: 'suggestions', label: 'Suggestions', icon: FaLightbulb, show: engSettings?.features?.suggestions !== false },
-                            { id: 'activity', label: 'Activity', icon: FaStream, show: true },
-                            { id: 'celebrations', label: 'Celebrations', icon: FaBirthdayCake, show: true },
-                            { id: 'privacy', label: 'Privacy & Trust', icon: FaShieldAlt, show: true },
-                        ].filter((tab) => tab.show !== false).map((tab) => (
-                            <button
-                                key={tab.id}
-                                type="button"
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                                    activeTab === tab.id
-                                        ? 'bg-[#20C997]/10 text-[#0d9488] ring-1 ring-[#20C997]/30'
-                                        : 'text-slate-600 hover:bg-slate-50'
-                                }`}
-                            >
-                                <tab.icon className="h-4 w-4" />
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                     {activeTab === 'surveys' && (
                         <div className="space-y-4">
-                            <h2 className="text-lg font-semibold text-slate-900">My Surveys</h2>
                             {filteredSurveys.length === 0 ? (
                                 <p className="py-10 text-center text-sm text-slate-500">
                                     {searchQuery ? 'No surveys match your search.' : 'No surveys assigned.'}
@@ -702,77 +696,149 @@ const EmployeeEngagementPage = () => {
 
                     {activeTab === 'feedback' && (
                         <div>
-                            <div className="mb-4 flex items-center justify-between gap-3">
-                                <h2 className="text-lg font-semibold text-slate-900">My Feedback</h2>
-                                <button
-                                    type="button"
-                                    onClick={() => setFeedbackOpen(true)}
-                                    className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white"
-                                    style={{ background: MINT_GRADIENT }}
-                                >
-                                    <FaPlus className="h-3.5 w-3.5" /> Give Feedback
-                                </button>
-                            </div>
-                            {feedback.length === 0 ? (
-                                <p className="py-10 text-center text-sm text-slate-500">No feedback yet.</p>
-                            ) : (
-                                <div className="overflow-x-auto rounded-xl border border-slate-100">
-                                    <table className="w-full min-w-[520px] text-left text-sm">
-                                        <thead>
-                                            <tr className="border-b border-slate-100 bg-slate-50/80">
-                                                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
-                                                    Subject
-                                                </th>
-                                                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
-                                                    Type
-                                                </th>
-                                                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
-                                                    Status
-                                                </th>
-                                                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
-                                                    Date
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredFeedback.map((f) => (
-                                                <tr
-                                                    key={f._id}
-                                                    className="cursor-pointer border-b border-slate-50 hover:bg-slate-50/80"
-                                                    onClick={() => openFeedbackDetail(f._id)}
-                                                >
-                                                    <td className="px-4 py-3 font-medium text-slate-900">
-                                                        {f.subject}
-                                                        {f.anonymous ? (
-                                                            <span className="ml-2 text-xs text-slate-400">
-                                                                (Anonymous)
-                                                            </span>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="px-4 py-3">{f.type}</td>
-                                                    <td className="px-4 py-3">
-                                                        <span
-                                                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${feedbackStatusStyle(f.status)}`}
-                                                        >
-                                                            {f.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-slate-600">
-                                                        {f.createdAt
-                                                            ? new Date(f.createdAt).toLocaleDateString()
-                                                            : '—'}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                            <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        ...(engSettings?.features?.feedback !== false
+                                            ? [{ id: 'feedback', label: `Feedback (${feedback.length})` }]
+                                            : []),
+                                        ...(engSettings?.features?.suggestions !== false
+                                            ? [{ id: 'suggestions', label: `Suggestions (${suggestions.length})` }]
+                                            : []),
+                                    ].map((tab) => (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => setFeedbackSub(tab.id)}
+                                            className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold transition sm:px-4 sm:py-2 sm:text-sm ${
+                                                feedbackSub === tab.id
+                                                    ? 'bg-[#20C997] text-white shadow-sm'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    ))}
                                 </div>
+                                {feedbackSub === 'suggestions' ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSuggestionOpen(true)}
+                                        className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white sm:w-auto"
+                                        style={{ background: MINT_GRADIENT }}
+                                    >
+                                        <FaPlus className="h-3.5 w-3.5" /> Submit Suggestion
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setFeedbackOpen(true)}
+                                        className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white sm:w-auto"
+                                        style={{ background: MINT_GRADIENT }}
+                                    >
+                                        <FaPlus className="h-3.5 w-3.5" /> Give Feedback
+                                    </button>
+                                )}
+                            </div>
+
+                            {feedbackSub === 'suggestions' ? (
+                                <>
+                                    {suggestions.length === 0 ? (
+                                        <p className="py-10 text-center text-sm text-slate-500">No suggestions yet.</p>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {filteredSuggestions.map((s) => (
+                                                <article
+                                                    key={s._id}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => openSuggestionDetail(s._id)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            openSuggestionDetail(s._id);
+                                                        }
+                                                    }}
+                                                    className="cursor-pointer rounded-2xl border border-slate-100 bg-slate-50/40 p-4 transition hover:border-[#20C997]/30 hover:shadow-sm sm:p-5"
+                                                >
+                                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                                        <h3 className="font-semibold text-slate-900">{s.subject}</h3>
+                                                        <span
+                                                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${feedbackStatusStyle(s.status)}`}
+                                                        >
+                                                            {s.status}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{s.message}</p>
+                                                </article>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    {feedback.length === 0 ? (
+                                        <p className="py-10 text-center text-sm text-slate-500">No feedback yet.</p>
+                                    ) : (
+                                        <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                            <table className="w-full min-w-[520px] text-left text-sm">
+                                                <thead>
+                                                    <tr className="border-b border-slate-100 bg-slate-50/80">
+                                                        <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
+                                                            Subject
+                                                        </th>
+                                                        <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
+                                                            Type
+                                                        </th>
+                                                        <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
+                                                            Status
+                                                        </th>
+                                                        <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">
+                                                            Date
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredFeedback.map((f) => (
+                                                        <tr
+                                                            key={f._id}
+                                                            className="cursor-pointer border-b border-slate-50 hover:bg-slate-50/80"
+                                                            onClick={() => openFeedbackDetail(f._id)}
+                                                        >
+                                                            <td className="px-4 py-3 font-medium text-slate-900">
+                                                                {f.subject}
+                                                                {f.anonymous ? (
+                                                                    <span className="ml-2 text-xs text-slate-400">
+                                                                        (Anonymous)
+                                                                    </span>
+                                                                ) : null}
+                                                            </td>
+                                                            <td className="px-4 py-3">{f.type}</td>
+                                                            <td className="px-4 py-3">
+                                                                <span
+                                                                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${feedbackStatusStyle(f.status)}`}
+                                                                >
+                                                                    {f.status}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-slate-600">
+                                                                {f.createdAt
+                                                                    ? new Date(f.createdAt).toLocaleDateString()
+                                                                    : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
 
                     {activeTab === 'recognition' && (
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex flex-wrap gap-2">
                                     {[
@@ -806,9 +872,11 @@ const EmployeeEngagementPage = () => {
 
                             {recognitionSubTab === 'wall' && (
                                 <div className="space-y-3">
-                                    {wall.length === 0 ? (
+                                    {filteredWall.length === 0 ? (
                                         <p className="py-10 text-center text-sm text-slate-500">
-                                            No public recognition yet.
+                                            {searchQuery
+                                                ? 'No recognition matches your search.'
+                                                : 'No public recognition yet.'}
                                         </p>
                                     ) : (
                                         filteredWall.map((r) => {
@@ -876,12 +944,14 @@ const EmployeeEngagementPage = () => {
 
                             {recognitionSubTab === 'received' && (
                                 <div className="space-y-3">
-                                    {received.length === 0 ? (
+                                    {filteredReceived.length === 0 ? (
                                         <p className="py-10 text-center text-sm text-slate-500">
-                                            No recognition received yet.
+                                            {searchQuery
+                                                ? 'No recognition matches your search.'
+                                                : 'No recognition received yet.'}
                                         </p>
                                     ) : (
-                                        received.map((r) => (
+                                        filteredReceived.map((r) => (
                                             <article
                                                 key={r._id}
                                                 role="button"
@@ -916,12 +986,14 @@ const EmployeeEngagementPage = () => {
 
                             {recognitionSubTab === 'given' && (
                                 <div className="space-y-3">
-                                    {given.length === 0 ? (
+                                    {filteredGiven.length === 0 ? (
                                         <p className="py-10 text-center text-sm text-slate-500">
-                                            You have not given recognition yet.
+                                            {searchQuery
+                                                ? 'No recognition matches your search.'
+                                                : 'You have not given recognition yet.'}
                                         </p>
                                     ) : (
-                                        given.map((r) => (
+                                        filteredGiven.map((r) => (
                                             <article
                                                 key={r._id}
                                                 role="button"
@@ -951,71 +1023,9 @@ const EmployeeEngagementPage = () => {
                         </div>
                     )}
 
-                    {activeTab === 'suggestions' && (
-                        <div>
-                            <div className="mb-4 flex items-center justify-between gap-3">
-                                <div>
-                                    <h2 className="text-lg font-semibold text-slate-900">My Suggestions</h2>
-                                    <p className="text-xs text-slate-500">
-                                        Workflow: {SUGGESTION_STATUSES.join(' → ')}
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setSuggestionOpen(true)}
-                                    className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white"
-                                    style={{ background: MINT_GRADIENT }}
-                                >
-                                    <FaPlus className="h-3.5 w-3.5" /> Submit Suggestion
-                                </button>
-                            </div>
-                            {suggestions.length === 0 ? (
-                                <p className="py-10 text-center text-sm text-slate-500">No suggestions yet.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {filteredSuggestions.map((s) => (
-                                        <article
-                                            key={s._id}
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={() => openSuggestionDetail(s._id)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    openSuggestionDetail(s._id);
-                                                }
-                                            }}
-                                            className="cursor-pointer rounded-2xl border border-slate-100 bg-slate-50/40 p-5 transition hover:border-[#20C997]/30 hover:shadow-sm"
-                                        >
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <h3 className="font-semibold text-slate-900">{s.subject}</h3>
-                                                <span
-                                                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${feedbackStatusStyle(s.status)}`}
-                                                >
-                                                    {s.status}
-                                                </span>
-                                            </div>
-                                            <p className="mt-2 text-sm text-slate-600">{s.message}</p>
-                                            {Array.isArray(s.responses) && s.responses.length > 0 && (
-                                                <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 text-sm text-slate-700">
-                                                    <p className="text-xs font-semibold uppercase text-slate-500">
-                                                        HR remarks
-                                                    </p>
-                                                    <p className="mt-1 line-clamp-2">{s.responses[0].response}</p>
-                                                </div>
-                                            )}
-                                            <p className="mt-2 text-xs font-medium text-[#0d9488]">View details</p>
-                                        </article>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
                     {activeTab === 'activity' && (
                         <div className="space-y-3">
-                            <h2 className="text-lg font-semibold text-slate-900">My activity</h2>
-                            <p className="text-xs text-slate-500">Last 30 days. Only your own Engagement activity is shown.</p>
+                            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Activity</h2>
                             {activity.length === 0 ? (
                                 <p className="py-10 text-center text-sm text-slate-500">No recent activity.</p>
                             ) : (
@@ -1053,10 +1063,7 @@ const EmployeeEngagementPage = () => {
 
                     {activeTab === 'celebrations' && (
                         <div className="space-y-3">
-                            <h2 className="text-lg font-semibold text-slate-900">Celebrations & outcomes</h2>
-                            <p className="text-xs text-slate-500">
-                                Work anniversaries and implemented suggestion outcomes. Anonymous submitters are never named.
-                            </p>
+                            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Celebrations</h2>
                             {celebrations.length === 0 ? (
                                 <p className="py-10 text-center text-sm text-slate-500">No upcoming celebrations this period.</p>
                             ) : (
@@ -1085,27 +1092,8 @@ const EmployeeEngagementPage = () => {
                     )}
 
                     {activeTab === 'privacy' && (
-                        <div className="space-y-5">
-                            <div>
-                                <h2 className="text-lg font-semibold text-slate-900">Engagement Privacy & Trust</h2>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    How your organization protects Engagement participation and reporting.
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-[#20C997]/20 bg-[#20C997]/5 p-5">
-                                <div className="flex items-start gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#0d9488] shadow-sm">
-                                        <FaShieldAlt className="h-4 w-4" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-semibold text-slate-900">Your trust matters</p>
-                                        <p className="mt-1 text-sm text-slate-600">
-                                            Engagement is designed so honest feedback can be shared safely. Analytics
-                                            stay aggregate, and anonymous submissions do not reveal who you are.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="space-y-4">
+                            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Privacy</h2>
                             <ul className="space-y-3">
                                 {(engSettings?.privacy?.points || [
                                     'Anonymous feedback and anonymous surveys do not expose your identity to managers or colleagues.',

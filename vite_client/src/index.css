@@ -1104,6 +1104,11 @@ canvas {
     overflow-x: clip;
   }
 
+  /* Engagement: keep section nav fully visible (wrap), don't clip chips */
+  .page-shell.engagement-page {
+    overflow-x: visible;
+  }
+
   .page-shell-inner,
   .hrms-main-rail,
   .hrms-stack {

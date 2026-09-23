@@ -361,18 +361,14 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
     }, [analytics]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             {!forceTeamScope && (
-                <div className="rounded-2xl border border-[#20C997]/20 bg-[#20C997]/5 px-4 py-3 text-sm text-slate-700">
-                    <p className="font-semibold text-slate-900">Organization dashboard</p>
-                    <p className="mt-0.5 text-xs text-slate-600">
-                        Company-wide engagement health, eNPS, trends, and closed-loop KPIs.
-                        For direct reports only, use <strong>My Team</strong>. For action follow-up, use{' '}
-                        <strong>Insights</strong>.
-                    </p>
+                <div className="rounded-xl border border-[#20C997]/20 bg-[#20C997]/5 px-3 py-2 text-xs text-slate-600 sm:px-4 sm:py-2.5 sm:text-sm">
+                    <span className="font-semibold text-slate-900">Organization dashboard</span>
+                    <span className="hidden sm:inline"> — company-wide engagement health and trends.</span>
                 </div>
             )}
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                     {analytics?.scope && (
                         <span className="rounded-full bg-[#20C997]/10 px-3 py-1 text-xs font-semibold text-[#0d9488] ring-1 ring-[#20C997]/20">

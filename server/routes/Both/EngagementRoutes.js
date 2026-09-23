@@ -22,7 +22,8 @@ import {
     getPublicEngagementSettings,
     getWellbeingTemplate,
     getEngagementActivity,
-    getEngagementCelebrations
+    getEngagementCelebrations,
+    exportEngagementSummary
 } from '../../controllers/engagement/engagementController.js';
 import {
     getActionPlans,
@@ -124,6 +125,9 @@ router.route('/recognition/:id/react')
 // Analytics
 router.route('/analytics')
     .get(...analyticsAccess, readLimiter, getEngagementAnalytics);
+
+router.route('/export/summary')
+    .get(...analyticsAccess, readLimiter, exportEngagementSummary);
 
 router.route('/settings')
     .get(isAuthenticatedBoth, readLimiter, getPublicEngagementSettings);
