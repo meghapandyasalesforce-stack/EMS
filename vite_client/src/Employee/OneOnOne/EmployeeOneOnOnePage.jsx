@@ -485,12 +485,6 @@ const EmployeeOneOnOnePage = ({
                                                     <p className={`mt-2 text-xs font-semibold ${statusTone(nextMeeting.status)}`}>
                                                         Status: {statusLabel(nextMeeting.status)}
                                                     </p>
-                                                    {nextMeeting.status === 'Pending Response' &&
-                                                        isOrganizerOf(nextMeeting) && (
-                                                        <p className="mt-1 text-xs text-amber-700">
-                                                            Waiting for {personName(nextMeeting.employeeId, 'invitee')}
-                                                        </p>
-                                                    )}
                                                 </div>
                                             </div>
                                             <div className="w-full min-w-0 rounded-lg bg-slate-100 p-3.5 text-sm text-slate-600 md:max-w-[220px]">
@@ -650,12 +644,6 @@ const EmployeeOneOnOnePage = ({
                                                                 <p className="truncate text-xs text-slate-500">
                                                                     {getOtherPersonRole(meeting)}
                                                                 </p>
-                                                                {meeting.status === 'Pending Response' &&
-                                                                    isOrganizerOf(meeting) && (
-                                                                    <p className="mt-0.5 truncate text-[11px] text-amber-700">
-                                                                        Waiting for {personName(meeting.employeeId, 'invitee')}
-                                                                    </p>
-                                                                )}
                                                                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:hidden">
                                                                     <span className="text-xs text-slate-500">
                                                                         {meeting.duration || 30}m

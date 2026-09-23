@@ -625,13 +625,6 @@ const OneOnOneMeetingHub = () => {
                                                     </>
                                                 ) : null}
 
-                                                {meeting.status === 'Reschedule Requested' &&
-                                                matchesActor(meeting.rescheduleProposal?.proposedBy) ? (
-                                                    <span className="inline-flex w-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800">
-                                                        Waiting for acceptance
-                                                    </span>
-                                                ) : null}
-
                                                 {isOrganizerOf(meeting) && ACTIVE.has(meeting.status) ? (
                                                     <button
                                                         type="button"
