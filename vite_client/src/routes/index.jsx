@@ -217,7 +217,8 @@ export const profileDetailRoutes = [
   { path: '/professional-experience', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/family-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/job-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
-  { path: '/financial-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] }
+  { path: '/financial-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
+  { path: '/profile-security', component: ProfileDetailsPage, message: 'Loading profile security...', allowedRoles: [] },
 ];
 
 export const renderProfileRoutes = () => {
@@ -229,6 +230,7 @@ export const renderProfileRoutes = () => {
     '/family-details',
     '/job-details',
     '/financial-details',
+    '/profile-security',
   ];
 
   return paths.map((path) => (
@@ -275,7 +277,10 @@ export const attendanceRoutes = [
   { path: '/manager/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/my-attendance-regularization', component: lazy(() => import('../Employee/AttendanceRegularization/MyRegularizationRequests')), message: 'Loading my attendance regularization...', allowedRoles: [] },
   { path: '/team-learning', component: lazy(() => import('../Manager/TeamLearning/TeamLearningPage')), message: 'Loading team learning...', allowedRoles: [] },
-  { path: '/one-on-one', component: lazy(() => import('../components/OneOnOneRouteWrapper')), message: 'Loading one-on-one meetings...', allowedRoles: [] }
+  // Organizer / sender — manage meetings you created
+  { path: '/one-on-one', component: lazy(() => import('../components/OneOnOneRouteWrapper')), message: 'Loading one-on-one meetings...', allowedRoles: [] },
+  // Receiver / personal — My 1:1 invitations & notes
+  { path: '/1-on-1', component: lazy(() => import('../components/MyOneOnOneRoute')), message: 'Loading your 1:1 meetings...', allowedRoles: [] }
 ];
 
 // Organization routes - admin only

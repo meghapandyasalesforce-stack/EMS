@@ -1,10 +1,12 @@
 /**
- * Organization billing / Stripe subscription endpoints.
+ * Organization billing / Razorpay subscription endpoints.
+ * Webhook is source of truth; verify-payment is optimistic UX confirmation.
  */
 
 import asyncHandler from '../../helpers/asyncHandler.js';
 import Organization from '../../models/organization.model.js';
 import Employee from '../../models/employee.model.js';
+import BillingPayment from '../../models/billingPayment.model.js';
 import {
   sendSuccess,
   sendError,
@@ -14,26 +16,35 @@ import {
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import { getPlanDetails, getPlanMaxEmployees, listKnownPlanIds } from '../../helpers/subscriptionPlans.js';
 import {
-  getStripeBillingMode,
-  isStripeLiveConfigured,
+  getBillingMode,
+  isRazorpayConfigured,
   isPaidPlan,
   createCheckoutSession,
   createBillingPortalSession,
   applyPlanToOrganization,
-  mapStripeSubscriptionStatus,
   verifyMockCheckoutToken,
-  getStripe,
-} from '../../services/stripeBillingService.js';
+  verifyRazorpayPaymentSignature,
+  verifyRazorpaySubscriptionSignature,
+  verifyRazorpayWebhookSignature,
+  getRazorpayCurrency,
+  activatePaidSubscription,
+  processRazorpayWebhookEvent,
+  cancelRazorpaySubscription,
+  planAmountMinorUnits,
+  getRazorpay,
+} from '../../services/razorpayBillingService.js';
 import { getTenantUsageSnapshot, attachTenantToRequest } from '../../services/tenantService.js';
 import logger from '../../helpers/logger.js';
 
 const serializeBilling = (org, usage = null) => {
   const plan = getPlanDetails(org.subscriptionPlan);
+  const currency = getRazorpayCurrency();
   return {
     organizationId: org._id,
     subscriptionPlan: org.subscriptionPlan || 'free',
     planName: plan?.name || org.subscriptionPlan,
     planPrice: plan?.price ?? 0,
+    currency,
     maxEmployees: org.maxEmployees ?? getPlanMaxEmployees(org.subscriptionPlan),
     subscriptionStatus: org.subscriptionStatus || 'trial',
     isTrialActive: !!org.isTrialActive,
@@ -41,13 +52,33 @@ const serializeBilling = (org, usage = null) => {
     subscriptionStartDate: org.subscriptionStartDate || null,
     subscriptionEndDate: org.subscriptionEndDate || null,
     paymentMethod: org.paymentMethod || 'none',
-    stripeCustomerId: org.stripeCustomerId || null,
-    stripeSubscriptionId: org.stripeSubscriptionId || null,
-    billingMode: getStripeBillingMode(),
-    stripeConfigured: isStripeLiveConfigured(),
+    razorpayCustomerId: org.razorpayCustomerId || null,
+    razorpaySubscriptionId: org.razorpaySubscriptionId || null,
+    razorpayOrderId: org.razorpayOrderId || null,
+    razorpayPaymentId: org.razorpayPaymentId || null,
+    billingMode: getBillingMode(),
+    razorpayConfigured: isRazorpayConfigured(),
+    recurring: Boolean(org.razorpaySubscriptionId),
     usage: usage || null,
   };
 };
+
+const serializePayment = (p) => ({
+  id: p._id,
+  invoiceNumber: p.invoiceNumber || null,
+  planId: p.planId,
+  status: p.status,
+  source: p.source,
+  amount: (p.amountMinor || 0) / 100,
+  amountMinor: p.amountMinor,
+  currency: p.currency,
+  razorpayPaymentId: p.razorpayPaymentId || null,
+  razorpaySubscriptionId: p.razorpaySubscriptionId || null,
+  periodStart: p.periodStart || null,
+  periodEnd: p.periodEnd || null,
+  failureReason: p.failureReason || null,
+  createdAt: p.createdAt,
+});
 
 /**
  * GET /api/v1/organization/subscription/current
@@ -76,8 +107,15 @@ export const getCurrentSubscription = asyncHandler(async (req, res) => {
     };
   }
 
+  const recentPayments = await BillingPayment.find({ organizationId })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+
+  const currency = getRazorpayCurrency();
   return sendSuccess(res, {
     subscription: serializeBilling(org, usage),
+    recentPayments: recentPayments.map(serializePayment),
     availablePlans: listKnownPlanIds().map((id) => {
       const p = getPlanDetails(id);
       return {
@@ -87,7 +125,7 @@ export const getCurrentSubscription = asyncHandler(async (req, res) => {
         maxEmployees: p.maxEmployees,
         features: p.features,
         trialDays: p.trialDays,
-        currency: 'USD',
+        currency,
         requiresCheckout: isPaidPlan(id),
       };
     }),
@@ -95,8 +133,20 @@ export const getCurrentSubscription = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/organization/subscription/payments
+ */
+export const listBillingPayments = asyncHandler(async (req, res) => {
+  const organizationId = getOrganizationId(req);
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+  const payments = await BillingPayment.find({ organizationId })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+  return sendSuccess(res, { payments: payments.map(serializePayment) });
+});
+
+/**
  * POST /api/v1/organization/subscription/checkout
- * Body: { planId }
  */
 export const createSubscriptionCheckout = asyncHandler(async (req, res) => {
   const organizationId = getOrganizationId(req);
@@ -126,12 +176,17 @@ export const createSubscriptionCheckout = asyncHandler(async (req, res) => {
       organization: org,
       planId,
       customerEmail: req.user?.email || org.email,
+      customerName: req.user?.name || org.name,
     });
 
-    // Persist customer id early when Stripe created one
-    if (session.customerId && !org.stripeCustomerId) {
-      org.stripeCustomerId = session.customerId;
-      org.paymentMethod = 'stripe';
+    if (session.orderId) {
+      org.razorpayOrderId = session.orderId;
+      org.paymentMethod = 'razorpay';
+      await org.save();
+    }
+    if (session.subscriptionId) {
+      org.razorpaySubscriptionId = session.subscriptionId;
+      org.paymentMethod = 'razorpay';
       await org.save();
     }
 
@@ -149,7 +204,6 @@ export const createSubscriptionCheckout = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/organization/subscription/checkout/preview?token=
- * Load plan summary for the hosted payment page (does not activate).
  */
 export const previewMockCheckout = asyncHandler(async (req, res) => {
   const organizationId = getOrganizationId(req);
@@ -175,8 +229,8 @@ export const previewMockCheckout = asyncHandler(async (req, res) => {
       planId: payload.planId,
       planName: payload.planName || plan.name,
       amount: payload.amount ?? plan.price,
-      currency: payload.currency || 'USD',
-      billingMode: getStripeBillingMode(),
+      currency: payload.currency || getRazorpayCurrency(),
+      billingMode: getBillingMode(),
       testCardHint: '4242 4242 4242 4242',
     },
   });
@@ -184,12 +238,10 @@ export const previewMockCheckout = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/organization/subscription/confirm-mock
- * Completes mock checkout after dummy card payment (dev without Stripe keys).
- * Requires Stripe test card 4242 4242 4242 4242 (any future expiry, any CVC).
  */
 export const confirmMockCheckout = asyncHandler(async (req, res) => {
-  if (getStripeBillingMode() !== 'mock') {
-    return sendError(res, 'Mock checkout is disabled when Stripe is configured', 400, 'MOCK_DISABLED');
+  if (getBillingMode() !== 'mock') {
+    return sendError(res, 'Mock checkout is disabled when Razorpay is configured', 400, 'MOCK_DISABLED');
   }
 
   const organizationId = getOrganizationId(req);
@@ -239,25 +291,19 @@ export const confirmMockCheckout = asyncHandler(async (req, res) => {
   const org = await Organization.findById(organizationId);
   if (!org) return sendNotFound(res, 'Organization not found');
 
-  const periodEnd = new Date(now);
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  const paymentId = `pay_mock_${Date.now()}`;
+  const subscriptionId = `sub_mock_${organizationId}`;
 
-  applyPlanToOrganization(org, payload.planId, {
-    subscriptionStatus: 'active',
-    isTrialActive: false,
-    clearTrial: true,
-    subscriptionStartDate: org.subscriptionStartDate || now,
-    subscriptionEndDate: periodEnd,
-    paymentMethod: 'stripe',
-    stripeCustomerId: org.stripeCustomerId || `cus_mock_${organizationId}`,
-    stripeSubscriptionId: `sub_mock_${Date.now()}`,
-  });
-  await org.save();
-
-  logger.info('Mock checkout confirmed after dummy card payment', {
-    organizationId,
+  const { payment } = await activatePaidSubscription({
+    organization: org,
     planId: payload.planId,
-    cardLast4: '4242',
+    paymentId,
+    orderId: `order_mock_${Date.now()}`,
+    subscriptionId,
+    source: 'mock',
+    amountMinor: planAmountMinorUnits(payload.planId),
+    currency: payload.currency || getRazorpayCurrency(),
+    customerId: org.razorpayCustomerId || `cust_mock_${organizationId}`,
   });
 
   return sendSuccess(
@@ -267,12 +313,107 @@ export const confirmMockCheckout = asyncHandler(async (req, res) => {
       payment: {
         status: 'succeeded',
         amount: payload.amount ?? getPlanDetails(payload.planId).price,
-        currency: 'USD',
+        currency: payload.currency || getRazorpayCurrency(),
         last4: '4242',
         brand: 'visa',
+        invoiceNumber: payment?.invoiceNumber,
       },
     },
     'Payment successful'
+  );
+});
+
+/**
+ * POST /api/v1/organization/subscription/verify-payment
+ * Optimistic confirm after Checkout.js (webhook remains source of truth for renewals).
+ */
+export const verifyRazorpayPayment = asyncHandler(async (req, res) => {
+  if (!isRazorpayConfigured()) {
+    return sendError(res, 'Razorpay is not configured', 503, 'RAZORPAY_NOT_CONFIGURED');
+  }
+
+  const organizationId = getOrganizationId(req);
+  const {
+    razorpay_order_id: orderId,
+    razorpay_payment_id: paymentId,
+    razorpay_subscription_id: subscriptionId,
+    razorpay_signature: signature,
+    planId: bodyPlanId,
+  } = req.body || {};
+
+  if (!paymentId || !signature) {
+    return sendValidationError(res, {
+      razorpay_payment_id: !paymentId ? 'Required' : undefined,
+      razorpay_signature: !signature ? 'Required' : undefined,
+    });
+  }
+
+  const isSubscription = Boolean(subscriptionId);
+  const valid = isSubscription
+    ? verifyRazorpaySubscriptionSignature({ paymentId, subscriptionId, signature })
+    : verifyRazorpayPaymentSignature({ orderId, paymentId, signature });
+
+  if (!valid) {
+    return sendError(res, 'Invalid payment signature', 400, 'INVALID_SIGNATURE');
+  }
+
+  const org = await Organization.findById(organizationId);
+  if (!org) return sendNotFound(res, 'Organization not found');
+
+  let planId = bodyPlanId || org.subscriptionPlan;
+
+  try {
+    const rzp = getRazorpay();
+    if (isSubscription && rzp) {
+      const sub = await rzp.subscriptions.fetch(subscriptionId);
+      if (sub?.notes?.planId) planId = sub.notes.planId;
+      if (sub?.notes?.organizationId && String(sub.notes.organizationId) !== String(organizationId)) {
+        return sendError(res, 'Subscription does not belong to this organization', 403, 'SUB_ORG_MISMATCH');
+      }
+    } else if (orderId && rzp) {
+      const order = await rzp.orders.fetch(orderId);
+      if (order?.notes?.planId) planId = order.notes.planId;
+      if (order?.notes?.organizationId && String(order.notes.organizationId) !== String(organizationId)) {
+        return sendError(res, 'Order does not belong to this organization', 403, 'ORDER_ORG_MISMATCH');
+      }
+    }
+  } catch (error) {
+    logger.warn('Could not fetch Razorpay entity during verify', { error: error.message });
+  }
+
+  if (!isPaidPlan(planId)) {
+    return sendError(res, 'Invalid plan on payment', 400, 'INVALID_PLAN');
+  }
+
+  const { payment, alreadyApplied } = await activatePaidSubscription({
+    organization: org,
+    planId,
+    paymentId,
+    orderId,
+    subscriptionId: subscriptionId || org.razorpaySubscriptionId,
+    source: 'checkout',
+  });
+
+  // Reload org in case another path updated it
+  const fresh = await Organization.findById(organizationId);
+  const subscriptionOrg = fresh || org;
+
+  return sendSuccess(
+    res,
+    {
+      subscription: serializeBilling(subscriptionOrg),
+      payment: {
+        orderId,
+        paymentId,
+        subscriptionId: subscriptionId || subscriptionOrg.razorpaySubscriptionId,
+        status: 'captured',
+        invoiceNumber: payment?.invoiceNumber,
+        alreadyApplied: !!alreadyApplied,
+      },
+    },
+    alreadyApplied
+      ? 'Payment already processed — subscription is active'
+      : 'Payment verified — subscription updated'
   );
 });
 
@@ -298,224 +439,103 @@ export const createPortalSession = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/v1/organization/subscription/cancel
+ * Cancel recurring Razorpay subscription (keeps access until period end).
+ */
+export const cancelRecurringSubscription = asyncHandler(async (req, res) => {
+  const organizationId = getOrganizationId(req);
+  const org = await Organization.findById(organizationId);
+  if (!org) return sendNotFound(res, 'Organization not found');
+
+  const atCycleEnd = req.body?.atCycleEnd !== false;
+
+  if (org.razorpaySubscriptionId) {
+    await cancelRazorpaySubscription(org.razorpaySubscriptionId, {
+      cancelAtCycleEnd: atCycleEnd,
+    });
+  }
+
+  org.subscriptionStatus = atCycleEnd ? org.subscriptionStatus : 'cancelled';
+  if (!atCycleEnd) {
+    // Immediate cancel → free at end of grace; mark cancelled now
+    org.subscriptionStatus = 'cancelled';
+  }
+  await org.save();
+
+  return sendSuccess(
+    res,
+    { subscription: serializeBilling(org) },
+    atCycleEnd
+      ? 'Subscription will cancel at the end of the billing period'
+      : 'Subscription cancelled'
+  );
+});
+
+/**
  * POST /api/v1/organization/subscription/switch-free
- * Downgrade / switch to free without Stripe.
  */
 export const switchToFreePlan = asyncHandler(async (req, res) => {
   const organizationId = getOrganizationId(req);
   const org = await Organization.findById(organizationId);
   if (!org) return sendNotFound(res, 'Organization not found');
 
-  // If live Stripe subscription exists, cancel at period end via Stripe when possible
-  if (isStripeLiveConfigured() && org.stripeSubscriptionId && !String(org.stripeSubscriptionId).startsWith('sub_mock_')) {
-    try {
-      const stripe = getStripe();
-      await stripe.subscriptions.update(org.stripeSubscriptionId, {
-        cancel_at_period_end: true,
-        metadata: { ...(org.metadata || {}), requestedPlan: 'free' },
-      });
-    } catch (error) {
-      logger.warn('Failed to schedule Stripe cancel on free switch', {
-        error: error.message,
-        organizationId,
-      });
-    }
+  if (org.razorpaySubscriptionId) {
+    await cancelRazorpaySubscription(org.razorpaySubscriptionId, { cancelAtCycleEnd: false });
   }
 
   applyPlanToOrganization(org, 'free', {
     subscriptionStatus: 'active',
     isTrialActive: false,
-    paymentMethod: org.paymentMethod === 'stripe' ? 'stripe' : 'none',
+    paymentMethod: 'none',
+    razorpaySubscriptionId: undefined,
+    subscriptionEndDate: null,
   });
+  org.razorpaySubscriptionId = undefined;
   await org.save();
 
   return sendSuccess(res, { subscription: serializeBilling(org) }, 'Switched to Free plan');
 });
 
-/**
- * GET /api/v1/organization/subscription/checkout/session/:sessionId
- * After Stripe redirect — sync org from session (backup if webhook delayed).
- */
 export const syncCheckoutSession = asyncHandler(async (req, res) => {
-  const organizationId = getOrganizationId(req);
-  const { sessionId } = req.params;
-
-  if (!sessionId || sessionId.startsWith('mock_')) {
-    return sendSuccess(res, { synced: false, reason: 'mock_or_missing' });
-  }
-
-  if (!isStripeLiveConfigured()) {
-    return sendError(res, 'Stripe is not configured', 503, 'STRIPE_NOT_CONFIGURED');
-  }
-
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.retrieve(sessionId, {
-    expand: ['subscription'],
-  });
-
-  if (String(session.client_reference_id || session.metadata?.organizationId) !== String(organizationId)) {
-    return sendError(res, 'Session does not belong to this organization', 403, 'SESSION_ORG_MISMATCH');
-  }
-
-  if (session.payment_status !== 'paid' && session.status !== 'complete') {
-    return sendSuccess(res, { synced: false, status: session.status, payment_status: session.payment_status });
-  }
-
-  const org = await Organization.findById(organizationId);
-  if (!org) return sendNotFound(res, 'Organization not found');
-
-  const planId = session.metadata?.planId || org.subscriptionPlan;
-  const subscription = session.subscription;
-  const subObj = typeof subscription === 'object' ? subscription : null;
-
-  applyPlanToOrganization(org, planId, {
-    subscriptionStatus: subObj
-      ? mapStripeSubscriptionStatus(subObj.status)
-      : 'active',
-    isTrialActive: false,
-    clearTrial: true,
-    subscriptionStartDate: org.subscriptionStartDate || new Date(),
-    subscriptionEndDate: subObj?.current_period_end
-      ? new Date(subObj.current_period_end * 1000)
-      : org.subscriptionEndDate,
-    paymentMethod: 'stripe',
-    stripeCustomerId: session.customer || org.stripeCustomerId,
-    stripeSubscriptionId: subObj?.id || session.subscription || org.stripeSubscriptionId,
-  });
-  await org.save();
-
-  return sendSuccess(res, { synced: true, subscription: serializeBilling(org) }, 'Subscription synced');
+  return sendSuccess(res, { synced: false, reason: 'use_razorpay_verify' });
 });
 
 /**
- * Stripe webhook handler (raw body required).
- * POST /api/v1/webhooks/stripe
+ * POST /api/v1/webhooks/razorpay
  */
-export const handleStripeWebhook = async (req, res) => {
-  if (!isStripeLiveConfigured()) {
-    return res.status(503).json({ success: false, message: 'Stripe not configured' });
-  }
+export const handleRazorpayWebhook = async (req, res) => {
+  const signature = req.headers['x-razorpay-signature'];
+  const rawBody = req.rawBody
+    ? req.rawBody.toString('utf8')
+    : typeof req.body === 'string'
+      ? req.body
+      : JSON.stringify(req.body || {});
 
-  const stripe = getStripe();
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (process.env.RAZORPAY_WEBHOOK_SECRET) {
+    const ok = verifyRazorpayWebhookSignature(rawBody, signature);
+    if (!ok) {
+      logger.error('Razorpay webhook signature failed');
+      return res.status(400).json({ success: false, message: 'Invalid signature' });
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    return res.status(503).json({ success: false, message: 'Webhook secret not configured' });
+  }
 
   let event;
   try {
-    if (webhookSecret && req.rawBody) {
-      event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
-    } else {
-      // Dev fallback without signature verification (not for production)
-      event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      logger.warn('Stripe webhook accepted without signature verification');
-    }
-  } catch (error) {
-    logger.error('Stripe webhook signature failed', { error: error.message });
-    return res.status(400).send(`Webhook Error: ${error.message}`);
+    event = typeof req.body === 'object' && req.body !== null ? req.body : JSON.parse(rawBody);
+  } catch {
+    return res.status(400).json({ success: false, message: 'Invalid JSON' });
   }
 
   try {
-    await processStripeEvent(event);
-    return res.json({ received: true });
+    const result = await processRazorpayWebhookEvent(event);
+    return res.json({ received: true, ...result });
   } catch (error) {
-    logger.error('Stripe webhook processing failed', {
-      type: event?.type,
+    logger.error('Razorpay webhook processing failed', {
+      event: event?.event,
       error: error.message,
     });
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
-async function processStripeEvent(event) {
-  switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object;
-      const organizationId = session.metadata?.organizationId || session.client_reference_id;
-      const planId = session.metadata?.planId;
-      if (!organizationId || !planId) return;
-
-      const org = await Organization.findById(organizationId);
-      if (!org) return;
-
-      let periodEnd = null;
-      if (session.subscription) {
-        try {
-          const stripe = getStripe();
-          const sub = await stripe.subscriptions.retrieve(session.subscription);
-          periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
-          applyPlanToOrganization(org, planId, {
-            subscriptionStatus: mapStripeSubscriptionStatus(sub.status),
-            isTrialActive: false,
-            clearTrial: true,
-            subscriptionStartDate: org.subscriptionStartDate || new Date(),
-            subscriptionEndDate: periodEnd,
-            paymentMethod: 'stripe',
-            stripeCustomerId: session.customer || org.stripeCustomerId,
-            stripeSubscriptionId: sub.id,
-          });
-        } catch {
-          applyPlanToOrganization(org, planId, {
-            subscriptionStatus: 'active',
-            clearTrial: true,
-            paymentMethod: 'stripe',
-            stripeCustomerId: session.customer || org.stripeCustomerId,
-            stripeSubscriptionId: session.subscription,
-          });
-        }
-      } else {
-        applyPlanToOrganization(org, planId, {
-          subscriptionStatus: 'active',
-          clearTrial: true,
-          paymentMethod: 'stripe',
-          stripeCustomerId: session.customer || org.stripeCustomerId,
-        });
-      }
-      await org.save();
-      logger.info('Webhook checkout.session.completed applied', { organizationId, planId });
-      break;
-    }
-    case 'customer.subscription.updated':
-    case 'customer.subscription.deleted': {
-      const sub = event.data.object;
-      const organizationId = sub.metadata?.organizationId;
-      const org = organizationId
-        ? await Organization.findById(organizationId)
-        : await Organization.findOne({ stripeSubscriptionId: sub.id });
-      if (!org) return;
-
-      const planId = sub.metadata?.planId || org.subscriptionPlan;
-      if (event.type === 'customer.subscription.deleted') {
-        applyPlanToOrganization(org, 'free', {
-          subscriptionStatus: 'cancelled',
-          isTrialActive: false,
-          stripeSubscriptionId: null,
-        });
-      } else {
-        applyPlanToOrganization(org, planId, {
-          subscriptionStatus: mapStripeSubscriptionStatus(sub.status),
-          subscriptionEndDate: sub.current_period_end
-            ? new Date(sub.current_period_end * 1000)
-            : org.subscriptionEndDate,
-          stripeCustomerId: sub.customer || org.stripeCustomerId,
-          stripeSubscriptionId: sub.id,
-          paymentMethod: 'stripe',
-          isTrialActive: sub.status === 'trialing',
-        });
-      }
-      await org.save();
-      break;
-    }
-    case 'invoice.payment_failed': {
-      const invoice = event.data.object;
-      const org = await Organization.findOne({
-        stripeCustomerId: invoice.customer,
-      });
-      if (!org) return;
-      org.subscriptionStatus = 'past_due';
-      await org.save();
-      break;
-    }
-    default:
-      break;
-  }
-}

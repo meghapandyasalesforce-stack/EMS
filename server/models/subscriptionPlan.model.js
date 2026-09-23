@@ -49,6 +49,12 @@ const subscriptionPlanSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    /** Cached Razorpay Plan id (plan_xxx) for recurring subscriptions */
+    razorpayPlanId: {
+      type: String,
+      sparse: true,
+      trim: true,
+    },
   },
   { timestamps: true }
 );

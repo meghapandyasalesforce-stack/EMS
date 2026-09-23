@@ -28,7 +28,7 @@ export default async function csrfProtection(req, res, next) {
         '/api/v1/admin/auth/refresh-token', // Refresh token endpoint (no CSRF needed)
         '/api/v1/platform/auth/refresh-token',
         '/api/v1/both/password', // forgot/reset password endpoints under this prefix
-        '/api/v1/webhooks/stripe', // Stripe signed webhooks
+        '/api/v1/webhooks/razorpay', // Razorpay signed webhooks
     ].some((path) => normalizedUrl.startsWith(path));
     
     if (allowlisted) {

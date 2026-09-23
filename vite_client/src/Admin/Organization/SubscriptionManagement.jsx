@@ -27,6 +27,40 @@ const formatDate = (value) => {
   }
 };
 
+const formatMoney = (amount, currency = 'INR') => {
+  const n = Number(amount || 0);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(n);
+  } catch {
+    return `${currency} ${n}`;
+  }
+};
+
+const loadRazorpayScript = () =>
+  new Promise((resolve) => {
+    if (typeof window !== 'undefined' && window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const existing = document.querySelector('script[data-razorpay-checkout]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true));
+      existing.addEventListener('error', () => resolve(false));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.dataset.razorpayCheckout = '1';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+
 const statusTone = (status) => {
   switch (status) {
     case 'active':
@@ -47,6 +81,7 @@ const SubscriptionManagement = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [plans, setPlans] = useState([]);
   const [subscription, setSubscription] = useState(null);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyPlan, setBusyPlan] = useState(null);
 
@@ -57,6 +92,7 @@ const SubscriptionManagement = () => {
       });
       setSubscription(res.data.subscription || null);
       setPlans(res.data.availablePlans || []);
+      setPayments(res.data.recentPayments || []);
     } catch (error) {
       logger.error('Failed to load subscription', { error: error.message });
       toast.error(error.response?.data?.message || 'Failed to load subscription');
@@ -69,10 +105,8 @@ const SubscriptionManagement = () => {
     load();
   }, [load]);
 
-  // Handle return from Stripe checkout / cancel (mock uses /organization/checkout page)
   useEffect(() => {
     const checkout = searchParams.get('checkout');
-    const sessionId = searchParams.get('session_id');
 
     const finishParams = () => {
       const next = new URLSearchParams(searchParams);
@@ -85,24 +119,6 @@ const SubscriptionManagement = () => {
         toast.success('Subscription updated after payment');
         await load();
         finishParams();
-        return;
-      }
-
-      if (checkout === 'success' && sessionId) {
-        try {
-          setBusyPlan('sync');
-          await axios.get(
-            `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/checkout/session/${sessionId}`,
-            { withCredentials: true }
-          );
-          toast.success('Payment successful — subscription updated');
-          await load();
-        } catch (error) {
-          toast.error(error.response?.data?.message || 'Could not sync payment');
-        } finally {
-          setBusyPlan(null);
-          finishParams();
-        }
         return;
       }
 
@@ -121,6 +137,79 @@ const SubscriptionManagement = () => {
       run();
     }
   }, [searchParams, setSearchParams, load]);
+
+  const openRazorpayCheckout = async (checkout) => {
+    const ok = await loadRazorpayScript();
+    if (!ok || !window.Razorpay) {
+      toast.error('Could not load Razorpay Checkout. Check your network.');
+      return;
+    }
+
+    const planId = checkout.planId;
+    const options = {
+      key: checkout.keyId,
+      name: checkout.name || 'Paarsiv EMS',
+      description: checkout.description || `${checkout.planName} plan`,
+      prefill: checkout.prefill || {},
+      theme: checkout.theme || { color: '#4F46E5' },
+      handler: async (response) => {
+        try {
+          setBusyPlan(planId);
+          const res = await axios.post(
+            `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/verify-payment`,
+            {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_subscription_id: response.razorpay_subscription_id,
+              razorpay_signature: response.razorpay_signature,
+              planId,
+            },
+            { withCredentials: true }
+          );
+          toast.success(
+            res.data?.message || 'Payment successful — subscription updated'
+          );
+          await load();
+        } catch (error) {
+          const code = error.response?.data?.code;
+          // Race with webhook may surface as duplicate; plan is usually already active
+          if (code === 'DUPLICATE_VALUE' || code === 'ALREADY_APPLIED') {
+            toast.success('Payment successful — subscription updated');
+            await load();
+          } else {
+            // Still refresh — webhook may have activated the plan
+            await load();
+            toast.error(
+              error.response?.data?.message || 'Payment verification failed'
+            );
+          }
+        } finally {
+          setBusyPlan(null);
+        }
+      },
+      modal: {
+        ondismiss: () => {
+          toast.info('Checkout cancelled');
+          setBusyPlan(null);
+        },
+      },
+    };
+
+    if (checkout.subscriptionId) {
+      options.subscription_id = checkout.subscriptionId;
+    } else {
+      options.order_id = checkout.orderId;
+      options.amount = checkout.amount;
+      options.currency = checkout.currency || 'INR';
+    }
+
+    const rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', (resp) => {
+      toast.error(resp?.error?.description || 'Payment failed');
+      setBusyPlan(null);
+    });
+    rzp.open();
+  };
 
   const handleSelectPlan = async (planId) => {
     if (busyPlan) return;
@@ -149,6 +238,17 @@ const SubscriptionManagement = () => {
         { withCredentials: true }
       );
       const checkout = res.data.checkout;
+
+      if (checkout?.mode === 'razorpay' && (checkout.subscriptionId || checkout.orderId)) {
+        toast.info(
+          checkout.subscriptionId
+            ? 'Opening Razorpay subscription checkout…'
+            : 'Opening Razorpay Checkout…'
+        );
+        await openRazorpayCheckout(checkout);
+        return;
+      }
+
       if (checkout?.url) {
         if (checkout.mode === 'mock') {
           toast.info('Opening development checkout…');
@@ -156,7 +256,9 @@ const SubscriptionManagement = () => {
         window.location.href = checkout.url;
         return;
       }
-      toast.error('No checkout URL returned');
+
+      toast.error('No checkout session returned');
+      setBusyPlan(null);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to start checkout');
       setBusyPlan(null);
@@ -193,6 +295,7 @@ const SubscriptionManagement = () => {
   }
 
   const currentPlan = subscription?.subscriptionPlan;
+  const currency = subscription?.currency || plans[0]?.currency || 'INR';
   const planOrder = ['free', 'basic', 'premium', 'enterprise'];
   const sortedPlans = planOrder
     .map((id) => plans.find((p) => p.id === id))
@@ -205,7 +308,7 @@ const SubscriptionManagement = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Subscription & billing</h1>
             <p className="mt-2 text-gray-600">
-              View your plan, seats, renewal dates, and upgrade with checkout
+              View your plan, seats, renewal dates, and upgrade with Razorpay checkout
               {subscription?.billingMode === 'mock' ? ' (development / mock mode)' : ''}.
             </p>
           </div>
@@ -228,9 +331,10 @@ const SubscriptionManagement = () => {
                   {subscription.planName || currentPlan}
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
-                  ${subscription.planPrice ?? 0}/month
+                  {formatMoney(subscription.planPrice ?? 0, currency)}/month
                   {subscription.billingMode === 'mock' && ' · Mock billing'}
-                  {subscription.stripeConfigured && ' · Stripe connected'}
+                  {subscription.razorpayConfigured && ' · Razorpay connected'}
+                  {subscription.recurring && ' · Recurring'}
                 </p>
               </div>
               <span
@@ -287,6 +391,7 @@ const SubscriptionManagement = () => {
             const targetIdx = planOrder.indexOf(plan.id);
             const isUpgrade = targetIdx > currentIdx;
             const isDowngrade = targetIdx < currentIdx;
+            const planCurrency = plan.currency || currency;
 
             return (
               <div
@@ -304,7 +409,9 @@ const SubscriptionManagement = () => {
                   <div className="mb-6 text-center">
                     <h3 className="mb-2 text-2xl font-bold text-gray-900">{plan.name}</h3>
                     <div className="mb-4">
-                      <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
+                      <span className="text-4xl font-bold text-gray-900">
+                        {formatMoney(plan.price, planCurrency)}
+                      </span>
                       <span className="text-gray-600">/month</span>
                     </div>
                     <div className="flex items-center justify-center text-sm text-gray-600">
@@ -373,16 +480,57 @@ const SubscriptionManagement = () => {
           <h2 className="text-lg font-semibold text-gray-900">How billing works</h2>
           <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-gray-600">
             <li>
-              Paid plans open a <strong>checkout payment page</strong> (like Razorpay/Stripe). Enter test card{' '}
-              <code className="text-xs">4242 4242 4242 4242</code> — no real money is charged in test/mock mode.
+              Paid plans create a <strong>Razorpay Subscription</strong> (recurring monthly). Checkout
+              authorizes the mandate; renewals are charged automatically.
             </li>
-            <li>Free plan never requires payment.</li>
             <li>
-              For live Stripe Checkout, set <code className="text-xs">STRIPE_SECRET_KEY=sk_test_…</code> and{' '}
-              <code className="text-xs">STRIPE_BILLING_MODE=stripe</code>.
+              Webhooks (<code className="text-xs">subscription.charged</code>, etc.) are the source of
+              truth for renewals and failures. Client verify unlocks access immediately after checkout.
+            </li>
+            <li>
+              Without API keys, local <strong>mock</strong> checkout uses card{' '}
+              <code className="text-xs">4242 4242 4242 4242</code>.
+            </li>
+            <li>
+              Free plan cancels any active Razorpay subscription. Configure webhook:{' '}
+              <code className="text-xs">POST /api/v1/webhooks/razorpay</code>.
             </li>
           </ul>
         </div>
+
+        {payments.length > 0 && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900">Payment history</h2>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="py-2 pr-4">Invoice</th>
+                    <th className="py-2 pr-4">Plan</th>
+                    <th className="py-2 pr-4">Amount</th>
+                    <th className="py-2 pr-4">Status</th>
+                    <th className="py-2">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.id} className="border-b border-gray-100">
+                      <td className="py-2.5 pr-4 font-mono text-xs text-gray-700">
+                        {p.invoiceNumber || '—'}
+                      </td>
+                      <td className="py-2.5 pr-4 capitalize">{p.planId}</td>
+                      <td className="py-2.5 pr-4">
+                        {formatMoney(p.amount, p.currency || currency)}
+                      </td>
+                      <td className="py-2.5 pr-4 capitalize">{p.status}</td>
+                      <td className="py-2.5">{formatDate(p.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

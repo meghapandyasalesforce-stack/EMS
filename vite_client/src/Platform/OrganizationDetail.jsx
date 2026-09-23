@@ -59,6 +59,8 @@ const OrganizationDetail = () => {
     platformNotes: '',
     platformTags: '',
     paymentMethod: 'none',
+    razorpayCustomerId: '',
+    razorpaySubscriptionId: '',
     stripeCustomerId: '',
     stripeSubscriptionId: '',
   });
@@ -98,6 +100,8 @@ const OrganizationDetail = () => {
       platformNotes: currentOrg.platformNotes || '',
       platformTags: (currentOrg.platformTags || []).join(', '),
       paymentMethod: currentOrg.paymentMethod || 'none',
+      razorpayCustomerId: currentOrg.razorpayCustomerId || '',
+      razorpaySubscriptionId: currentOrg.razorpaySubscriptionId || '',
       stripeCustomerId: currentOrg.stripeCustomerId || '',
       stripeSubscriptionId: currentOrg.stripeSubscriptionId || '',
     });
@@ -161,6 +165,8 @@ const OrganizationDetail = () => {
               .map((t) => t.trim())
               .filter(Boolean),
             paymentMethod: profileForm.paymentMethod,
+            razorpayCustomerId: profileForm.razorpayCustomerId || null,
+            razorpaySubscriptionId: profileForm.razorpaySubscriptionId || null,
             stripeCustomerId: profileForm.stripeCustomerId || null,
             stripeSubscriptionId: profileForm.stripeSubscriptionId || null,
           },
@@ -566,17 +572,18 @@ const OrganizationDetail = () => {
 
       {tab === 'billing' && (
         <form onSubmit={handleSaveProfile} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Billing (stub)</h2>
-          <p className="text-sm text-slate-600">Payment method and Stripe IDs for ops reference. Full billing comes later.</p>
+          <h2 className="text-lg font-semibold text-slate-900">Billing</h2>
+          <p className="text-sm text-slate-600">Payment method and Razorpay IDs for ops reference.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={profileForm.paymentMethod} onChange={(e) => setProfileForm((f) => ({ ...f, paymentMethod: e.target.value }))}>
               <option value="none">No payment method</option>
-              <option value="stripe">Stripe</option>
+              <option value="razorpay">Razorpay</option>
+              <option value="stripe">Stripe (legacy)</option>
               <option value="paypal">PayPal</option>
               <option value="bank_transfer">Bank transfer</option>
             </select>
-            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={profileForm.stripeCustomerId} onChange={(e) => setProfileForm((f) => ({ ...f, stripeCustomerId: e.target.value }))} placeholder="Stripe customer ID" />
-            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-2" value={profileForm.stripeSubscriptionId} onChange={(e) => setProfileForm((f) => ({ ...f, stripeSubscriptionId: e.target.value }))} placeholder="Stripe subscription ID" />
+            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={profileForm.razorpayCustomerId} onChange={(e) => setProfileForm((f) => ({ ...f, razorpayCustomerId: e.target.value }))} placeholder="Razorpay customer ID" />
+            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-2" value={profileForm.razorpaySubscriptionId} onChange={(e) => setProfileForm((f) => ({ ...f, razorpaySubscriptionId: e.target.value }))} placeholder="Razorpay subscription ID" />
           </div>
           <button type="submit" disabled={savingProfile} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
             {savingProfile ? 'Saving…' : 'Save billing fields'}

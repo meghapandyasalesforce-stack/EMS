@@ -44,6 +44,7 @@ const EMPLOYEE_WORKSPACE_ROUTES = [
   '/my-attendance-regularization',
   '/employee/projects',
   '/one-on-one',
+  '/1-on-1',
   '/employee/benefits-learning',
   '/employee/documents-id',
   '/employee/my-documents',
@@ -57,11 +58,16 @@ const ROUTE_TO_PORTAL = [
   ['/dashboard-admin', 'admin'],
   ['/dashboard-administration', 'executive'],
   ['/dashboard-hr', 'hr_manager'],
+  // Organizer schedule page — HR / manager workspaces
+  ['/one-on-one', 'hr_manager'],
+  ['/one-on-one', 'line_manager'],
+  ['/one-on-one', 'project_manager'],
   ['/dashboard-finance', 'payroll_admin'],
   ['/dashboard-manager', 'line_manager'],
   ['/dashboard-manager', 'project_manager'],
   ['/projects', 'project_manager'],
   ['/add-project', 'project_manager'],
+  // /1-on-1 is personal (employee) — comes from EMPLOYEE_WORKSPACE_ROUTES below
   ...EMPLOYEE_WORKSPACE_ROUTES.map((path) => [path, 'employee']),
   ...ME_PROFILE_ROUTES.map((path) => [path, 'employee']),
 ];

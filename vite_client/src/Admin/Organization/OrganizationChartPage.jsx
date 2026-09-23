@@ -38,7 +38,6 @@ import {
   getChildren,
   getDescendants,
   getFullName,
-  getSmartInitialExpanded,
   isExecutive,
   managerStateLabel,
   matchesDepartment,
@@ -98,10 +97,11 @@ function OrganizationChartPage() {
       setMeta(data.meta || null);
 
       const allowed = getAllowedIds(list, 'all');
-      setExpanded(getSmartInitialExpanded(list, allowed));
-      if (list.length) {
-        setSelectedId((prev) => prev || list[0].id);
-      }
+      // Always show the full expanded tree by default
+      setExpanded(new Set(list.map((e) => String(e.id))));
+      // Side details panel opens only when a card is clicked
+      setSelectedId(null);
+      setMobilePanelOpen(false);
       fitPendingRef.current = true;
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load organization chart');
@@ -123,7 +123,9 @@ function OrganizationChartPage() {
   useEffect(() => {
     if (!employees.length) return;
     const allowed = getAllowedIds(employees, departmentFilter, departmentList);
-    setExpanded(getSmartInitialExpanded(employees, allowed));
+    setExpanded(new Set([...allowed].map(String)));
+    setSelectedId(null);
+    setMobilePanelOpen(false);
     fitPendingRef.current = true;
   }, [departmentFilter, employees, departmentList]);
 
@@ -317,6 +319,7 @@ function OrganizationChartPage() {
       const emp = getById(employees, id);
       if (!emp) return;
       setSelectedId(id);
+      setMobilePanelOpen(true);
       if (reveal) {
         if (departmentFilter !== 'all') {
           const inDept = matchesDepartment(emp, departmentFilter, departmentList);
@@ -329,12 +332,14 @@ function OrganizationChartPage() {
           });
         setTimeout(() => centerOn(id), 50);
       }
-      if (window.matchMedia('(max-width: 800px)').matches) {
-        setMobilePanelOpen(true);
-      }
     },
     [employees, departmentFilter, departmentList, centerOn]
   );
+
+  const closeEmployeePanel = useCallback(() => {
+    setSelectedId(null);
+    setMobilePanelOpen(false);
+  }, []);
 
   const handleViewInChart = useCallback(
     (id) => {
@@ -464,7 +469,8 @@ function OrganizationChartPage() {
             type="button"
             className="icon-button mobile-close"
             aria-label="Close details"
-            onClick={() => setMobilePanelOpen(false)}
+            title="Close details"
+            onClick={closeEmployeePanel}
           >
             <FiX />
           </button>
@@ -864,6 +870,18 @@ function OrganizationChartPage() {
                     <button
                       type="button"
                       className="org-tool-btn org-tool-btn-primary"
+                      onClick={() => {
+                        setExpanded(new Set(employees.map((e) => String(e.id))));
+                        fitPendingRef.current = true;
+                      }}
+                      title="Expand all branches"
+                    >
+                      <FiChevronDown />
+                      <span>Expand</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="org-tool-btn"
                       onClick={fitChart}
                       title="Reset pan and zoom to fit the chart"
                     >
@@ -880,17 +898,6 @@ function OrganizationChartPage() {
                         Center
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      className="org-tool-btn"
-                      onClick={() => {
-                        setExpanded(new Set(employees.map((e) => String(e.id))));
-                        fitPendingRef.current = true;
-                      }}
-                      title="Expand all branches"
-                    >
-                      Expand
-                    </button>
                     <button
                       type="button"
                       className="org-tool-btn"
@@ -1175,12 +1182,14 @@ function OrganizationChartPage() {
                     </div>
                   </div>
                 </div>
-                <aside
-                  className={`employee-panel${mobilePanelOpen ? ' mobile-open' : ''}`}
-                  aria-label="Employee details"
-                >
-                  {renderPanel()}
-                </aside>
+                {selected ? (
+                  <aside
+                    className={`employee-panel${mobilePanelOpen ? ' mobile-open' : ''} panel-visible`}
+                    aria-label="Employee details"
+                  >
+                    {renderPanel()}
+                  </aside>
+                ) : null}
               </div>
               </div>
               ) : null}

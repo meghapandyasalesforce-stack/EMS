@@ -77,6 +77,8 @@ const NotificationDropdown = () => {
         () => getAnnouncementAudienceCutoff(employeeUser, authUser),
         [employeeUser, authUser]
     );
+    // Primitive dep so socket effect does not reconnect on every new Date() identity
+    const announcementCutoffMs = announcementCutoff ? announcementCutoff.getTime() : 0;
 
     const visibleNotifications = useMemo(
         () =>
@@ -172,7 +174,7 @@ const NotificationDropdown = () => {
             socket.off('notification', onNotification);
             socket.disconnect();
         };
-    }, [sessionUser, dispatch, announcementCutoff]);
+    }, [sessionUser, dispatch, announcementCutoffMs]);
 
     // Calculate dropdown position when opening – panel opens to the right of the button, stays in viewport
     const DROPDOWN_MAX_HEIGHT_PX = 512;
@@ -413,8 +415,56 @@ const NotificationDropdown = () => {
                             visibleNotifications.map((notification) => (
                                 <div
                                     key={notification?._id || Math.random()}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => {
+                                        const meta = notification?.metadata || {};
+                                        const meetingId = meta.oneOnOneId || meta.meetingId;
+                                        const isOneOnOne =
+                                            meta.type === 'one_on_one' || Boolean(meetingId);
+                                        if (isOneOnOne && meetingId) {
+                                            if (!notification?.isRead) markAsRead(notification._id);
+                                            setIsOpen(false);
+                                            const action = String(meta.action || '');
+                                            // Invitations / schedule changes → personal My 1:1
+                                            // Responses / organizer updates → organizer One-on-One
+                                            const inviteeActions = new Set([
+                                                'invite',
+                                                'schedule_changed',
+                                                'updated',
+                                                'cancelled',
+                                                'reschedule_accepted',
+                                                'reschedule_rejected',
+                                                'reschedule_countered'
+                                            ]);
+                                            const organizerActions = new Set([
+                                                'accepted',
+                                                'declined',
+                                                'reschedule_requested'
+                                            ]);
+                                            let path = meta.link || null;
+                                            if (!path) {
+                                                if (organizerActions.has(action)) {
+                                                    path = `/one-on-one?meetingId=${meetingId}`;
+                                                } else if (inviteeActions.has(action) || action === 'invite') {
+                                                    path = `/1-on-1?meetingId=${meetingId}`;
+                                                } else {
+                                                    path = `/1-on-1?meetingId=${meetingId}`;
+                                                }
+                                            }
+                                            navigate(path);
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') e.currentTarget.click();
+                                    }}
                                     className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
                                         !notification?.isRead ? 'bg-theme-secondary/10' : ''
+                                    } ${
+                                        notification?.metadata?.type === 'one_on_one' ||
+                                        notification?.metadata?.oneOnOneId
+                                            ? 'cursor-pointer'
+                                            : ''
                                     }`}
                                 >
                                     <div className="flex items-start space-x-3">

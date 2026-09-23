@@ -220,6 +220,8 @@ export const createOneOnOne = asyncHandler(async (req, res) => {
         status: 'Pending',
         recurring: req.body.recurring
     });
+    meeting.statusHistory = meeting.statusHistory.slice(0, 40);
+};
 
     await oneOnOne.save();
     await populateMeeting(oneOnOne);
@@ -241,10 +243,28 @@ export const createOneOnOne = asyncHandler(async (req, res) => {
                 action: 'scheduled'
             }
         });
-    } catch (notificationError) {
-        logger.error('Error sending one-on-one notification', {
-            error: notificationError.message,
-            oneOnOneId: oneOnOne._id
+        return false;
+    }
+    return true;
+};
+
+const stripNotesIfNotParticipant = (meetingDoc, actorId) => {
+    const obj = typeof meetingDoc.toObject === 'function' ? meetingDoc.toObject() : { ...meetingDoc };
+    if (!isStrictParticipant(obj, actorId)) {
+        delete obj.meetingNotes;
+        delete obj.managerNotes;
+        delete obj.employeeNotes;
+    }
+    return obj;
+};
+
+const loadMeetingOr404 = async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) {
+        res.status(401).json({
+            success: false,
+            message: 'Session missing organization context. Please log in again.',
+            code: 'MISSING_ORGANIZATION_ID'
         });
     }
 
@@ -258,8 +278,10 @@ export const createOneOnOne = asyncHandler(async (req, res) => {
 
     res.status(201).json({
         success: true,
-        message: 'One-on-one meeting scheduled successfully',
-        data: oneOnOne
+        message: multi
+            ? `${created.length} one-on-one invitations sent`
+            : 'One-on-one invitation sent',
+        data: multi ? created : created[0]
     });
 });
 
@@ -336,9 +358,10 @@ export const getOneOnOnes = asyncHandler(async (req, res) => {
         .populate('goals.goalId')
         .sort({ scheduledDate: -1 });
 
+    const actorId = getActorEmployeeId(req);
     res.json({
         success: true,
-        data: oneOnOnes
+        data: oneOnOnes.map((m) => stripNotesIfNotParticipant(m, actorId))
     });
 });
 
@@ -421,10 +444,72 @@ export const updateOneOnOne = asyncHandler(async (req, res) => {
         });
     }
 
+    const {
+        employeeIds: _ignoreIds,
+        employeeId: _ignoreEmp,
+        status: _ignoreStatus,
+        managerId: _ignoreMgr,
+        organizationId: _ignoreOrg,
+        inviteeResponse: _ignoreInv,
+        rescheduleProposal: _ignoreProp,
+        statusHistory: _ignoreHist,
+        ...updateBody
+    } = req.body || {};
+
+    const prevDate = meeting.scheduledDate ? new Date(meeting.scheduledDate).toISOString() : '';
+    const prevTime = meeting.scheduledTime || '';
+
+    Object.assign(meeting, updateBody);
+
+    const nextDate = meeting.scheduledDate ? new Date(meeting.scheduledDate).toISOString() : '';
+    const nextTime = meeting.scheduledTime || '';
+    const scheduleChanged = prevDate !== nextDate || prevTime !== nextTime;
+
+    if (scheduleChanged) {
+        meeting.status = 'Pending Response';
+        meeting.inviteeResponse = { status: 'pending' };
+        meeting.rescheduleProposal = { status: 'none' };
+        pushHistory(meeting, {
+            status: 'Pending Response',
+            action: 'rescheduled_by_organizer',
+            actorId: getActorEmployeeId(req),
+            note: 'Organizer changed date/time — awaiting invitee confirmation'
+        });
+    } else {
+        pushHistory(meeting, {
+            status: meeting.status,
+            action: 'updated',
+            actorId: getActorEmployeeId(req),
+            note: 'Meeting details updated'
+        });
+    }
+
+    await meeting.save();
+    await populateMeeting(meeting);
+
+    const { formattedDate, formattedTime } = formatMeetingWhen(
+        meeting.scheduledDate,
+        meeting.scheduledTime
+    );
+    const organizerLabel = personLabel(meeting.managerId, 'Organizer');
+
+    await notifyPeople({
+        recipientEmployeeIds: [meeting.employeeId?._id || meeting.employeeId],
+        actor: req.employee || req.user,
+        message: scheduleChanged
+            ? `${organizerLabel} updated your one-on-one to ${formattedDate} at ${formattedTime}. Please confirm again.`
+            : `${organizerLabel} updated details for your one-on-one on ${formattedDate}.`,
+        meeting,
+        action: scheduleChanged ? 'schedule_changed' : 'updated',
+        forInvitee: true
+    });
+
     res.json({
         success: true,
-        message: 'One-on-one updated successfully',
-        data: oneOnOne
+        message: scheduleChanged
+            ? 'Meeting updated — invitee must confirm the new time'
+            : 'One-on-one updated successfully',
+        data: meeting
     });
 });
 
@@ -755,7 +840,7 @@ export const cancelOneOnOne = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         message: 'One-on-one meeting cancelled',
-        data: oneOnOne
+        data: meeting
     });
 });
 
@@ -826,7 +911,7 @@ export const completeOneOnOne = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         message: 'One-on-one completed successfully',
-        data: oneOnOne
+        data: meeting
     });
 });
 

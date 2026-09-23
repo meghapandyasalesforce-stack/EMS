@@ -514,7 +514,7 @@ export const updateOrganizationSettings = async (req, res) => {
 
 /**
  * Update subscription plan
- * Paid plans should use Stripe Checkout (/organization/subscription/checkout).
+ * Paid plans should use Razorpay Checkout (/organization/subscription/checkout).
  * Direct PUT remains for Free plan switches and mock-mode convenience.
  */
 export const updateSubscriptionPlan = async (req, res) => {
@@ -534,10 +534,14 @@ export const updateSubscriptionPlan = async (req, res) => {
         }
 
         const planId = subscriptionPlan ? String(subscriptionPlan).toLowerCase() : null;
-        const billingMode = (await import('../../services/stripeBillingService.js')).getStripeBillingMode();
-        const { isPaidPlan, applyPlanToOrganization } = await import('../../services/stripeBillingService.js');
+        const {
+            getBillingMode,
+            isPaidPlan,
+            applyPlanToOrganization,
+        } = await import('../../services/razorpayBillingService.js');
+        const billingMode = getBillingMode();
 
-        if (planId && isPaidPlan(planId) && billingMode === 'stripe') {
+        if (planId && isPaidPlan(planId) && billingMode === 'razorpay') {
             return sendError(
                 res,
                 'Paid plan changes require Checkout. Use POST /organization/subscription/checkout.',
@@ -552,7 +556,7 @@ export const updateSubscriptionPlan = async (req, res) => {
                 subscriptionStatus: planId === 'free' ? organization.subscriptionStatus || 'active' : 'active',
                 isTrialActive: planId === 'free' ? organization.isTrialActive : false,
                 clearTrial: planId !== 'free',
-                paymentMethod: planId === 'free' ? organization.paymentMethod || 'none' : 'stripe',
+                paymentMethod: planId === 'free' ? organization.paymentMethod || 'none' : 'razorpay',
             });
         } else if (maxEmployees !== undefined) {
             organization.maxEmployees = maxEmployees;

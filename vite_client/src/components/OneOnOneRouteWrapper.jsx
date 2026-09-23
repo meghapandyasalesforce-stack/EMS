@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { useSelector } from 'react-redux';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 
 const OneOnOneMeetingHub = React.lazy(() => import('./OneOnOne/OneOnOneMeetingHub'));
@@ -12,7 +12,7 @@ const OneOnOneMeetingHub = React.lazy(() => import('./OneOnOne/OneOnOneMeetingHu
 const OneOnOneRouteWrapper = () => {
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
-    const [isLoading, setIsLoading] = React.useState(true);
+    const [searchParams] = useSearchParams();
 
     React.useEffect(() => {
         const timer = setTimeout(() => setIsLoading(false), 50);

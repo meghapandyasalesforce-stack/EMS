@@ -8,6 +8,20 @@ import { isPublicGuestRoute, isPlatformRoute } from './authSessionUtils.js';
  */
 function clearAuthAndRedirectToLogin() {
   if (typeof window === 'undefined') return;
+
+  const path = window.location.pathname || '';
+  const isPlatform = path.startsWith('/platform');
+  const loginPath = isPlatform ? '/platform/login' : '/login';
+  const alreadyOnAuthScreen =
+    path === loginPath ||
+    path.startsWith('/login') ||
+    path.startsWith('/platform/login') ||
+    path.startsWith('/forgot-password') ||
+    path.startsWith('/reset-password') ||
+    path.startsWith('/register') ||
+    path.startsWith('/organization/login') ||
+    path.startsWith('/organization/register');
+
   try {
     localStorage.removeItem('persist:root');
     localStorage.removeItem('csrfToken');
@@ -16,11 +30,21 @@ function clearAuthAndRedirectToLogin() {
     localStorage.removeItem('organizationId');
     localStorage.removeItem('userId');
     localStorage.removeItem('isOrganizationLogin');
+    localStorage.removeItem('activePortal');
+    // role / refreshTokenPresent are readable cookies — clear so platform sessions
+    // cannot retrigger PLATFORM_SESSION_DEAD → /login forever.
+    const expire = 'Max-Age=0; path=/';
+    document.cookie = `role=; ${expire}`;
+    document.cookie = `refreshTokenPresent=; ${expire}`;
+    document.cookie = `csrfToken=; ${expire}`;
   } catch (e) {
     logger.warn('clearAuthAndRedirectToLogin', e?.message);
   }
-  const isPlatform = window.location.pathname.startsWith('/platform');
-  window.location.href = isPlatform ? '/platform/login' : '/login';
+
+  // Already on login: clearing storage is enough. Re-assigning href causes a reload loop.
+  if (alreadyOnAuthScreen) return;
+
+  window.location.href = loginPath;
 }
 
 /** Session probe calls — reject quietly; never refresh tokens or redirect to login.
@@ -28,6 +52,14 @@ function clearAuthAndRedirectToLogin() {
  * so dashboards don't hard-fail when the short-lived jwt cookie expired. */
 function isSessionProbeRequest(url = '') {
   return url.includes('/auth/permissions');
+}
+
+/** Soft auth failures during bootstrap — never hard-redirect the whole app. */
+function isBootstrapAuthRequest(url = '') {
+  return (
+    url.includes('/auth/permissions') ||
+    url.includes('/profile-details/get-my-details')
+  );
 }
 
 function maybeRedirectToLoginOn401(errorCode) {
@@ -656,8 +688,17 @@ instance.interceptors.response.use(
           role = 'employee';
         }
 
-        if (onPlatformRoute || role === 'platform') {
+        if (onPlatformRoute) {
           role = 'platform';
+        } else if (role === 'platform') {
+          // Platform operator cookie must not drive org HRMS API refresh
+          isRefreshing = false;
+          processQueue(
+            new Error('Platform session cannot access organization APIs'),
+            null
+          );
+          maybeRedirectToLoginOn401('PLATFORM_SESSION_DEAD');
+          return Promise.reject(error);
         }
         
         const refreshEndpoint =
@@ -735,6 +776,24 @@ instance.interceptors.response.use(
     // Handle 403 errors - log helpful message
     if (error.response?.status === 403) {
       const message = error.response?.data?.message || 'Access forbidden';
+      const requestUrl = originalRequest?.url || '';
+      const pathname =
+        typeof window !== 'undefined' ? window.location.pathname : '';
+      const onPlatformRoute = isPlatformRoute(pathname);
+      const onPublicGuestRoute = isPublicGuestRoute(pathname);
+
+      // Only hard-redirect when the server explicitly rejected a platform JWT on
+      // an org HRMS API — not for every 403 while a leftover role=platform cookie exists.
+      if (
+        !onPlatformRoute &&
+        !onPublicGuestRoute &&
+        !isBootstrapAuthRequest(requestUrl) &&
+        error.response?.data?.code === 'INSUFFICIENT_PERMISSIONS' &&
+        /Platform operator/i.test(message)
+      ) {
+        maybeRedirectToLoginOn401('PLATFORM_SESSION_DEAD');
+      }
+
       if (message.includes('admin') || message.includes('Access restricted')) {
         // Don't auto-redirect for 403, let user see the error message
       }

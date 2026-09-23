@@ -28,7 +28,10 @@ const isAuthenticatedBoth = async (req, res, next) => {
     if (decoded.role !== 'admin' && decoded.role !== 'employee') {
       return res.status(403).json({
         success: false,
-        message: 'Access denied',
+        message:
+          decoded.role === 'platform'
+            ? 'Platform operator sessions cannot access organization HRMS APIs. Sign in to your organization instead.'
+            : 'Access denied',
         code: 'INSUFFICIENT_PERMISSIONS',
       });
     }
@@ -65,6 +68,17 @@ const isAuthenticatedBoth = async (req, res, next) => {
           message: 'Session expired due to password change. Please log in again.',
           code: 'PASSWORD_CHANGED',
         });
+      }
+    }
+
+    // Ensure org context from JWT when profile hydrate left it empty
+    if (!req.organizationId && decoded.organizationId) {
+      req.organizationId = decoded.organizationId;
+      if (req.employee && !req.employee.organizationId) {
+        req.employee.organizationId = decoded.organizationId;
+      }
+      if (req.user && !req.user.organizationId) {
+        req.user.organizationId = decoded.organizationId;
       }
     }
 
