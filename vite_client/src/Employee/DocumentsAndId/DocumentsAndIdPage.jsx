@@ -449,13 +449,13 @@ const DocumentsAndIdPage = () => {
               <span className="font-medium text-slate-800">Share Digital Card</span>
             </button>
 
-            <button
+            {/* <button
               onClick={() => toast.info('Lost card reporting will be enabled soon.')}
               className="flex w-full items-center gap-2 rounded-xl border bg-white p-3 text-left transition hover:bg-gray-50"
             >
               <FaExclamationTriangle className="text-red-500" />
               <span className="font-medium text-slate-800">Report Lost Card</span>
-            </button>
+            </button> */}
           </div>
         </div>
 

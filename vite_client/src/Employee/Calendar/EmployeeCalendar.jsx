@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiCalendar, FiClock, FiAlertCircle, FiRefreshCw, FiChevronLeft, FiChevronRight, FiBell, FiUser } from 'react-icons/fi';
+import { FiCalendar, FiClock, FiAlertCircle, FiRefreshCw, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { useSelector } from 'react-redux';
 import axios from '../../utils/axios';
@@ -351,6 +351,21 @@ const EmployeeCalendar = () => {
     setSelectedDate(new Date(currentYear, currentMonth, 1));
   };
 
+  const goToToday = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    // Midnight local — avoids time-of-day selection quirks
+    const today = new Date(y, m - 1, d);
+
+    setCurrentYear(y);
+    setCurrentMonth(m);
+    setSelectedDate(today);
+    setViewMode('month');
+    setShowMobileDateDetails(false);
+  };
+
   if (loading) {
     return (
       <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
@@ -405,12 +420,6 @@ const EmployeeCalendar = () => {
                   Day
                 </button>
               </div>
-              <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600">
-                <FiBell className="h-4 w-4" />
-              </button>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                <FiUser className="h-4 w-4" />
-              </div>
             </div>
           </div>
         </div>
@@ -444,7 +453,11 @@ const EmployeeCalendar = () => {
                   <span className="font-medium text-slate-700">Month:</span>
                   <select
                     value={currentMonth}
-                    onChange={(e) => setCurrentMonth(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const month = parseInt(e.target.value, 10);
+                      setCurrentMonth(month);
+                      setSelectedDate(new Date(currentYear, month - 1, 1));
+                    }}
                     className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm"
                   >
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
@@ -457,10 +470,14 @@ const EmployeeCalendar = () => {
                   <span className="font-medium text-slate-700">Year:</span>
                   <select
                     value={currentYear}
-                    onChange={(e) => setCurrentYear(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const year = parseInt(e.target.value, 10);
+                      setCurrentYear(year);
+                      setSelectedDate(new Date(year, currentMonth - 1, 1));
+                    }}
                     className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm"
                   >
-                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i).map(year => (
+                    {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
                       <option key={year} value={year}>{year}</option>
                     ))}
                   </select>
@@ -486,12 +503,7 @@ const EmployeeCalendar = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const now = new Date();
-                    setCurrentYear(now.getFullYear());
-                    setCurrentMonth(now.getMonth() + 1);
-                    setSelectedDate(now);
-                  }}
+                  onClick={goToToday}
                   className="rounded-lg px-3 py-1.5 text-sm font-semibold text-[#0a8f6c] hover:bg-[#20C997]/10"
                 >
                   Go to today
