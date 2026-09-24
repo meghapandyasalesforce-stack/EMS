@@ -4,7 +4,7 @@ import LeaveBalanceAudit from '../models/leaveBalanceAudit.model.js';
 import leaveBalanceEngine from './leaveBalanceEngine.js';
 import logger from '../helpers/logger.js';
 import { getEffectiveCarryForwardConfig } from '../constants/leaveDefaults.js';
-import { getRollingAccrualMonthlyRate, usesMonthlyAccrual } from '../helpers/leavePolicyAccrualHelper.js';
+import { getRollingAccrualMonthlyRate, usesMonthlyAccrual, getJoinAccrualCutoffDay } from '../helpers/leavePolicyAccrualHelper.js';
 import { getEmployeeLeaveYearBounds, clampLeavePeriodStart } from '../helpers/leaveYearBoundsHelper.js';
 import { getEffectiveJoiningDate, roundLeaveDays } from '../helpers/leaveBalanceRulesHelper.js';
 
@@ -170,7 +170,8 @@ class LeaveBalanceAutomationService {
                 employee,
                 year,
                 month - 1,
-                joiningDate
+                joiningDate,
+                getJoinAccrualCutoffDay(policy?.leaveCycle)
             );
             if (earned <= 0) continue;
 

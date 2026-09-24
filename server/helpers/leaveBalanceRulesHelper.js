@@ -6,6 +6,7 @@
  */
 
 import { LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
+import { DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY } from '../constants/leaveConstants.js';
 
 export function roundLeaveDays(value) {
     return Math.round((Number(value) || 0) * 1000) / 1000;
@@ -183,11 +184,69 @@ export function getEffectiveJoiningDate(employee) {
     return new Date(LEAVE_HISTORY_MIN_YEAR, 0, 1);
 }
 
+/**
+ * Normalize join-month accrual cutoff (1–31). Default 31 = any join day credits that month.
+ */
+export function getJoinAccrualCutoffDay(leaveCycleOrDay = {}) {
+    const day =
+        typeof leaveCycleOrDay === 'number' || typeof leaveCycleOrDay === 'string'
+            ? Number(leaveCycleOrDay)
+            : Number(leaveCycleOrDay?.joinAccrualCutoffDay);
+    if (Number.isInteger(day) && day >= 1 && day <= 31) {
+        return day;
+    }
+    return DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY;
+}
+
+/**
+ * First calendar month that receives monthly accrual for a joining date.
+ * Join on/before cutoff → join month; after cutoff → next month.
+ */
+export function getFirstAccrualCalendarMonth(
+    joiningDate,
+    joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
+) {
+    const join = joiningDate instanceof Date ? joiningDate : new Date(joiningDate);
+    const year = join.getFullYear();
+    const monthIndex = join.getMonth();
+    const day = join.getDate();
+    const cutoff = getJoinAccrualCutoffDay(joinAccrualCutoffDay);
+
+    if (day <= cutoff) {
+        return { year, monthIndex };
+    }
+    if (monthIndex === 11) {
+        return { year: year + 1, monthIndex: 0 };
+    }
+    return { year, monthIndex: monthIndex + 1 };
+}
+
+/** True when (year, monthIndex) is on/after the first accrual month for this join + cutoff. */
+export function isEligibleForMonthlyAccrualCredit(
+    joiningDate,
+    year,
+    monthIndex,
+    joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
+) {
+    if (!joiningDate) return false;
+    const start = getFirstAccrualCalendarMonth(joiningDate, joinAccrualCutoffDay);
+    if (year > start.year) return true;
+    if (year < start.year) return false;
+    return monthIndex >= start.monthIndex;
+}
+
 /** Month index range (0–11) for accrual within a calendar year up to asOfDate. */
-export function getAccrualMonthRange(employee, year, asOfDate = new Date(), periodOpeningBalance = null) {
+export function getAccrualMonthRange(
+    employee,
+    year,
+    asOfDate = new Date(),
+    periodOpeningBalance = null,
+    joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
+) {
     const joiningDate = getEffectiveJoiningDate(employee);
-    const joinYear = joiningDate.getFullYear();
-    const joinMonthIndex = joiningDate.getMonth();
+    const accrualStart = getFirstAccrualCalendarMonth(joiningDate, joinAccrualCutoffDay);
+    const joinYear = accrualStart.year;
+    const joinMonthIndex = accrualStart.monthIndex;
     const yearStart = new Date(year, 0, 1);
     const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
 
@@ -239,17 +298,13 @@ export function getAccrualMonthRange(employee, year, asOfDate = new Date(), peri
         };
     }
 
-    // If employee joined in or before this year, accrual starts from join month
-    // If employee joined after this year, no accrual
+    // Accrual starts from first eligible accrual month (join month or next, per cutoff)
     let startMonth;
     if (joinYear === year) {
-        // Employee joined this year - start from join month
         startMonth = joinMonthIndex;
     } else if (joinYear < year) {
-        // Employee joined before this year - start from January
         startMonth = 0;
     } else {
-        // Employee joined after this year - no accrual
         return { startMonth: 0, endMonth: -1, monthsCompleted: 0 };
     }
 

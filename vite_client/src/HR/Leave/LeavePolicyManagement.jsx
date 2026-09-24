@@ -197,6 +197,11 @@ const emptyPolicyForm = () => ({
     applicablePositions: [],
     applicableRoles: [],
     applicableEmployees: [],
+    leaveCycle: {
+        startMonth: 1,
+        endMonth: 12,
+        joinAccrualCutoffDay: 31,
+    },
     leaveTypes: [
         {
             ...DEFAULT_LEAVE_TYPE,
@@ -226,13 +231,30 @@ const mapPolicyToForm = (policy) => ({
         .filter(Boolean),
     applicableRoles: (policy?.applicableRoles || []).map(toIdString).filter(Boolean),
     applicableEmployees: (policy?.applicableEmployees || []).map(toIdString).filter(Boolean),
+    leaveCycle: {
+        startMonth: Number(policy?.leaveCycle?.startMonth) || 1,
+        endMonth: Number(policy?.leaveCycle?.endMonth) || 12,
+        joinAccrualCutoffDay:
+            Number(policy?.leaveCycle?.joinAccrualCutoffDay) >= 1 &&
+            Number(policy?.leaveCycle?.joinAccrualCutoffDay) <= 31
+                ? Number(policy.leaveCycle.joinAccrualCutoffDay)
+                : 31,
+    },
     leaveTypes: (policy?.leaveTypes || []).map(mapLeaveTypeToForm),
 });
 
 const mapFormToApi = (formData) => {
     const applicableTo = formData.applicableTo || 'all';
+    const cutoffRaw = Number(formData.leaveCycle?.joinAccrualCutoffDay);
+    const joinAccrualCutoffDay =
+        Number.isInteger(cutoffRaw) && cutoffRaw >= 1 && cutoffRaw <= 31 ? cutoffRaw : 31;
     const payload = {
         ...formData,
+        leaveCycle: {
+            startMonth: Number(formData.leaveCycle?.startMonth) || 1,
+            endMonth: Number(formData.leaveCycle?.endMonth) || 12,
+            joinAccrualCutoffDay,
+        },
         leaveTypes: (formData.leaveTypes || []).map(mapLeaveTypeToApi),
         applicableTo,
         applicableDepartments:
@@ -273,6 +295,28 @@ const validateApplicabilityClient = (formData) => {
         return 'Select at least one employee for this policy.';
     }
     return null;
+};
+
+const validateJoinAccrualCutoffDay = (formData) => {
+    const raw = formData.leaveCycle?.joinAccrualCutoffDay;
+    if (raw === '' || raw == null) {
+        return 'Join-month accrual cutoff day is required (1–31).';
+    }
+    const day = Number(raw);
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+        return 'Join-month accrual cutoff day must be between 1 and 31.';
+    }
+    return null;
+};
+
+/** Clamp cutoff to 1–31 while typing; empty allowed so the field can be cleared temporarily. */
+const parseJoinAccrualCutoffInput = (raw) => {
+    if (raw === '') return '';
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed)) return null;
+    if (parsed < 1) return 1;
+    if (parsed > 31) return 31;
+    return parsed;
 };
 
 const formatApplicabilitySummary = (policy) => {
@@ -516,6 +560,11 @@ const LeavePolicyManagement = () => {
         const applicabilityError = validateApplicabilityClient(formData);
         if (applicabilityError) {
             toast.error(applicabilityError);
+            return;
+        }
+        const cutoffError = validateJoinAccrualCutoffDay(formData);
+        if (cutoffError) {
+            toast.error(cutoffError);
             return;
         }
         if (!(formData.leaveTypes || []).length) {
@@ -948,6 +997,53 @@ const LeavePolicyManagement = () => {
                             />
                             <p className="text-xs text-gray-500 mt-1">
                                 Optional. Set when replacing a policy mid-year (day before the new policy starts).
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Join-month accrual cutoff day
+                            </label>
+                            <input
+                                type="number"
+                                min={1}
+                                max={31}
+                                step={1}
+                                required
+                                value={formData.leaveCycle?.joinAccrualCutoffDay ?? 31}
+                                onChange={(e) => {
+                                    const next = parseJoinAccrualCutoffInput(e.target.value);
+                                    if (next === null) return;
+                                    setFormData({
+                                        ...formData,
+                                        leaveCycle: {
+                                            ...(formData.leaveCycle || { startMonth: 1, endMonth: 12 }),
+                                            joinAccrualCutoffDay: next,
+                                        },
+                                    });
+                                }}
+                                onBlur={() => {
+                                    const day = Number(formData.leaveCycle?.joinAccrualCutoffDay);
+                                    if (!Number.isInteger(day) || day < 1 || day > 31) {
+                                        setFormData({
+                                            ...formData,
+                                            leaveCycle: {
+                                                ...(formData.leaveCycle || {
+                                                    startMonth: 1,
+                                                    endMonth: 12,
+                                                }),
+                                                joinAccrualCutoffDay: 31,
+                                            },
+                                        });
+                                    }
+                                }}
+                                className="w-full border rounded px-3 py-2"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Must be 1–31. Join on or before this day → credit that month. Join after →
+                                first credit is next month. Use 31 to credit any join day (default).
                             </p>
                         </div>
                     </div>

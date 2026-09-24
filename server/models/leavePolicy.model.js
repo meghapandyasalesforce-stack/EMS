@@ -35,6 +35,13 @@ const leavePolicySchema = new mongoose.Schema({
     leaveCycle: {
         startMonth: { type: Number, default: 1, min: 1, max: 12 },
         endMonth: { type: Number, default: 12, min: 1, max: 12 },
+        /**
+         * Join-month accrual cutoff (1–31).
+         * Join on/before this day → credit the join month.
+         * Join after this day → first credit is the next month.
+         * Default 31 preserves full-month credit for any join day.
+         */
+        joinAccrualCutoffDay: { type: Number, default: 31, min: 1, max: 31 },
     },
     
     // Leave types configuration (Fixed Split Policy)

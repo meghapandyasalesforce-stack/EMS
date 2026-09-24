@@ -11,6 +11,9 @@ import {
     usesMonthlyAccrual,
     normalizePolicyLeaveTypes,
     sumPolicyMonthlyAccrual,
+    getJoinAccrualCutoffDay,
+    isEligibleForMonthlyAccrualCredit,
+    DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY,
 } from '../helpers/leavePolicyAccrualHelper.js';
 import {
     getEffectiveCarryForwardConfig,
@@ -513,6 +516,7 @@ class LeaveBalanceEngine {
                 : null;
 
         let rollingAvailable = null;
+        const joinAccrualCutoffDay = getJoinAccrualCutoffDay(activePolicy?.leaveCycle);
 
         if (this.usesStandardMonthlyBalanceRules(effectiveConfig)) {
             const computed = await this.computeRollingMonthlyBalance(
@@ -524,7 +528,8 @@ class LeaveBalanceEngine {
                 year,
                 rateSchedule,
                 isolatedPolicyWindow ? null : resolveLeaveTypeConfigForMonth,
-                policyWindowOpeningBalance
+                policyWindowOpeningBalance,
+                joinAccrualCutoffDay
             );
             typeBalance.accrued = computed.totalEarned;
             typeBalance.used = computed.totalUsed;
@@ -579,7 +584,8 @@ class LeaveBalanceEngine {
                 year,
                 organizationId,
                 asOfDate,
-                isolatedPolicyWindow ? null : resolveLeaveTypeConfigForMonth
+                isolatedPolicyWindow ? null : resolveLeaveTypeConfigForMonth,
+                joinAccrualCutoffDay
             );
             typeBalance.used = await this.calculateUsedBalance(
                 employee._id,
@@ -937,6 +943,7 @@ class LeaveBalanceEngine {
 
         const policyMonthlyRate = sumPolicyMonthlyAccrual(policy || {});
         const monthlyRate = policy && this.hasUsableLeaveTypes(policy) ? policyMonthlyRate : 0;
+        const joinAccrualCutoffDay = getJoinAccrualCutoffDay(policy?.leaveCycle);
 
         const rolledWithUsed = rollLeaveBalanceThroughPeriod({
             joinYear,
@@ -946,6 +953,19 @@ class LeaveBalanceEngine {
             monthlyRate,
             getUsedForMonth: (year, monthIndex) =>
                 combinedUsedByMonth.get(`${year}-${monthIndex}`) || 0,
+            shouldCreditMonth: (year, monthIndex) => {
+                if (
+                    !isEligibleForMonthlyAccrualCredit(
+                        joiningDate,
+                        year,
+                        monthIndex,
+                        joinAccrualCutoffDay
+                    )
+                ) {
+                    return 0;
+                }
+                return monthlyRate;
+            },
             balanceAnchor,
             periodOpeningBalance: effectiveOpening,
             initialBalance,
@@ -1270,6 +1290,7 @@ class LeaveBalanceEngine {
      * Current Month Balance = Previous Month Balance + monthlyRate − Leave Used (this month)
      * When periodOpeningBalance is provided, calculation starts from openingYear/openingMonth instead.
      * When resolveLeaveTypeConfigForMonth is set, each month uses that policy window’s rate/cap (mid-year split).
+     * joinAccrualCutoffDay: join on/before this day credits join month; after → next month (default 31).
      */
     async computeRollingMonthlyBalance(
         leaveTypeConfig,
@@ -1280,7 +1301,8 @@ class LeaveBalanceEngine {
         viewYear = null,
         rateSchedule = null,
         resolveLeaveTypeConfigForMonth = null,
-        initialBalance = 0
+        initialBalance = 0,
+        joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
     ) {
         const leaveType = leaveTypeConfig.type;
         const policyMonthlyRate = getRollingAccrualMonthlyRate(leaveTypeConfig);
@@ -1292,6 +1314,7 @@ class LeaveBalanceEngine {
                 : policyAnnualCap;
         const joiningDate = getEffectiveJoiningDate(employee);
         const employeeId = employee._id;
+        const cutoffDay = getJoinAccrualCutoffDay(joinAccrualCutoffDay);
 
         let fromDate;
         if (periodOpeningBalance?.openingYear != null && periodOpeningBalance?.openingMonth != null) {
@@ -1353,6 +1376,9 @@ class LeaveBalanceEngine {
         };
 
         const creditWithAnnualCap = (year, monthIndex) => {
+            if (!isEligibleForMonthlyAccrualCredit(joiningDate, year, monthIndex, cutoffDay)) {
+                return 0;
+            }
             const cfg = configForMonth(year, monthIndex);
             if (!cfg) return 0;
             const rate = resolveMonthRate(year, monthIndex);
@@ -1421,11 +1447,19 @@ class LeaveBalanceEngine {
     }
 
     /**
-     * Monthly earned for a single calendar month (full monthly rate once employed in that month).
+     * Monthly earned for a single calendar month (full monthly rate once eligible in that month).
+     * Join on/before joinAccrualCutoffDay → credit join month; after → credit from next month.
      */
-    calculateSingleMonthEarned(monthlyAmount, employee, year, monthIndex, joiningDate) {
+    calculateSingleMonthEarned(
+        monthlyAmount,
+        employee,
+        year,
+        monthIndex,
+        joiningDate,
+        joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
+    ) {
         const join = joiningDate || getEffectiveJoiningDate(employee);
-        if (join.getFullYear() > year || (join.getFullYear() === year && join.getMonth() > monthIndex)) {
+        if (!isEligibleForMonthlyAccrualCredit(join, year, monthIndex, joinAccrualCutoffDay)) {
             return 0;
         }
         return monthlyAmount;
@@ -1434,10 +1468,17 @@ class LeaveBalanceEngine {
     /**
      * Sum monthly earnings from year start (or joining) through asOfDate month.
      */
-    calculateAccruedThroughDate(leaveTypeConfig, employee, year, asOfDate = new Date()) {
+    calculateAccruedThroughDate(
+        leaveTypeConfig,
+        employee,
+        year,
+        asOfDate = new Date(),
+        joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
+    ) {
         const monthlyAmount = getRollingAccrualMonthlyRate(leaveTypeConfig);
         const annualCap = getAnnualEntitlementAmount(leaveTypeConfig);
         const joiningDate = getEffectiveJoiningDate(employee);
+        const cutoffDay = getJoinAccrualCutoffDay(joinAccrualCutoffDay);
         const yearStart = new Date(year, 0, 1);
         const yearEnd = new Date(year, 11, 31, 23, 59, 59);
 
@@ -1449,7 +1490,14 @@ class LeaveBalanceEngine {
 
         let total = 0;
         for (let m = startMonth; m <= endMonth; m += 1) {
-            const earned = this.calculateSingleMonthEarned(monthlyAmount, employee, year, m, joiningDate);
+            const earned = this.calculateSingleMonthEarned(
+                monthlyAmount,
+                employee,
+                year,
+                m,
+                joiningDate,
+                cutoffDay
+            );
             if (annualCap > 0 && total + earned > annualCap) {
                 total = annualCap;
                 break;
@@ -1469,11 +1517,13 @@ class LeaveBalanceEngine {
         year,
         organizationId,
         asOfDate = new Date(),
-        resolveLeaveTypeConfigForMonth = null
+        resolveLeaveTypeConfigForMonth = null,
+        joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
     ) {
         const accrual = leaveTypeConfig.accrual || {};
         const entitlementAmount = getAnnualEntitlementAmount(leaveTypeConfig);
         const joiningDate = getEffectiveJoiningDate(employee);
+        const cutoffDay = getJoinAccrualCutoffDay(joinAccrualCutoffDay);
         const yearStart = new Date(year, 0, 1);
         const yearEnd = new Date(year, 11, 31);
 
@@ -1528,7 +1578,14 @@ class LeaveBalanceEngine {
                 const cap = getAnnualEntitlementAmount(cfg);
                 const policyKey = String(cfg._sourcePolicyId || 'default');
                 const soFar = earnedByPolicy.get(policyKey) || 0;
-                let credit = this.calculateSingleMonthEarned(rate, employee, year, m, joiningDate);
+                let credit = this.calculateSingleMonthEarned(
+                    rate,
+                    employee,
+                    year,
+                    m,
+                    joiningDate,
+                    cutoffDay
+                );
                 if (cap > 0 && soFar + credit > cap) {
                     credit = Math.max(0, roundLeaveDays(cap - soFar));
                 }
@@ -1540,7 +1597,13 @@ class LeaveBalanceEngine {
             return total;
         }
 
-        return this.calculateAccruedThroughDate(leaveTypeConfig, employee, year, asOfDate);
+        return this.calculateAccruedThroughDate(
+            leaveTypeConfig,
+            employee,
+            year,
+            asOfDate,
+            cutoffDay
+        );
     }
 
     resolveUsageWindowStartDate(policy, year, disablePolicyIsolation = false) {
@@ -1703,7 +1766,9 @@ class LeaveBalanceEngine {
                 periodOpeningBalance,
                 year,
                 null,
-                resolveLeaveTypeConfigForMonth
+                resolveLeaveTypeConfigForMonth,
+                0,
+                getJoinAccrualCutoffDay(policy?.leaveCycle)
             );
             const closing = Math.max(0, roundLeaveDays(computed.available ?? 0));
             cache.set(cacheKey, closing);
@@ -1718,7 +1783,9 @@ class LeaveBalanceEngine {
             null,
             year,
             null,
-            resolveLeaveTypeConfigForMonth
+            resolveLeaveTypeConfigForMonth,
+            0,
+            getJoinAccrualCutoffDay(policy?.leaveCycle)
         );
 
         const closing = Math.max(0, roundLeaveDays(computed.available ?? computed.yearEndBalance ?? 0));

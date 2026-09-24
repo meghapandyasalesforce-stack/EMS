@@ -17,6 +17,9 @@ import {
     sumPolicyAnnualEntitlement,
     sumPolicyMonthlyAccrual,
     sumPolicyMonthlyAccrualForViewMonth,
+    getJoinAccrualCutoffDay,
+    getFirstAccrualCalendarMonth,
+    normalizeLeaveCycle,
 } from '../../helpers/leavePolicyAccrualHelper.js';
 
 describe('leavePolicyAccrualHelper', () => {
@@ -249,6 +252,61 @@ describe('leavePolicyAccrualHelper', () => {
                     4
                 )
             ).toBe(0);
+        });
+
+        it('with cutoff 15, returns zero for join month when joining after the 15th', () => {
+            const employee = { joiningDate: new Date(2026, 8, 28) }; // 28 Sep
+            const policy = {
+                leaveTypes: [casualType],
+                leaveCycle: { startMonth: 1, endMonth: 12, joinAccrualCutoffDay: 15 },
+            };
+            expect(sumPolicyMonthlyAccrualForViewMonth(policy, employee, 2026, 9)).toBe(0);
+            expect(sumPolicyMonthlyAccrualForViewMonth(policy, employee, 2026, 10)).toBe(0.5);
+        });
+    });
+
+    describe('joinAccrualCutoffDay', () => {
+        it('defaults cutoff to 31', () => {
+            expect(getJoinAccrualCutoffDay({})).toBe(31);
+            expect(getJoinAccrualCutoffDay(null)).toBe(31);
+        });
+
+        it('normalizes leave cycle with cutoff', () => {
+            expect(normalizeLeaveCycle({ joinAccrualCutoffDay: 15 })).toEqual({
+                startMonth: 1,
+                endMonth: 12,
+                joinAccrualCutoffDay: 15,
+            });
+        });
+
+        it('maps join after cutoff to next month', () => {
+            expect(getFirstAccrualCalendarMonth(new Date(2026, 8, 28), 15)).toEqual({
+                year: 2026,
+                monthIndex: 9,
+            });
+            expect(getFirstAccrualCalendarMonth(new Date(2026, 11, 20), 15)).toEqual({
+                year: 2027,
+                monthIndex: 0,
+            });
+        });
+
+        it('maps join on/before cutoff to join month', () => {
+            expect(getFirstAccrualCalendarMonth(new Date(2026, 8, 15), 15)).toEqual({
+                year: 2026,
+                monthIndex: 8,
+            });
+            expect(getFirstAccrualCalendarMonth(new Date(2026, 8, 1), 15)).toEqual({
+                year: 2026,
+                monthIndex: 8,
+            });
+        });
+
+        it('rejects invalid cutoff in policy validation', () => {
+            const errors = validateLeavePolicyAccrual({
+                leaveCycle: { startMonth: 1, endMonth: 12, joinAccrualCutoffDay: 40 },
+                leaveTypes: [casualType],
+            });
+            expect(errors.some((e) => /cutoff/i.test(e))).toBe(true);
         });
     });
 });

@@ -10,6 +10,7 @@ import { buildEmployeeLeaveBalanceResponse } from '../../helpers/leaveBalanceRes
 import {
     normalizePolicyLeaveTypes,
     validateLeavePolicyAccrual,
+    normalizeLeaveCycle,
 } from '../../helpers/leavePolicyAccrualHelper.js';
 import {
     validateLeavePolicyApplicability,
@@ -136,6 +137,7 @@ export const createLeavePolicy = async (req, res) => {
         if (policyData.leaveTypes) {
             policyData.leaveTypes = normalizePolicyLeaveTypes(policyData.leaveTypes);
         }
+        policyData.leaveCycle = normalizeLeaveCycle(policyData.leaveCycle);
 
         Object.assign(policyData, normalizeLeavePolicyApplicability(policyData));
 
@@ -272,6 +274,9 @@ export const updateLeavePolicy = async (req, res) => {
         const updateBody = { ...req.body };
         if (updateBody.leaveTypes) {
             updateBody.leaveTypes = normalizePolicyLeaveTypes(updateBody.leaveTypes);
+        }
+        if (updateBody.leaveCycle != null) {
+            updateBody.leaveCycle = normalizeLeaveCycle(updateBody.leaveCycle);
         }
 
         // Only normalize/validate applicability when the client sends scope fields

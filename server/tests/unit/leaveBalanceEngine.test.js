@@ -33,6 +33,41 @@ describe('leaveBalanceEngine', () => {
             expect(earned).toBe(0.5);
         });
 
+        it('with cutoff 15, credits join month when joining on the 15th', () => {
+            const employee = { joiningDate: new Date(2026, 8, 15) }; // 15 Sep
+            const earned = leaveBalanceEngine.calculateSingleMonthEarned(
+                1.5,
+                employee,
+                2026,
+                8,
+                employee.joiningDate,
+                15
+            );
+            expect(earned).toBe(1.5);
+        });
+
+        it('with cutoff 15, skips join month when joining after the 15th', () => {
+            const employee = { joiningDate: new Date(2026, 8, 28) }; // 28 Sep
+            const joinMonth = leaveBalanceEngine.calculateSingleMonthEarned(
+                1.5,
+                employee,
+                2026,
+                8,
+                employee.joiningDate,
+                15
+            );
+            const nextMonth = leaveBalanceEngine.calculateSingleMonthEarned(
+                1.5,
+                employee,
+                2026,
+                9,
+                employee.joiningDate,
+                15
+            );
+            expect(joinMonth).toBe(0);
+            expect(nextMonth).toBe(1.5);
+        });
+
         it('returns 0 before joining month', () => {
             const employee = { joiningDate: new Date(2026, 5, 20) };
             const earned = leaveBalanceEngine.calculateSingleMonthEarned(
