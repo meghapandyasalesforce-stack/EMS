@@ -15,6 +15,8 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
 import { HiOutlineDocumentText } from 'react-icons/hi2';
 import MeetingNotesPanel from '../../components/MeetingNotesPanel';
+import { getAuthActorIds, getAuthEmployeeId } from '../../utils/authUser';
+import { sanitizeMeetingLink } from '../../utils/meetingLink';
 
 const EmployeeOneOnOnePage = ({
     focusMeetingId: focusMeetingIdProp = ''
@@ -43,31 +45,38 @@ const EmployeeOneOnOnePage = ({
 
     const lastErrorToastAt = useRef(0);
 
+    // Auth session only — employeeDetails can be another person when admin views a profile
+    const actorIds = useMemo(() => getAuthActorIds(user, employee), [user, employee]);
     const currentUserId = useMemo(
-        () =>
-            String(
-                employee?._id ||
-                employee?.id ||
-                user?.employeeProfileId ||
-                user?._id ||
-                user?.id ||
-                ''
-            ),
-        [employee, user]
+        () => String(getAuthEmployeeId(user) || [...actorIds][0] || ''),
+        [user, actorIds]
+    );
+
+    const matchesActor = useCallback(
+        (ref) => {
+            if (ref == null || actorIds.size === 0) return false;
+            return actorIds.has(String(ref._id || ref.id || ref));
+        },
+        [actorIds]
     );
 
     const isOrganizerOf = useCallback(
-        (meeting) =>
-            Boolean(currentUserId) &&
-            String(meeting?.managerId?._id || meeting?.managerId || '') === currentUserId,
-        [currentUserId]
+        (meeting) => {
+            if (meeting?.myRole === 'organizer') return true;
+            if (meeting?.myRole === 'invitee' || meeting?.myRole === 'neither') return false;
+            return matchesActor(meeting?.managerId);
+        },
+        [matchesActor]
     );
 
     const isInviteeOf = useCallback(
-        (meeting) =>
-            Boolean(currentUserId) &&
-            String(meeting?.employeeId?._id || meeting?.employeeId || '') === currentUserId,
-        [currentUserId]
+        (meeting) => {
+            // Prefer server-resolved role — avoids Redux identity mismatches
+            if (meeting?.myRole === 'invitee') return true;
+            if (meeting?.myRole === 'organizer' || meeting?.myRole === 'neither') return false;
+            return matchesActor(meeting?.employeeId);
+        },
+        [matchesActor]
     );
 
     const personName = (person, fallback = 'Colleague') => {
@@ -125,13 +134,19 @@ const EmployeeOneOnOnePage = ({
             });
 
             const allMeetings = response.data?.data || [];
+            const actorFromApi = response.data?.meta?.actorEmployeeId;
 
-            // Personal view: meetings where user is organizer OR invitee
-            const myMeetings = currentUserId
-                ? allMeetings.filter(
-                      (meeting) => isOrganizerOf(meeting) || isInviteeOf(meeting)
-                  )
-                : allMeetings;
+            // Personal view: meetings where user is organizer OR invitee (prefer server myRole)
+            const myMeetings = allMeetings.filter((meeting) => {
+                if (meeting.myRole === 'organizer' || meeting.myRole === 'invitee') return true;
+                if (meeting.myRole === 'neither') return false;
+                if (actorFromApi) {
+                    const mgr = String(meeting?.managerId?._id || meeting?.managerId || '');
+                    const inv = String(meeting?.employeeId?._id || meeting?.employeeId || '');
+                    return mgr === String(actorFromApi) || inv === String(actorFromApi);
+                }
+                return isOrganizerOf(meeting) || isInviteeOf(meeting);
+            });
 
             setMeetings(myMeetings);
         } catch {
@@ -176,17 +191,25 @@ const EmployeeOneOnOnePage = ({
         return base;
     };
 
-    const resolveJoinLink = (meeting) => {
-        const link = String(meeting?.meetingLink || '').trim();
-        if (link) return link;
-        if (meeting?._id) return `https://meet.jit.si/ems-1on1-${meeting._id}`;
-        return '';
+    const resolveJoinLink = (meeting) => sanitizeMeetingLink(meeting?.meetingLink);
+
+    const isJoinableStatus = (meeting) => {
+        const status = String(meeting?.status || '').trim().toLowerCase();
+        return !['cancelled', 'declined', 'completed', 'no show'].includes(status);
     };
 
-    const canJoinMeeting = (meeting) => {
-        const status = String(meeting?.status || '').trim().toLowerCase();
-        if (!['scheduled', 'rescheduled', 'pending response'].includes(status)) return false;
-        return Boolean(resolveJoinLink(meeting));
+    const canJoinMeeting = (meeting) =>
+        Boolean(meeting) && isJoinableStatus(meeting) && Boolean(resolveJoinLink(meeting));
+
+    const handleJoinMeeting = (meeting, e) => {
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
+        const link = resolveJoinLink(meeting);
+        if (!link) {
+            toast.info('No meeting link yet. The organizer can add one when scheduling or editing the meeting.');
+            return;
+        }
+        window.open(link, '_blank', 'noopener,noreferrer');
     };
 
     const sortedMeetings = useMemo(() => {
@@ -206,31 +229,22 @@ const EmployeeOneOnOnePage = ({
             .sort((a, b) => a._scheduledAt.getTime() - b._scheduledAt.getTime());
     }, [meetings]);
 
-    const now = useMemo(() => new Date(), [meetings]);
-
     const upcomingMeetings = useMemo(() => {
         return sortedMeetings.filter((meeting) => {
             const status = (meeting.status || '').toLowerCase();
-            if (['cancelled', 'declined', 'completed'].includes(status)) return false;
-            // Keep active until meeting end time (not midnight of scheduledDate)
-            if (meeting._endsAt >= now) return true;
-            return status === 'pending response' || status === 'rescheduled';
+            return ['pending response', 'scheduled', 'rescheduled'].includes(status);
         });
-    }, [sortedMeetings, now]);
+    }, [sortedMeetings]);
 
+    // Only terminal statuses — do not treat "past end time" as completed
     const pastMeetings = useMemo(() => {
-        const upcomingIds = new Set(upcomingMeetings.map((m) => String(m._id)));
         return sortedMeetings
             .filter((meeting) => {
-                if (upcomingIds.has(String(meeting._id))) return false;
                 const status = (meeting.status || '').toLowerCase();
-                return (
-                    meeting._endsAt < now ||
-                    ['completed', 'cancelled', 'declined'].includes(status)
-                );
+                return ['completed', 'cancelled', 'declined', 'no show'].includes(status);
             })
             .sort((a, b) => b._scheduledAt.getTime() - a._scheduledAt.getTime());
-    }, [sortedMeetings, now, upcomingMeetings]);
+    }, [sortedMeetings]);
 
     const nextMeeting = upcomingMeetings[0] || null;
 
@@ -288,6 +302,14 @@ const EmployeeOneOnOnePage = ({
     };
 
     const handleAccept = async (meeting) => {
+        if (meeting?.myRole === 'organizer') {
+            toast.info('You organized this meeting — wait for the invitee to accept');
+            return;
+        }
+        if (meeting?.myRole && meeting.myRole !== 'invitee') {
+            toast.error('Only the invitee can accept this meeting');
+            return;
+        }
         try {
             setActionBusyId(meeting._id);
             await axios.patch(
@@ -307,6 +329,14 @@ const EmployeeOneOnOnePage = ({
     };
 
     const handleDecline = (meeting) => {
+        if (meeting?.myRole === 'organizer') {
+            toast.info('You organized this meeting — wait for the invitee to respond');
+            return;
+        }
+        if (meeting?.myRole && meeting.myRole !== 'invitee') {
+            toast.error('Only the invitee can decline this meeting');
+            return;
+        }
         const reason = window.prompt('Optional reason for declining:') || '';
         return runMeetingAction(
             meeting._id,
@@ -504,7 +534,8 @@ const EmployeeOneOnOnePage = ({
 
                                     <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-start sm:gap-3 lg:w-auto lg:shrink-0 lg:self-center">
                                         {nextMeeting.status === 'Pending Response' &&
-                                            isInviteeOf(nextMeeting) && (
+                                            isInviteeOf(nextMeeting) &&
+                                            !isOrganizerOf(nextMeeting) && (
                                             <>
                                                 <button
                                                     type="button"
@@ -532,6 +563,13 @@ const EmployeeOneOnOnePage = ({
                                                 </button>
                                             </>
                                         )}
+                                        {nextMeeting.status === 'Pending Response' &&
+                                            isOrganizerOf(nextMeeting) &&
+                                            !isInviteeOf(nextMeeting) && (
+                                            <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 sm:w-auto">
+                                                Waiting for {getOtherPersonName(nextMeeting)} to accept
+                                            </p>
+                                        )}
                                         {nextMeeting.status === 'Rescheduled' &&
                                             nextMeeting.rescheduleProposal?.status === 'pending' &&
                                             String(
@@ -556,16 +594,24 @@ const EmployeeOneOnOnePage = ({
                                                 </button>
                                             </>
                                         )}
-                                        {canJoinMeeting(nextMeeting) && (
-                                            <a
-                                                href={resolveJoinLink(nextMeeting)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#56B586] px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-[#56B586]/30 transition hover:bg-[#4aa578] hover:shadow-md sm:w-auto sm:min-w-[140px]"
+                                        {isJoinableStatus(nextMeeting) && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => handleJoinMeeting(nextMeeting, e)}
+                                                className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold shadow-sm transition sm:w-auto sm:min-w-[140px] ${
+                                                    canJoinMeeting(nextMeeting)
+                                                        ? 'bg-[#56B586] text-white shadow-[#56B586]/30 hover:bg-[#4aa578] hover:shadow-md'
+                                                        : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                                title={
+                                                    canJoinMeeting(nextMeeting)
+                                                        ? 'Open meeting link'
+                                                        : 'No meeting link added yet'
+                                                }
                                             >
                                                 <FaVideo className="h-3.5 w-3.5" aria-hidden />
                                                 Join Meeting
-                                            </a>
+                                            </button>
                                         )}
                                         {/* <button
                                             type="button"
@@ -664,20 +710,28 @@ const EmployeeOneOnOnePage = ({
                                                                 </p>
                                                             </div>
                                                             <div className="relative flex flex-1 items-center justify-end gap-1.5 sm:flex-none">
-                                                                {canJoinMeeting(meeting) && (
-                                                                    <a
-                                                                        href={resolveJoinLink(meeting)}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                        className="inline-flex items-center gap-1.5 rounded-full bg-[#56B586] px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm shadow-[#56B586]/25 transition hover:bg-[#4aa578] hover:shadow active:scale-[0.98]"
+                                                                {isJoinableStatus(meeting) && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => handleJoinMeeting(meeting, e)}
+                                                                        className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.98] ${
+                                                                            canJoinMeeting(meeting)
+                                                                                ? 'bg-[#56B586] text-white shadow-sm shadow-[#56B586]/25 hover:bg-[#4aa578] hover:shadow'
+                                                                                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                                                                        }`}
+                                                                        title={
+                                                                            canJoinMeeting(meeting)
+                                                                                ? 'Open meeting link'
+                                                                                : 'No meeting link added yet'
+                                                                        }
                                                                     >
                                                                         <FaVideo className="h-3 w-3 shrink-0 opacity-95" aria-hidden />
                                                                         Join
-                                                                    </a>
+                                                                    </button>
                                                                 )}
                                                                 {meeting.status === 'Pending Response' &&
-                                                                    isInviteeOf(meeting) && (
+                                                                    isInviteeOf(meeting) &&
+                                                                    !isOrganizerOf(meeting) && (
                                                                     <>
                                                                         <button
                                                                             type="button"
@@ -724,22 +778,6 @@ const EmployeeOneOnOnePage = ({
                                                                         role="menu"
                                                                         data-hrms-popup
                                                                     >
-                                                                        {canJoinMeeting(meeting) && (
-                                                                            <a
-                                                                                href={resolveJoinLink(meeting)}
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-[#2f7a55] transition hover:bg-[#56B586]/08"
-                                                                                role="menuitem"
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setOpenActionMenuId(null);
-                                                                                }}
-                                                                            >
-                                                                                <FaVideo className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                                                                                Join meeting
-                                                                            </a>
-                                                                        )}
                                                                         <button
                                                                             type="button"
                                                                             onMouseDown={(e) => {

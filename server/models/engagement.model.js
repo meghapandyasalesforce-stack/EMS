@@ -105,7 +105,10 @@ const surveySchema = new mongoose.Schema({
         enum: ['day7', 'day30', 'day90', 'exit'],
         index: true
     },
-    /** Employee this lifecycle survey was generated for (idempotency + targeting) */
+    /**
+     * Legacy: one survey per employee. New automation uses one shared survey per
+     * trigger and lists assignees in targetEmployees (lifecycleEmployeeId unset).
+     */
     lifecycleEmployeeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',
@@ -127,6 +130,7 @@ surveySchema.index(
     }
 );
 
+/** Legacy per-employee lifecycle docs only (shared surveys omit lifecycleEmployeeId). */
 surveySchema.index(
     { organizationId: 1, lifecycleTrigger: 1, lifecycleEmployeeId: 1 },
     {

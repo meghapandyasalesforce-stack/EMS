@@ -108,6 +108,33 @@ export async function approveNoticeBuyout(workflow, { buyoutDays, actor, notes }
     return workflow;
 }
 
+/** Apply leave-adjustment days; honors Configure Policies → Allow leave adjustment. */
+export async function applyNoticeLeaveAdjustment(workflow, leaveAdjustmentDays, { actor } = {}) {
+    const settings = await assertFeatureEnabled(workflow.organizationId, 'noticePeriod', 'Notice period');
+    if (settings.noticePeriodPolicy?.allowLeaveAdjustment === false) {
+        const err = new Error('Leave adjustment during notice is disabled in Configure → Policies');
+        err.statusCode = 400;
+        throw err;
+    }
+    if (!isFeatureEnabled(settings, 'leaveAdjustmentNotice')) {
+        const err = new Error('Leave Adjustment During Notice is disabled in Configure → Features');
+        err.statusCode = 403;
+        throw err;
+    }
+
+    const days = Math.max(0, Number(leaveAdjustmentDays) || 0);
+    workflow.noticePeriod = workflow.noticePeriod || {};
+    workflow.noticePeriod.leaveAdjustmentDays = days;
+    await applyNoticePeriodToWorkflow(workflow, workflow.organizationId);
+
+    addOffboardingActivity(workflow, {
+        action: 'notice_leave_adjustment',
+        description: `Leave adjustment set to ${days} day(s)`,
+        actor,
+    });
+    return workflow;
+}
+
 export function buildNoticePeriodDashboard(workflows) {
     const now = startOfDay(new Date());
     return {

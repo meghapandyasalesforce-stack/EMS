@@ -21,6 +21,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { isHR } from '../../utils/managerHelper';
 import { useAuthPermissions } from '../../Hooks/useAuthPermissions';
 import MeetingNotesPanel from '../../components/MeetingNotesPanel';
+import { sanitizeMeetingLink } from '../../utils/meetingLink';
 
 const TEAL = '#0a8f6c';
 const TEAL_LIGHT = '#14b887';
@@ -287,19 +288,13 @@ const OneOnOnePage = ({ onBackToReceive = null, focusMeetingId: focusMeetingIdPr
                         ? { ...basePayload, employeeIds: inviteIds }
                         : { ...basePayload, employeeId: inviteIds[0], employeeIds: inviteIds };
 
-                const response = await axios.post('/v1/both/one-on-one/one-on-ones', payload, {
+                await axios.post('/v1/both/one-on-one/one-on-ones', payload, {
                     withCredentials: true,
                 });
-                const created = response.data?.data;
-                const createdList = Array.isArray(created) ? created : created ? [created] : [];
-                // Defer ICS downloads so browsers don't block them after the async create
-                setTimeout(() => {
-                    createdList.forEach((meeting) => downloadOrganizerCalendarInvite(meeting));
-                }, 0);
                 toast.success(
                     inviteIds.length > 1
-                        ? `${inviteIds.length} meetings scheduled — calendar invites downloaded`
-                        : 'Meeting scheduled — calendar invite downloaded'
+                        ? `${inviteIds.length} meetings scheduled`
+                        : 'Meeting scheduled successfully'
                 );
             }
 
@@ -372,55 +367,21 @@ const OneOnOnePage = ({ onBackToReceive = null, focusMeetingId: focusMeetingIdPr
         return meetings.filter((m) => m.status === key).length;
     };
 
-    const resolveJoinLink = (meeting) => {
-        const link = String(meeting?.meetingLink || '').trim();
-        if (link) return link;
-        if (meeting?._id) return `https://meet.jit.si/ems-1on1-${meeting._id}`;
-        return '';
+    const resolveJoinLink = (meeting) => sanitizeMeetingLink(meeting?.meetingLink);
+
+    const canJoinMeeting = (meeting) => {
+        const status = String(meeting?.status || '').trim();
+        if (['Cancelled', 'Declined', 'Completed'].includes(status)) return false;
+        return Boolean(resolveJoinLink(meeting));
     };
 
-    const downloadOrganizerCalendarInvite = (meeting) => {
-        try {
-            const start = new Date(meeting.scheduledDate);
-            if (meeting.scheduledTime) {
-                const [hours, minutes] = String(meeting.scheduledTime).split(':').map(Number);
-                if (Number.isFinite(hours) && Number.isFinite(minutes)) {
-                    start.setHours(hours, minutes, 0, 0);
-                }
-            }
-            if (Number.isNaN(start.getTime())) return;
-            const end = new Date(start.getTime() + (Number(meeting.duration) || 30) * 60 * 1000);
-            const invitee = `${meeting.employeeId?.name || ''} ${meeting.employeeId?.lastName || ''}`.trim() || 'Colleague';
-            const joinLink = resolveJoinLink(meeting);
-            const fmt = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-            const ics = [
-                'BEGIN:VCALENDAR',
-                'VERSION:2.0',
-                'PRODID:-//Paarsiv//EMS//EN',
-                'BEGIN:VEVENT',
-                `UID:${meeting._id}@paarsiv-ems`,
-                `DTSTAMP:${fmt(new Date())}`,
-                `DTSTART:${fmt(start)}`,
-                `DTEND:${fmt(end)}`,
-                `SUMMARY:1:1 with ${invitee}`,
-                `DESCRIPTION:One-on-one meeting${joinLink ? ` — Join: ${joinLink}` : ''}`,
-                `LOCATION:${meeting.location || joinLink || 'Online'}`,
-                joinLink ? `URL:${joinLink}` : '',
-                'END:VEVENT',
-                'END:VCALENDAR'
-            ].filter(Boolean).join('\r\n');
-            const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `one-on-one-${meeting._id}.ics`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch {
-            /* silent */
+    const handleJoinMeeting = (meeting) => {
+        const link = resolveJoinLink(meeting);
+        if (!link) {
+            toast.info('No meeting link yet. Add one in the meeting form (Meeting link field).');
+            return;
         }
+        window.open(link, '_blank', 'noopener,noreferrer');
     };
 
     if (loading) {
@@ -592,19 +553,22 @@ const OneOnOnePage = ({ onBackToReceive = null, focusMeetingId: focusMeetingIdPr
                                                         <span className="truncate">{meeting.location}</span>
                                                     </div>
                                                 ) : null}
-                                                {resolveJoinLink(meeting) &&
-                                                ['Pending Response', 'Scheduled', 'Rescheduled'].includes(meeting.status) ? (
+                                                {['Pending Response', 'Scheduled', 'Rescheduled'].includes(meeting.status) ? (
                                                     <div className="flex items-center gap-2">
                                                         <FiVideo className="h-4 w-4 shrink-0 text-slate-400" />
-                                                        <a
-                                                            href={resolveJoinLink(meeting)}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleJoinMeeting(meeting)}
                                                             className="font-medium hover:underline"
-                                                            style={{ color: TEAL }}
+                                                            style={{ color: canJoinMeeting(meeting) ? TEAL : '#64748b' }}
+                                                            title={
+                                                                canJoinMeeting(meeting)
+                                                                    ? 'Open meeting link'
+                                                                    : 'No meeting link added yet'
+                                                            }
                                                         >
                                                             Join meeting
-                                                        </a>
+                                                        </button>
                                                     </div>
                                                 ) : null}
                                             </div>
@@ -712,7 +676,7 @@ const OneOnOnePage = ({ onBackToReceive = null, focusMeetingId: focusMeetingIdPr
                                                                 scheduledTime: meeting.scheduledTime || '',
                                                                 duration: meeting.duration || 30,
                                                                 location: meeting.location || '',
-                                                                meetingLink: meeting.meetingLink || '',
+                                                                meetingLink: sanitizeMeetingLink(meeting.meetingLink),
                                                                 agenda:
                                                                     meeting.agenda && meeting.agenda.length > 0
                                                                         ? meeting.agenda

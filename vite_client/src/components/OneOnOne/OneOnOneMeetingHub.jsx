@@ -21,7 +21,8 @@ import {
 } from 'react-icons/fi';
 import LoadingSpinner from '../LoadingSpinner';
 import { isManager } from '../../utils/managerHelper';
-
+import { getAuthActorIds, getAuthEmployeeId } from '../../utils/authUser';
+import { sanitizeMeetingLink } from '../../utils/meetingLink';
 const TEAL = '#0a8f6c';
 const TEAL_LIGHT = '#14b887';
 const PAGE_BG = '#f4f7f6';
@@ -72,23 +73,13 @@ const OneOnOneMeetingHub = () => {
     const userRole = user?.role || employee?.role;
     const canSchedule = userRole === 'admin' || isManager(user || employee);
 
-    /** All IDs that may represent the logged-in person (Employee / User / linked profile). */
-    const actorIds = useMemo(() => {
-        const ids = new Set();
-        const add = (v) => {
-            if (v == null || v === '') return;
-            ids.add(String(v._id || v.id || v));
-        };
-        add(employee?._id);
-        add(employee?.id);
-        add(user?.employeeProfileId);
-        add(user?.employeeId);
-        add(user?._id);
-        add(user?.id);
-        return ids;
-    }, [user, employee]);
+    /** All IDs that may represent the logged-in person (session only — not a browsed employee profile). */
+    const actorIds = useMemo(() => getAuthActorIds(user, employee), [user, employee]);
 
-    const currentUserId = employee?._id || user?.employeeProfileId || user?.employeeId || user?._id || employee?.id;
+    const currentUserId = useMemo(
+        () => String(getAuthEmployeeId(user) || [...actorIds][0] || ''),
+        [user, actorIds]
+    );
 
     const matchesActor = useCallback(
         (ref) => {
@@ -178,33 +169,37 @@ const OneOnOneMeetingHub = () => {
     }, [searchParams, meetings]);
 
     const filteredMeetings = useMemo(() => {
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
         return meetings.filter((m) => {
-            const d = new Date(m.scheduledDate);
             if (activeTab === 'pending') return m.status === 'Pending';
             if (activeTab === 'reschedule') return m.status === 'Reschedule Requested';
+            // History: only real terminal statuses (not "past date" loophole)
             if (activeTab === 'history') {
-                return ['Completed', 'Cancelled', 'Declined', 'No Show'].includes(m.status) || d < now;
+                return ['Completed', 'Cancelled', 'Declined', 'No Show'].includes(m.status);
             }
-            // upcoming
-            return ACTIVE.has(m.status) && d >= now && !['Declined', 'Cancelled'].includes(m.status);
+            // Upcoming: active meetings regardless of scheduled date
+            return ACTIVE.has(m.status) && !['Declined', 'Cancelled'].includes(m.status);
         }).sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
     }, [meetings, activeTab]);
 
-    const tabCounts = useMemo(() => {
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        return {
-            upcoming: meetings.filter((m) => ACTIVE.has(m.status) && new Date(m.scheduledDate) >= now).length,
-            pending: meetings.filter((m) => m.status === 'Pending').length,
-            reschedule: meetings.filter((m) => m.status === 'Reschedule Requested').length,
-            history: meetings.filter((m) => ['Completed', 'Cancelled', 'Declined', 'No Show'].includes(m.status)).length,
-        };
-    }, [meetings]);
+    const tabCounts = useMemo(() => ({
+        upcoming: meetings.filter((m) => ACTIVE.has(m.status) && !['Declined', 'Cancelled'].includes(m.status)).length,
+        pending: meetings.filter((m) => m.status === 'Pending').length,
+        reschedule: meetings.filter((m) => m.status === 'Reschedule Requested').length,
+        history: meetings.filter((m) => ['Completed', 'Cancelled', 'Declined', 'No Show'].includes(m.status)).length,
+    }), [meetings]);
 
-    const isInviteeOf = (m) => m && matchesActor(m.employeeId);
-    const isOrganizerOf = (m) => m && matchesActor(m.managerId);
+    const isInviteeOf = (m) => {
+        if (!m) return false;
+        if (m.myRole === 'invitee') return true;
+        if (m.myRole === 'organizer' || m.myRole === 'neither') return false;
+        return matchesActor(m.employeeId);
+    };
+    const isOrganizerOf = (m) => {
+        if (!m) return false;
+        if (m.myRole === 'organizer') return true;
+        if (m.myRole === 'invitee' || m.myRole === 'neither') return false;
+        return matchesActor(m.managerId);
+    };
     const isParticipantOf = (m) => isInviteeOf(m) || isOrganizerOf(m);
 
     const counterpartName = (m) => {
@@ -241,7 +236,7 @@ const OneOnOneMeetingHub = () => {
             scheduledTime: meeting.scheduledTime || '',
             duration: meeting.duration || 30,
             location: meeting.location || '',
-            meetingLink: meeting.meetingLink || '',
+            meetingLink: sanitizeMeetingLink(meeting.meetingLink),
             agenda: meeting.agenda?.length ? meeting.agenda : [{ topic: '', notes: '', discussed: false }],
         });
         setShowCreateModal(true);
@@ -553,21 +548,38 @@ const OneOnOneMeetingHub = () => {
                                             ) : null}
 
                                             <div className="mt-auto flex flex-col gap-2">
-                                                {meeting.meetingLink ? (
-                                                    <a
-                                                        href={meeting.meetingLink}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
+                                                {ACTIVE.has(meeting.status) ||
+                                                meeting.status === 'Pending Response' ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const link = sanitizeMeetingLink(meeting.meetingLink);
+                                                            if (!link) {
+                                                                toast.info(
+                                                                    'No meeting link yet. Add one when scheduling or editing the meeting.'
+                                                                );
+                                                                return;
+                                                            }
+                                                            window.open(link, '_blank', 'noopener,noreferrer');
+                                                        }}
                                                         className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-semibold transition hover:bg-teal-50"
-                                                        style={{ borderColor: `${TEAL}44`, color: TEAL }}
+                                                        style={{
+                                                            borderColor: sanitizeMeetingLink(meeting.meetingLink)
+                                                                ? `${TEAL}44`
+                                                                : GREY_BORDER,
+                                                            color: sanitizeMeetingLink(meeting.meetingLink)
+                                                                ? TEAL
+                                                                : '#64748b',
+                                                        }}
                                                     >
                                                         <FiVideo className="h-4 w-4" />
                                                         Join meeting
-                                                    </a>
+                                                    </button>
                                                 ) : null}
 
                                                 {isInviteeOf(meeting) &&
-                                                ['Pending', 'Scheduled', 'Rescheduled'].includes(meeting.status) ? (
+                                                !isOrganizerOf(meeting) &&
+                                                ['Pending', 'Pending Response', 'Scheduled', 'Rescheduled'].includes(meeting.status) ? (
                                                     <>
                                                         <button
                                                             type="button"

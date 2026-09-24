@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { format, differenceInCalendarDays, isValid } from 'date-fns';
 import {
-    FaArrowLeft, FaCheckCircle, FaTasks, FaFileAlt, FaClock, FaLaptop,
+    FaArrowLeft, FaCheckCircle, FaTasks, FaClock, FaLaptop,
     FaUser, FaHistory, FaChevronDown, FaChevronUp,
     FaCalendarAlt, FaIdBadge, FaUsers, FaMoneyCheckAlt, FaBoxOpen,
-    FaExternalLinkAlt, FaPlay, FaFlag, FaEdit,
+    FaPlay, FaFlag, FaEdit,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
@@ -12,25 +12,38 @@ import {
     TASK_GROUPS_BY_ROLE, ASSET_STATUSES, getTaskCompletionBlockers, canCompleteTask,
 } from '../../constants/onboardingConstants';
 import {
-    CmBadge, CmButton, CmRing, statusTone, cmInitials,
+    CmBadge, CmButton, CmRing, cmInitials,
 } from '../../components/corporateModern';
 import OnboardingVerificationTab from './OnboardingVerificationTab';
 import OnboardingTrainingTab from './OnboardingTrainingTab';
 import OnboardingActivityTab from './OnboardingActivityTab';
 import OnboardingAccessControl from './OnboardingAccessControl';
 import OnboardingOverviewSnapshot from './OnboardingOverviewSnapshot';
+import OnboardingBgvPanel from './OnboardingBgvPanel';
+import OnboardingGoalsPanel from './OnboardingGoalsPanel';
 import { formatStatusLabel } from '../../utils/textFormat.js';
 
 const DETAIL_TABS_ALL = [
     { id: 'overview', label: 'Overview' },
     { id: 'tasks', label: 'Tasks' },
     { id: 'documents', label: 'Documents & Verification' },
+    { id: 'bgv', label: 'Background Verification' },
+    { id: 'goals', label: 'Goals' },
     { id: 'training', label: 'Training' },
     { id: 'activity', label: 'Activity' },
 ];
 
-function tabsForViewer(viewerRole) {
-    return DETAIL_TABS_ALL;
+function tabsForViewer(viewerRole, isFeatureEnabled) {
+    return DETAIL_TABS_ALL.filter((tab) => {
+        if (tab.id === 'bgv') return typeof isFeatureEnabled === 'function' ? isFeatureEnabled('backgroundVerification') : true;
+        if (tab.id === 'goals') return typeof isFeatureEnabled === 'function' ? isFeatureEnabled('goalAssignment') : true;
+        if (tab.id === 'documents') return typeof isFeatureEnabled !== 'function' || isFeatureEnabled('documentCollection');
+        if (tab.id === 'training') {
+            if (typeof isFeatureEnabled !== 'function') return true;
+            return isFeatureEnabled('mandatoryTraining') || isFeatureEnabled('trainingLms');
+        }
+        return true;
+    });
 }
 
 function toDateInputValue(value) {
@@ -219,7 +232,16 @@ export default function OnboardingHrDetailView({
 }) {
     const isHr = viewerRole === 'hr';
     const isEmployeeView = viewerRole === 'employee';
-    const detailTabs = useMemo(() => tabsForViewer(viewerRole), [viewerRole]);
+    const detailTabs = useMemo(
+        () => tabsForViewer(viewerRole, isFeatureEnabled),
+        [viewerRole, isFeatureEnabled],
+    );
+
+    useEffect(() => {
+        if (!detailTabs.some((t) => t.id === detailTab) && detailTabs[0]) {
+            onDetailTabChange?.(detailTabs[0].id);
+        }
+    }, [detailTabs, detailTab, onDetailTabChange]);
 
     const emp = wf.employeeId || {};
     const fullName = [emp.name, emp.lastName].filter(Boolean).join(' ');
@@ -825,11 +847,29 @@ export default function OnboardingHrDetailView({
                 </div>
             )}
 
+            {detailTab === 'bgv' && isFeatureEnabled('backgroundVerification') && (
+                <OnboardingBgvPanel
+                    workflowId={wf._id}
+                    employeeId={emp?._id}
+                    isHRView={isHr}
+                    onUpdated={refreshWorkflow}
+                />
+            )}
+
+            {detailTab === 'goals' && isFeatureEnabled('goalAssignment') && (
+                <div className="cm-card">
+                    <OnboardingGoalsPanel
+                        workflowId={wf._id}
+                        isHRView={isHr}
+                        onUpdated={refreshWorkflow}
+                    />
+                </div>
+            )}
+
             {detailTab === 'training' && (
                 <div className="space-y-4">
                     {(isFeatureEnabled('mandatoryTraining')
                         || isFeatureEnabled('trainingLms')
-                        || isFeatureEnabled('lmsDashboard')
                         || (wf.trainingModules?.length > 0)) ? (
                         <OnboardingTrainingTab
                             wf={wf}

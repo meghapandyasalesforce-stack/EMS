@@ -112,7 +112,58 @@ const personLabel = (person, fallback = 'Someone') => {
     return name || fallback;
 };
 
-const getActorEmployeeId = (req) => req.employee?._id || null;
+const getActorEmployeeId = (req) =>
+    req.employee?._id ||
+    req.authContext?.employee?._id ||
+    req.user?.employeeProfileId ||
+    req.employeeProfileId ||
+    null;
+
+const viewerRoleForMeeting = (meeting, actorId) => {
+    if (!actorId) return 'neither';
+    if (idStr(meeting.employeeId) === idStr(actorId)) return 'invitee';
+    if (idStr(meeting.managerId) === idStr(actorId)) return 'organizer';
+    return 'neither';
+};
+
+const withViewerRole = (meetingDoc, actorId) => {
+    const obj = typeof meetingDoc.toObject === 'function' ? meetingDoc.toObject() : { ...meetingDoc };
+    obj.myRole = viewerRoleForMeeting(obj, actorId);
+    // Never expose legacy auto-generated Jitsi placeholders
+    if (isLegacyAutoMeetingLink(obj.meetingLink)) {
+        obj.meetingLink = '';
+    }
+    return obj;
+};
+
+/** Legacy auto Jitsi links from older builds — treat as empty. */
+const isLegacyAutoMeetingLink = (link) => {
+    const value = String(link || '').trim().toLowerCase();
+    if (!value) return false;
+    return value.includes('meet.jit.si/ems-1on1-') || value.includes('jit.si/ems-1on1-');
+};
+
+const sanitizeMeetingLinkInput = (link) => {
+    const value = String(link || '').trim();
+    if (!value || isLegacyAutoMeetingLink(value)) return '';
+    return value;
+};
+
+/** Clear legacy placeholder links from DB (org-scoped). Safe to call on list. */
+const purgeLegacyMeetingLinks = async (organizationId) => {
+    if (!organizationId) return;
+    try {
+        await OneOnOne.updateMany(
+            {
+                organizationId,
+                meetingLink: { $regex: /meet\.jit\.si\/ems-1on1-|jit\.si\/ems-1on1-/i }
+            },
+            { $set: { meetingLink: '' } }
+        );
+    } catch {
+        // non-fatal — responses still strip the link
+    }
+};
 
 const isStrictParticipant = (meeting, actorId) => {
     if (!actorId) return false;
@@ -169,14 +220,17 @@ const loadMeetingOr404 = async (req, res) => {
 
 const assertInvitee = (meeting, req, res) => {
     const actorId = getActorEmployeeId(req);
-    if (!actorId || idStr(meeting.employeeId) !== idStr(actorId)) {
-        res.status(403).json({
-            success: false,
-            message: 'Only the invitee can perform this action'
-        });
-        return false;
+    if (actorId && idStr(meeting.employeeId) === idStr(actorId)) {
+        return true;
     }
-    return true;
+    const isOrganizer = actorId && idStr(meeting.managerId) === idStr(actorId);
+    res.status(403).json({
+        success: false,
+        message: isOrganizer
+            ? 'You organized this meeting — only the invitee can accept or decline'
+            : 'Only the invitee can perform this action'
+    });
+    return false;
 };
 
 const assertOrganizerOrHr = (meeting, req, res) => {
@@ -296,6 +350,10 @@ export const createOneOnOne = asyncHandler(async (req, res) => {
         ...meetingFields
     } = req.body;
 
+    if (Object.prototype.hasOwnProperty.call(meetingFields, 'meetingLink')) {
+        meetingFields.meetingLink = sanitizeMeetingLinkInput(meetingFields.meetingLink);
+    }
+
     const created = [];
     for (const empId of employeeIds) {
         const oneOnOne = new OneOnOne({
@@ -315,11 +373,6 @@ export const createOneOnOne = asyncHandler(async (req, res) => {
             note: 'Meeting invitation sent'
         });
         await oneOnOne.save();
-        // Ensure every meeting has a joinable video link
-        if (!String(oneOnOne.meetingLink || '').trim()) {
-            oneOnOne.meetingLink = `https://meet.jit.si/ems-1on1-${oneOnOne._id}`;
-            await oneOnOne.save();
-        }
         await populateMeeting(oneOnOne);
         created.push(oneOnOne);
     }
@@ -423,6 +476,9 @@ export const getOneOnOnes = asyncHandler(async (req, res) => {
     const { managerId, employeeId, status, startDate, endDate } = req.query;
     const currentUserId = req.employee?._id || req.user?._id;
 
+    // Remove legacy auto-generated Jitsi URLs stored on older meetings
+    await purgeLegacyMeetingLinks(organizationId);
+
     const query = addOrganizationFilter(req, {});
 
     if (currentUserId && !req.user) {
@@ -482,7 +538,10 @@ export const getOneOnOnes = asyncHandler(async (req, res) => {
     const actorId = getActorEmployeeId(req);
     res.json({
         success: true,
-        data: oneOnOnes.map((m) => stripNotesIfNotParticipant(m, actorId))
+        data: oneOnOnes.map((m) => withViewerRole(stripNotesIfNotParticipant(m, actorId), actorId)),
+        meta: {
+            actorEmployeeId: actorId ? String(actorId) : null
+        }
     });
 });
 
@@ -496,7 +555,10 @@ export const getOneOnOneById = asyncHandler(async (req, res) => {
 
     await populateMeeting(meeting);
     const actorId = getActorEmployeeId(req);
-    res.json({ success: true, data: stripNotesIfNotParticipant(meeting, actorId) });
+    res.json({
+        success: true,
+        data: withViewerRole(stripNotesIfNotParticipant(meeting, actorId), actorId)
+    });
 });
 
 /**
@@ -530,6 +592,11 @@ export const updateOneOnOne = asyncHandler(async (req, res) => {
     const prevTime = meeting.scheduledTime || '';
 
     Object.assign(meeting, updateBody);
+    if (Object.prototype.hasOwnProperty.call(updateBody, 'meetingLink')) {
+        meeting.meetingLink = sanitizeMeetingLinkInput(updateBody.meetingLink);
+    } else if (isLegacyAutoMeetingLink(meeting.meetingLink)) {
+        meeting.meetingLink = '';
+    }
 
     const nextDate = meeting.scheduledDate ? new Date(meeting.scheduledDate).toISOString() : '';
     const nextTime = meeting.scheduledTime || '';
@@ -605,9 +672,6 @@ export const acceptOneOnOne = asyncHandler(async (req, res) => {
         reason: ''
     };
     meeting.rescheduleProposal = { status: 'none' };
-    if (!String(meeting.meetingLink || '').trim()) {
-        meeting.meetingLink = `https://meet.jit.si/ems-1on1-${meeting._id}`;
-    }
     pushHistory(meeting, {
         status: 'Scheduled',
         action: 'accepted',
@@ -628,7 +692,7 @@ export const acceptOneOnOne = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         message: 'Meeting accepted',
-        data: meeting
+        data: withViewerRole(meeting, getActorEmployeeId(req))
     });
 });
 
@@ -675,7 +739,7 @@ export const declineOneOnOne = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         message: 'Meeting declined',
-        data: meeting
+        data: withViewerRole(meeting, getActorEmployeeId(req))
     });
 });
 

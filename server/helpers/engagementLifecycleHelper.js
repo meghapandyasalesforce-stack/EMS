@@ -1,6 +1,7 @@
 /**
  * Lifecycle-based engagement surveys.
  * Reuses Survey model + notify() — does not create a separate survey system.
+ * One shared Survey per org + trigger; eligible employees are added to targetEmployees.
  */
 import Employee from '../models/employee.model.js';
 import Organization from '../models/organization.model.js';
@@ -20,6 +21,65 @@ const TRIGGER_META = {
     day30: { days: 30, label: 'Day 30' },
     day90: { days: 90, label: 'Day 90' },
     exit: { days: null, label: 'Exit' }
+};
+
+/**
+ * Collapse legacy per-employee lifecycle surveys into one shared survey per trigger.
+ * Merges assignees into the oldest survey; removes empty duplicates (0 responses).
+ */
+const consolidateLifecycleSurveysForTrigger = async (organizationId, trigger) => {
+    const surveys = await Survey.find({ organizationId, lifecycleTrigger: trigger }).sort({
+        createdAt: 1
+    });
+    if (surveys.length <= 1) return;
+
+    const primary = surveys[0];
+    const idSet = new Set(
+        (primary.targetEmployees || []).map((id) => String(id)).filter(Boolean)
+    );
+    if (primary.lifecycleEmployeeId) {
+        idSet.add(String(primary.lifecycleEmployeeId));
+    }
+
+    const toRemove = [];
+    for (let i = 1; i < surveys.length; i += 1) {
+        const s = surveys[i];
+        (s.targetEmployees || []).forEach((id) => {
+            if (id) idSet.add(String(id));
+        });
+        if (s.lifecycleEmployeeId) {
+            idSet.add(String(s.lifecycleEmployeeId));
+        }
+        if ((Number(s.responseCount) || 0) === 0) {
+            toRemove.push(s._id);
+        } else {
+            // Keep surveys that already collected responses; stop listing as Active lifecycle dupes
+            if (s.status === 'Active') {
+                s.status = 'Archived';
+                s.lifecycleEmployeeId = null;
+                await s.save();
+            }
+        }
+    }
+
+    primary.targetAudience = 'Specific Employees';
+    primary.targetEmployees = [...idSet];
+    primary.totalInvites = idSet.size;
+    primary.lifecycleEmployeeId = null;
+    if (primary.status === 'Closed' || primary.status === 'Archived') {
+        primary.status = 'Active';
+    }
+    await primary.save();
+
+    if (toRemove.length) {
+        await Survey.deleteMany({ _id: { $in: toRemove }, organizationId });
+        logger.info('Consolidated lifecycle survey duplicates', {
+            organizationId: String(organizationId),
+            trigger,
+            kept: String(primary._id),
+            removed: toRemove.length
+        });
+    }
 };
 
 const startOfDay = (d) => {
@@ -48,8 +108,9 @@ const safeLifecycleNotify = async (settings, payload) => {
 };
 
 /**
- * Create (or skip if exists) a lifecycle Survey for one employee.
- * Returns { created: boolean, survey? }
+ * Assign an employee to the single shared lifecycle Survey for this trigger.
+ * One survey per org + trigger (Day 7 / 30 / 90 / Exit); employees are added to its audience.
+ * Returns { created: boolean, assigned?: boolean, survey? }
  */
 export const createLifecycleSurveyForEmployee = async ({
     organizationId,
@@ -68,49 +129,98 @@ export const createLifecycleSurveyForEmployee = async ({
     const template = LIFECYCLE_SURVEY_TEMPLATES[trigger];
     if (!template) return { created: false };
 
-    const existing = await Survey.findOne({
+    const empId = employee._id;
+    const empIdStr = String(empId);
+
+    // Already on any survey for this trigger (shared or legacy per-employee)
+    const alreadyAssigned = await Survey.findOne({
         organizationId,
         lifecycleTrigger: trigger,
-        lifecycleEmployeeId: employee._id
+        $or: [{ lifecycleEmployeeId: empId }, { targetEmployees: empId }]
     })
         .select('_id')
         .lean();
-    if (existing) return { created: false, surveyId: existing._id };
+    if (alreadyAssigned) {
+        return { created: false, surveyId: alreadyAssigned._id };
+    }
 
     const lifecycle = settings.lifecycle || {};
     const openDays = Number(lifecycle.openDurationDays) || 7;
-    const startDate = new Date(now);
     const endDate = new Date(now.getTime() + openDays * MS_PER_DAY);
     const anonymous = lifecycle.anonymous !== false;
     const empName = `${employee.name || ''} ${employee.lastName || ''}`.trim() || 'Employee';
 
-    const survey = new Survey({
+    // Reuse the oldest survey for this org + trigger (one shared survey)
+    let survey = await Survey.findOne({
         organizationId,
-        title: template.title,
-        description: template.description,
-        type: template.type,
-        questions: template.questions,
-        targetAudience: 'Specific Employees',
-        targetEmployees: [employee._id],
-        startDate,
-        endDate,
-        anonymous,
-        status: 'Active',
-        reminderEnabled: true,
-        reminderDaysBefore: Math.min(2, Math.max(0, openDays - 1)),
-        totalInvites: 1,
-        lifecycleTrigger: trigger,
-        lifecycleEmployeeId: employee._id
-    });
+        lifecycleTrigger: trigger
+    }).sort({ createdAt: 1 });
 
-    try {
-        await survey.save();
-    } catch (err) {
-        // Race on unique index — treat as already created
-        if (err?.code === 11000) {
-            return { created: false };
+    let created = false;
+
+    if (survey) {
+        const targets = Array.isArray(survey.targetEmployees) ? survey.targetEmployees : [];
+        const alreadyOnShared = targets.some((id) => String(id) === empIdStr);
+        if (alreadyOnShared) {
+            return { created: false, surveyId: survey._id };
         }
-        throw err;
+
+        survey.targetAudience = 'Specific Employees';
+        survey.targetEmployees = [...targets, empId];
+        survey.totalInvites = (Number(survey.totalInvites) || targets.length) + 1;
+        // Prefer shared model going forward (legacy field unused)
+        survey.lifecycleEmployeeId = null;
+        if (survey.status === 'Closed' || survey.status === 'Archived') {
+            survey.status = 'Active';
+        }
+        // Keep survey open long enough for the newly assigned employee
+        if (!survey.endDate || new Date(survey.endDate) < endDate) {
+            survey.endDate = endDate;
+        }
+        await survey.save();
+    } else {
+        survey = new Survey({
+            organizationId,
+            title: template.title,
+            description: template.description,
+            type: template.type,
+            questions: template.questions,
+            targetAudience: 'Specific Employees',
+            targetEmployees: [empId],
+            startDate: new Date(now),
+            endDate,
+            anonymous,
+            status: 'Active',
+            reminderEnabled: true,
+            reminderDaysBefore: Math.min(2, Math.max(0, openDays - 1)),
+            totalInvites: 1,
+            lifecycleTrigger: trigger
+            // no lifecycleEmployeeId — shared across all employees for this trigger
+        });
+
+        try {
+            await survey.save();
+            created = true;
+        } catch (err) {
+            // Race: another worker created the shared survey — attach to it
+            if (err?.code === 11000) {
+                survey = await Survey.findOne({
+                    organizationId,
+                    lifecycleTrigger: trigger
+                }).sort({ createdAt: 1 });
+                if (!survey) throw err;
+                const targets = Array.isArray(survey.targetEmployees) ? survey.targetEmployees : [];
+                if (!targets.some((id) => String(id) === empIdStr)) {
+                    survey.targetEmployees = [...targets, empId];
+                    survey.totalInvites = (Number(survey.totalInvites) || targets.length) + 1;
+                    survey.lifecycleEmployeeId = null;
+                    await survey.save();
+                }
+                created = false;
+            } else {
+                throw err;
+            }
+        }
     }
 
     await safeLifecycleNotify(settings, {
@@ -118,21 +228,21 @@ export const createLifecycleSurveyForEmployee = async ({
         organizationId,
         data: {
             survey,
-            recipients: [employee._id.toString()],
+            recipients: [empIdStr],
             trigger,
             triggerLabel: TRIGGER_META[trigger]?.label || trigger,
             employeeName: empName
         }
     });
 
-    logger.info('Lifecycle engagement survey created', {
+    logger.info(created ? 'Lifecycle engagement survey created' : 'Lifecycle engagement survey assignee added', {
         organizationId: String(organizationId),
-        employeeId: String(employee._id),
+        employeeId: empIdStr,
         trigger,
         surveyId: String(survey._id)
     });
 
-    return { created: true, survey };
+    return { created, assigned: true, survey };
 };
 
 const processJoinerTrigger = async (organizationId, settings, trigger, now) => {
@@ -212,6 +322,12 @@ export const processLifecycleEngagementSurveys = async (options = {}) => {
             const settings = await loadEngagementSettings(org._id);
             if (!settings.lifecycle?.enabled) continue;
             if (!isEngagementFeatureEnabled(settings, 'surveys')) continue;
+
+            // One shared survey per trigger — merge any legacy per-employee copies
+            await consolidateLifecycleSurveysForTrigger(org._id, 'day7');
+            await consolidateLifecycleSurveysForTrigger(org._id, 'day30');
+            await consolidateLifecycleSurveysForTrigger(org._id, 'day90');
+            await consolidateLifecycleSurveysForTrigger(org._id, 'exit');
 
             totalCreated += await processJoinerTrigger(org._id, settings, 'day7', now);
             totalCreated += await processJoinerTrigger(org._id, settings, 'day30', now);

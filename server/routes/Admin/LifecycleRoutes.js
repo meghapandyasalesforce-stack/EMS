@@ -316,7 +316,7 @@ router.route('/alumni')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, requireLifecycleFeature(['alumniManagement', 'rehireEligibility'], 'Alumni', true), getAlumniList);
 
 router.route('/alumni/:alumniId/blacklist')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, requireLifecycleFeature('alumniManagement', 'Alumni'), postAlumniBlacklist);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, requireLifecycleFeature('blacklisting', 'Blacklisting'), postAlumniBlacklist);
 
 router.route('/alumni/:alumniId/rehire')
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, requireLifecycleFeature('rehireEligibility', 'Rehire'), postAlumniRehire);

@@ -12,36 +12,18 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { canAccessLifecycleEnterprise } from '../../utils/managerHelper';
 import { useEmployees } from '../../Hooks/useDashboardData';
 import {
-    TASK_STATUS_COLORS, WORKFLOW_STATUSES, TASK_GROUPS_BY_ROLE,
-    ASSET_STATUSES, getTaskCompletionBlockers, canCompleteTask,
+    WORKFLOW_STATUSES, TASK_GROUPS_BY_ROLE,
 } from '../../constants/onboardingConstants';
 import { getTokenFromCookie } from '../../utils/authHelper';
 import { getSocketIOUrl } from '../../utils/socketUrl';
 import {
-    FaUserPlus, FaCheckCircle, FaTasks, FaFileAlt, FaClock, FaLaptop,
-    FaUser, FaChartLine, FaHistory, FaStickyNote, FaGraduationCap,
-    FaSpinner, FaSearch, FaPen, FaCalendarAlt, FaTrash, FaFilter, FaArrowLeft,
-    FaShieldAlt, FaFlagCheckered, FaChevronDown, FaChevronUp,
+    FaUserPlus, FaTasks, FaSearch, FaCalendarAlt, FaTrash, FaFilter,
 } from 'react-icons/fa';
 import OnboardingHrDetailView from './OnboardingHrDetailView';
-import OnboardingBgvPanel from './OnboardingBgvPanel';
-import OnboardingMilestonesPanel from './OnboardingMilestonesPanel';
-import OnboardingFormsPanel from './OnboardingFormsPanel';
-import OnboardingGoalsPanel from './OnboardingGoalsPanel';
-import ItProvisioningPanel from './ItProvisioningPanel';
-import LmsDashboard from './LmsDashboard';
 import useLifecycleFeatures from '../../Hooks/useLifecycleFeatures';
+import { filterHrAssignees } from '../../utils/hrAssignees';
+import { filterManagerCandidates } from '../../utils/managerAssignees';
 import { CmBadge, CmButton, CmSearch, CmStat, CmPerson, CmRing, CmEmpty, statusTone } from '../../components/corporateModern';
-
-const PROGRESS_RING_SPECS = [
-    { key: 'overall', label: 'Overall', getValue: (wf, b) => wf?.progress || 0, color: 'var(--cm-primary)' },
-    { key: 'tasks', label: 'Tasks', getValue: (_wf, b) => b.tasks || 0, color: '#2563eb' },
-    { key: 'documents', label: 'Documents', getValue: (_wf, b) => b.documents || 0, color: '#7c3aed' },
-    { key: 'checklist', label: 'Checklist', getValue: (_wf, b) => b.checklist || 0, color: '#059669' },
-    { key: 'training', label: 'Training', getValue: (_wf, b) => b.training || 0, color: '#d97706' },
-    { key: 'policies', label: 'Policies', getValue: (_wf, b) => b.policies || 0, color: '#db2777' },
-    { key: 'assets', label: 'Assets', getValue: (_wf, b) => b.assets || 0, color: '#0891b2' },
-];
 
 const TASK_ACTION_SECTIONS = {
     'Assign laptop and equipment': 'onboarding-assets',
@@ -53,17 +35,6 @@ const TASK_ACTION_ROUTES = {
     'Upload identity documents': '/job-details',
     'Upload bank details': '/financial-details',
     'Verify employee documents': '/documents',
-};
-
-const WORKFLOW_STATUS_COLORS = {
-    Draft: 'bg-slate-100 text-slate-700',
-    Scheduled: 'bg-indigo-100 text-indigo-800',
-    'Not Started': 'bg-gray-100 text-gray-700',
-    'In Progress': 'bg-blue-100 text-blue-800',
-    Completed: 'bg-emerald-100 text-emerald-800',
-    Paused: 'bg-amber-100 text-amber-800',
-    Cancelled: 'bg-gray-200 text-gray-600',
-    Overdue: 'bg-red-100 text-red-800',
 };
 
 const OnboardingHub = () => {
@@ -98,7 +69,7 @@ const OnboardingHub = () => {
     const workflowIdRef = React.useRef(workflowIdParam);
     workflowIdRef.current = workflowIdParam;
 
-    const { isEnabled: isFeatureEnabled, filterByFeature } = useLifecycleFeatures({ admin: isHRView });
+    const { isEnabled: isFeatureEnabled, filterByFeature } = useLifecycleFeatures({ admin: isHRView, showAll: true });
 
     const roleFromApi = dashboard?.role;
     const myEmployeeId = (employee?._id || employee?.id || user?.employeeId || roleFromApi?.employeeId)?.toString();
@@ -127,6 +98,7 @@ const OnboardingHub = () => {
 
     const { data: employeeData = { employees: [] } } = useEmployees();
     const employees = employeeData?.employees ?? [];
+    const hrAssignees = useMemo(() => filterHrAssignees(employees), [employees]);
 
     const [createForm, setCreateForm] = useState({
         employeeId: '', templateId: '', assignedHR: '', assignedBuddy: '',
@@ -134,6 +106,17 @@ const OnboardingHub = () => {
         expectedCompletionDate: '',
         saveAsDraft: false,
     });
+
+    const buddyCandidates = useMemo(() => {
+        const selfId = String(createForm.employeeId || '');
+        if (!selfId) return employees;
+        return employees.filter((emp) => String(emp._id || emp.id) !== selfId);
+    }, [employees, createForm.employeeId]);
+
+    const managerCandidates = useMemo(
+        () => filterManagerCandidates(employees, createForm.employeeId),
+        [employees, createForm.employeeId],
+    );
 
     const templates = dashboard?.templates || [];
 
@@ -1208,13 +1191,19 @@ const OnboardingHub = () => {
                                             });
                                             if (matched) assignedManager = String(matched._id || matched.id);
                                         }
-                                        setCreateForm((prev) => ({
-                                            ...prev,
-                                            employeeId,
-                                            // Autofill only joining date + manager from employee profile
-                                            joiningDate,
-                                            assignedManager,
-                                        }));
+                                        setCreateForm((prev) => {
+                                            const nextManager = String(assignedManager || '');
+                                            const allowedManagers = new Set(
+                                                filterManagerCandidates(employees, employeeId).map((e) => String(e._id || e.id)),
+                                            );
+                                            return {
+                                                ...prev,
+                                                employeeId,
+                                                joiningDate,
+                                                assignedManager: nextManager && allowedManagers.has(nextManager) ? nextManager : '',
+                                                assignedBuddy: String(prev.assignedBuddy) === String(employeeId) ? '' : prev.assignedBuddy,
+                                            };
+                                        });
                                     }}>
                                     <option value="">Select employee</option>
                                     {employees.map((emp) => (
@@ -1278,8 +1267,10 @@ const OnboardingHub = () => {
                                 <select className="w-full p-2 border rounded-lg mt-1" value={createForm.assignedManager}
                                     onChange={(e) => setCreateForm({ ...createForm, assignedManager: e.target.value })}>
                                     <option value="">From employee profile</option>
-                                    {employees.map((emp) => (
-                                        <option key={emp._id || emp.id} value={emp._id || emp.id}>{emp.name}</option>
+                                    {managerCandidates.map((emp) => (
+                                        <option key={emp._id || emp.id} value={emp._id || emp.id}>
+                                            {emp.name}{emp.lastName ? ` ${emp.lastName}` : ''}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -1288,21 +1279,31 @@ const OnboardingHub = () => {
                                 <select className="w-full p-2 border rounded-lg mt-1" value={createForm.assignedHR}
                                     onChange={(e) => setCreateForm({ ...createForm, assignedHR: e.target.value })}>
                                     <option value="">Auto-assign</option>
-                                    {employees.map((emp) => (
-                                        <option key={emp._id || emp.id} value={emp._id || emp.id}>{emp.name}</option>
+                                    {hrAssignees.map((emp) => (
+                                        <option key={emp._id || emp.id} value={emp._id || emp.id}>
+                                            {emp.name}{emp.lastName ? ` ${emp.lastName}` : ''}
+                                            {emp.jobTitle ? ` (${emp.jobTitle})` : ''}
+                                        </option>
                                     ))}
                                 </select>
+                                {!hrAssignees.length && (
+                                    <p className="mt-1 text-xs text-gray-500">No HR Manager / HR Executive found. Use Auto-assign.</p>
+                                )}
                             </div>
+                            {isFeatureEnabled('buddyProgram') && (
                             <div>
                                 <label className="text-sm font-medium">Buddy</label>
                                 <select className="w-full p-2 border rounded-lg mt-1" value={createForm.assignedBuddy}
                                     onChange={(e) => setCreateForm({ ...createForm, assignedBuddy: e.target.value })}>
                                     <option value="">None</option>
-                                    {employees.map((emp) => (
-                                        <option key={emp._id || emp.id} value={emp._id || emp.id}>{emp.name}</option>
+                                    {buddyCandidates.map((emp) => (
+                                        <option key={emp._id || emp.id} value={emp._id || emp.id}>
+                                            {emp.name}{emp.lastName ? ` ${emp.lastName}` : ''}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
+                            )}
                             <div>
                                 <label className="text-sm font-medium">Welcome Message</label>
                                 <textarea className="w-full p-2 border rounded-lg mt-1" rows={2}

@@ -2,13 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 import {
-    FiSave, FiToggleLeft, FiToggleRight, FiPackage, FiFileText, FiLayers,
-    FiBell, FiSettings, FiSliders, FiTool,
+    FiSave, FiToggleLeft, FiToggleRight, FiPackage, FiFileText,
+    FiSettings, FiSliders, FiTool,
 } from 'react-icons/fi';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 import { clearLifecycleFeaturesCache } from '../../Hooks/useLifecycleFeatures';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import WorkflowBuilder from './WorkflowBuilder';
 import FormBuilderHub from './FormBuilderHub';
 import DocumentHub from './DocumentHub';
 import ExitInterviewHub from './ExitInterviewHub';
@@ -19,10 +18,8 @@ const SECTIONS = [
     { id: 'modules', label: 'Features', icon: FiSettings },
     { id: 'policies', label: 'Policies', icon: FiSliders },
     { id: 'packs', label: 'Packs', icon: FiPackage },
-    { id: 'templates', label: 'Templates', icon: FiLayers },
     { id: 'builders', label: 'Builders', icon: FiTool },
     { id: 'documents', label: 'Document Catalog', icon: FiFileText },
-    { id: 'automation', label: 'Rules', icon: FiBell },
 ];
 
 const BUILDER_TABS = [
@@ -32,10 +29,56 @@ const BUILDER_TABS = [
     { id: 'letters', label: 'Letter Generator', featureKeys: ['experienceLetter', 'relievingLetter', 'serviceCertificate', 'offerLetter'] },
 ];
 
-const APPROVAL_ENTITIES = ['Offer', 'Onboarding', 'Offboarding', 'Clearance', 'ExitInterview', 'FnF', 'AssetReturn'];
-const ESCALATION_ROLES = ['hr', 'manager', 'it', 'payroll', 'admin'];
 const BGV_VENDORS = import.meta.env.PROD ? ['manual'] : ['manual', 'stub_vendor'];
-const ESIGN_PROVIDERS = ['internal', 'docusign', 'adobe_sign', 'aadhaar_esign'];
+const ESIGN_PROVIDERS = [
+    { value: 'internal', label: 'Internal (built-in)' },
+    { value: 'docusign', label: 'DocuSign (requires server credentials)' },
+    { value: 'adobe_sign', label: 'Adobe Sign (requires server credentials)' },
+    { value: 'aadhaar_esign', label: 'Aadhaar eSign (requires server credentials)' },
+];
+
+/**
+ * Hide from Configure UI — already in other modules, dead toggles (no runtime gate),
+ * or duplicated under Policies. Keys still persist; other modules untouched.
+ */
+const HIDDEN_FROM_CONFIGURE = new Set([
+    // Already in employee / org / leave / attendance / payroll / branding / email
+    'departmentAssignment',
+    'designationAssignment',
+    'reportingManagerAssignment',
+    'workLocationAssignment',
+    'shiftAssignment',
+    'attendancePolicyAssignment',
+    'leavePolicyAssignment',
+    'employeeIdGeneration',
+    'payrollSetup',
+    'welcomeEmail',
+    'whiteLabelBranding',
+    'notificationCenter',
+    'leaveEncashment',
+    'bonusRecovery',
+    // Dead / unused toggles (capability exists elsewhere or not gated by this key)
+    'candidatePortal',
+    'employeeFeedback',
+    'hrInitiatedExit',
+    'termination',
+    'retirement',
+    'contractCompletion',
+    'noticeAlerts',
+    'lastWorkingDay',
+    'assetDamageReporting',
+    'itTicketingIntegration',
+    // Unused / redundant toggles (no unique runtime gate or no UI)
+    'joiningChecklist',
+    'probationCenter',
+    'lmsDashboard',
+    'bulkOperations',
+    // Shared / Automation — managed via Rules / Enterprise hub, not Features list
+    'reminders',
+    'escalations',
+    'enterpriseDashboards',
+    'globalLifecycleSearch',
+]);
 
 /** Build explicit true/false for every registry feature (avoids undefined === Enabled). */
 function normalizeFeatureMap(stored = {}, registryFeatures = []) {
@@ -79,27 +122,21 @@ const LifecycleConfigurationPanel = () => {
     const [snapshot, setSnapshot] = useState(null);
     const [enabledFeatures, setEnabledFeatures] = useState({});
     const [modules, setModules] = useState({ onboarding: { enabled: true }, offboarding: { enabled: true } });
-    const [notifications, setNotifications] = useState({ email: true, inApp: true, push: true });
     const [noticePeriodPolicy, setNoticePeriodPolicy] = useState({});
     const [fnfPolicy, setFnfPolicy] = useState({});
     const [bgvPolicy, setBgvPolicy] = useState({});
     const [offerPolicy, setOfferPolicy] = useState({ defaultExpiryDays: 7 });
     const [esignProvider, setEsignProvider] = useState('internal');
-    const [reminders, setReminders] = useState([]);
-    const [escalations, setEscalations] = useState([]);
-    const [approvals, setApprovals] = useState([]);
     const [defaults, setDefaults] = useState({});
     const [documentOverrides, setDocumentOverrides] = useState([]);
-    const [approvalWorkflows, setApprovalWorkflows] = useState([]);
     const [onboardingTemplates, setOnboardingTemplates] = useState([]);
     const [offboardingTemplates, setOffboardingTemplates] = useState([]);
 
     const load = useCallback(async () => {
         try {
             setLoading(true);
-            const [registryRes, workflowsRes, onbTplRes, offTplRes] = await Promise.all([
+            const [registryRes, onbTplRes, offTplRes] = await Promise.all([
                 axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/registry`, { withCredentials: true }),
-                axios.get('/v1/admin/approvals/workflows', { withCredentials: true }).catch(() => ({ data: { data: [] } })),
                 axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/templates/onboarding`, { withCredentials: true }).catch(() => ({ data: { data: [] } })),
                 axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/templates/offboarding`, { withCredentials: true }).catch(() => ({ data: { data: [] } })),
             ]);
@@ -110,18 +147,13 @@ const LifecycleConfigurationPanel = () => {
             const registryFeatures = data.data.registry?.features || [];
             setModules(settings.modules || { onboarding: { enabled: true }, offboarding: { enabled: true } });
             setEnabledFeatures(normalizeFeatureMap(settings.enabledFeatures || {}, registryFeatures));
-            setNotifications(settings.notifications || { email: true, inApp: true, push: true });
             setNoticePeriodPolicy(settings.noticePeriodPolicy || {});
             setFnfPolicy(settings.fnfPolicy || {});
             setBgvPolicy(settings.bgvPolicy || { vendor: 'manual' });
             setOfferPolicy(settings.offerPolicy || { defaultExpiryDays: 7 });
             setEsignProvider(settings.esignProvider || 'internal');
-            setReminders(settings.reminders || []);
-            setEscalations(settings.escalations || []);
-            setApprovals(settings.approvals || []);
             setDefaults(settings.defaults || {});
             setDocumentOverrides(settings.documentOverrides || []);
-            setApprovalWorkflows(workflowsRes.data?.data || workflowsRes.data?.workflows || []);
             setOnboardingTemplates(onbTplRes.data?.data || []);
             setOffboardingTemplates(offTplRes.data?.data || []);
         } catch (error) {
@@ -136,10 +168,11 @@ const LifecycleConfigurationPanel = () => {
     const featuresByModule = useMemo(() => {
         const features = snapshot?.registry?.features || [];
         const isPackFeature = (f) => f.category === 'industry' || f.category === 'compliance';
+        const visible = (f) => !isPackFeature(f) && !HIDDEN_FROM_CONFIGURE.has(f.key);
         return {
-            onboarding: features.filter((f) => f.module === 'onboarding' && !isPackFeature(f)),
-            offboarding: features.filter((f) => f.module === 'offboarding' && !isPackFeature(f)),
-            shared: features.filter((f) => f.module === 'shared' && !isPackFeature(f)),
+            onboarding: features.filter((f) => f.module === 'onboarding' && visible(f)),
+            offboarding: features.filter((f) => f.module === 'offboarding' && visible(f)),
+            shared: features.filter((f) => f.module === 'shared' && visible(f)),
         };
     }, [snapshot]);
 
@@ -176,15 +209,11 @@ const LifecycleConfigurationPanel = () => {
             const { data } = await axios.patch(`${ADMIN_LIFECYCLE_ENDPOINT}/settings`, {
                 modules,
                 enabledFeatures,
-                notifications,
                 noticePeriodPolicy,
                 fnfPolicy,
                 bgvPolicy,
                 offerPolicy,
                 esignProvider,
-                reminders,
-                escalations,
-                approvals,
                 defaults,
                 documentOverrides,
             }, { withCredentials: true });
@@ -384,9 +413,9 @@ const LifecycleConfigurationPanel = () => {
                                     </div>
                                 ))}
                             </div>
-                            {renderFeatureGroup('Onboarding Features', featuresByModule.onboarding)}
-                            {renderFeatureGroup('Offboarding Features', featuresByModule.offboarding)}
-                            {renderFeatureGroup('Shared / Automation', featuresByModule.shared)}
+                            {featuresByModule.onboarding.length > 0 && renderFeatureGroup('Onboarding Features', featuresByModule.onboarding)}
+                            {featuresByModule.offboarding.length > 0 && renderFeatureGroup('Offboarding Features', featuresByModule.offboarding)}
+                            {featuresByModule.shared.length > 0 && renderFeatureGroup('Shared / Automation', featuresByModule.shared)}
                         </div>
                     )}
 
@@ -397,12 +426,14 @@ const LifecycleConfigurationPanel = () => {
                                     <NumberField label="Default notice days" value={noticePeriodPolicy.defaultNoticeDays} onChange={(v) => setNoticePeriodPolicy((p) => ({ ...p, defaultNoticeDays: v }))} />
                                     <NumberField label="Probation notice days" value={noticePeriodPolicy.probationNoticeDays} onChange={(v) => setNoticePeriodPolicy((p) => ({ ...p, probationNoticeDays: v }))} />
                                     <NumberField label="Max buyout days" value={noticePeriodPolicy.maxBuyoutDays} onChange={(v) => setNoticePeriodPolicy((p) => ({ ...p, maxBuyoutDays: v }))} />
-                                    <NumberField label="Escalation days after overdue" value={noticePeriodPolicy.escalationDaysAfterOverdue} onChange={(v) => setNoticePeriodPolicy((p) => ({ ...p, escalationDaysAfterOverdue: v }))} />
                                 </div>
                                 <div className="mt-3 flex flex-wrap gap-4">
                                     <ToggleRow label="Allow notice buyout" checked={noticePeriodPolicy.allowBuyout} onChange={(v) => setNoticePeriodPolicy((p) => ({ ...p, allowBuyout: v }))} />
                                     <ToggleRow label="Allow leave adjustment" checked={noticePeriodPolicy.allowLeaveAdjustment !== false} onChange={(v) => setNoticePeriodPolicy((p) => ({ ...p, allowLeaveAdjustment: v }))} />
                                 </div>
+                                <p className="mt-2 text-xs text-gray-500">
+                                    Leave adjustment also requires Features → Leave Adjustment During Notice.
+                                </p>
                             </PolicyCard>
 
                             <PolicyCard title="Full & Final Settlement Policy">
@@ -427,23 +458,8 @@ const LifecycleConfigurationPanel = () => {
                                 <div className="mt-3 space-y-2">
                                     <ToggleRow label="Block joining until BGV clear" checked={bgvPolicy.blockJoiningUntilClear} onChange={(v) => setBgvPolicy((p) => ({ ...p, blockJoiningUntilClear: v }))} />
                                     <p className="text-xs text-gray-500 pt-1">
-                                        Core checks always run when BGV is on. Extra check types below appear on open cases after save.
+                                        Extra BGV check types (employment, education, reference) are toggled under Features.
                                     </p>
-                                    <ToggleRow
-                                        label="Employment Verification"
-                                        checked={enabledFeatures.employmentVerification === true}
-                                        onChange={(v) => setEnabledFeatures((prev) => ({ ...prev, employmentVerification: v }))}
-                                    />
-                                    <ToggleRow
-                                        label="Education Verification"
-                                        checked={enabledFeatures.educationVerification === true}
-                                        onChange={(v) => setEnabledFeatures((prev) => ({ ...prev, educationVerification: v }))}
-                                    />
-                                    <ToggleRow
-                                        label="Reference Verification"
-                                        checked={enabledFeatures.referenceVerification === true}
-                                        onChange={(v) => setEnabledFeatures((prev) => ({ ...prev, referenceVerification: v }))}
-                                    />
                                 </div>
                             </PolicyCard>
 
@@ -453,10 +469,13 @@ const LifecycleConfigurationPanel = () => {
                                     <label className="text-sm text-gray-700">
                                         E-sign provider
                                         <select value={esignProvider} onChange={(e) => setEsignProvider(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
-                                            {ESIGN_PROVIDERS.map((v) => <option key={v} value={v}>{v}</option>)}
+                                            {ESIGN_PROVIDERS.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
                                         </select>
                                     </label>
                                 </div>
+                                <p className="mt-2 text-xs text-gray-500">
+                                    Use Internal unless DocuSign / Adobe / Aadhaar credentials are configured on the server.
+                                </p>
                             </PolicyCard>
 
                             <PolicyCard title="Default Templates">
@@ -493,10 +512,6 @@ const LifecycleConfigurationPanel = () => {
                                 {renderPackGrid(compliancePacks, 'compliance', 'No compliance packs loaded.')}
                             </div>
                         </div>
-                    )}
-
-                    {activeSection === 'templates' && (
-                        <WorkflowBuilder />
                     )}
 
                     {activeSection === 'builders' && (
@@ -545,52 +560,6 @@ const LifecycleConfigurationPanel = () => {
                                     onChange={setDocumentOverrides}
                                 />
                             </div>
-                        </div>
-                    )}
-
-                    {activeSection === 'automation' && (
-                        <div className="space-y-6">
-                            <PolicyCard title="Notification Channels">
-                                <div className="grid gap-2">
-                                    {['email', 'inApp', 'push'].map((ch) => (
-                                        <ToggleRow
-                                            key={ch}
-                                            label={ch === 'inApp' ? 'In-App' : ch}
-                                            checked={notifications[ch] !== false}
-                                            onChange={(v) => setNotifications((prev) => ({ ...prev, [ch]: v }))}
-                                        />
-                                    ))}
-                                </div>
-                            </PolicyCard>
-
-                            <EditableRuleList
-                                title="Reminder Rules"
-                                rules={reminders}
-                                onChange={setReminders}
-                                fields={[
-                                    { key: 'key', label: 'Key', type: 'text' },
-                                    { key: 'label', label: 'Label', type: 'text' },
-                                    { key: 'featureKey', label: 'Feature key', type: 'text' },
-                                    { key: 'daysBeforeDue', label: 'Days before due', type: 'number' },
-                                ]}
-                                emptyRule={{ key: '', label: '', featureKey: 'reminders', enabled: true, daysBeforeDue: 1, channels: ['email', 'in_app'] }}
-                            />
-
-                            <EditableRuleList
-                                title="Escalation Rules"
-                                rules={escalations}
-                                onChange={setEscalations}
-                                fields={[
-                                    { key: 'key', label: 'Key', type: 'text' },
-                                    { key: 'label', label: 'Label', type: 'text' },
-                                    { key: 'featureKey', label: 'Feature key', type: 'text' },
-                                    { key: 'daysAfterDue', label: 'Days after due', type: 'number' },
-                                    { key: 'escalateToRole', label: 'Escalate to role', type: 'select', options: ESCALATION_ROLES },
-                                ]}
-                                emptyRule={{ key: '', label: '', featureKey: 'escalations', enabled: true, daysAfterDue: 2, escalateToRole: 'hr', channels: ['email', 'in_app'] }}
-                            />
-
-                            <ApprovalBindingsEditor approvals={approvals} workflows={approvalWorkflows} onChange={setApprovals} />
                         </div>
                     )}
                 </section>
@@ -705,92 +674,6 @@ function ConfigurableDocumentList({ title, docs, preferredKeys = [], overrides, 
                 {!sortedDocs.length && <p className="text-sm text-gray-500">No documents for enabled features.</p>}
             </div>
         </div>
-    );
-}
-
-function EditableRuleList({ title, rules, onChange, fields, emptyRule }) {
-    const updateRule = (index, key, value) => {
-        const next = [...rules];
-        next[index] = { ...next[index], [key]: value };
-        onChange(next);
-    };
-
-    const removeRule = (index) => onChange(rules.filter((_, i) => i !== index));
-    const addRule = () => onChange([...rules, { ...emptyRule, key: `rule_${Date.now()}` }]);
-
-    return (
-        <PolicyCard title={title}>
-            {!rules.length ? <p className="text-sm text-gray-500 mb-3">None configured.</p> : (
-                <div className="space-y-3 mb-3">
-                    {rules.map((rule, index) => (
-                        <div key={rule.key || index} className="rounded-lg border border-gray-100 p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <ToggleRow label="Enabled" checked={rule.enabled !== false} onChange={(v) => updateRule(index, 'enabled', v)} />
-                                <button type="button" onClick={() => removeRule(index)} className="text-xs text-red-600 hover:underline">Remove</button>
-                            </div>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                                {fields.map((field) => (
-                                    <label key={field.key} className="text-xs text-gray-600">
-                                        {field.label}
-                                        {field.type === 'select' ? (
-                                            <select value={rule[field.key] || ''} onChange={(e) => updateRule(index, field.key, e.target.value)} className="mt-1 w-full rounded border px-2 py-1.5 text-sm">
-                                                {field.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                                            </select>
-                                        ) : (
-                                            <input
-                                                type={field.type}
-                                                value={rule[field.key] ?? ''}
-                                                onChange={(e) => updateRule(index, field.key, field.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                                            />
-                                        )}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-            <button type="button" onClick={addRule} className="text-xs px-3 py-1.5 rounded-lg border hover:bg-gray-50">Add rule</button>
-        </PolicyCard>
-    );
-}
-
-function ApprovalBindingsEditor({ approvals, workflows, onChange }) {
-    const bindings = APPROVAL_ENTITIES.map((entityType) => {
-        const existing = approvals.find((a) => a.entityType === entityType);
-        return existing || { entityType, enabled: false, approvalWorkflowId: null };
-    });
-
-    const updateBinding = (entityType, patch) => {
-        const next = [...bindings];
-        const idx = next.findIndex((b) => b.entityType === entityType);
-        next[idx] = { ...next[idx], ...patch };
-        onChange(next);
-    };
-
-    return (
-        <PolicyCard title="Approval Rules">
-            <div className="space-y-3">
-                {bindings.map((binding) => (
-                    <div key={binding.entityType} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-100 p-3">
-                        <span className="w-28 text-sm font-medium text-gray-800">{binding.entityType}</span>
-                        <Toggle checked={binding.enabled} onChange={(v) => updateBinding(binding.entityType, { enabled: v })} />
-                        <select
-                            value={binding.approvalWorkflowId || ''}
-                            onChange={(e) => updateBinding(binding.entityType, { approvalWorkflowId: e.target.value || null })}
-                            className="flex-1 min-w-[180px] rounded-lg border px-2 py-1.5 text-sm"
-                            disabled={!binding.enabled}
-                        >
-                            <option value="">Select workflow</option>
-                            {workflows.map((wf) => (
-                                <option key={wf._id} value={wf._id}>{wf.name || wf.workflowName || wf._id}</option>
-                            ))}
-                        </select>
-                    </div>
-                ))}
-            </div>
-        </PolicyCard>
     );
 }
 

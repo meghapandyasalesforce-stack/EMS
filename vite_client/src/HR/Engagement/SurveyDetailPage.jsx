@@ -528,29 +528,35 @@ const SurveyDetailPage = () => {
     const showAnalyticsDetail = overview?.available === true;
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
-            <div className="page-shell-inner hrms-stack">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F0F7F4]">
+            <div className="page-shell-inner hrms-stack max-w-6xl">
                 <button
                     type="button"
                     onClick={() => navigate('/engagement')}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
                     <FaArrowLeft className="text-xs" /> Back
                 </button>
 
-                <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
+                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                    <div className="flex flex-col gap-5">
+                        <div className="flex items-start gap-3 sm:gap-4">
                             <div
-                                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white"
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white sm:h-12 sm:w-12"
                                 style={{ background: MINT_GRADIENT }}
                             >
-                                <FaChartLine className="h-5 w-5" />
+                                <FaChartLine className="h-4 w-4 sm:h-5 sm:w-5" />
                             </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-900">{survey.title}</h1>
-                                <p className="mt-1 text-sm text-slate-600">{survey.description}</p>
-                                <div className="mt-2 flex flex-wrap gap-2">
+                            <div className="min-w-0 flex-1">
+                                <h1 className="text-xl font-bold leading-snug text-slate-900 sm:text-2xl">
+                                    {survey.title}
+                                </h1>
+                                {survey.description ? (
+                                    <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                                        {survey.description}
+                                    </p>
+                                ) : null}
+                                <div className="mt-2.5 flex flex-wrap gap-2">
                                     <span
                                         className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${surveyStatusStyle(survey.status)}`}
                                     >
@@ -571,85 +577,90 @@ const SurveyDetailPage = () => {
                         </div>
 
                         {canManage && (
-                            <div className="flex flex-wrap items-end gap-2">
-                                {(survey.responseCount || 0) === 0 ? (
+                            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+                                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                                    {(survey.responseCount || 0) === 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/engagement/surveys/${surveyId}/edit`)}
+                                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:rounded-full sm:px-4 sm:py-2"
+                                        >
+                                            <FaEdit className="h-3.5 w-3.5 shrink-0" />
+                                            <span className="truncate">Edit Survey</span>
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMetadataEditOpen((v) => !v)}
+                                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:rounded-full sm:px-4 sm:py-2"
+                                            >
+                                                <FaEdit className="h-3.5 w-3.5 shrink-0" />
+                                                <span className="truncate">Edit Details</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleCloneSurvey}
+                                                disabled={cloning}
+                                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 sm:rounded-full sm:px-4 sm:py-2"
+                                            >
+                                                <FaCopy className="h-3.5 w-3.5 shrink-0" />
+                                                <span className="truncate">{cloning ? 'Cloning...' : 'Clone Survey'}</span>
+                                            </button>
+                                        </>
+                                    )}
                                     <button
                                         type="button"
-                                        onClick={() => navigate(`/engagement/surveys/${surveyId}/edit`)}
-                                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                        onClick={handleExportResponses}
+                                        disabled={exportingResponses}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 sm:rounded-full sm:px-4 sm:py-2"
                                     >
-                                        <FaEdit className="h-4 w-4" />
-                                        Edit Survey
+                                        <FaDownload className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="truncate">{exportingResponses ? 'Exporting...' : 'Export CSV'}</span>
                                     </button>
-                                ) : (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={() => setMetadataEditOpen((v) => !v)}
-                                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                                        >
-                                            <FaEdit className="h-4 w-4" />
-                                            Edit Details
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleCloneSurvey}
-                                            disabled={cloning}
-                                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                                        >
-                                            <FaCopy className="h-4 w-4" />
-                                            {cloning ? 'Cloning...' : 'Clone Survey'}
-                                        </button>
-                                    </>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={handleExportResponses}
-                                    disabled={exportingResponses}
-                                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                                >
-                                    <FaDownload className="h-4 w-4" />
-                                    {exportingResponses ? 'Exporting...' : 'Export CSV'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleDeleteSurvey}
-                                    disabled={deleting}
-                                    className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
-                                >
-                                    <FaTrash className="h-4 w-4" />
-                                    {deleting ? 'Deleting...' : 'Delete'}
-                                </button>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">
-                                        Status
-                                    </label>
-                                    <select
-                                        value={statusDraft}
-                                        onChange={(e) => setStatusDraft(e.target.value)}
-                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                    <button
+                                        type="button"
+                                        onClick={handleDeleteSurvey}
+                                        disabled={deleting}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60 sm:rounded-full sm:px-4 sm:py-2"
                                     >
-                                        <option value="Draft">Draft</option>
-                                        <option value="Active">Active</option>
-                                        <option value="Closed">Closed</option>
-                                        <option value="Archived">Archived</option>
-                                    </select>
-                                    {getStatusHint(statusDraft, 'survey') && (
-                                        <p className="mt-1 text-xs text-amber-700">
-                                            {getStatusHint(statusDraft, 'survey')}
-                                        </p>
-                                    )}
+                                        <FaTrash className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="truncate">{deleting ? 'Deleting...' : 'Delete'}</span>
+                                    </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={handleStatusSave}
-                                    disabled={saving}
-                                    className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                                    style={{ background: MINT_GRADIENT }}
-                                >
-                                    <FaSave className="h-4 w-4" />
-                                    {saving ? 'Saving...' : 'Save'}
-                                </button>
+
+                                <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:p-3.5">
+                                    <div className="min-w-0 flex-1">
+                                        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                            Status
+                                        </label>
+                                        <select
+                                            value={statusDraft}
+                                            onChange={(e) => setStatusDraft(e.target.value)}
+                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 sm:max-w-xs"
+                                        >
+                                            <option value="Draft">Draft</option>
+                                            <option value="Active">Active</option>
+                                            <option value="Closed">Closed</option>
+                                            <option value="Archived">Archived</option>
+                                        </select>
+                                        {getStatusHint(statusDraft, 'survey') && (
+                                            <p className="mt-1.5 text-xs leading-snug text-amber-700">
+                                                {getStatusHint(statusDraft, 'survey')}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleStatusSave}
+                                        disabled={saving}
+                                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60 sm:w-auto sm:rounded-full sm:py-2"
+                                        style={{ background: MINT_GRADIENT }}
+                                    >
+                                        <FaSave className="h-4 w-4" />
+                                        {saving ? 'Saving...' : 'Save'}
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>

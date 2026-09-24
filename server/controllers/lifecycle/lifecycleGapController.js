@@ -53,8 +53,8 @@ import {
     generateBgvReport,
 } from '../../services/backgroundVerificationService.js';
 import {
-    applyNoticePeriodToWorkflow,
     approveNoticeBuyout,
+    applyNoticeLeaveAdjustment,
     buildNoticePeriodDashboard,
 } from '../../services/noticePeriodService.js';
 import {
@@ -552,9 +552,7 @@ export const patchNoticeLeaveAdjustment = async (req, res) => {
     try {
         const organizationId = orgId(req);
         const workflow = await loadOffboardingWorkflow(organizationId, req.params.workflowId);
-        workflow.noticePeriod = workflow.noticePeriod || {};
-        workflow.noticePeriod.leaveAdjustmentDays = Number(req.body.leaveAdjustmentDays || 0);
-        await applyNoticePeriodToWorkflow(workflow, organizationId);
+        await applyNoticeLeaveAdjustment(workflow, req.body.leaveAdjustmentDays, { actor: actor(req)?._id });
         await saveOffboardingWorkflow(workflow, organizationId, { actor: actor(req)?._id });
         return res.json({ success: true, data: workflow, message: 'Leave adjustment updated' });
     } catch (error) {
