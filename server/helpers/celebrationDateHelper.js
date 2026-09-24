@@ -170,4 +170,28 @@ export function hasReachedOrgNineAm(timezone, refDate = new Date()) {
   return dt.hour > 9 || (dt.hour === 9 && dt.minute >= 0);
 }
 
+/**
+ * True during the morning delivery window: 9:00–9:59 AM in org local time.
+ * Holiday / birthday / anniversary / event pushes should only fire in this window
+ * (not later in the afternoon if the server restarts after 9 AM).
+ */
+export function isOrgMorningNotifyWindow(timezone, refDate = new Date()) {
+  const tz = normalizeTimezone(timezone);
+  const dt = DateTime.fromJSDate(refDate, { zone: tz });
+  return dt.hour === 9;
+}
+
+/**
+ * Timezone used for morning lifestyle notifications (holiday/birthday/anniversary).
+ * Orgs that still have the UTC default would otherwise fire at 9 AM UTC (~2:30–3:30 PM IST).
+ * Override with MORNING_NOTIFY_TIMEZONE if needed; non-UTC org timezones are respected as-is.
+ */
+export function resolveMorningNotifyTimezone(effectiveTimezone) {
+  const tz = normalizeTimezone(effectiveTimezone);
+  if (tz === 'UTC') {
+    return normalizeTimezone(process.env.MORNING_NOTIFY_TIMEZONE || 'Asia/Kolkata');
+  }
+  return tz;
+}
+
 export { getDateKeyInTimezone };

@@ -6,8 +6,8 @@ import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
     FaArrowLeft, FaBoxOpen, FaCalendarAlt, FaClipboardCheck,
-    FaClock, FaExchangeAlt, FaFileAlt, FaFilter, FaKey,
-    FaMoneyCheckAlt, FaPlus, FaSearch, FaSignOutAlt, FaStickyNote, FaTasks, FaUserFriends,
+    FaClock, FaExchangeAlt, FaFileAlt, FaKey,
+    FaMoneyCheckAlt, FaPlus, FaSignOutAlt, FaStickyNote, FaTasks, FaUserFriends,
     FaTrash,
 } from 'react-icons/fa';
 import axios, { openDocumentPreview } from '../../utils/axios';
@@ -25,6 +25,9 @@ import ExitInterviewWorkflowPanel from './ExitInterviewWorkflowPanel';
 import OffboardingLettersPanel from './OffboardingLettersPanel';
 import OffboardingAlumniPanel from './OffboardingAlumniPanel';
 import useLifecycleFeatures from '../../Hooks/useLifecycleFeatures';
+import { filterHrAssignees } from '../../utils/hrAssignees';
+import { filterManagerCandidates } from '../../utils/managerAssignees';
+import { CmBadge, CmButton, CmSearch, CmStat, CmPerson, CmRing, CmEmpty, statusTone } from '../../components/corporateModern';
 
 const OFFBOARDING_STATUSES = [
     'Draft', 'Scheduled', 'Initiated', 'In Progress', 'Paused', 'Completed', 'Cancelled', 'Overdue',
@@ -85,7 +88,7 @@ const OffboardingHub = () => {
     const userObj = user || employee;
     const isAdmin = user?.role === 'admin';
     const isHRView = isAdmin || isHR(userObj);
-    const { isEnabled: isFeatureEnabled, filterByFeature } = useLifecycleFeatures({ admin: isHRView });
+    const { isEnabled: isFeatureEnabled, filterByFeature } = useLifecycleFeatures({ admin: isHRView, showAll: true });
     const workflowIdParam = searchParams.get('id') || '';
     const viewParam = searchParams.get('view') || '';
     const [loading, setLoading] = useState(true);
@@ -114,6 +117,7 @@ const OffboardingHub = () => {
     workflowIdRef.current = workflowIdParam;
     const { data: employeeData = { employees: [] } } = useEmployees();
     const employees = employeeData?.employees || [];
+    const hrAssignees = useMemo(() => filterHrAssignees(employees), [employees]);
     const [createForm, setCreateForm] = useState({
         employeeId: '',
         lastWorkingDate: '',
@@ -124,6 +128,10 @@ const OffboardingHub = () => {
         assignedManager: '',
         saveAsDraft: false,
     });
+    const managerCandidates = useMemo(
+        () => filterManagerCandidates(employees, createForm.employeeId),
+        [employees, createForm.employeeId],
+    );
 
     const fetchDashboard = useCallback(async ({ soft = false } = {}) => {
         if (fetchInFlight.current) return;
@@ -538,8 +546,9 @@ const OffboardingHub = () => {
     const breakdown = workflow?.progressBreakdown || {};
 
     return (
-        <div className="page-shell hrms-lifecycle bg-gray-50">
+        <div className="page-shell hrms-lifecycle cm-hrms bg-gray-50">
             <div className="page-shell-inner hrms-stack pb-10">
+                {!workflow && (
                 <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div className="min-w-0">
                         <p className="text-sm font-medium text-theme-secondary">
@@ -551,7 +560,7 @@ const OffboardingHub = () => {
                         </p>
                         <h1 className="mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">
                             {isHRView
-                                ? (workflow ? 'Employee Offboarding' : 'Offboarding Workflows')
+                                ? 'Offboarding Hub'
                                 : isManagerView
                                     ? 'My Team'
                                     : 'My Offboarding'}
@@ -559,7 +568,9 @@ const OffboardingHub = () => {
                         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500 sm:text-base">
                             {isManagerView
                                 ? 'Direct reports who are currently offboarding.'
-                                : 'Coordinate employee transitions, handovers, and clearances in one place.'}
+                                : isHRView
+                                    ? 'Plan and track every exit journey notice, clearance, and settlement in one place'
+                                    : 'Coordinate your exit, handovers, and clearances in one place.'}
                         </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:items-end">
@@ -579,161 +590,225 @@ const OffboardingHub = () => {
                                 )}
                             </div>
                         )}
-                        {isHRView && !workflow && (
-                            <button
-                                type="button"
-                                onClick={() => setShowCreateModal(true)}
-                                className="inline-flex w-full shrink-0 items-center justify-center gap-2.5 rounded-xl bg-theme-secondary px-5 py-3 text-sm font-semibold tracking-wide text-white shadow-md shadow-blue-900/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-theme-primary hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 active:translate-y-0 active:shadow-sm sm:w-auto sm:py-2.5 sm:text-base"
-                            >
+                        {isHRView && (
+                            <CmButton variant="inverted" onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
                                 <FaPlus className="shrink-0 text-base" />
                                 <span>Offboard Employee</span>
-                            </button>
+                            </CmButton>
                         )}
                     </div>
                 </header>
+                )}
 
                 {!workflow && (isHRView || isWorkQueueView) && dashboard.stats && (
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-                        {[
-                            ['Total Separations', dashboard.stats.totalSeparations, 'bg-indigo-50 text-indigo-700'],
-                            ['Active', dashboard.stats.active, 'bg-blue-50 text-blue-700'],
-                            ['Upcoming', dashboard.stats.upcoming, 'bg-purple-50 text-purple-700'],
-                            ['Overdue', dashboard.stats.overdue, 'bg-red-50 text-red-700'],
-                            ['Pending Assets', dashboard.stats.pendingAssets, 'bg-amber-50 text-amber-700'],
-                            ['Pending Clearances', dashboard.stats.pendingClearances, 'bg-orange-50 text-orange-700'],
-                            ['Average Progress', `${dashboard.stats.averageProgress || 0}%`, 'bg-emerald-50 text-emerald-700'],
-                        ].map(([label, value, color]) => (
-                            <div key={label} className={`rounded-xl p-3 text-center ${color}`}>
-                                <div className="text-2xl font-bold">{value ?? 0}</div>
-                                <div className="text-xs">{label}</div>
-                            </div>
-                        ))}
+                    <div className="cm-kpi-row cm-kpi-row--3">
+                        <CmStat
+                            label="Active Separations"
+                            value={dashboard.stats.active ?? 0}
+                            attention={(dashboard.stats.overdue ?? 0) > 0}
+                            meta={`${dashboard.stats.overdue ?? 0} overdue · ${dashboard.stats.upcoming ?? 0} upcoming`}
+                        />
+                        <CmStat
+                            label="Pending Clearances"
+                            value={(dashboard.stats.pendingClearances ?? 0) + (dashboard.stats.pendingAssets ?? 0)}
+                            attention={((dashboard.stats.pendingClearances ?? 0) + (dashboard.stats.pendingAssets ?? 0)) > 0}
+                            meta={`${dashboard.stats.pendingClearances ?? 0} clearances · ${dashboard.stats.pendingAssets ?? 0} assets`}
+                        />
+                        <CmStat
+                            label="Average Progress"
+                            value={`${dashboard.stats.averageProgress || 0}%`}
+                            meta={`${dashboard.stats.totalSeparations ?? 0} total separations`}
+                        />
                     </div>
                 )}
 
                 {!workflow && isHRView && dashboard.analytics && (
-                    <section className="grid gap-4 rounded-xl bg-white p-4 shadow-sm lg:grid-cols-2">
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-800">Separation reasons</h3>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {(dashboard.analytics.byReason || []).map((entry) => (
-                                    <span key={entry._id || 'Not specified'} className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700">
-                                        {entry._id || 'Not specified'}: {entry.count}
-                                    </span>
-                                ))}
-                                {!dashboard.analytics.byReason?.length && <span className="text-xs text-gray-500">No analytics available yet.</span>}
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3 text-center">
-                            <div className="rounded-lg bg-gray-50 p-3">
-                                <p className="text-xl font-bold text-gray-800">{dashboard.analytics.completionRate || 0}%</p>
-                                <p className="text-xs text-gray-500">Completion rate</p>
-                            </div>
-                            <div className="rounded-lg bg-gray-50 p-3">
-                                <p className="text-xl font-bold text-gray-800">{dashboard.analytics.averageProgress || 0}%</p>
-                                <p className="text-xs text-gray-500">Average progress</p>
-                            </div>
-                            <div className="rounded-lg bg-gray-50 p-3">
-                                <p className="text-xl font-bold text-gray-800">{dashboard.analytics.completed || 0}</p>
-                                <p className="text-xs text-gray-500">Completed</p>
-                            </div>
-                        </div>
-                    </section>
+                    <div className="cm-kpi-row cm-kpi-row--3">
+                        <CmStat
+                            label="Completion Rate"
+                            value={`${dashboard.analytics.completionRate || 0}%`}
+                            meta="Exit workflows completed"
+                        />
+                        <CmStat
+                            label="Completed"
+                            value={dashboard.analytics.completed || 0}
+                            meta="Finished separations"
+                        />
+                        <CmStat
+                            label="Top Reasons"
+                            value={(dashboard.analytics.byReason || []).slice(0, 1).map((e) => e._id || 'Other')[0] || '—'}
+                            meta={(dashboard.analytics.byReason || []).slice(0, 3).map((e) => `${e._id || 'Other'}: ${e.count}`).join(' · ') || 'No reason data yet'}
+                        />
+                    </div>
                 )}
 
                 {!workflow && (isHRView || isWorkQueueView) && (
                     <>
-                    <section>
-                        <div className="mb-4 flex flex-col gap-3">
-                            <div className="relative">
-                                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input
+                    <div className="rounded-xl bg-white p-5 shadow-sm">
+                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <div className="flex-1">
+                                <CmSearch
                                     value={searchTerm}
                                     onChange={(event) => setSearchTerm(event.target.value)}
                                     placeholder="Search by employee name or email..."
-                                    className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 shadow-sm"
                                 />
                             </div>
-                            <div className="flex min-w-0 items-center gap-2">
-                                <FaFilter className="shrink-0 text-gray-400" />
-                                <div className="hrms-chip-scroll">
-                                    <div className="hrms-chip-scroll-track" aria-label="Filter workflows by status">
-                                        {['all', ...OFFBOARDING_STATUSES].map((status) => (
-                                            <div key={status} className="hrms-chip-scroll-item">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setStatusFilter(status)}
-                                                    className={`whitespace-nowrap rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
-                                                        statusFilter === status
-                                                            ? 'border-theme-primary bg-theme-primary text-white shadow-sm'
-                                                            : 'border-gray-200 bg-white text-gray-600 hover:border-theme-primary'
-                                                    }`}
-                                                >
-                                                    {status === 'all' ? 'All' : status}
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
+                            <div className="hrms-chip-scroll">
+                                <div className="hrms-chip-scroll-track" aria-label="Filter workflows by status">
+                                    {['all', ...OFFBOARDING_STATUSES].map((status) => (
+                                        <div key={status} className="hrms-chip-scroll-item">
+                                            <button
+                                                type="button"
+                                                onClick={() => setStatusFilter(status)}
+                                                className={`cm-chip ${statusFilter === status ? 'cm-chip--active' : ''}`}
+                                            >
+                                                {status === 'all' ? 'All' : status}
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {filteredWorkflows.map((item) => {
-                                const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
-                                const completed = item.tasks?.filter((task) => task.status === 'Completed').length || 0;
-                                return (
-                                    <article
-                                        key={item._id}
-                                        className="cursor-pointer rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md"
-                                        onClick={() => openWorkflow(item)}
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <h3 className="truncate font-semibold text-gray-800">
-                                                {item.employeeId?.name} {item.employeeId?.lastName}
-                                            </h3>
-                                            <span className={`rounded-full px-2.5 py-1 text-xs ${STATUS_COLORS[item.status] || STATUS_COLORS.Draft}`}>
-                                                {item.status}
-                                            </span>
-                                        </div>
-                                        <p className="mt-1 text-xs text-gray-500">
-                                            Last day: {item.lastWorkingDate ? format(new Date(item.lastWorkingDate), 'MMM dd, yyyy') : 'Not set'}
-                                        </p>
-                                        <div className="mt-4">
-                                            <div className="mb-1 flex justify-between text-xs text-gray-500">
-                                                <span>Progress</span><span>{progress}%</span>
-                                            </div>
-                                            <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-                                                <div className="h-full rounded-full bg-theme-primary" style={{ width: `${progress}%` }} />
-                                            </div>
-                                        </div>
-                                        <p className="mt-3 flex items-center gap-2 text-xs text-gray-500">
-                                            <FaTasks /> {completed}/{item.tasks?.length || 0} Tasks
-                                        </p>
-                                        <div className="mt-4 flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={(event) => { event.stopPropagation(); openWorkflow(item); }}
-                                                className="flex-1 rounded-lg bg-theme-secondary px-3 py-2 text-sm text-white"
+
+                        {filteredWorkflows.length === 0 ? (
+                            <CmEmpty title="No offboarding workflows found">
+                                {isHRView ? 'Create one to get started.' : 'No matching workflows in this view.'}
+                            </CmEmpty>
+                        ) : (
+                            <>
+                                <div className="space-y-3 sm:hidden">
+                                    {filteredWorkflows.map((item) => {
+                                        const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
+                                        const fullName = `${item.employeeId?.name || ''} ${item.employeeId?.lastName || ''}`.trim();
+                                        const completed = item.tasks?.filter((task) => task.status === 'Completed').length || 0;
+                                        const total = item.tasks?.length || 0;
+                                        return (
+                                            <article
+                                                key={item._id}
+                                                onClick={() => openWorkflow(item)}
+                                                className="cursor-pointer rounded-2xl border border-[rgba(187,202,193,0.35)] bg-white p-4 shadow-sm"
                                             >
-                                                View Details
-                                            </button>
-                                            {isHRView && (
-                                                <button
-                                                    type="button"
-                                                    onClick={(event) => { event.stopPropagation(); setPendingDelete(item); }}
-                                                    className="rounded-lg border border-red-200 px-3 text-red-600 hover:bg-red-50"
-                                                    aria-label="Delete workflow"
-                                                >
-                                                    <FaTrash />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </article>
-                                );
-                            })}
-                            {!filteredWorkflows.length && <EmptyItems>No offboarding workflows found.</EmptyItems>}
-                        </div>
-                    </section>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <CmPerson
+                                                        name={fullName}
+                                                        meta={item.employeeId?.jobTitle || item.employeeId?.department || item.reason || ''}
+                                                    />
+                                                    <CmBadge tone={statusTone(item.status)} dot={false}>{item.status}</CmBadge>
+                                                </div>
+                                                <div className="mt-4 flex items-center gap-3">
+                                                    <CmRing value={progress} size={42} attention={item.status === 'Overdue'} />
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-semibold text-[var(--cm-on-surface)]">Progress</p>
+                                                        <p className="text-xs text-[var(--cm-muted)]">{completed}/{total} tasks completed</p>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-4 text-sm">
+                                                    <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Last working day</p>
+                                                    <p className="text-[var(--cm-on-surface)]">
+                                                        {item.lastWorkingDate ? format(new Date(item.lastWorkingDate), 'MMM dd, yyyy') : '—'}
+                                                    </p>
+                                                </div>
+                                                <div className="mt-4 flex items-center justify-between gap-3">
+                                                    <CmButton variant="secondary" size="sm" onClick={(event) => { event.stopPropagation(); openWorkflow(item); }}>
+                                                        View details
+                                                    </CmButton>
+                                                    {isHRView && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(event) => { event.stopPropagation(); setPendingDelete(item); }}
+                                                            aria-label="Delete workflow"
+                                                            className="cm-link cm-link--attention"
+                                                        >
+                                                            <FaTrash />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="hidden sm:block cm-table-wrap">
+                                    <table className="cm-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Employee</th>
+                                                <th>Status</th>
+                                                <th>Progress</th>
+                                                <th>Reason</th>
+                                                <th>Actions</th>
+                                                <th>Last working day</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredWorkflows.map((item) => {
+                                                const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
+                                                const fullName = `${item.employeeId?.name || ''} ${item.employeeId?.lastName || ''}`.trim();
+                                                const isSelected = workflow?._id === item._id;
+                                                return (
+                                                    <tr
+                                                        key={item._id}
+                                                        onClick={() => openWorkflow(item)}
+                                                        className={`cursor-pointer ${isSelected ? 'bg-[rgba(28,202,155,0.06)]' : ''}`}
+                                                    >
+                                                        <td>
+                                                            <CmPerson
+                                                                name={fullName}
+                                                                meta={item.employeeId?.jobTitle || item.employeeId?.department || ''}
+                                                            />
+                                                        </td>
+                                                        <td>
+                                                            <CmBadge tone={statusTone(item.status)}>{item.status}</CmBadge>
+                                                        </td>
+                                                        <td>
+                                                            <div className="flex items-center gap-3">
+                                                                <CmRing value={progress} size={36} attention={item.status === 'Overdue'} />
+                                                                <span className="text-xs text-[var(--cm-muted)]">
+                                                                    {item.tasks?.filter((task) => task.status === 'Completed').length || 0}/{item.tasks?.length || 0} tasks
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="text-sm">{item.reason || '—'}</td>
+                                                        <td onClick={(event) => event.stopPropagation()}>
+                                                            {isHRView ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPendingDelete(item)}
+                                                                    aria-label="Delete workflow"
+                                                                    className="cm-link cm-link--attention"
+                                                                >
+                                                                    <FaTrash />
+                                                                </button>
+                                                            ) : (
+                                                                <CmButton variant="secondary" size="sm" onClick={() => openWorkflow(item)}>
+                                                                    View
+                                                                </CmButton>
+                                                            )}
+                                                        </td>
+                                                        <td className="text-sm">
+                                                            {item.lastWorkingDate ? format(new Date(item.lastWorkingDate), 'MMM dd, yyyy') : '—'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        )}
+
+                        {filteredWorkflows.length > 0 && (
+                            <div className="cm-pagination">
+                                <span>
+                                    Showing {filteredWorkflows.length} of {dashboard?.stats?.totalSeparations ?? filteredWorkflows.length} separations
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <button type="button" className="cm-icon-btn" aria-label="Previous page" disabled>‹</button>
+                                    <button type="button" className="cm-icon-btn" aria-label="Next page" disabled>›</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {isHRView && (isFeatureEnabled('alumniManagement') || isFeatureEnabled('rehireEligibility')) && (
                         <Section id="offboarding-alumni" icon={<FaUserFriends />} title="Alumni Database">
@@ -974,24 +1049,28 @@ const OffboardingHub = () => {
                                     >
                                         Approve buyout
                                     </button>
-                                    <label className="text-sm text-gray-600">
-                                        Leave adjustment (days)
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={leaveAdjustmentDays}
-                                            onChange={(e) => setLeaveAdjustmentDays(e.target.value)}
-                                            className="mt-1 block w-28 rounded-lg border px-2 py-1.5 text-sm"
-                                        />
-                                    </label>
-                                    <button
-                                        type="button"
-                                        disabled={submitting}
-                                        onClick={saveLeaveAdjustment}
-                                        className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60"
-                                    >
-                                        Save adjustment
-                                    </button>
+                                    {isFeatureEnabled('leaveAdjustmentNotice') && (
+                                        <>
+                                            <label className="text-sm text-gray-600">
+                                                Leave adjustment (days)
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={leaveAdjustmentDays}
+                                                    onChange={(e) => setLeaveAdjustmentDays(e.target.value)}
+                                                    className="mt-1 block w-28 rounded-lg border px-2 py-1.5 text-sm"
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                disabled={submitting}
+                                                onClick={saveLeaveAdjustment}
+                                                className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60"
+                                            >
+                                                Save adjustment
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </Section>
@@ -1295,11 +1374,17 @@ const OffboardingHub = () => {
                                             });
                                             if (matched) assignedManager = String(matched._id);
                                         }
-                                        setCreateForm((prev) => ({
-                                            ...prev,
-                                            employeeId,
-                                            assignedManager,
-                                        }));
+                                        setCreateForm((prev) => {
+                                            const allowedManagers = new Set(
+                                                filterManagerCandidates(employees, employeeId).map((e) => String(e._id || e.id)),
+                                            );
+                                            const nextManager = String(assignedManager || '');
+                                            return {
+                                                ...prev,
+                                                employeeId,
+                                                assignedManager: nextManager && allowedManagers.has(nextManager) ? nextManager : '',
+                                            };
+                                        });
                                     }}
                                     className="mt-1 w-full rounded-lg border p-2"
                                 >
@@ -1321,13 +1406,25 @@ const OffboardingHub = () => {
                             <label className="text-sm">Assigned HR
                                 <select value={createForm.assignedHR} onChange={(event) => setCreateForm({ ...createForm, assignedHR: event.target.value })} className="mt-1 w-full rounded-lg border p-2">
                                     <option value="">Auto assign</option>
-                                    {employees.map((item) => <option key={item._id} value={item._id}>{item.name} {item.lastName}</option>)}
+                                    {hrAssignees.map((item) => (
+                                        <option key={item._id} value={item._id}>
+                                            {item.name} {item.lastName || ''}
+                                            {item.jobTitle ? ` (${item.jobTitle})` : ''}
+                                        </option>
+                                    ))}
                                 </select>
+                                {!hrAssignees.length && (
+                                    <p className="mt-1 text-xs text-gray-500">No HR Manager / HR Executive found. Use Auto assign.</p>
+                                )}
                             </label>
                             <label className="text-sm">Assigned manager
                                 <select value={createForm.assignedManager} onChange={(event) => setCreateForm({ ...createForm, assignedManager: event.target.value })} className="mt-1 w-full rounded-lg border p-2">
                                     <option value="">Employee manager</option>
-                                    {employees.map((item) => <option key={item._id} value={item._id}>{item.name} {item.lastName}</option>)}
+                                    {managerCandidates.map((item) => (
+                                        <option key={item._id} value={item._id}>
+                                            {item.name} {item.lastName || ''}
+                                        </option>
+                                    ))}
                                 </select>
                             </label>
                             <label className="text-sm md:col-span-2">Details

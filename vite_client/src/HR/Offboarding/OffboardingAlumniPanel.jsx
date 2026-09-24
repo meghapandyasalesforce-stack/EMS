@@ -4,12 +4,14 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import useLifecycleFeatures from '../../Hooks/useLifecycleFeatures';
 
 const OffboardingAlumniPanel = ({ isHRView }) => {
     const [loading, setLoading] = useState(true);
     const [records, setRecords] = useState([]);
     const [dashboard, setDashboard] = useState(null);
     const [submitting, setSubmitting] = useState(false);
+    const { isEnabled: isFeatureEnabled } = useLifecycleFeatures({ admin: true, showAll: true });
 
     const load = useCallback(async () => {
         try {
@@ -57,6 +59,9 @@ const OffboardingAlumniPanel = ({ isHRView }) => {
     if (!isHRView) return null;
     if (loading) return <LoadingSpinner message="Loading alumni..." />;
 
+    const canRehire = isFeatureEnabled('rehireEligibility');
+    const canBlacklist = isFeatureEnabled('blacklisting');
+
     return (
         <div className="space-y-4">
             {dashboard && (
@@ -81,12 +86,16 @@ const OffboardingAlumniPanel = ({ isHRView }) => {
                                     {r.status} · LWD {r.lastWorkingDate ? format(new Date(r.lastWorkingDate), 'MMM dd, yyyy') : '—'}
                                 </p>
                             </div>
-                            {r.eligibleForRehire && r.status !== 'Blacklisted' && (
+                            {r.eligibleForRehire && r.status !== 'Blacklisted' && (canRehire || canBlacklist) && (
                                 <div className="flex gap-2">
-                                    <button type="button" disabled={submitting} onClick={() => rehire(r._id)}
-                                        className="text-xs px-2 py-1 bg-theme-primary text-white rounded">Rehire</button>
-                                    <button type="button" disabled={submitting} onClick={() => blacklist(r._id)}
-                                        className="text-xs px-2 py-1 border border-red-300 text-red-600 rounded">Blacklist</button>
+                                    {canRehire && (
+                                        <button type="button" disabled={submitting} onClick={() => rehire(r._id)}
+                                            className="text-xs px-2 py-1 bg-theme-primary text-white rounded">Rehire</button>
+                                    )}
+                                    {canBlacklist && (
+                                        <button type="button" disabled={submitting} onClick={() => blacklist(r._id)}
+                                            className="text-xs px-2 py-1 border border-red-300 text-red-600 rounded">Blacklist</button>
+                                    )}
                                 </div>
                             )}
                         </div>

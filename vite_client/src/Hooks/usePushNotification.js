@@ -7,6 +7,8 @@ import {
   saveSubscriptionToServer,
   syncPushSubscriptionIfGranted,
   getServiceWorkerRegistration,
+  getMobilePushGuidance,
+  notePushSubscriptionRefreshed,
 } from '../utils/push';
 
 /**
@@ -19,6 +21,7 @@ export const usePushNotification = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [mobileGuidance, setMobileGuidance] = useState(null);
 
   // Initialize push notifications
   const initializePush = useCallback(async () => {
@@ -28,6 +31,15 @@ export const usePushNotification = () => {
 
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         setIsSupported(false);
+        setIsLoading(false);
+        return;
+      }
+
+      const guidance = getMobilePushGuidance();
+      setMobileGuidance(guidance.message);
+      if (!guidance.ok) {
+        setIsSupported(true);
+        setError(guidance.message);
         setIsLoading(false);
         return;
       }
@@ -66,7 +78,10 @@ export const usePushNotification = () => {
 
       let sub;
       try {
-        sub = await ensurePushSubscription(registration, vapidPublicKey);
+        // Explicit Enable: always refresh endpoint (safe — user opted in again)
+        sub = await ensurePushSubscription(registration, vapidPublicKey, {
+          forceNew: true,
+        });
       } catch (subscribeError) {
         logger.error('Failed to subscribe to push', subscribeError);
         setError('Failed to subscribe to push notifications');
@@ -78,6 +93,7 @@ export const usePushNotification = () => {
         await saveSubscriptionToServer(sub);
         setSubscription(sub);
         setIsSubscribed(true);
+        notePushSubscriptionRefreshed();
       } catch (serverError) {
         logger.error('Failed to save subscription to server', serverError);
         setError('Failed to save subscription to server. Please try again.');
@@ -158,14 +174,29 @@ export const usePushNotification = () => {
         return;
       }
 
+      const guidance = getMobilePushGuidance();
+      setMobileGuidance(guidance.message);
+      if (!guidance.ok) {
+        setError(guidance.message);
+        setIsLoading(false);
+        return;
+      }
+
       try {
+        // Re-sync local subscription to the server when permission is already granted.
+        // Only mark subscribed if the server save succeeds (avoids "enabled" with no delivery).
         const sub = await syncPushSubscriptionIfGranted();
         if (sub) {
           setSubscription(sub);
           setIsSubscribed(true);
+        } else {
+          setSubscription(null);
+          setIsSubscribed(false);
         }
       } catch (err) {
         logger.error('Failed to restore push subscription', err);
+        setSubscription(null);
+        setIsSubscribed(false);
       } finally {
         setIsLoading(false);
       }
@@ -180,6 +211,7 @@ export const usePushNotification = () => {
     isSubscribed,
     isLoading,
     error,
+    mobileGuidance,
     subscribe: initializePush,
     unsubscribe,
     requestPermission,

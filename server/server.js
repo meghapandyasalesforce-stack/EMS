@@ -95,9 +95,15 @@ if (isMetricsEnabled()) {
   app.use(metricsMiddleware);
 }
 
+// Parse cookies BEFORE request logging / auth so jwt is available on req.cookies
+app.use(cookieParser());
+
 // ✅ Logger (except tests)
 if (process.env.NODE_ENV !== "test") app.use(requestLogger);
 app.set("trust proxy", 1);
+
+// Avoid 304 empty-body cache issues on mobile browsers (wipes notification lists)
+app.set("etag", false);
 
 // ✅ Compression middleware (should be early in the middleware stack)
 app.use(compression({
@@ -129,7 +135,7 @@ app.use(express.json({
   },
 }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(cookieParser());
+// cookieParser already applied earlier (before requestLogger)
 
 // ✅ Security Middleware
 app.use(
@@ -454,15 +460,59 @@ const startServer = async () => {
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-    // Handle uncaught exceptions
+    // Handle uncaught exceptions — don't kill the process for transient network blips
+    // (e.g. IMAP/TLS ECONNRESET from resume inbox polling).
+    const TRANSIENT_NETWORK_CODES = new Set([
+      'ECONNRESET',
+      'EPIPE',
+      'ETIMEDOUT',
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'EHOSTUNREACH',
+      'ENETUNREACH',
+    ]);
+
     process.on('uncaughtException', (error) => {
-      logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
+      const code = error?.code || error?.errno;
+      const message = String(error?.message || '');
+      const isTransientNetwork =
+        TRANSIENT_NETWORK_CODES.has(code) ||
+        /ECONNRESET|EPIPE|ETIMEDOUT|socket hang up|Connection not available/i.test(message);
+
+      logger.error('Uncaught Exception', {
+        error: message,
+        code,
+        stack: error?.stack,
+        fatal: !isTransientNetwork,
+      });
+
+      if (isTransientNetwork) {
+        return;
+      }
+
       gracefulShutdown('uncaughtException');
     });
 
     // Handle unhandled promise rejections
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled Rejection', { reason, promise });
+      const err = reason instanceof Error ? reason : null;
+      const code = err?.code || reason?.code;
+      const message = String(err?.message || reason || '');
+      const isTransientNetwork =
+        TRANSIENT_NETWORK_CODES.has(code) ||
+        /ECONNRESET|EPIPE|ETIMEDOUT|socket hang up|Connection not available/i.test(message);
+
+      logger.error('Unhandled Rejection', {
+        reason: message,
+        code,
+        fatal: !isTransientNetwork,
+      });
+
+      if (isTransientNetwork) {
+        return;
+      }
+
       gracefulShutdown('unhandledRejection');
     });
 

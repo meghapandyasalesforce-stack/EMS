@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import {
-    FaBalanceScale, FaBell, FaChartPie, FaGraduationCap, FaLaptop, FaSearch, FaUserCheck,
+    FaBalanceScale, FaChartPie, FaGraduationCap, FaLaptop, FaSearch, FaUserCheck,
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
@@ -24,7 +24,6 @@ const ALL_TABS = [
     },
     { key: 'lms', label: 'LMS', icon: FaGraduationCap, features: ['lmsDashboard', 'trainingLms', 'mandatoryTraining'] },
     { key: 'probation', label: 'Probation', icon: FaUserCheck, features: ['probationCenter', 'probation'] },
-    { key: 'notifications', label: 'Notifications', icon: FaBell, features: ['notificationCenter', 'bulkOperations'] },
 ];
 
 const CATEGORY_ORDER = [
@@ -38,13 +37,6 @@ const LifecycleEnterpriseHub = () => {
     const [searchQ, setSearchQ] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
-    const [notifConfig, setNotifConfig] = useState(null);
-    const [bulkOp, setBulkOp] = useState('progress_refresh');
-    const [bulkRunning, setBulkRunning] = useState(false);
-    const [bulkResult, setBulkResult] = useState(null);
-    const [legacyDashboardType, setLegacyDashboardType] = useState('executive');
-    const [legacyDashboard, setLegacyDashboard] = useState(null);
-    const [legacyLoading, setLegacyLoading] = useState(false);
 
     const visibleTabs = useMemo(() => {
         if (!loaded) return [];
@@ -52,8 +44,6 @@ const LifecycleEnterpriseHub = () => {
     }, [loaded, isEnabled]);
 
     const searchEnabled = loaded && isEnabled('globalLifecycleSearch');
-    const bulkEnabled = loaded && isEnabled('bulkOperations');
-    const notifEnabled = loaded && isEnabled('notificationCenter');
 
     useEffect(() => {
         if (!loaded || !visibleTabs.length) return;
@@ -61,34 +51,6 @@ const LifecycleEnterpriseHub = () => {
             setTab(visibleTabs[0].key);
         }
     }, [loaded, visibleTabs, tab]);
-
-    useEffect(() => {
-        if (tab === 'notifications' && notifEnabled) {
-            axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/notifications/center`)
-                .then(({ data }) => setNotifConfig(data.data))
-                .catch((err) => {
-                    if (err.response?.status === 403) {
-                        toast.error(err.response?.data?.message || 'Notification center is disabled in Configure');
-                    }
-                });
-        }
-    }, [tab, notifEnabled]);
-
-    const loadLegacyDashboard = useCallback(async () => {
-        if (!isEnabled('enterpriseDashboards')) return;
-        try {
-            setLegacyLoading(true);
-            const { data } = await axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/dashboards/${legacyDashboardType}`);
-            setLegacyDashboard(data.data);
-        } catch (err) {
-            setLegacyDashboard(null);
-            if (err.response?.status === 403) {
-                toast.error(err.response?.data?.message || 'Dashboards are disabled in Configure');
-            }
-        } finally {
-            setLegacyLoading(false);
-        }
-    }, [legacyDashboardType, isEnabled]);
 
     const runSearch = async () => {
         if (!searchEnabled) {
@@ -125,32 +87,6 @@ const LifecycleEnterpriseHub = () => {
             .concat(Object.keys(groups).filter((c) => !CATEGORY_ORDER.includes(c)))
             .map((c) => ({ category: c, items: groups[c] || [] }));
     }, [searchResults]);
-
-    const saveNotif = async () => {
-        try {
-            await axios.patch(`${ADMIN_LIFECYCLE_ENDPOINT}/notifications/center`, { global: notifConfig?.global });
-            toast.success('Notification settings saved');
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Save failed');
-        }
-    };
-
-    const runBulk = async () => {
-        try {
-            setBulkRunning(true);
-            setBulkResult(null);
-            const { data } = await axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/bulk/execute`, {
-                operation: bulkOp,
-                payload: {},
-            });
-            setBulkResult(data.data);
-            toast.success(`Bulk: ${data.data?.succeeded ?? 0}/${data.data?.total ?? 0} succeeded`);
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Bulk failed');
-        } finally {
-            setBulkRunning(false);
-        }
-    };
 
     if (!loaded) {
         return (
@@ -242,8 +178,6 @@ const LifecycleEnterpriseHub = () => {
                             <EnterpriseCommandCenter
                                 isEnabled={isEnabled}
                                 onNavigateTab={setTab}
-                                bulkEnabled={bulkEnabled}
-                                notifEnabled={notifEnabled}
                             />
                         )}
 
@@ -255,114 +189,6 @@ const LifecycleEnterpriseHub = () => {
                             <LmsDashboard isHRView />
                         )}
                         {tab === 'probation' && (isEnabled('probationCenter') || isEnabled('probation')) && <ProbationCenter />}
-                        {tab === 'notifications' && (notifEnabled || bulkEnabled) && (
-                            <div className="space-y-6">
-                                {notifEnabled && (
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-gray-900">Notification channels</h3>
-                                        <p className="mt-1 text-sm text-gray-500">Configure global channels for lifecycle events.</p>
-                                        {notifConfig ? (
-                                            <>
-                                                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                                    {Object.entries(notifConfig.global || {}).map(([ch, enabled]) => (
-                                                        <label key={ch} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 text-sm capitalize">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={Boolean(enabled)}
-                                                                onChange={(e) => setNotifConfig((p) => ({
-                                                                    ...p,
-                                                                    global: { ...p.global, [ch]: e.target.checked },
-                                                                }))}
-                                                            />
-                                                            {ch}
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                                <button type="button" onClick={saveNotif} className="mt-3 rounded-lg bg-theme-primary px-4 py-2 text-sm text-white">
-                                                    Save channels
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <LoadingSpinner message="Loading notification settings..." />
-                                        )}
-                                    </div>
-                                )}
-                                {bulkEnabled && (
-                                    <div className={notifEnabled ? 'border-t border-gray-100 pt-6' : ''}>
-                                        <h3 className="text-sm font-semibold text-gray-900">Bulk operations</h3>
-                                        <p className="mt-1 text-sm text-gray-500">Run lifecycle maintenance and exports.</p>
-                                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                                            <select
-                                                value={bulkOp}
-                                                onChange={(e) => setBulkOp(e.target.value)}
-                                                className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                                            >
-                                                <option value="progress_refresh">Refresh onboarding progress</option>
-                                                <option value="export_workflows">Export workflows CSV</option>
-                                                <option value="send_reminders">Send reminders</option>
-                                                <option value="document_verify">Verify documents</option>
-                                                <option value="document_remind">Remind document owners</option>
-                                                <option value="letter_generate">Generate letters</option>
-                                                <option value="send_notifications">Trigger notifications</option>
-                                                <option value="workflow_assign">Assign workflow templates</option>
-                                                <option value="onboarding_create">Bulk create onboarding</option>
-                                                <option value="offboarding_create">Bulk create offboarding</option>
-                                            </select>
-                                            <button
-                                                type="button"
-                                                disabled={bulkRunning}
-                                                onClick={runBulk}
-                                                className="rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                                            >
-                                                {bulkRunning ? 'Running…' : 'Run'}
-                                            </button>
-                                        </div>
-                                        {bulkResult && (
-                                            <div className="mt-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-700">
-                                                Succeeded {bulkResult.succeeded ?? 0} / {bulkResult.total ?? 0}
-                                                {bulkResult.failed ? ` · Failed ${bulkResult.failed}` : ''}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Preserved alternate dashboard type viewer */}
-                                {isEnabled('enterpriseDashboards') && (
-                                    <div className="border-t border-gray-100 pt-6">
-                                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                            <h3 className="text-sm font-semibold text-gray-900">Classic dashboard views</h3>
-                                            <button type="button" onClick={loadLegacyDashboard} className="text-xs text-theme-primary underline">
-                                                Load view
-                                            </button>
-                                        </div>
-                                        <div className="mb-3 flex flex-wrap gap-2">
-                                            {['executive', 'hr', 'recruitment', 'lifecycle', 'country'].map((t) => (
-                                                <button
-                                                    key={t}
-                                                    type="button"
-                                                    onClick={() => setLegacyDashboardType(t)}
-                                                    className={`rounded-full px-3 py-1 text-xs capitalize ${legacyDashboardType === t ? 'bg-theme-primary text-white' : 'border border-gray-200'}`}
-                                                >
-                                                    {t}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {legacyLoading ? <LoadingSpinner /> : legacyDashboard?.kpis ? (
-                                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                                                {Object.entries(legacyDashboard.kpis).map(([k, v]) => (
-                                                    <div key={k} className="rounded-lg border p-4">
-                                                        <p className="text-xs text-gray-500 capitalize">{k.replace(/([A-Z])/g, ' $1')}</p>
-                                                        <p className="text-xl font-bold">{v}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-gray-500">Select a type and load to view raw KPI packs.</p>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </section>
                 )}
             </div>

@@ -65,11 +65,17 @@ export const generateToken = (userId, role = null, organizationId = null, res = 
 
         if (res) {
             const crossSite = String(process.env.CROSS_SITE_COOKIES).toLowerCase() === 'true';
+            // Ngrok / HTTPS tunnels: prefer Secure cookies so mobile Chrome keeps the session
+            const forwardedProto = (res.req?.headers?.['x-forwarded-proto'] || '').toString().split(',')[0].trim();
+            const requestSecure =
+              forwardedProto === 'https' ||
+              Boolean(res.req?.secure) ||
+              String(process.env.FORCE_SECURE_COOKIES).toLowerCase() === 'true';
             const cookieOptions = {
                 maxAge: 60 * 60 * 1000, // 1 hour for access token
                 httpOnly: true,
                 sameSite: crossSite ? 'none' : 'lax',
-                secure: crossSite || process.env.NODE_ENV === 'production',
+                secure: crossSite || requestSecure || process.env.NODE_ENV === 'production',
                 path: '/',
             };
 

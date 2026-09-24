@@ -29,7 +29,12 @@ export const getOrganizationId = (req, options = {}) => {
         return req.organizationId;
     }
 
-    // Priority 3: Public/unauthenticated flows only (explicit opt-in)
+    // Priority 3: JWT claims (isAuthenticatedBoth / refresh may not hydrate user.employee)
+    if (req.decoded?.organizationId) {
+        return req.decoded.organizationId;
+    }
+
+    // Priority 4: Public/unauthenticated flows only (explicit opt-in)
     if (allowBody && req.body?.organizationId) {
         return req.body.organizationId;
     }

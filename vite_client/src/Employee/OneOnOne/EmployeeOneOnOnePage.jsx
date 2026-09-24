@@ -1,43 +1,130 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import {
     FaCalendarAlt,
-    FaClock,
-    FaVideo,
-    FaStickyNote,
     FaArrowRight,
-    FaPaperclip,
-    FaHistory,
     FaEllipsisV,
-    FaCircle
+    FaCircle,
+    FaVideo
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
 import { HiOutlineDocumentText } from 'react-icons/hi2';
+import MeetingNotesPanel from '../../components/MeetingNotesPanel';
+import { getAuthActorIds, getAuthEmployeeId } from '../../utils/authUser';
+import { sanitizeMeetingLink } from '../../utils/meetingLink';
 
-const EmployeeOneOnOnePage = () => {
+const EmployeeOneOnOnePage = ({
+    focusMeetingId: focusMeetingIdProp = ''
+} = {}) => {
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const focusMeetingId = focusMeetingIdProp || searchParams.get('meetingId') || '';
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const [meetings, setMeetings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedMeetingId, setSelectedMeetingId] = useState('');
-    const [noteDrafts, setNoteDrafts] = useState({});
-    const [savingNotes, setSavingNotes] = useState(false);
-    const [noteHistory, setNoteHistory] = useState({});
-    const [attachmentsByMeeting, setAttachmentsByMeeting] = useState({});
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [openActionMenuId, setOpenActionMenuId] = useState(null);
-    const fileInputRef = useRef(null);
+    const [notesPulse, setNotesPulse] = useState(false);
+    const [actionBusyId, setActionBusyId] = useState('');
+    const [rescheduleMeeting, setRescheduleMeeting] = useState(null);
+    const [rescheduleForm, setRescheduleForm] = useState({
+        proposedDate: '',
+        proposedTime: '',
+        reason: ''
+    });
 
     const closeActionMenu = useCallback(() => setOpenActionMenuId(null), []);
     useHrmsPopupDismiss(closeActionMenu, Boolean(openActionMenuId));
 
-    useEffect(() => {
-        fetchMeetings();
-    }, []);
+    const lastErrorToastAt = useRef(0);
+
+    // Auth session only — employeeDetails can be another person when admin views a profile
+    const actorIds = useMemo(() => getAuthActorIds(user, employee), [user, employee]);
+    const currentUserId = useMemo(
+        () => String(getAuthEmployeeId(user) || [...actorIds][0] || ''),
+        [user, actorIds]
+    );
+
+    const matchesActor = useCallback(
+        (ref) => {
+            if (ref == null || actorIds.size === 0) return false;
+            return actorIds.has(String(ref._id || ref.id || ref));
+        },
+        [actorIds]
+    );
+
+    const isOrganizerOf = useCallback(
+        (meeting) => {
+            if (meeting?.myRole === 'organizer') return true;
+            if (meeting?.myRole === 'invitee' || meeting?.myRole === 'neither') return false;
+            return matchesActor(meeting?.managerId);
+        },
+        [matchesActor]
+    );
+
+    const isInviteeOf = useCallback(
+        (meeting) => {
+            // Prefer server-resolved role — avoids Redux identity mismatches
+            if (meeting?.myRole === 'invitee') return true;
+            if (meeting?.myRole === 'organizer' || meeting?.myRole === 'neither') return false;
+            return matchesActor(meeting?.employeeId);
+        },
+        [matchesActor]
+    );
+
+    const personName = (person, fallback = 'Colleague') => {
+        const first = person?.name || '';
+        const last = person?.lastName || '';
+        return `${first} ${last}`.trim() || fallback;
+    };
+
+    const getOtherPerson = useCallback(
+        (meeting) => {
+            if (isOrganizerOf(meeting)) return meeting?.employeeId;
+            return meeting?.managerId;
+        },
+        [isOrganizerOf]
+    );
+
+    const getOtherPersonName = useCallback(
+        (meeting) => personName(getOtherPerson(meeting), 'Colleague'),
+        [getOtherPerson]
+    );
+
+    const getOtherPersonRole = useCallback(
+        (meeting) => {
+            const other = getOtherPerson(meeting);
+            return other?.jobTitle || other?.position || (isOrganizerOf(meeting) ? 'Colleague' : 'Organizer');
+        },
+        [getOtherPerson, isOrganizerOf]
+    );
+
+    const statusLabel = (status) => {
+        const s = String(status || '');
+        if (s === 'Pending Response') return 'Pending Response';
+        if (s === 'Scheduled') return 'Confirmed';
+        if (s === 'Rescheduled') return 'Reschedule Pending';
+        if (s === 'Declined') return 'Declined';
+        if (s === 'Cancelled') return 'Cancelled';
+        if (s === 'Completed') return 'Completed';
+        return s || 'Unknown';
+    };
+
+    const statusTone = (status) => {
+        const s = String(status || '');
+        if (s === 'Pending Response' || s === 'Rescheduled') return 'text-amber-600';
+        if (s === 'Scheduled') return 'text-[#56B586]';
+        if (s === 'Declined' || s === 'Cancelled') return 'text-red-600';
+        if (s === 'Completed') return 'text-slate-500';
+        return 'text-slate-500';
+    };
 
     const fetchMeetings = async () => {
         try {
@@ -47,120 +134,149 @@ const EmployeeOneOnOnePage = () => {
             });
 
             const allMeetings = response.data?.data || [];
-            const currentUser = user || employee;
-            const currentUserId = currentUser?._id || currentUser?.id;
+            const actorFromApi = response.data?.meta?.actorEmployeeId;
 
-            // Backend already scopes meetings by employee; keep a defensive
-            // filter only when current identity is available.
-            const employeeMeetings = currentUserId
-                ? allMeetings.filter((meeting) => {
-                    const meetingEmployeeId = meeting.employeeId?._id || meeting.employeeId;
-                    return String(meetingEmployeeId) === String(currentUserId);
-                })
-                : allMeetings;
+            // Personal view: meetings where user is organizer OR invitee (prefer server myRole)
+            const myMeetings = allMeetings.filter((meeting) => {
+                if (meeting.myRole === 'organizer' || meeting.myRole === 'invitee') return true;
+                if (meeting.myRole === 'neither') return false;
+                if (actorFromApi) {
+                    const mgr = String(meeting?.managerId?._id || meeting?.managerId || '');
+                    const inv = String(meeting?.employeeId?._id || meeting?.employeeId || '');
+                    return mgr === String(actorFromApi) || inv === String(actorFromApi);
+                }
+                return isOrganizerOf(meeting) || isInviteeOf(meeting);
+            });
 
-            setMeetings(employeeMeetings);
-        } catch (error) {
-            toast.error('Failed to load one-on-one meetings');
+            setMeetings(myMeetings);
+        } catch {
+            const nowTs = Date.now();
+            if (nowTs - lastErrorToastAt.current > 4000) {
+                lastErrorToastAt.current = nowTs;
+                toast.error('Failed to load one-on-one meetings');
+            }
         } finally {
             setLoading(false);
         }
     };
 
+    useEffect(() => {
+        fetchMeetings();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        if (focusMeetingId) {
+            setSelectedMeetingId(focusMeetingId);
+        }
+    }, [focusMeetingId]);
+
+    const getMeetingStartAt = (meeting) => {
+        const base = new Date(meeting.scheduledDate);
+        if (Number.isNaN(base.getTime())) return null;
+        const time = String(meeting.scheduledTime || '').trim();
+        if (time) {
+            const match = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+            if (match) {
+                let hours = Number(match[1]);
+                const minutes = Number(match[2]);
+                const meridiem = (match[3] || '').toUpperCase();
+                if (meridiem === 'PM' && hours < 12) hours += 12;
+                if (meridiem === 'AM' && hours === 12) hours = 0;
+                if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+                    base.setHours(hours, minutes, 0, 0);
+                }
+            }
+        }
+        return base;
+    };
+
+    const resolveJoinLink = (meeting) => sanitizeMeetingLink(meeting?.meetingLink);
+
+    const isJoinableStatus = (meeting) => {
+        const status = String(meeting?.status || '').trim().toLowerCase();
+        return !['cancelled', 'declined', 'completed', 'no show'].includes(status);
+    };
+
+    const canJoinMeeting = (meeting) =>
+        Boolean(meeting) && isJoinableStatus(meeting) && Boolean(resolveJoinLink(meeting));
+
+    const handleJoinMeeting = (meeting, e) => {
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
+        const link = resolveJoinLink(meeting);
+        if (!link) {
+            toast.info('No meeting link yet. The organizer can add one when scheduling or editing the meeting.');
+            return;
+        }
+        window.open(link, '_blank', 'noopener,noreferrer');
+    };
+
     const sortedMeetings = useMemo(() => {
         return [...meetings]
-            .map((meeting) => ({
-                ...meeting,
-                _scheduledAt: new Date(meeting.scheduledDate)
-            }))
+            .map((meeting) => {
+                const start = getMeetingStartAt(meeting);
+                const durationMs = (Number(meeting.duration) || 30) * 60 * 1000;
+                return {
+                    ...meeting,
+                    _scheduledAt: start || new Date(meeting.scheduledDate),
+                    _endsAt: start
+                        ? new Date(start.getTime() + durationMs)
+                        : new Date(meeting.scheduledDate)
+                };
+            })
             .filter((meeting) => !Number.isNaN(meeting._scheduledAt.getTime()))
             .sort((a, b) => a._scheduledAt.getTime() - b._scheduledAt.getTime());
     }, [meetings]);
 
-    const now = useMemo(() => new Date(), [meetings]);
-
     const upcomingMeetings = useMemo(() => {
         return sortedMeetings.filter((meeting) => {
             const status = (meeting.status || '').toLowerCase();
-            return meeting._scheduledAt >= now && status !== 'cancelled';
+            return ['pending response', 'scheduled', 'rescheduled'].includes(status);
         });
-    }, [sortedMeetings, now]);
+    }, [sortedMeetings]);
 
+    // Only terminal statuses — do not treat "past end time" as completed
     const pastMeetings = useMemo(() => {
         return sortedMeetings
             .filter((meeting) => {
                 const status = (meeting.status || '').toLowerCase();
-                return meeting._scheduledAt < now || status === 'completed' || status === 'cancelled';
+                return ['completed', 'cancelled', 'declined', 'no show'].includes(status);
             })
             .sort((a, b) => b._scheduledAt.getTime() - a._scheduledAt.getTime());
-    }, [sortedMeetings, now]);
+    }, [sortedMeetings]);
 
     const nextMeeting = upcomingMeetings[0] || null;
 
     useEffect(() => {
+        if (focusMeetingId) return;
         if (!selectedMeetingId && nextMeeting?._id) {
             setSelectedMeetingId(nextMeeting._id);
         }
-    }, [nextMeeting, selectedMeetingId]);
-
-    useEffect(() => {
-        const currentUser = user || employee;
-        if (!currentUser || meetings.length === 0) return;
-
-        const currentUserId = currentUser?._id || currentUser?.id || 'employee';
-        const storedDrafts = {};
-        const storedHistory = {};
-        const storedAttachments = {};
-
-        meetings.forEach((meeting) => {
-            const notesKey = `oneOnOneNotes:${currentUserId}:${meeting._id}`;
-            const historyKey = `oneOnOneNotesHistory:${currentUserId}:${meeting._id}`;
-            const attachmentsKey = `oneOnOneAttachments:${currentUserId}:${meeting._id}`;
-
-            const notesValue = localStorage.getItem(notesKey);
-            if (notesValue) {
-                storedDrafts[meeting._id] = notesValue;
-            }
-
-            const historyValue = localStorage.getItem(historyKey);
-            if (historyValue) {
-                try {
-                    storedHistory[meeting._id] = JSON.parse(historyValue);
-                } catch (e) {
-                    storedHistory[meeting._id] = [];
-                }
-            }
-
-            const attachmentsValue = localStorage.getItem(attachmentsKey);
-            if (attachmentsValue) {
-                try {
-                    storedAttachments[meeting._id] = JSON.parse(attachmentsValue);
-                } catch (e) {
-                    storedAttachments[meeting._id] = [];
-                }
-            }
-        });
-
-        if (Object.keys(storedDrafts).length > 0) {
-            setNoteDrafts((prev) => ({ ...storedDrafts, ...prev }));
-        }
-        if (Object.keys(storedHistory).length > 0) {
-            setNoteHistory((prev) => ({ ...storedHistory, ...prev }));
-        }
-        if (Object.keys(storedAttachments).length > 0) {
-            setAttachmentsByMeeting((prev) => ({ ...storedAttachments, ...prev }));
-        }
-    }, [meetings, user, employee]);
+    }, [nextMeeting, selectedMeetingId, focusMeetingId]);
 
     const selectedMeeting =
-        sortedMeetings.find((meeting) => meeting._id === selectedMeetingId) ||
+        sortedMeetings.find((meeting) => String(meeting._id) === String(selectedMeetingId)) ||
         nextMeeting ||
         pastMeetings[0] ||
         null;
 
-    const selectedNotes = selectedMeeting
-        ? (noteDrafts[selectedMeeting._id] ?? selectedMeeting.notes ?? '')
-        : '';
+    const mergeMeetingUpdate = (updated) => {
+        if (!updated?._id) return;
+        setMeetings((prev) =>
+            prev.map((m) =>
+                String(m._id) === String(updated._id)
+                    ? {
+                          ...m,
+                          ...updated,
+                          _scheduledAt:
+                              m._scheduledAt ||
+                              (updated.scheduledDate ? new Date(updated.scheduledDate) : undefined)
+                      }
+                    : m
+            )
+        );
+    };
 
     const getInitials = (name = 'Manager') =>
         name
@@ -170,34 +286,132 @@ const EmployeeOneOnOnePage = () => {
             .map((part) => part[0]?.toUpperCase())
             .join('');
 
-    const handleSaveNotes = () => {
-        if (!selectedMeeting?._id) {
-            toast.info('Select a meeting to save notes.');
+    const runMeetingAction = async (meetingId, requestFn, successMessage) => {
+        try {
+            setActionBusyId(meetingId);
+            await requestFn();
+            toast.success(successMessage);
+            await fetchMeetings();
+            setSelectedMeetingId(meetingId);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Action failed');
+        } finally {
+            setActionBusyId('');
+            setOpenActionMenuId(null);
+        }
+    };
+
+    const handleAccept = async (meeting) => {
+        if (meeting?.myRole === 'organizer') {
+            toast.info('You organized this meeting — wait for the invitee to accept');
             return;
         }
+        if (meeting?.myRole && meeting.myRole !== 'invitee') {
+            toast.error('Only the invitee can accept this meeting');
+            return;
+        }
+        try {
+            setActionBusyId(meeting._id);
+            await axios.patch(
+                `/v1/both/one-on-one/one-on-ones/${meeting._id}/accept`,
+                {},
+                { withCredentials: true }
+            );
+            toast.success('Meeting accepted');
+            await fetchMeetings();
+            setSelectedMeetingId(meeting._id);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Action failed');
+        } finally {
+            setActionBusyId('');
+            setOpenActionMenuId(null);
+        }
+    };
 
-        const currentUser = user || employee;
-        const currentUserId = currentUser?._id || currentUser?.id || 'employee';
-        const storageKey = `oneOnOneNotes:${currentUserId}:${selectedMeeting._id}`;
-        const historyKey = `oneOnOneNotesHistory:${currentUserId}:${selectedMeeting._id}`;
-        const historyEntry = {
-            content: selectedNotes || '',
-            savedAt: new Date().toISOString()
-        };
-        const existingHistory = noteHistory[selectedMeeting._id] || [];
-        const updatedHistory = [historyEntry, ...existingHistory].slice(0, 10);
+    const handleDecline = (meeting) => {
+        if (meeting?.myRole === 'organizer') {
+            toast.info('You organized this meeting — wait for the invitee to respond');
+            return;
+        }
+        if (meeting?.myRole && meeting.myRole !== 'invitee') {
+            toast.error('Only the invitee can decline this meeting');
+            return;
+        }
+        const reason = window.prompt('Optional reason for declining:') || '';
+        return runMeetingAction(
+            meeting._id,
+            () =>
+                axios.patch(
+                    `/v1/both/one-on-one/one-on-ones/${meeting._id}/decline`,
+                    { reason },
+                    { withCredentials: true }
+                ),
+            'Meeting declined'
+        );
+    };
 
-        setSavingNotes(true);
-        localStorage.setItem(storageKey, selectedNotes || '');
-        localStorage.setItem(historyKey, JSON.stringify(updatedHistory));
-        setNoteHistory((prev) => ({
-            ...prev,
-            [selectedMeeting._id]: updatedHistory
-        }));
-        setTimeout(() => {
-            setSavingNotes(false);
-            toast.success('Notes saved on this device');
-        }, 250);
+    const openReschedule = (meeting) => {
+        const d = meeting._scheduledAt || new Date(meeting.scheduledDate);
+        setRescheduleForm({
+            proposedDate: format(d, 'yyyy-MM-dd'),
+            proposedTime: meeting.scheduledTime || '10:00',
+            reason: ''
+        });
+        setRescheduleMeeting(meeting);
+        setOpenActionMenuId(null);
+    };
+
+    const submitReschedule = async (e) => {
+        e.preventDefault();
+        if (!rescheduleMeeting) return;
+        if (!rescheduleForm.proposedDate || !rescheduleForm.proposedTime) {
+            toast.warning('Pick a proposed date and time');
+            return;
+        }
+        await runMeetingAction(
+            rescheduleMeeting._id,
+            () =>
+                axios.patch(
+                    `/v1/both/one-on-one/one-on-ones/${rescheduleMeeting._id}/request-reschedule`,
+                    {
+                        proposedDate: new Date(
+                            `${rescheduleForm.proposedDate}T${rescheduleForm.proposedTime}`
+                        ).toISOString(),
+                        proposedTime: rescheduleForm.proposedTime,
+                        reason: rescheduleForm.reason
+                    },
+                    { withCredentials: true }
+                ),
+            'Reschedule proposal sent to organizer'
+        );
+        setRescheduleMeeting(null);
+    };
+
+    const respondToOrganizerProposal = async (meeting, action) => {
+        if (action === 'counter') {
+            openReschedule(meeting);
+            return;
+        }
+        try {
+            setActionBusyId(meeting._id);
+            await axios.patch(
+                `/v1/both/one-on-one/one-on-ones/${meeting._id}/respond-reschedule`,
+                { action },
+                { withCredentials: true }
+            );
+            if (action === 'accept') {
+                toast.success('New time confirmed');
+            } else {
+                toast.success('Proposal declined');
+            }
+            await fetchMeetings();
+            setSelectedMeetingId(meeting._id);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Action failed');
+        } finally {
+            setActionBusyId('');
+            setOpenActionMenuId(null);
+        }
     };
 
     const handleViewSummary = (meetingId) => {
@@ -205,58 +419,21 @@ const EmployeeOneOnOnePage = () => {
         setShowHistoryModal(true);
     };
 
-    const handleAttachClick = () => {
-        if (!selectedMeeting?._id) {
-            toast.info('Select a meeting before attaching files.');
-            return;
-        }
-        fileInputRef.current?.click();
-    };
-
-    const handleFileSelected = (event) => {
-        const files = Array.from(event.target.files || []);
-        if (!selectedMeeting?._id || files.length === 0) return;
-
-        const currentUser = user || employee;
-        const currentUserId = currentUser?._id || currentUser?.id || 'employee';
-        const attachmentsKey = `oneOnOneAttachments:${currentUserId}:${selectedMeeting._id}`;
-        const existing = attachmentsByMeeting[selectedMeeting._id] || [];
-        const newEntries = files.map((file) => ({
-            name: file.name,
-            size: file.size,
-            uploadedAt: new Date().toISOString()
-        }));
-        const updated = [...newEntries, ...existing].slice(0, 20);
-
-        setAttachmentsByMeeting((prev) => ({
-            ...prev,
-            [selectedMeeting._id]: updated
-        }));
-        localStorage.setItem(attachmentsKey, JSON.stringify(updated));
-        toast.success(`${files.length} file${files.length > 1 ? 's' : ''} attached`);
-        event.target.value = '';
-    };
-
-    const handleCopyMeetingLink = async (meeting) => {
-        if (!meeting?.meetingLink) {
-            toast.info('No meeting link available');
-            return;
-        }
-
-        try {
-            await navigator.clipboard.writeText(meeting.meetingLink);
-            toast.success('Meeting link copied');
-        } catch (error) {
-            toast.error('Unable to copy link');
-        } finally {
-            setOpenActionMenuId(null);
-        }
-    };
-
-    const handleOpenNotes = (meetingId) => {
-        setSelectedMeetingId(meetingId);
+    const handleOpenNotes = (meetingId, event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const id = String(meetingId || '');
+        if (!id) return;
+        setSelectedMeetingId(id);
         setShowHistoryModal(false);
         setOpenActionMenuId(null);
+        setNotesPulse(true);
+        window.setTimeout(() => {
+            const panel = document.getElementById('ooo-notes-panel');
+            panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            panel?.querySelector('textarea')?.focus?.();
+        }, 120);
+        window.setTimeout(() => setNotesPulse(false), 1200);
     };
 
     const handleViewSummaryFromMenu = (meetingId) => {
@@ -265,141 +442,86 @@ const EmployeeOneOnOnePage = () => {
         setOpenActionMenuId(null);
     };
 
-    const formatICSDate = (date) =>
-        date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-
-    const handleAddToCalendar = (meeting) => {
-        try {
-            const start = new Date(meeting.scheduledDate);
-            if (meeting.scheduledTime) {
-                const [hours, minutes] = String(meeting.scheduledTime).split(':').map(Number);
-                if (Number.isFinite(hours) && Number.isFinite(minutes)) {
-                    start.setHours(hours, minutes, 0, 0);
-                }
-            }
-
-            if (Number.isNaN(start.getTime())) {
-                toast.error('Invalid meeting date');
-                return;
-            }
-
-            const durationMinutes = Number(meeting.duration) || 30;
-            const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
-            const title = `1:1 with ${getManagerName(meeting)}`;
-            const description = meeting.agenda
-                ?.map((item) => item.topic)
-                .filter(Boolean)
-                .join(', ') || 'One-on-one meeting';
-            const location = meeting.location || meeting.meetingLink || 'Online';
-
-            const icsContent = [
-                'BEGIN:VCALENDAR',
-                'VERSION:2.0',
-                'PRODID:-//Paarsiv//EMS//EN',
-                'BEGIN:VEVENT',
-                `UID:${meeting._id}@paarsiv-ems`,
-                `DTSTAMP:${formatICSDate(new Date())}`,
-                `DTSTART:${formatICSDate(start)}`,
-                `DTEND:${formatICSDate(end)}`,
-                `SUMMARY:${title}`,
-                `DESCRIPTION:${description.replace(/\n/g, ' ')}`,
-                `LOCATION:${location.replace(/\n/g, ' ')}`,
-                'END:VEVENT',
-                'END:VCALENDAR'
-            ].join('\r\n');
-
-            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.download = `one-on-one-${meeting._id}.ics`;
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-            URL.revokeObjectURL(url);
-
-            toast.success('Calendar invite downloaded');
-        } catch (error) {
-            toast.error('Unable to create calendar invite');
-        } finally {
-            setOpenActionMenuId(null);
-        }
-    };
-
     const formatMeetingDate = (dateObj) => format(dateObj, 'MMM dd, yyyy');
-    const formatMeetingDay = (dateObj) => format(dateObj, 'EEE');
     const formatMeetingMonth = (dateObj) => format(dateObj, 'MMM').toUpperCase();
     const formatMeetingDateOnly = (dateObj) => format(dateObj, 'dd');
-    const getManagerName = (meeting) => {
-        const first = meeting?.managerId?.name || '';
-        const last = meeting?.managerId?.lastName || '';
-        return `${first} ${last}`.trim() || 'Your Manager';
-    };
-    const selectedMeetingHistory = selectedMeeting ? (noteHistory[selectedMeeting._id] || []) : [];
-    const selectedMeetingAttachments = selectedMeeting ? (attachmentsByMeeting[selectedMeeting._id] || []) : [];
 
     if (loading) {
         return <LoadingSpinner message="Loading your one-on-one meetings..." />;
     }
 
     return (
-        <div className="min-h-screen bg-[#F4F6FB] transition-all duration-300">
+        <div className="min-h-screen bg-[#F8F9FA] transition-all duration-300">
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack">
-                <header>
-                    <h1 className="text-4xl font-bold tracking-tight text-slate-900">My 1:1 Meetings</h1>
-                    <p className="mt-1 text-slate-600">
-                        Manage your ongoing growth conversations and feedback loops.
-                    </p>
+                <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div className="min-w-0">
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
+                            My 1:1 Meetings
+                        </h1>
+                        <p className="mt-1 text-sm text-slate-500 sm:mt-1.5 sm:text-base">
+                            Manage your ongoing growth conversations and feedback loops.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/one-on-one')}
+                        className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+                    >
+                        Meeting Management
+                    </button>
                 </header>
 
                 {meetings.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-100 bg-white py-16 text-center shadow-sm">
+                    <div className="rounded-xl border border-slate-200 bg-white py-16 text-center">
                         <FaCalendarAlt className="mx-auto mb-4 text-4xl text-slate-300" />
                         <p className="text-base font-medium text-slate-700">No one-on-one meetings scheduled</p>
                         <p className="mt-1 text-sm text-slate-500">
-                            Your manager will schedule meetings with you here.
+                            Meetings you schedule or receive will appear here.
                         </p>
                     </div>
                 ) : (
                     <>
-                        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm md:p-6">
+                        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 md:p-6">
                             {nextMeeting ? (
-                                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                                    <div className="flex min-w-0 flex-1 items-start gap-5 border-l-[3px] border-[#20C997] pl-4">
-                                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[#20C997]/15 text-lg font-semibold text-[#006D4E]">
-                                            {getInitials(getManagerName(nextMeeting))}
-                                        </div>
-                                        <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-start">
-                                            <div className="min-w-0 flex-1">
-                                                <span className="mb-2 inline-flex rounded-md bg-[#20C997]/15 px-2 py-1 text-[11px] font-semibold tracking-wide text-[#006D4E]">
-                                                    NEXT MEETING
-                                                </span>
-                                                <h2 className="leading-tight text-4xl font-semibold text-slate-900">
-                                                    {getManagerName(nextMeeting)}
-                                                </h2>
-                                                <p className="text-slate-600">
-                                                    {nextMeeting.managerId?.jobTitle || 'Manager'}
-                                                </p>
-                                                <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                                                    <span className="inline-flex items-center gap-2">
-                                                        <FaCalendarAlt className="text-slate-500" />
-                                                        {format(nextMeeting._scheduledAt, 'MMM dd, yyyy')}
-                                                    </span>
-                                                    {nextMeeting.scheduledTime && (
-                                                        <span className="inline-flex items-center gap-2">
-                                                            <FaClock className="text-slate-500" />
-                                                            {nextMeeting.scheduledTime}
+                                <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-stretch lg:justify-between">
+                                    <div className="flex min-w-0 flex-1 flex-col gap-3 sm:gap-4">
+                                        <span className="inline-flex w-fit rounded-full bg-[#56B586]/18 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#2f7a55]">
+                                            {nextMeeting.status === 'Pending Response'
+                                                ? 'Pending Response'
+                                                : 'Next Meeting'}
+                                        </span>
+                                        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:gap-4 md:flex-row md:items-start">
+                                            <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#56B586] text-sm font-semibold text-white sm:h-14 sm:w-14 sm:text-base">
+                                                    {getInitials(getOtherPersonName(nextMeeting))}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h2 className="truncate text-lg font-bold text-slate-900 sm:text-xl lg:text-2xl">
+                                                        {getOtherPersonName(nextMeeting)}
+                                                    </h2>
+                                                    <p className="mt-0.5 truncate text-sm text-slate-500">
+                                                        {getOtherPersonRole(nextMeeting)}
+                                                    </p>
+                                                    <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600 sm:mt-3">
+                                                        <FaCalendarAlt className="shrink-0 text-[#56B586]" />
+                                                        <span>
+                                                            {format(nextMeeting._scheduledAt, 'MMM dd, yyyy')}
+                                                            {nextMeeting.scheduledTime ? ` • ${nextMeeting.scheduledTime}` : ''}
+                                                            {nextMeeting.duration ? ` • ${nextMeeting.duration} min` : ''}
                                                         </span>
-                                                    )}
+                                                    </p>
+                                                    <p className={`mt-2 text-xs font-semibold ${statusTone(nextMeeting.status)}`}>
+                                                        Status: {statusLabel(nextMeeting.status)}
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <div className="w-full min-w-0 md:max-w-xs rounded-xl bg-slate-100/80 p-3 text-sm text-slate-600">
-                                                <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-[#006D4E]">
+                                            <div className="w-full min-w-0 rounded-lg bg-slate-100 p-3.5 text-sm text-slate-600 md:max-w-[220px]">
+                                                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
                                                     Agenda Preview
                                                 </p>
-                                                <p className="line-clamp-6 text-[13px]">
+                                                <p className="line-clamp-4 text-[13px] leading-relaxed">
                                                     {nextMeeting.agenda
                                                         ?.map((item) => item.topic)
                                                         .filter(Boolean)
@@ -410,24 +532,100 @@ const EmployeeOneOnOnePage = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap gap-3 lg:shrink-0">
-                                        {nextMeeting.meetingLink && (
-                                            <a
-                                                href={nextMeeting.meetingLink}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex min-w-[150px] items-center justify-center rounded-xl bg-gradient-to-r from-[#20C997] to-[#0a8f6c] px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:from-[#1ab589] hover:to-[#0a7a5e]"
-                                            >
-                                                Join Meeting
-                                            </a>
+                                    <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-start sm:gap-3 lg:w-auto lg:shrink-0 lg:self-center">
+                                        {nextMeeting.status === 'Pending Response' &&
+                                            isInviteeOf(nextMeeting) &&
+                                            !isOrganizerOf(nextMeeting) && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionBusyId === nextMeeting._id}
+                                                    onClick={() => handleAccept(nextMeeting)}
+                                                    className="inline-flex w-full items-center justify-center rounded-lg bg-[#56B586] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#4aa578] disabled:opacity-60 sm:w-auto sm:min-w-[110px]"
+                                                >
+                                                    Accept
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionBusyId === nextMeeting._id}
+                                                    onClick={() => handleDecline(nextMeeting)}
+                                                    className="inline-flex w-full items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60 sm:w-auto sm:min-w-[110px]"
+                                                >
+                                                    Decline
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionBusyId === nextMeeting._id}
+                                                    onClick={() => openReschedule(nextMeeting)}
+                                                    className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 sm:w-auto sm:min-w-[110px]"
+                                                >
+                                                    Propose New Time
+                                                </button>
+                                            </>
                                         )}
-                                        <button
+                                        {nextMeeting.status === 'Pending Response' &&
+                                            isOrganizerOf(nextMeeting) &&
+                                            !isInviteeOf(nextMeeting) && (
+                                            <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 sm:w-auto">
+                                                Waiting for {getOtherPersonName(nextMeeting)} to accept
+                                            </p>
+                                        )}
+                                        {nextMeeting.status === 'Rescheduled' &&
+                                            nextMeeting.rescheduleProposal?.status === 'pending' &&
+                                            String(
+                                                nextMeeting.rescheduleProposal?.requestedBy?._id ||
+                                                    nextMeeting.rescheduleProposal?.requestedBy ||
+                                                    ''
+                                            ) !== currentUserId && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => respondToOrganizerProposal(nextMeeting, 'accept')}
+                                                    className="inline-flex w-full items-center justify-center rounded-lg bg-[#56B586] px-4 py-2.5 text-sm font-semibold text-white sm:w-auto"
+                                                >
+                                                    Accept new time
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => respondToOrganizerProposal(nextMeeting, 'decline')}
+                                                    className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 sm:w-auto"
+                                                >
+                                                    Decline time
+                                                </button>
+                                            </>
+                                        )}
+                                        {isJoinableStatus(nextMeeting) && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => handleJoinMeeting(nextMeeting, e)}
+                                                className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold shadow-sm transition sm:w-auto sm:min-w-[140px] ${
+                                                    canJoinMeeting(nextMeeting)
+                                                        ? 'bg-[#56B586] text-white shadow-[#56B586]/30 hover:bg-[#4aa578] hover:shadow-md'
+                                                        : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                                title={
+                                                    canJoinMeeting(nextMeeting)
+                                                        ? 'Open meeting link'
+                                                        : 'No meeting link added yet'
+                                                }
+                                            >
+                                                <FaVideo className="h-3.5 w-3.5" aria-hidden />
+                                                Join Meeting
+                                            </button>
+                                        )}
+                                        {/* <button
                                             type="button"
-                                            onClick={() => setSelectedMeetingId(nextMeeting._id)}
-                                            className="inline-flex min-w-[150px] items-center justify-center rounded-xl border border-[#20C997]/60 px-6 py-3 text-base font-semibold text-[#0a8f6c] transition hover:bg-[#20C997]/10"
+                                            onClick={() => {
+                                                setSelectedMeetingId(nextMeeting._id);
+                                                document.getElementById('ooo-notes-panel')?.scrollIntoView({
+                                                    behavior: 'smooth',
+                                                    block: 'start'
+                                                });
+                                            }}
+                                            className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto sm:min-w-[130px]"
                                         >
                                             View Notes
-                                        </button>
+                                        </button> */}
                                     </div>
                                 </div>
                             ) : (
@@ -436,11 +634,11 @@ const EmployeeOneOnOnePage = () => {
                         </section>
 
                         <div className="hrms-main-rail">
-                            <div className="min-w-0 space-y-6">
-                                <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                                    <div className="mb-4 flex items-center justify-between">
-                                        <h3 className="text-xl font-semibold text-slate-900">Upcoming</h3>
-                                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                            <div className="min-w-0 space-y-4 sm:space-y-5">
+                                <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                                    <div className="mb-3 flex items-center gap-2 sm:mb-4">
+                                        <h3 className="text-base font-semibold text-slate-900 sm:text-lg">Upcoming</h3>
+                                        <span className="text-xs text-slate-400">
                                             {upcomingMeetings.length} total
                                         </span>
                                     </div>
@@ -448,53 +646,122 @@ const EmployeeOneOnOnePage = () => {
                                     {upcomingMeetings.length === 0 ? (
                                         <p className="text-sm text-slate-500">No upcoming meetings scheduled.</p>
                                     ) : (
-                                        <div className="space-y-3">
+                                        <div className="space-y-2.5">
                                             {upcomingMeetings.map((meeting) => (
-                                                <button
-                                                    type="button"
+                                                <div
                                                     key={meeting._id}
-                                                    onClick={() => setSelectedMeetingId(meeting._id)}
-                                                    className={`w-full rounded-xl border p-4 text-left transition ${
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => {
+                                                        setSelectedMeetingId(meeting._id);
+                                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                            document.getElementById('ooo-notes-panel')?.scrollIntoView({
+                                                                behavior: 'smooth',
+                                                                block: 'start'
+                                                            });
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            setSelectedMeetingId(meeting._id);
+                                                        }
+                                                    }}
+                                                    className={`w-full cursor-pointer rounded-lg border p-3 text-left transition sm:p-3.5 ${
                                                         selectedMeeting?._id === meeting._id
-                                                            ? 'border-[#20C997]/50 bg-[#20C997]/5'
-                                                            : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                                                            ? 'border-[#56B586]/45 bg-[#56B586]/08'
+                                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                                     }`}
                                                 >
-                                                    <div className="flex items-center justify-between gap-3">
+                                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                                                         <div className="flex min-w-0 items-center gap-3">
-                                                            <div className="rounded-lg bg-[#20C997]/10 px-3 py-1.5 text-center">
-                                                                <p className="text-[10px] font-bold tracking-wide text-[#20C997]">
+                                                            <div className="min-w-[44px] rounded-md border border-slate-200 bg-white px-2 py-1.5 text-center sm:min-w-[48px] sm:px-2.5">
+                                                                <p className="text-[10px] font-semibold tracking-wide text-slate-400">
                                                                     {formatMeetingMonth(meeting._scheduledAt)}
                                                                 </p>
-                                                                <p className="text-lg font-bold text-[#006D4E]">
+                                                                <p className="text-base font-bold leading-none text-[#56B586] sm:text-lg">
                                                                     {formatMeetingDateOnly(meeting._scheduledAt)}
                                                                 </p>
                                                             </div>
-                                                            <div className="min-w-0">
+                                                            <div className="min-w-0 flex-1">
                                                                 <p className="truncate font-semibold text-slate-800">
-                                                                    {getManagerName(meeting)}
+                                                                    {getOtherPersonName(meeting)}
                                                                 </p>
-                                                                <p className="text-xs text-slate-500">
-                                                                    {meeting.managerId?.jobTitle || 'Manager'}
+                                                                <p className="truncate text-xs text-slate-500">
+                                                                    {getOtherPersonRole(meeting)}
                                                                 </p>
+                                                                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:hidden">
+                                                                    <span className="text-xs text-slate-500">
+                                                                        {meeting.duration || 30}m
+                                                                    </span>
+                                                                    <span className={`inline-flex items-center gap-1 text-xs font-medium ${statusTone(meeting.status)}`}>
+                                                                        <FaCircle className="text-[7px]" />
+                                                                        {statusLabel(meeting.status)}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-3 text-right">
-                                                            <div>
-                                                                <p className="text-sm text-slate-700">{meeting.duration || 30}m</p>
-                                                                <p className="inline-flex items-center gap-1 text-xs text-slate-500">
-                                                                    <FaCircle className="text-[8px] text-[#20C997]" />
-                                                                    Confirmed
+                                                        <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 sm:justify-end sm:gap-3 sm:border-0 sm:pt-0">
+                                                            <div className="hidden text-right sm:block">
+                                                                <p className="text-sm text-slate-600">{meeting.duration || 30}m</p>
+                                                                <p className={`inline-flex items-center gap-1.5 text-xs font-medium ${statusTone(meeting.status)}`}>
+                                                                    <FaCircle className="text-[7px]" />
+                                                                    {statusLabel(meeting.status)}
                                                                 </p>
                                                             </div>
-                                                            <div className="relative">
+                                                            <div className="relative flex flex-1 items-center justify-end gap-1.5 sm:flex-none">
+                                                                {isJoinableStatus(meeting) && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => handleJoinMeeting(meeting, e)}
+                                                                        className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.98] ${
+                                                                            canJoinMeeting(meeting)
+                                                                                ? 'bg-[#56B586] text-white shadow-sm shadow-[#56B586]/25 hover:bg-[#4aa578] hover:shadow'
+                                                                                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                                                                        }`}
+                                                                        title={
+                                                                            canJoinMeeting(meeting)
+                                                                                ? 'Open meeting link'
+                                                                                : 'No meeting link added yet'
+                                                                        }
+                                                                    >
+                                                                        <FaVideo className="h-3 w-3 shrink-0 opacity-95" aria-hidden />
+                                                                        Join
+                                                                    </button>
+                                                                )}
+                                                                {meeting.status === 'Pending Response' &&
+                                                                    isInviteeOf(meeting) &&
+                                                                    !isOrganizerOf(meeting) && (
+                                                                    <>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleAccept(meeting);
+                                                                            }}
+                                                                            className="rounded-md bg-[#56B586] px-2.5 py-1.5 text-[11px] font-semibold text-white sm:px-2 sm:py-1"
+                                                                        >
+                                                                            Accept
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleDecline(meeting);
+                                                                            }}
+                                                                            className="rounded-md border border-red-200 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 sm:px-2 sm:py-1"
+                                                                        >
+                                                                            Decline
+                                                                        </button>
+                                                                    </>
+                                                                )}
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         setOpenActionMenuId((prev) => (prev === meeting._id ? null : meeting._id));
                                                                     }}
-                                                                    className="rounded p-1 text-slate-400 transition hover:bg-slate-100"
+                                                                    className="rounded p-1.5 text-slate-400 transition hover:bg-slate-100 sm:p-1"
                                                                     aria-label="Meeting quick actions"
                                                                     aria-expanded={openActionMenuId === meeting._id}
                                                                     aria-haspopup="menu"
@@ -505,103 +772,129 @@ const EmployeeOneOnOnePage = () => {
 
                                                                 {openActionMenuId === meeting._id && (
                                                                     <div
-                                                                        className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                                                                        className="absolute right-0 bottom-full z-30 mb-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg sm:bottom-auto sm:top-full sm:mb-0 sm:mt-2"
                                                                         onClick={(e) => e.stopPropagation()}
+                                                                        onMouseDown={(e) => e.stopPropagation()}
                                                                         role="menu"
+                                                                        data-hrms-popup
                                                                     >
-                                                                        {meeting.meetingLink && (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => handleCopyMeetingLink(meeting)}
-                                                                                className="block w-full px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                                                                role="menuitem"
-                                                                            >
-                                                                                Copy meeting link
-                                                                            </button>
-                                                                        )}
                                                                         <button
                                                                             type="button"
-                                                                            onClick={() => handleOpenNotes(meeting._id)}
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                handleOpenNotes(meeting._id, e);
+                                                                            }}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                handleOpenNotes(meeting._id, e);
+                                                                            }}
                                                                             className="block w-full px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                                                             role="menuitem"
                                                                         >
                                                                             Open notes
                                                                         </button>
+                                                                        {['Pending Response', 'Scheduled', 'Rescheduled'].includes(meeting.status) && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    openReschedule(meeting);
+                                                                                }}
+                                                                                className="block w-full px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                                                                role="menuitem"
+                                                                            >
+                                                                                Propose new time
+                                                                            </button>
+                                                                        )}
                                                                         <button
                                                                             type="button"
-                                                                            onClick={() => handleViewSummaryFromMenu(meeting._id)}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleViewSummaryFromMenu(meeting._id);
+                                                                            }}
                                                                             className="block w-full px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                                                             role="menuitem"
                                                                         >
                                                                             View summary
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleAddToCalendar(meeting)}
-                                                                            className="block w-full px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                                                            role="menuitem"
-                                                                        >
-                                                                            Add to calendar
                                                                         </button>
                                                                     </div>
                                                                 )}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </button>
+                                                </div>
                                             ))}
                                         </div>
                                     )}
                                 </section>
 
-                                <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                                    <h3 className="mb-4 text-xl font-semibold text-slate-900">Past Meetings</h3>
+                                <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                                    <h3 className="mb-3 text-base font-semibold text-slate-900 sm:mb-4 sm:text-lg">
+                                        Past Meetings
+                                    </h3>
                                     {pastMeetings.length === 0 ? (
                                         <p className="text-sm text-slate-500">No past meetings yet.</p>
                                     ) : (
-                                        <div className="space-y-3">
+                                        <div className="space-y-2.5">
                                             {pastMeetings.slice(0, 6).map((meeting) => (
                                                 <button
                                                     type="button"
                                                     key={meeting._id}
-                                                    onClick={() => setSelectedMeetingId(meeting._id)}
-                                                    className={`w-full rounded-xl border p-4 text-left transition ${
+                                                    onClick={() => {
+                                                        setSelectedMeetingId(meeting._id);
+                                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                            document.getElementById('ooo-notes-panel')?.scrollIntoView({
+                                                                behavior: 'smooth',
+                                                                block: 'start'
+                                                            });
+                                                        }
+                                                    }}
+                                                    className={`w-full rounded-lg border p-3 text-left transition sm:p-3.5 ${
                                                         selectedMeeting?._id === meeting._id
-                                                            ? 'border-[#20C997]/50 bg-[#20C997]/5'
-                                                            : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                                                            ? 'border-[#56B586]/45 bg-[#56B586]/08'
+                                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                                     }`}
                                                 >
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="rounded-lg bg-slate-100 px-3 py-1.5 text-center">
-                                                                <p className="text-[10px] font-bold tracking-wide text-slate-500">
+                                                    <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                                                        <div className="flex min-w-0 items-center gap-3">
+                                                            <div className="min-w-[44px] rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center sm:min-w-[48px] sm:px-2.5">
+                                                                <p className="text-[10px] font-semibold tracking-wide text-slate-400">
                                                                     {formatMeetingMonth(meeting._scheduledAt)}
                                                                 </p>
-                                                                <p className="text-lg font-bold text-slate-700">
+                                                                <p className="text-base font-bold leading-none text-slate-500 sm:text-lg">
                                                                     {formatMeetingDateOnly(meeting._scheduledAt)}
                                                                 </p>
                                                             </div>
-                                                            <div>
-                                                                <p className="font-semibold text-slate-800">
-                                                                    {getManagerName(meeting)}
+                                                            <div className="min-w-0">
+                                                                <p className="truncate font-semibold text-slate-800">
+                                                                    {getOtherPersonName(meeting)}
                                                                 </p>
-                                                                <p className="text-xs text-slate-500">
-                                                                    {meeting.managerId?.jobTitle || 'Manager'}
+                                                                <p className="truncate text-xs text-slate-500">
+                                                                    {getOtherPersonRole(meeting)}
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <p className="text-sm text-slate-700">{meeting.duration || 30}m</p>
-                                                            <button
-                                                                type="button"
+                                                        <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 sm:block sm:border-0 sm:pt-0 sm:text-right">
+                                                            <p className="text-sm text-slate-600">{meeting.duration || 30}m</p>
+                                                            <span
+                                                                role="button"
+                                                                tabIndex={0}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     handleViewSummary(meeting._id);
                                                                 }}
-                                                                className="inline-flex items-center gap-1 text-sm font-semibold text-[#20C997] transition hover:text-[#0a8f6c]"
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                                        e.stopPropagation();
+                                                                        handleViewSummary(meeting._id);
+                                                                    }
+                                                                }}
+                                                                className="inline-flex items-center gap-1 text-sm font-semibold text-[#56B586] transition hover:text-[#2f7a55]"
                                                             >
                                                                 View Summary <FaArrowRight className="text-xs" />
-                                                            </button>
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </button>
@@ -611,98 +904,47 @@ const EmployeeOneOnOnePage = () => {
                                 </section>
                             </div>
 
-                            <aside className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h3 className="flex items-center gap-2 text-xl font-semibold text-slate-900">
-                                        <HiOutlineDocumentText className="text-[#20C997]" />
+                            <aside
+                                id="ooo-notes-panel"
+                                className={`scroll-mt-20 space-y-3 rounded-xl border bg-white p-4 transition sm:space-y-4 sm:p-5 ${
+                                    notesPulse
+                                        ? 'border-[#56B586] ring-2 ring-[#56B586]/30'
+                                        : 'border-slate-200'
+                                }`}
+                            >
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                    <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
+                                        <HiOutlineDocumentText className="shrink-0 text-[#56B586]" />
                                         Meeting Notes
                                     </h3>
-                                    <span className="rounded-md border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                        Drafting
-                                    </span>
+                                    {selectedMeeting && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowHistoryModal(true)}
+                                            className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                                        >
+                                            History
+                                        </button>
+                                    )}
                                 </div>
 
                                 {selectedMeeting ? (
                                     <>
-                                        <p className="mb-3 text-sm text-slate-500">
-                                            Drafting notes for {formatMeetingDate(selectedMeeting._scheduledAt)} with{' '}
-                                            {getManagerName(selectedMeeting)}:
+                                        <p className="mb-2 text-sm text-slate-500">
+                                            Notes with {getOtherPersonName(selectedMeeting)} ·{' '}
+                                            {formatMeetingDate(selectedMeeting._scheduledAt)}
                                         </p>
-                                        <textarea
-                                            value={selectedNotes}
-                                            onChange={(e) =>
-                                                setNoteDrafts((prev) => ({
-                                                    ...prev,
-                                                    [selectedMeeting._id]: e.target.value
-                                                }))
-                                            }
-                                            className="h-64 w-full resize-none rounded-xl border border-slate-100 bg-slate-100/60 p-3 text-sm text-slate-700 outline-none transition focus:border-[#20C997]/40 focus:ring-2 focus:ring-[#20C997]/20"
-                                            placeholder="Capture key discussion points, action items, and follow-ups..."
+                                        <MeetingNotesPanel
+                                            meeting={selectedMeeting}
+                                            currentUserId={currentUserId}
+                                            onMeetingUpdated={mergeMeetingUpdate}
                                         />
-
-                                        <div className="mt-4 grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={handleAttachClick}
-                                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-                                            >
-                                                <FaPaperclip />
-                                                Attach
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (!selectedMeeting) {
-                                                        toast.info('Select a meeting first.');
-                                                        return;
-                                                    }
-                                                    setShowHistoryModal(true);
-                                                }}
-                                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-                                            >
-                                                <FaHistory />
-                                                History
-                                            </button>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            onClick={handleSaveNotes}
-                                            disabled={savingNotes}
-                                            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#20C997] to-[#0a8f6c] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-[#1ab589] hover:to-[#0a7a5e] disabled:cursor-not-allowed disabled:opacity-70"
-                                        >
-                                            <FaStickyNote />
-                                            {savingNotes ? 'Saving...' : 'Save Notes'}
-                                        </button>
-                                        <p className="text-center text-[11px] text-slate-400">
-                                            {selectedMeetingHistory[0]?.savedAt
-                                                ? `Last saved at ${format(new Date(selectedMeetingHistory[0].savedAt), 'hh:mm a')}`
-                                                : 'No saved note versions yet'}
-                                        </p>
                                     </>
                                 ) : (
                                     <p className="text-sm text-slate-500">
-                                        Select a meeting from upcoming or past to view and draft notes.
+                                        Select a meeting from upcoming or past to view and add notes.
                                     </p>
                                 )}
-
-                                {selectedMeeting && selectedMeetingAttachments.length > 0 && (
-                                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                                        <p className="mb-2 text-xs font-semibold text-slate-600">Attached files</p>
-                                        <ul className="space-y-1 text-xs text-slate-500">
-                                            {selectedMeetingAttachments.slice(0, 3).map((file, index) => (
-                                                <li key={`${file.name}-${index}`} className="truncate">
-                                                    {file.name}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                                <div className="rounded-xl border border-slate-100 bg-[#fff8ef] p-3 text-xs text-slate-600">
-                                    <p className="font-semibold text-slate-700">Pro-tip</p>
-                                    <p className="mt-1">Notes are private until you choose to share them with your manager.</p>
-                                </div>
                             </aside>
                         </div>
                     </>
@@ -710,66 +952,132 @@ const EmployeeOneOnOnePage = () => {
             </div>
             </div>
             </div>
-            <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                multiple
-                onChange={handleFileSelected}
-            />
             {showHistoryModal && selectedMeeting && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
-                    <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h4 className="text-lg font-semibold text-slate-900">
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+                    <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5">
+                        <div className="mb-4 flex items-start justify-between gap-3">
+                            <h4 className="text-base font-semibold text-slate-900 sm:text-lg">
                                 Meeting Summary & History
                             </h4>
                             <button
                                 type="button"
                                 onClick={() => setShowHistoryModal(false)}
-                                className="rounded px-2 py-1 text-sm text-slate-500 transition hover:bg-slate-100"
+                                className="shrink-0 rounded px-2 py-1 text-sm text-slate-500 transition hover:bg-slate-100"
                             >
                                 Close
                             </button>
                         </div>
 
                         <div className="mb-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-                            <p className="font-medium text-slate-800">{getManagerName(selectedMeeting)}</p>
+                            <p className="font-medium text-slate-800">{getOtherPersonName(selectedMeeting)}</p>
                             <p className="text-xs text-slate-500">
                                 {formatMeetingDate(selectedMeeting._scheduledAt)} {selectedMeeting.scheduledTime ? `• ${selectedMeeting.scheduledTime}` : ''}
-                            </p>
-                            <p className="mt-2">
-                                {selectedMeeting.notes || noteDrafts[selectedMeeting._id] || 'No summary notes available yet.'}
+                                {' · '}
+                                <span className={statusTone(selectedMeeting.status)}>{statusLabel(selectedMeeting.status)}</span>
                             </p>
                         </div>
 
-                        <div className="max-h-64 overflow-y-auto">
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Saved Versions
-                            </p>
-                            {selectedMeetingHistory.length === 0 ? (
-                                <p className="text-sm text-slate-500">No saved versions yet.</p>
-                            ) : (
-                                <ul className="space-y-2">
-                                    {selectedMeetingHistory.map((entry, index) => (
-                                        <li key={`${entry.savedAt}-${index}`} className="rounded-lg border border-slate-100 p-3">
-                                            <p className="mb-1 text-xs text-slate-400">
-                                                {format(new Date(entry.savedAt), 'MMM dd, yyyy hh:mm a')}
-                                            </p>
-                                            <p className="line-clamp-3 text-sm text-slate-700">
-                                                {entry.content || '(empty note)'}
-                                            </p>
+                        <div className="mb-4">
+                            <MeetingNotesPanel
+                                meeting={selectedMeeting}
+                                currentUserId={currentUserId}
+                                onMeetingUpdated={(updated) => {
+                                    mergeMeetingUpdate(updated);
+                                }}
+                                compact
+                            />
+                        </div>
+
+                        {Array.isArray(selectedMeeting.statusHistory) && selectedMeeting.statusHistory.length > 0 && (
+                            <div className="mb-2 max-h-40 overflow-y-auto">
+                                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Meeting history
+                                </p>
+                                <ul className="space-y-1.5">
+                                    {selectedMeeting.statusHistory.slice(0, 8).map((entry, index) => (
+                                        <li key={`${entry.at}-${index}`} className="text-xs text-slate-600">
+                                            <span className="font-medium">{entry.action || entry.status}</span>
+                                            {entry.note ? ` — ${entry.note}` : ''}
+                                            {entry.at ? ` · ${format(new Date(entry.at), 'MMM dd, hh:mm a')}` : ''}
                                         </li>
                                     ))}
                                 </ul>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
+                </div>
+            )}
+
+            {rescheduleMeeting && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+                    <form
+                        onSubmit={submitReschedule}
+                        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5"
+                    >
+                        <h4 className="text-base font-semibold text-slate-900 sm:text-lg">Propose new time</h4>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Suggest a new date/time for {getOtherPersonName(rescheduleMeeting)}.
+                        </p>
+                        <div className="mt-4 space-y-3">
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Date</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={rescheduleForm.proposedDate}
+                                    onChange={(e) =>
+                                        setRescheduleForm((prev) => ({ ...prev, proposedDate: e.target.value }))
+                                    }
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm sm:py-2"
+                                    min={new Date().toISOString().split('T')[0]}
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Time</label>
+                                <input
+                                    type="time"
+                                    required
+                                    value={rescheduleForm.proposedTime}
+                                    onChange={(e) =>
+                                        setRescheduleForm((prev) => ({ ...prev, proposedTime: e.target.value }))
+                                    }
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm sm:py-2"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Reason (optional)</label>
+                                <textarea
+                                    value={rescheduleForm.reason}
+                                    onChange={(e) =>
+                                        setRescheduleForm((prev) => ({ ...prev, reason: e.target.value }))
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm sm:py-2"
+                                    placeholder="Why do you need a new time?"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setRescheduleMeeting(null)}
+                                className="rounded-lg px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:py-2"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={Boolean(actionBusyId)}
+                                className="rounded-lg bg-[#56B586] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#4aa578] disabled:opacity-60 sm:py-2"
+                            >
+                                Send proposal
+                            </button>
+                        </div>
+                    </form>
                 </div>
             )}
         </div>
     );
 };
-
 export default EmployeeOneOnOnePage;
 

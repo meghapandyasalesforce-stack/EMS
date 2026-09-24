@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { FaCheck, FaTrash } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import EnablePushNotificationsButton from '../components/EnablePushNotificationsButton';
@@ -12,8 +13,18 @@ import {
   deleteAllNotifications,
 } from '../context/notificationSlice';
 
+const resolveNotificationPath = (notification) => {
+  const meta = notification?.metadata || {};
+  if (meta.url) return meta.url;
+  if (meta.oneOnOneId || meta.type === 'one_on_one') {
+    return meta.oneOnOneId ? `/one-on-one?meetingId=${meta.oneOnOneId}` : '/one-on-one';
+  }
+  return null;
+};
+
 const Notifications = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const notifications = useSelector((state) => state.notifications.notifications || []);
   const unreadCount = useSelector((state) => state.notifications.unreadCount || 0);
   const loading = useSelector((state) => state.notifications.loading || false);
@@ -153,20 +164,41 @@ const Notifications = () => {
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {displayedNotifications.map((n) => (
+            {displayedNotifications.map((n) => {
+              const deepLink = resolveNotificationPath(n);
+              return (
               <li
                 key={n._id || n.id}
                 className={`flex items-start justify-between gap-3 p-4 ${
                   n.isRead || n.read ? '' : 'bg-theme-secondary/10'
-                }`}
+                } ${deepLink ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                onClick={() => {
+                  if (!deepLink) return;
+                  if (!n.isRead && !n.read) {
+                    markOne(n._id || n.id);
+                  }
+                  navigate(deepLink);
+                }}
+                onKeyDown={(e) => {
+                  if (!deepLink) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(deepLink);
+                  }
+                }}
+                role={deepLink ? 'link' : undefined}
+                tabIndex={deepLink ? 0 : undefined}
               >
                 <div className="min-w-0 flex-1 pr-2">
                   <p className="text-sm font-medium text-gray-800 break-words">{n.message}</p>
                   <p className="text-xs text-gray-500 mt-1">
                     {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
                   </p>
+                  {deepLink ? (
+                    <p className="text-xs text-theme-secondary mt-1">Open related item →</p>
+                  ) : null}
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
                   {!n.isRead && !n.read && (
                     <button
                       type="button"
@@ -187,7 +219,8 @@ const Notifications = () => {
                   </button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

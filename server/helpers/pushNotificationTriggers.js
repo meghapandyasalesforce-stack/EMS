@@ -3,7 +3,7 @@
  * Helper functions to send push notifications for key events
  */
 
-import { sendPushNotification, createPushPayload } from './pushNotificationService.js';
+import { sendPushNotification, createPushPayload, isPushEnabledForUser } from './pushNotificationService.js';
 import logger from './logger.js';
 
 /**
@@ -14,6 +14,7 @@ import logger from './logger.js';
  */
 export const notifyPayrollReleased = async (employeeId, payrollData, organizationId) => {
     try {
+        if (!(await isPushEnabledForUser(employeeId))) return;
         const message = `Your payroll for ${payrollData.month} ${payrollData.year} has been released. Net Salary: $${(payrollData.inHandSalary || 0).toFixed(2)}`;
         const payload = createPushPayload(message, 'payroll', {
             payrollId: payrollData._id?.toString(),
@@ -45,6 +46,7 @@ export const notifyPayrollReleased = async (employeeId, payrollData, organizatio
  */
 export const notifyLeaveApproved = async (employeeId, leaveData, organizationId) => {
     try {
+        if (!(await isPushEnabledForUser(employeeId))) return;
         const message = `Your leave request for ${leaveData.leaveType} (${leaveData.startDate} to ${leaveData.endDate}) has been approved.`;
         const payload = createPushPayload(message, 'leave', {
             leaveId: leaveData._id?.toString(),
@@ -77,6 +79,7 @@ export const notifyLeaveApproved = async (employeeId, leaveData, organizationId)
  */
 export const notifyLeaveRejected = async (employeeId, leaveData, organizationId) => {
     try {
+        if (!(await isPushEnabledForUser(employeeId))) return;
         const message = `Your leave request for ${leaveData.leaveType} (${leaveData.startDate} to ${leaveData.endDate}) has been rejected.`;
         const payload = createPushPayload(message, 'leave', {
             leaveId: leaveData._id?.toString(),
@@ -109,6 +112,7 @@ export const notifyLeaveRejected = async (employeeId, leaveData, organizationId)
  */
 export const notifyTaskAssigned = async (employeeId, taskData, organizationId) => {
     try {
+        if (!(await isPushEnabledForUser(employeeId))) return;
         const message = `A new task "${taskData.title}" has been assigned to you.`;
         const payload = createPushPayload(message, 'task', {
             taskId: taskData._id?.toString(),
@@ -139,4 +143,3 @@ export default {
     notifyLeaveRejected,
     notifyTaskAssigned
 };
-

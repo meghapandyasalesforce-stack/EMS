@@ -8,6 +8,20 @@ import { isPublicGuestRoute, isPlatformRoute } from './authSessionUtils.js';
  */
 function clearAuthAndRedirectToLogin() {
   if (typeof window === 'undefined') return;
+
+  const path = window.location.pathname || '';
+  const isPlatform = path.startsWith('/platform');
+  const loginPath = isPlatform ? '/platform/login' : '/login';
+  const alreadyOnAuthScreen =
+    path === loginPath ||
+    path.startsWith('/login') ||
+    path.startsWith('/platform/login') ||
+    path.startsWith('/forgot-password') ||
+    path.startsWith('/reset-password') ||
+    path.startsWith('/register') ||
+    path.startsWith('/organization/login') ||
+    path.startsWith('/organization/register');
+
   try {
     localStorage.removeItem('persist:root');
     localStorage.removeItem('csrfToken');
@@ -16,11 +30,21 @@ function clearAuthAndRedirectToLogin() {
     localStorage.removeItem('organizationId');
     localStorage.removeItem('userId');
     localStorage.removeItem('isOrganizationLogin');
+    localStorage.removeItem('activePortal');
+    // role / refreshTokenPresent are readable cookies — clear so platform sessions
+    // cannot retrigger PLATFORM_SESSION_DEAD → /login forever.
+    const expire = 'Max-Age=0; path=/';
+    document.cookie = `role=; ${expire}`;
+    document.cookie = `refreshTokenPresent=; ${expire}`;
+    document.cookie = `csrfToken=; ${expire}`;
   } catch (e) {
     logger.warn('clearAuthAndRedirectToLogin', e?.message);
   }
-  const isPlatform = window.location.pathname.startsWith('/platform');
-  window.location.href = isPlatform ? '/platform/login' : '/login';
+
+  // Already on login: clearing storage is enough. Re-assigning href causes a reload loop.
+  if (alreadyOnAuthScreen) return;
+
+  window.location.href = loginPath;
 }
 
 /** Session probe calls — reject quietly; never refresh tokens or redirect to login.
@@ -28,6 +52,14 @@ function clearAuthAndRedirectToLogin() {
  * so dashboards don't hard-fail when the short-lived jwt cookie expired. */
 function isSessionProbeRequest(url = '') {
   return url.includes('/auth/permissions');
+}
+
+/** Soft auth failures during bootstrap — never hard-redirect the whole app. */
+function isBootstrapAuthRequest(url = '') {
+  return (
+    url.includes('/auth/permissions') ||
+    url.includes('/profile-details/get-my-details')
+  );
 }
 
 function maybeRedirectToLoginOn401(errorCode) {
@@ -243,21 +275,57 @@ function isPresignedS3Url(url) {
 /**
  * Resolve a displayable, short-lived signed URL for a private profile photo.
  * Fetches via the authorization-aware GET /v1/both/profile-photo/:userType/:userId
- * endpoint and caches the result for 15 minutes. Returns null when the caller
- * lacks a stable userType/userId (components then fall back to initials).
+ * endpoint and caches the result for 15 minutes.
  *
  * Stored https://…amazonaws.com/… object URLs are NOT reused — the bucket is
  * private, so only freshly signed URLs (or cached ones) are returned.
+ *
+ * Local /uploads paths and already-signed URLs are returned immediately.
  */
 export async function resolveProfileSignedUrl(profilePhoto, { userType, userId, preferFull = false } = {}) {
-  if (!profilePhoto) return null;
-  const photo = typeof profilePhoto === 'object' ? profilePhoto : { url: profilePhoto };
-  const existing = photo.url || photo.s3Key || null;
-  // Reuse only an already pre-signed URL (e.g. handed back by this resolver).
-  if (isPresignedS3Url(existing)) return existing;
+  const photo = profilePhoto && typeof profilePhoto === 'object'
+    ? profilePhoto
+    : profilePhoto
+      ? { url: profilePhoto }
+      : null;
+
+  // Prefer an already-signed URL handed back by the server
+  const preSigned =
+    (isPresignedS3Url(photo?.signedUrl) && photo.signedUrl) ||
+    (isPresignedS3Url(photo?.url) && photo.url) ||
+    (isPresignedS3Url(photo?.thumbnailUrl) && photo.thumbnailUrl) ||
+    null;
+  if (preSigned) return preSigned;
+
+  // S3-backed photos (private) — never treat `filename` alone as a local disk path.
+  // New uploads store url/s3Key as the object key plus a filename; local /uploads
+  // must only be used when the stored url is actually under /uploads/.
+  const hasS3Ref = Boolean(
+    photo?.s3Key ||
+      photo?.thumbS3Key ||
+      (typeof photo?.url === 'string' &&
+        photo.url &&
+        !photo.url.startsWith('/') &&
+        photo.url !== '__fetch__' &&
+        !/^https?:\/\//i.test(photo.url)) ||
+      (typeof photo?.url === 'string' && /amazonaws\.com\//i.test(photo.url))
+  );
+
+  if (!hasS3Ref) {
+    const localPath =
+      (typeof photo?.url === 'string' && photo.url.startsWith('/uploads/') && photo.url) ||
+      (typeof photo === 'string' && photo.startsWith('/uploads/') && photo) ||
+      (photo?.filename && !photo?.url
+        ? `/uploads/profile-photos/${photo.filename}`
+        : null);
+    if (localPath) {
+      return getProfilePhotoUrl(photo?.url?.startsWith('/uploads/') ? photo : localPath);
+    }
+  }
+
   if (!userId || !userType) return null;
 
-  const cacheId = `${userType}:${userId}`;
+  const cacheId = `${userType}:${userId}:${preferFull ? 'full' : 'thumb'}`;
   const now = Date.now();
   const cached = _profilePhotoCache[cacheId];
   if (cached && cached.expiresAt > now) return cached.url;
@@ -268,16 +336,30 @@ export async function resolveProfileSignedUrl(profilePhoto, { userType, userId, 
       ? data?.profilePhoto?.url || data?.profilePhoto?.thumbnailUrl
       : data?.profilePhoto?.thumbnailUrl || data?.profilePhoto?.url || null;
     if (url) {
+      const displayUrl = url.startsWith('/uploads/') ? getProfilePhotoUrl(url) : url;
       _profilePhotoCache = {
         ..._profilePhotoCache,
-        [cacheId]: { url, expiresAt: now + 15 * 60 * 1000 },
+        [cacheId]: { url: displayUrl, expiresAt: now + 15 * 60 * 1000 },
       };
+      return displayUrl;
     }
-    return url;
+    return null;
   } catch {
     // No photo found / unauthorized — caller falls back to initials.
     return null;
   }
+}
+
+/** Drop cached signed URLs for a user (call after upload/delete). */
+export function invalidateProfilePhotoCache(userType, userId) {
+  if (!userType || !userId) {
+    _profilePhotoCache = {};
+    return;
+  }
+  const prefix = `${userType}:${userId}:`;
+  _profilePhotoCache = Object.fromEntries(
+    Object.entries(_profilePhotoCache).filter(([key]) => !key.startsWith(prefix))
+  );
 }
 
 /** Employee-specific download (legacy embedded docs + job uploads). */
@@ -606,8 +688,17 @@ instance.interceptors.response.use(
           role = 'employee';
         }
 
-        if (onPlatformRoute || role === 'platform') {
+        if (onPlatformRoute) {
           role = 'platform';
+        } else if (role === 'platform') {
+          // Platform operator cookie must not drive org HRMS API refresh
+          isRefreshing = false;
+          processQueue(
+            new Error('Platform session cannot access organization APIs'),
+            null
+          );
+          maybeRedirectToLoginOn401('PLATFORM_SESSION_DEAD');
+          return Promise.reject(error);
         }
         
         const refreshEndpoint =
@@ -685,6 +776,24 @@ instance.interceptors.response.use(
     // Handle 403 errors - log helpful message
     if (error.response?.status === 403) {
       const message = error.response?.data?.message || 'Access forbidden';
+      const requestUrl = originalRequest?.url || '';
+      const pathname =
+        typeof window !== 'undefined' ? window.location.pathname : '';
+      const onPlatformRoute = isPlatformRoute(pathname);
+      const onPublicGuestRoute = isPublicGuestRoute(pathname);
+
+      // Only hard-redirect when the server explicitly rejected a platform JWT on
+      // an org HRMS API — not for every 403 while a leftover role=platform cookie exists.
+      if (
+        !onPlatformRoute &&
+        !onPublicGuestRoute &&
+        !isBootstrapAuthRequest(requestUrl) &&
+        error.response?.data?.code === 'INSUFFICIENT_PERMISSIONS' &&
+        /Platform operator/i.test(message)
+      ) {
+        maybeRedirectToLoginOn401('PLATFORM_SESSION_DEAD');
+      }
+
       if (message.includes('admin') || message.includes('Access restricted')) {
         // Don't auto-redirect for 403, let user see the error message
       }

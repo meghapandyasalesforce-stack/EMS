@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiCreditCard, FiDownload, FiUser, FiCalendar, FiMapPin, FiBriefcase, FiTag, FiArrowLeft } from 'react-icons/fi';
+import { FiCreditCard, FiDownload, FiUser, FiArrowLeft } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
+import { downloadPdfBlob } from '../utils/downloadPdfBlob';
 import { useSignedProfilePhoto } from '../Hooks/useSignedProfilePhoto';
+import PaarsivIdCard from '../components/PaarsivIdCard';
 
 const IdCardView = () => {
   const [idCard, setIdCard] = useState(null);
@@ -44,7 +46,8 @@ const IdCardView = () => {
     try {
       toast.info('Generating ID card PDF...');
       const response = await axios.get(`/v1/admin/id-cards/card/${idCard._id}/download`, {
-        responseType: 'blob'
+        responseType: 'blob',
+        withCredentials: true,
       });
 
       const contentType = response.headers?.['content-type'] || '';
@@ -61,17 +64,17 @@ const IdCardView = () => {
         return;
       }
 
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `id-card-${idCard.employeeId?.employeeId || idCard.cardNumber || 'card'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      toast.success('ID card downloaded successfully!');
+      const fileName = `id-card-${idCard.employeeId?.employeeId || idCard.cardNumber || 'card'}.pdf`;
+      const method = await downloadPdfBlob(response.data, fileName);
+      if (method === 'share-cancelled') return;
+      if (method === 'open') {
+        toast.success('ID card opened — use Share/Save in the browser to keep a copy');
+      } else if (method === 'share') {
+        toast.success('ID card ready to save or share');
+      } else {
+        toast.success('ID card downloaded successfully!');
+      }
     } catch (error) {
-      // Removed console.error for production
       toast.error('Failed to download ID card');
     }
   };
@@ -168,122 +171,19 @@ const IdCardView = () => {
                 ID Card Preview
               </h2>
               
-              {/* ID Card Design */}
-              <div 
-                id="id-card-preview"
-                className="w-full max-w-sm mx-auto rounded-lg border-2 shadow-lg overflow-hidden"
-                style={{
-                  backgroundColor: idCard.cardDesign?.backgroundColor || '#ffffff',
-                  borderColor: idCard.cardDesign?.borderColor || '#e0e0e0'
-                }}
-              >
-                {/* Card Header */}
-                <div 
-                  className="p-4 text-center"
-                  style={{
-                    backgroundColor: idCard.cardDesign?.accentColor || '#1976d2',
-                    color: '#ffffff'
-                  }}
-                >
-                  <h3 className="font-bold text-lg">
-                    {idCard.cardDesign?.companyName || 'Paarsiv Technologies'}
-                  </h3>
-                  <p className="text-sm opacity-90">
-                    {idCard.cardDesign?.companyAddress || 'Employee ID Card'}
-                  </p>
-                </div>
-
-                {/* Card Content */}
-                <div className="p-6">
-                  {/* Employee Photo */}
-                  <div className="flex justify-center mb-4">
-                    <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-                      {idCardPhotoUrl ? (
-                        <img
-                          src={idCardPhotoUrl}
-                          alt="Employee Photo"
-                          className="w-20 h-20 rounded-full object-cover"
-                          crossOrigin="anonymous"
-                        />
-                      ) : (
-                        <FiUser className="w-8 h-8 text-gray-400" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Employee Details */}
-                  <div className="space-y-3 text-center">
-                    <h4 
-                      className="text-xl font-bold"
-                      style={{ color: idCard.cardDesign?.textColor || '#000000' }}
-                    >
-                      {idCard.employeeId?.name} {idCard.employeeId?.lastName}
-                    </h4>
-                    
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-center">
-                        <FiTag className="w-4 h-4 mr-2 text-gray-500" />
-                        <span style={{ color: idCard.cardDesign?.textColor || '#000000' }}>
-                          ID: {idCard.employeeId?.employeeId}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center justify-center">
-                        <FiBriefcase className="w-4 h-4 mr-2 text-gray-500" />
-                        <span style={{ color: idCard.cardDesign?.textColor || '#000000' }}>
-                          {idCard.employeeId?.jobTitle || 'Not Specified'}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center justify-center">
-                        <FiMapPin className="w-4 h-4 mr-2 text-gray-500" />
-                        <span style={{ color: idCard.cardDesign?.textColor || '#000000' }}>
-                          {idCard.employeeId?.department || 'Not Specified'}
-                        </span>
-                      </div>
-
-                      {idCard.employeeId?.phone1 && (
-                        <div className="flex items-center justify-center">
-                          <FiUser className="w-4 h-4 mr-2 text-gray-500" />
-                          <span style={{ color: idCard.cardDesign?.textColor || '#000000' }}>
-                            {idCard.employeeId.phone1}
-                          </span>
-                        </div>
-                      )}
-
-                      {idCard.employeeId?.joiningDate && (
-                        <div className="flex items-center justify-center">
-                          <FiCalendar className="w-4 h-4 mr-2 text-gray-500" />
-                          <span style={{ color: idCard.cardDesign?.textColor || '#000000' }}>
-                            Joined: {new Date(idCard.employeeId.joiningDate).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* QR Code */}
-                  <div className="flex justify-center mt-4">
-                    {idCard.qrCode?.imageUrl && (
-                      <img
-                        src={idCard.qrCode.imageUrl}
-                        alt="QR Code"
-                        className="w-16 h-16"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Card Footer */}
-                <div 
-                  className="px-4 py-2 text-center text-xs"
-                  style={{
-                    backgroundColor: idCard.cardDesign?.accentColor || '#1976d2',
-                    color: '#ffffff'
-                  }}
-                >
-                  Employee ID Card
-                </div>
+              {/* ID Card Design — Paarsiv portrait badge */}
+              <div id="id-card-preview" className="flex justify-center py-2">
+                <PaarsivIdCard
+                  size="full"
+                  name={idCard.employeeId?.name}
+                  lastName={idCard.employeeId?.lastName}
+                  jobTitle={idCard.employeeId?.jobTitle || idCard.employeeId?.position || 'Employee'}
+                  employeeId={idCard.employeeId?.employeeId}
+                  cardNumber={idCard.cardNumber}
+                  photoUrl={idCardPhotoUrl}
+                  profilePhoto={idCard.employeeId?.profilePhoto || idCard.employeeId?.profilePicture}
+                  userId={idCard.employeeId?._id || idCard.employeeId?.id}
+                />
               </div>
 
               {/* Download Button */}
@@ -359,30 +259,26 @@ const IdCardView = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Template</span>
-                  <span className="text-sm capitalize">{idCard.cardDesign?.template || 'Standard'}</span>
+                  <span className="text-sm">Paarsiv Official</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Background</span>
+                  <span className="text-gray-600">Accent</span>
                   <div className="flex items-center">
-                    <div 
+                    <div
                       className="w-4 h-4 rounded border mr-2"
-                      style={{ backgroundColor: idCard.cardDesign?.backgroundColor || '#ffffff' }}
-                    ></div>
-                    <span className="text-sm font-mono">
-                      {idCard.cardDesign?.backgroundColor || '#ffffff'}
-                    </span>
+                      style={{ backgroundColor: '#2BAA75' }}
+                    />
+                    <span className="text-sm font-mono">#2BAA75</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Text Color</span>
+                  <span className="text-gray-600">Text</span>
                   <div className="flex items-center">
-                    <div 
+                    <div
                       className="w-4 h-4 rounded border mr-2"
-                      style={{ backgroundColor: idCard.cardDesign?.textColor || '#000000' }}
-                    ></div>
-                    <span className="text-sm font-mono">
-                      {idCard.cardDesign?.textColor || '#000000'}
-                    </span>
+                      style={{ backgroundColor: '#1A1A1A' }}
+                    />
+                    <span className="text-sm font-mono">#1A1A1A</span>
                   </div>
                 </div>
               </div>

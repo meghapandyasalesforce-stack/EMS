@@ -37,39 +37,59 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Push event - handle incoming push notifications
+// Push event - handle incoming push notifications (mobile-safe icons / fallbacks)
 self.addEventListener('push', (event) => {
   let data = {};
-  
+
   if (event.data) {
     try {
       data = event.data.json();
     } catch (e) {
       data = {
-        title: 'New Notification',
+        title: 'Paarsiv',
         body: event.data.text() || 'You have a new notification'
       };
     }
   } else {
     data = {
-      title: 'New Notification',
+      title: 'Paarsiv',
       body: 'You have a new notification'
     };
   }
 
-  const options = {
-    body: data.body || 'You have a new notification',
-    icon: data.icon || '/logo192.png',
-    badge: data.badge || '/logo192.png',
-    tag: data.tag || 'notification',
-    data: data.data || {},
-    requireInteraction: data.requireInteraction || false,
-    vibrate: data.vibrate || [200],
-    timestamp: Date.now()
+  const origin = self.location.origin;
+  const defaultIcon = `${origin}/logo192.png`;
+  const badIcon = (url) =>
+    !url || /^http:\/\//i.test(url) || /localhost|127\.0\.0\.1/i.test(url);
+  const title = data.title && data.title !== 'Notification' ? data.title : 'Paarsiv';
+  const body = data.body || 'You have a new notification';
+  const tag = data.tag || `notification-${Date.now()}`;
+  const notificationData = {
+    ...(data.data || {}),
+    url: data.data?.url || data.url || '/notifications',
   };
+  const icon = badIcon(data.icon) ? defaultIcon : data.icon;
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'New Notification', options)
+    (async () => {
+      try {
+        await self.registration.showNotification(title, {
+          body,
+          icon,
+          badge: defaultIcon,
+          tag,
+          data: notificationData,
+          requireInteraction: false,
+          renotify: true,
+        });
+      } catch (err) {
+        await self.registration.showNotification(title, {
+          body,
+          tag,
+          data: notificationData,
+        });
+      }
+    })()
   );
 });
 
@@ -77,22 +97,36 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const urlToOpen = event.notification.data?.url || '/';
-  const fullUrl = new URL(urlToOpen, self.location.origin).href;
+  const rawUrl = event.notification.data?.url || '/notifications';
+  let fullUrl;
+  try {
+    let path = rawUrl;
+    if (/^https?:\/\//i.test(rawUrl)) {
+      const parsed = new URL(rawUrl);
+      path = `${parsed.pathname}${parsed.search}` || '/notifications';
+    } else if (!path.startsWith('/')) {
+      path = `/${path}`;
+    }
+    fullUrl = new URL(path, self.location.origin).href;
+  } catch {
+    fullUrl = `${self.location.origin}/notifications`;
+  }
 
   event.waitUntil(
     clients.matchAll({
       type: 'window',
       includeUncontrolled: true
     }).then((clientList) => {
-      // Check if there's already a window/tab open with the target URL
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if (client.url === fullUrl && 'focus' in client) {
-          return client.focus();
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          client.focus();
+          if (client.navigate) {
+            return client.navigate(fullUrl);
+          }
+          return client;
         }
       }
-      // If no window is open, open a new one
       if (clients.openWindow) {
         return clients.openWindow(fullUrl);
       }

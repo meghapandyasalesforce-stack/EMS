@@ -838,6 +838,18 @@ canvas {
     max-width: none;
   }
 
+  /* One-on-one status filters: hide scrollbar, keep chips fully visible while scrolling */
+  .ooo-filter-scroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .ooo-filter-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .ooo-filter-chip {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   /* Tabs stay on one readable row and scroll only inside their own control. */
   .main-scroll-area [role="tablist"] {
     width: 100%;
@@ -1090,6 +1102,11 @@ canvas {
   .page-shell {
     padding: 1.5rem 1rem 1.25rem;
     overflow-x: clip;
+  }
+
+  /* Engagement: keep section nav fully visible (wrap), don't clip chips */
+  .page-shell.engagement-page {
+    overflow-x: visible;
   }
 
   .page-shell-inner,

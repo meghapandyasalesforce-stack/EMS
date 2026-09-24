@@ -28,6 +28,7 @@ import {
 } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { sanitizeMeetingLink } from '../../utils/meetingLink';
 import { formatStatusLabel, UI_BADGE_TEXT_CLASS, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
 import { 
     BOTH_ATTENDANCE_ENDPOINT, 
@@ -1151,9 +1152,9 @@ const DashboardManager = () => {
                                                     {meeting.location ? ` · ${meeting.location}` : ''}
                                                 </p>
                                                 <div className="mt-2 flex gap-2">
-                                                    {meeting.meetingLink ? (
+                                                    {sanitizeMeetingLink(meeting.meetingLink) ? (
                                                         <a
-                                                            href={meeting.meetingLink}
+                                                            href={sanitizeMeetingLink(meeting.meetingLink)}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="inline-flex items-center gap-1 rounded-full bg-emerald-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800"

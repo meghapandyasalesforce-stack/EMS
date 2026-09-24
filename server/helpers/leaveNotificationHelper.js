@@ -1,7 +1,7 @@
 import Employee from '../models/employee.model.js';
 import User from '../models/user.model.js';
 import { sendNotification } from './notificationService.js';
-import { sendPushNotification, createPushPayload } from './pushNotificationService.js';
+import { sendPushNotification, createPushPayload, isPushEnabledForUser } from './pushNotificationService.js';
 import logger from './logger.js';
 
 const normalizeRoleText = (value) => String(value || '').trim().toLowerCase();
@@ -146,6 +146,10 @@ const sendLeavePushNotifications = async ({ recipientIds, title, message, type, 
     const results = await Promise.allSettled(
         recipientIds.map(async (recipientId) => {
             try {
+                if (!(await isPushEnabledForUser(recipientId))) {
+                    return { sent: 0, failed: 0, reason: 'PUSH_DISABLED' };
+                }
+
                 const employee = await Employee.findById(recipientId).select('_id').lean();
                 const user = await User.findById(recipientId).select('_id').lean();
                 

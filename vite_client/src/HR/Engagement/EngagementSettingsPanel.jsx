@@ -1,15 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
-import { MINT_GRADIENT } from '../Reports/constants';
 
-const Toggle = ({ checked, onChange, disabled, label, hint }) => (
-    <label className="flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
-        <span>
-            <span className="block text-sm font-semibold text-slate-800">{label}</span>
-            {hint && <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>}
-        </span>
-        <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} className="mt-1 h-4 w-4" />
+const Toggle = ({ checked, onChange, disabled, label }) => (
+    <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+        <span className="text-sm font-semibold text-slate-800">{label}</span>
+        <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} className="h-4 w-4 shrink-0" />
     </label>
 );
 
@@ -29,7 +25,9 @@ const EngagementSettingsPanel = () => {
         }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        load();
+    }, []);
 
     const save = async (patch) => {
         try {
@@ -44,17 +42,17 @@ const EngagementSettingsPanel = () => {
         }
     };
 
-    if (loading || !settings) return <p className="py-12 text-center text-sm text-slate-500">Loading settings...</p>;
+    if (loading || !settings) {
+        return <p className="py-12 text-center text-sm text-slate-500">Loading settings...</p>;
+    }
 
     const features = settings.features || {};
-    const notifications = settings.notifications || {};
     const lifecycle = settings.lifecycle || {};
 
     return (
         <div className="space-y-6">
             <div>
-                <h3 className="text-sm font-semibold text-slate-800">Modules</h3>
-                <p className="mb-3 text-xs text-slate-500">Disabled modules hide employee actions and reject new API usage. Existing history remains.</p>
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">Modules</h3>
                 <div className="space-y-2">
                     {[
                         ['surveys', 'Surveys'],
@@ -75,24 +73,19 @@ const EngagementSettingsPanel = () => {
             </div>
 
             <div>
-                <h3 className="text-sm font-semibold text-slate-800">Lifecycle survey automation</h3>
-                <p className="mb-3 text-xs text-slate-500">
-                    Automatically assigns existing Survey forms for new joiners (Day 7 / 30 / 90) and exit/resignation.
-                    Does not create a separate survey system.
-                </p>
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">Lifecycle surveys</h3>
                 <div className="space-y-2">
                     <Toggle
                         label="Enable lifecycle automation"
-                        hint="Hourly job creates targeted surveys when triggers fire"
                         checked={Boolean(lifecycle.enabled)}
                         disabled={saving}
                         onChange={() => save({ lifecycle: { ...lifecycle, enabled: !lifecycle.enabled } })}
                     />
                     {[
-                        ['day7', 'Day 7 new-joiner survey'],
-                        ['day30', 'Day 30 new-joiner survey'],
-                        ['day90', 'Day 90 new-joiner survey'],
-                        ['exit', 'Exit / resignation survey'],
+                        ['day7', 'Day 7'],
+                        ['day30', 'Day 30'],
+                        ['day90', 'Day 90'],
+                        ['exit', 'Exit / resignation'],
                     ].map(([key, label]) => (
                         <Toggle
                             key={key}
@@ -102,61 +95,27 @@ const EngagementSettingsPanel = () => {
                             onChange={() => save({ lifecycle: { ...lifecycle, [key]: lifecycle[key] === false } })}
                         />
                     ))}
-                    <Toggle
-                        label="Lifecycle surveys anonymous by default"
-                        hint="Preserves identity privacy for lifecycle responses"
-                        checked={lifecycle.anonymous !== false}
-                        disabled={saving || !lifecycle.enabled}
-                        onChange={() => save({ lifecycle: { ...lifecycle, anonymous: lifecycle.anonymous === false } })}
-                    />
-                    <label className="block rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
-                        <span className="block text-sm font-semibold text-slate-800">Open duration (days)</span>
-                        <span className="mt-0.5 block text-xs text-slate-500">How long lifecycle surveys stay open (3–30).</span>
-                        <input
-                            type="number"
-                            min={3}
-                            max={30}
-                            defaultValue={lifecycle.openDurationDays || 7}
-                            disabled={saving || !lifecycle.enabled}
-                            className="mt-2 w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                            onBlur={(e) => {
-                                const n = parseInt(e.target.value, 10);
-                                if (!Number.isNaN(n) && n !== lifecycle.openDurationDays) {
-                                    save({ lifecycle: { ...lifecycle, openDurationDays: n } });
-                                }
-                            }}
-                        />
-                    </label>
                 </div>
             </div>
 
             <div>
-                <h3 className="text-sm font-semibold text-slate-800">Privacy & approval</h3>
-                <div className="mt-3 space-y-2">
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">Privacy</h3>
+                <div className="space-y-2">
                     <Toggle
-                        label="Require HR approval for employee recognition"
-                        hint="HR/Admin recognition still publishes immediately"
+                        label="Require approval for employee recognition"
                         checked={Boolean(settings.recognitionRequireApproval)}
                         disabled={saving}
                         onChange={() => save({ recognitionRequireApproval: !settings.recognitionRequireApproval })}
                     />
-                    <Toggle
-                        label="Default anonymous feedback checkbox on"
-                        hint="Employees still need anonymous permission to submit anonymously"
-                        checked={Boolean(settings.anonymousFeedbackDefault)}
-                        disabled={saving}
-                        onChange={() => save({ anonymousFeedbackDefault: !settings.anonymousFeedbackDefault })}
-                    />
-                    <label className="block rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
-                        <span className="block text-sm font-semibold text-slate-800">Analytics privacy threshold</span>
-                        <span className="mt-0.5 block text-xs text-slate-500">Never below 5. Higher values hide more detail.</span>
+                    <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+                        <span className="text-sm font-semibold text-slate-800">Min responses for analytics</span>
                         <input
                             type="number"
                             min={5}
                             max={50}
                             defaultValue={settings.analyticsMinResponses || 5}
                             disabled={saving}
-                            className="mt-2 w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                            className="w-20 rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
                             onBlur={(e) => {
                                 const n = parseInt(e.target.value, 10);
                                 if (!Number.isNaN(n) && n !== settings.analyticsMinResponses) {
@@ -167,34 +126,6 @@ const EngagementSettingsPanel = () => {
                     </label>
                 </div>
             </div>
-
-            <div>
-                <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
-                <p className="mb-3 text-xs text-slate-500">Organization-level Engagement notification preferences.</p>
-                <div className="space-y-2">
-                    {[
-                        ['surveyAssigned', 'Survey assigned'],
-                        ['surveyReminder', 'Survey reminders & closing notices'],
-                        ['lifecycleSurveyAssigned', 'Lifecycle survey assigned'],
-                        ['recognitionReceived', 'Recognition received'],
-                        ['actionPlanAssigned', 'Action plan assigned'],
-                        ['actionPlanDue', 'Action plan due / overdue'],
-                        ['suggestionImplemented', 'Suggestion implemented'],
-                    ].map(([key, label]) => (
-                        <Toggle
-                            key={key}
-                            label={label}
-                            checked={notifications[key] !== false}
-                            disabled={saving}
-                            onChange={() => save({ notifications: { ...notifications, [key]: notifications[key] === false } })}
-                        />
-                    ))}
-                </div>
-            </div>
-
-            <p className="text-xs text-slate-400" style={{ background: `${MINT_GRADIENT}00` }}>
-                Settings apply organization-wide. Server-side authorization remains the source of truth.
-            </p>
         </div>
     );
 };

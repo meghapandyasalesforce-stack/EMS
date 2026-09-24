@@ -4,7 +4,6 @@ import { useSelector } from 'react-redux';
 import {
   FaSearch,
   FaDownload,
-  FaIdCard,
   FaShareAlt,
   FaExclamationTriangle,
   FaEye,
@@ -17,7 +16,9 @@ import {
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios, { getUploadUrl, openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
+import { downloadPdfBlob } from '../../utils/downloadPdfBlob';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import PaarsivIdCard from '../../components/PaarsivIdCard';
 import { canEmployeeDeleteOwnDocument } from '../../utils/documentDeleteRules';
 import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 
@@ -180,19 +181,33 @@ const DocumentsAndIdPage = () => {
     }
 
     try {
+      toast.info('Preparing ID card PDF…');
       const response = await axios.get(`/v1/admin/id-cards/card/${idCard._id}/download`, {
         responseType: 'blob',
         withCredentials: true
       });
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `id-card-${idCard.employeeId?.employeeId || idCard.cardNumber || 'card'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('ID card PDF downloaded');
+      const contentType = response.headers?.['content-type'] || '';
+      if (contentType && !contentType.includes('application/pdf') && contentType.includes('json')) {
+        const errorText = await response.data.text();
+        let message = 'Failed to download ID card PDF';
+        try {
+          message = JSON.parse(errorText)?.message || message;
+        } catch {
+          /* keep default */
+        }
+        toast.error(message);
+        return;
+      }
+      const fileName = `id-card-${idCard.employeeId?.employeeId || idCard.cardNumber || 'card'}.pdf`;
+      const method = await downloadPdfBlob(response.data, fileName);
+      if (method === 'share-cancelled') return;
+      if (method === 'open') {
+        toast.success('ID card opened — use Share/Save in the browser to keep a copy');
+      } else if (method === 'share') {
+        toast.success('ID card ready to save or share');
+      } else {
+        toast.success('ID card PDF downloaded');
+      }
     } catch {
       toast.error('Failed to download ID card PDF');
     }
@@ -398,53 +413,18 @@ const DocumentsAndIdPage = () => {
             <div className="w-full rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
               <h2 className="mb-4 text-xl font-semibold text-slate-800">Digital ID Card</h2>
               {idCard ? (
-                <div
-                  className="w-full min-h-[340px] rounded-2xl p-6 text-white"
-                  style={{
-                    background: `linear-gradient(135deg, ${idCard.cardDesign?.accentColor || '#2563eb'}, ${idCard.cardDesign?.backgroundColor || '#059669'})`
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-semibold">{idCard.cardDesign?.companyName || 'paarsiv'}</p>
-                    <FaIdCard className="text-2xl opacity-80" />
-                  </div>
-                  <p className="mt-1 text-xs tracking-wide opacity-80">EMPLOYEE ID</p>
-
-                  <div className="my-5 flex justify-center">
-                    {idCardProfilePhoto ? (
-                      <img
-                        src={idCardProfilePhoto}
-                        alt="Employee"
-                        className="h-24 w-24 rounded-full border-2 border-white/80 object-cover"
-                      />
-                    ) : (
-                      <div className="h-24 w-24 rounded-full border-2 border-white/70 bg-white/20" />
-                    )}
-                  </div>
-
-                  <p className="text-center text-lg font-semibold">
-                    {idCard.employeeId?.name} {idCard.employeeId?.lastName}
-                  </p>
-                  <p className="text-center text-sm opacity-90">{idCard.employeeId?.jobTitle || 'Employee'}</p>
-
-                  <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-xs opacity-70">ID NUMBER</p>
-                      <p className="font-medium">{idCard.employeeId?.employeeId || '--'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs opacity-70">CARD NO.</p>
-                      <p className="font-medium">{idCard.cardNumber || '--'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs opacity-70">DEPARTMENT</p>
-                      <p className="font-medium">{idCard.employeeId?.department || '--'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs opacity-70">STATUS</p>
-                      <p className="font-medium capitalize">{idCard.status || '--'}</p>
-                    </div>
-                  </div>
+                <div className="flex justify-center rounded-2xl bg-slate-50 px-4 py-6">
+                  <PaarsivIdCard
+                    size="preview"
+                    name={idCard.employeeId?.name}
+                    lastName={idCard.employeeId?.lastName}
+                    jobTitle={idCard.employeeId?.jobTitle || idCard.employeeId?.position || 'Employee'}
+                    employeeId={idCard.employeeId?.employeeId}
+                    cardNumber={idCard.cardNumber}
+                    photoUrl={idCardProfilePhoto}
+                    profilePhoto={idCard.employeeId?.profilePhoto || idCard.employeeId?.profilePicture}
+                    userId={idCard.employeeId?._id || idCard.employeeId?.id}
+                  />
                 </div>
               ) : (
                 <div className="rounded-lg border p-4 text-sm text-slate-600">
@@ -469,13 +449,13 @@ const DocumentsAndIdPage = () => {
               <span className="font-medium text-slate-800">Share Digital Card</span>
             </button>
 
-            <button
+            {/* <button
               onClick={() => toast.info('Lost card reporting will be enabled soon.')}
               className="flex w-full items-center gap-2 rounded-xl border bg-white p-3 text-left transition hover:bg-gray-50"
             >
               <FaExclamationTriangle className="text-red-500" />
               <span className="font-medium text-slate-800">Report Lost Card</span>
-            </button>
+            </button> */}
           </div>
         </div>
 

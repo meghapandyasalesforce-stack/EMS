@@ -11,10 +11,13 @@ export default function SignedProfilePhoto({
   profilePhoto,
   userType = 'employee',
   userId,
+  preferFull = false,
   className = '',
   ...imgProps
 }) {
-  const { photoUrl } = useSignedProfilePhoto(profilePhoto, { userType, userId });
+  const { photoUrl } = useSignedProfilePhoto(profilePhoto, { userType, userId, preferFull });
   if (!photoUrl) return null;
-  return <img src={photoUrl} alt="" className={className} {...imgProps} />;
+  // Do not set crossOrigin — S3 signed URLs often lack CORS and would fail to render
+  const { crossOrigin: _ignored, ...safeProps } = imgProps;
+  return <img src={photoUrl} alt="" className={className} {...safeProps} />;
 }

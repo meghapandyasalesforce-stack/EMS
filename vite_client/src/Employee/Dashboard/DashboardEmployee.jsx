@@ -1291,10 +1291,10 @@ function DashboardEmployee() {
                             <div className="mt-3 grid grid-cols-1 gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => navigate('/one-on-one')}
+                                    onClick={() => navigate('/1-on-1')}
                                     className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#20C997]/30"
                                 >
-                                    <FaUserTie className="text-[#20C997]" /> One-on-one
+                                    <FaUserTie className="text-[#20C997]" /> 1:1
                                 </button>
                                 <button
                                     type="button"

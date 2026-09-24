@@ -11,7 +11,8 @@ import {
   calculateCompletedYears,
   calculateMarriageCompletedYears,
   buildCelebrationEventKey,
-  hasReachedOrgNineAm,
+  isOrgMorningNotifyWindow,
+  resolveMorningNotifyTimezone,
 } from '../helpers/celebrationDateHelper.js';
 import { loadCelebrationEmployees } from '../helpers/celebrationRecipientHelper.js';
 import { ensureCelebrationEvent } from '../helpers/celebrationEventService.js';
@@ -346,8 +347,10 @@ async function processMarriageAnniversariesForOrg(organizationId, timezone, toda
 }
 
 export async function processCelebrationNotificationsForOrg(organizationId, refDate = new Date()) {
-  const timezone = await getEffectiveTimezone(organizationId);
-  if (!hasReachedOrgNineAm(timezone, refDate)) return;
+  const effectiveTimezone = await getEffectiveTimezone(organizationId);
+  const timezone = resolveMorningNotifyTimezone(effectiveTimezone);
+  // Only send during 9:00–9:59 AM local morning window
+  if (!isOrgMorningNotifyWindow(timezone, refDate)) return;
 
   const today = getTodayPartsInTimezone(timezone, refDate);
   const orgDayKey = `${organizationId}:${today.dateKey}`;
@@ -395,15 +398,15 @@ export async function runCelebrationNotificationCheck(refDate = new Date()) {
 }
 
 /**
- * Schedule isolated Birthday & Anniversary notifications from 9:00 AM org local time.
- * If the server starts after 9:00, it still sends once for that day (no duplicates).
+ * Schedule isolated Birthday & Anniversary notifications at 9:00–9:59 AM org local time.
+ * Runs once per org per day within that morning window only.
  */
 export const scheduleCelebrationNotificationJobs = () => {
   cron.schedule('* * * * *', async () => {
     await runCelebrationNotificationCheck();
   });
 
-  logger.info('Celebration notification jobs scheduled (from 9:00 AM org local time)');
+  logger.info('Celebration notification jobs scheduled (9:00–9:59 AM org local time)');
 };
 
 export default {

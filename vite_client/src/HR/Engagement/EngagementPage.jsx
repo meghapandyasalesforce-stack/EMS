@@ -15,10 +15,8 @@ import {
     FaDownload,
     FaTasks,
     FaCog,
-    FaUsers,
     FaTrash,
     FaStream,
-    FaUserClock,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -42,29 +40,82 @@ import { PERMISSIONS } from '../../utils/permissions';
 const MINT = '#20C997';
 const MINT_DARK = '#0d9488';
 
-const KpiStat = ({ label, value, icon: Icon, accent = MINT, subtext, muted = false }) => (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-                <p
-                    className={`mt-1 truncate font-bold ${
-                        muted ? 'text-xl text-slate-400' : 'text-2xl text-slate-900'
-                    }`}
-                >
-                    {value}
-                </p>
-                {subtext && (
-                    <p className="mt-1 text-xs leading-snug text-slate-500">{subtext}</p>
-                )}
+/** Map legacy tab ids (and new section ids) → { section, sub } for deep links. */
+const resolveEngagementNav = (rawTab, rawSub) => {
+    const tab = String(rawTab || '').trim() || 'dashboard';
+    const sub = rawSub != null && String(rawSub).trim() ? String(rawSub).trim() : null;
+    const legacy = {
+        analytics: { section: 'dashboard', sub: 'overview' },
+        insights: { section: 'dashboard', sub: 'insights' },
+        dashboard: { section: 'dashboard', sub: sub || 'overview' },
+        surveys: { section: 'surveys', sub: sub === 'pulse' ? 'pulse' : 'surveys' },
+        pulse: { section: 'surveys', sub: 'pulse' },
+        feedback: { section: 'feedback', sub: sub === 'suggestions' ? 'suggestions' : 'feedback' },
+        suggestions: { section: 'feedback', sub: 'suggestions' },
+        recognition: { section: 'recognition', sub: null },
+        actions: { section: 'actions', sub: null },
+        settings: { section: 'settings', sub: null },
+        // Kept for deep links only — not shown in main nav
+        lifecycle: { section: 'lifecycle', sub: null },
+        team: { section: 'team', sub: null },
+    };
+    if (legacy[tab]) {
+        const mapped = legacy[tab];
+        if (sub && ['dashboard', 'surveys', 'feedback'].includes(mapped.section)) {
+            return { section: mapped.section, sub };
+        }
+        return mapped;
+    }
+    return { section: 'dashboard', sub: 'overview' };
+};
+
+const SubTabBar = ({ tabs, active, onChange, trailing = null }) => {
+    if (!tabs?.length && !trailing) return null;
+    return (
+        <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <div className="flex flex-wrap gap-2">
+                {tabs?.map((tab) => (
+                    <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => onChange(tab.id)}
+                        className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+                            active === tab.id
+                                ? 'bg-[#20C997] text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                        {tab.icon ? <tab.icon className="h-3.5 w-3.5 shrink-0" /> : null}
+                        <span className="truncate">{tab.label}</span>
+                    </button>
+                ))}
             </div>
+            {trailing ? <div className="shrink-0 sm:ml-auto">{trailing}</div> : null}
+        </div>
+    );
+};
+
+const KpiStat = ({ label, value, icon: Icon, accent = MINT, subtext, muted = false }) => (
+    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:rounded-2xl sm:p-5">
+        <div className="flex items-start justify-between gap-2">
             <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11 sm:rounded-xl"
                 style={{ backgroundColor: `${accent}18`, color: accent }}
             >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
             </div>
         </div>
+        <p
+            className={`mt-2 truncate font-bold tabular-nums sm:mt-3 ${
+                muted ? 'text-lg text-slate-400 sm:text-xl' : 'text-xl text-slate-900 sm:text-2xl'
+            }`}
+        >
+            {value}
+        </p>
+        <p className="mt-0.5 text-[10px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-xs sm:leading-normal">
+            {label}
+        </p>
+        {subtext && <p className="mt-1 text-xs leading-snug text-slate-500">{subtext}</p>}
     </div>
 );
 
@@ -106,15 +157,32 @@ const EngagementPage = () => {
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const location = useLocation();
-    const [activeTab, setActiveTab] = useState(
-        location.state?.tab || new URLSearchParams(location.search).get('tab') || 'surveys'
-    );
+    const initialNav = useMemo(() => {
+        const params = new URLSearchParams(location.search);
+        return resolveEngagementNav(
+            location.state?.tab || params.get('tab'),
+            location.state?.sub || params.get('sub')
+        );
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initial deep link only
+    const [activeSection, setActiveSection] = useState(initialNav.section);
+    const [activeSub, setActiveSub] = useState(initialNav.sub);
     const [searchQuery, setSearchQuery] = useState('');
     const [surveysError, setSurveysError] = useState(null);
     const [feedbackError, setFeedbackError] = useState(null);
     const [recognitionError, setRecognitionError] = useState(null);
     const [analyticsError, setAnalyticsError] = useState(null);
     const [exporting, setExporting] = useState(null);
+
+    const goToNav = (section, sub = null) => {
+        setActiveSection(section);
+        setActiveSub(sub);
+    };
+
+    /** Supports legacy tab ids from dashboards / pulse create / deep links. */
+    const onNavigateTab = (tabId) => {
+        const mapped = resolveEngagementNav(tabId, null);
+        goToNav(mapped.section, mapped.sub);
+    };
 
     useEffect(() => {
         const empId = employee?._id || employee?.id;
@@ -142,10 +210,22 @@ const EngagementPage = () => {
     }, [employee?._id, employee?.id, hasTeamAnalyticsPermission]);
 
     useEffect(() => {
-        if (activeTab === 'team' && !canViewTeamAnalytics) {
-            setActiveTab('surveys');
+        if (activeSection === 'team' && !canViewTeamAnalytics) {
+            goToNav(canViewAnalytics ? 'dashboard' : 'surveys', canViewAnalytics ? 'overview' : 'surveys');
         }
-    }, [activeTab, canViewTeamAnalytics]);
+    }, [activeSection, canViewTeamAnalytics, canViewAnalytics]);
+
+    useEffect(() => {
+        if (activeSection === 'dashboard' && !canViewAnalytics) {
+            goToNav('surveys', 'surveys');
+        }
+    }, [activeSection, canViewAnalytics]);
+
+    useEffect(() => {
+        if (activeSection === 'dashboard' && !activeSub) setActiveSub('overview');
+        if (activeSection === 'surveys' && !activeSub) setActiveSub('surveys');
+        if (activeSection === 'feedback' && !activeSub) setActiveSub('feedback');
+    }, [activeSection, activeSub]);
 
     const fetchAll = async () => {
         setLoading(true);
@@ -232,7 +312,7 @@ const EngagementPage = () => {
                 file: exportFilename('employee-recognition'),
             },
             summary: {
-                url: '/v1/admin/engagement/export/summary',
+                url: '/v1/both/engagement/export/summary',
                 file: exportFilename('employee-engagement-summary'),
             },
         };
@@ -243,7 +323,7 @@ const EngagementPage = () => {
             await downloadEngagementExport(cfg.url, cfg.file);
             toast.success('Export downloaded');
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Export failed');
+            toast.error(error.response?.data?.message || error.message || 'Export failed');
         } finally {
             setExporting(null);
         }
@@ -308,7 +388,7 @@ const EngagementPage = () => {
 
     const filteredSurveys = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        if (!q || activeTab !== 'surveys') return surveys;
+        if (!q || !(activeSection === 'surveys' && activeSub === 'surveys')) return surveys;
         return surveys.filter((s) =>
             [s.title, s.description, s.status, s.type]
                 .filter(Boolean)
@@ -316,11 +396,11 @@ const EngagementPage = () => {
                 .toLowerCase()
                 .includes(q)
         );
-    }, [surveys, searchQuery, activeTab]);
+    }, [surveys, searchQuery, activeSection, activeSub]);
 
     const filteredFeedback = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        if (!q || activeTab !== 'feedback') return generalFeedback;
+        if (!q || !(activeSection === 'feedback' && activeSub === 'feedback')) return generalFeedback;
         return generalFeedback.filter((f) =>
             [f.subject, f.type, f.status, f.category, f.employeeId?.name]
                 .filter(Boolean)
@@ -328,11 +408,11 @@ const EngagementPage = () => {
                 .toLowerCase()
                 .includes(q)
         );
-    }, [generalFeedback, searchQuery, activeTab]);
+    }, [generalFeedback, searchQuery, activeSection, activeSub]);
 
     const filteredSuggestions = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        if (!q || activeTab !== 'suggestions') return suggestions;
+        if (!q || !(activeSection === 'feedback' && activeSub === 'suggestions')) return suggestions;
         return suggestions.filter((s) =>
             [s.subject, s.status, s.category, s.employeeId?.name]
                 .filter(Boolean)
@@ -340,9 +420,111 @@ const EngagementPage = () => {
                 .toLowerCase()
                 .includes(q)
         );
-    }, [suggestions, searchQuery, activeTab]);
+    }, [suggestions, searchQuery, activeSection, activeSub]);
 
-    const personName = (p) => `${p?.name || ''} ${p?.lastName || ''}`.trim() || 'Someone';
+    const mainNavItems = useMemo(() => {
+        const surveysEnabled = engSettings?.features?.surveys !== false;
+        const pulseEnabled = isManagerUser && engSettings?.features?.pulse !== false;
+        const feedbackEnabled = engSettings?.features?.feedback !== false;
+        const suggestionsEnabled = engSettings?.features?.suggestions !== false;
+        const recognitionEnabled = engSettings?.features?.recognition !== false;
+
+        return [
+            ...(canViewAnalytics
+                ? [{ id: 'dashboard', label: 'Dashboard', shortLabel: 'Dashboard', icon: FaChartBar, defaultSub: 'overview' }]
+                : []),
+            ...((surveysEnabled || pulseEnabled)
+                ? [{
+                    id: 'surveys',
+                    label: `Surveys (${surveys.length})`,
+                    shortLabel: `Surveys (${surveys.length})`,
+                    icon: FaClipboardList,
+                    defaultSub: surveysEnabled ? 'surveys' : 'pulse',
+                }]
+                : []),
+            ...((feedbackEnabled || suggestionsEnabled)
+                ? [{
+                    id: 'feedback',
+                    label: `Feedback (${generalFeedback.length})`,
+                    shortLabel: `Feedback (${generalFeedback.length})`,
+                    icon: FaComments,
+                    defaultSub: feedbackEnabled ? 'feedback' : 'suggestions',
+                }]
+                : []),
+            ...(recognitionEnabled
+                ? [{
+                    id: 'recognition',
+                    label: `Recognition (${recognitions.length})`,
+                    shortLabel: `Recognition (${recognitions.length})`,
+                    icon: FaAward,
+                    defaultSub: null,
+                }]
+                : []),
+            ...(isManagerUser
+                ? [
+                    { id: 'actions', label: 'Action Plans', shortLabel: 'Actions', icon: FaTasks, defaultSub: null },
+                    { id: 'settings', label: 'Settings', shortLabel: 'Settings', icon: FaCog, defaultSub: null },
+                ]
+                : []),
+        ];
+    }, [
+        canViewAnalytics,
+        engSettings,
+        isManagerUser,
+        surveys.length,
+        generalFeedback.length,
+        suggestions.length,
+        recognitions.length,
+    ]);
+
+    const dashboardSubTabs = useMemo(() => {
+        const tabs = [{ id: 'overview', label: 'Overview', icon: FaChartBar }];
+        if (isManagerUser) tabs.push({ id: 'insights', label: 'Insights', icon: FaStream });
+        return tabs;
+    }, [isManagerUser]);
+
+    const surveysSubTabs = useMemo(() => {
+        const tabs = [];
+        if (engSettings?.features?.surveys !== false) {
+            tabs.push({ id: 'surveys', label: `Surveys (${surveys.length})`, icon: FaClipboardList });
+        }
+        if (isManagerUser && engSettings?.features?.pulse !== false) {
+            tabs.push({ id: 'pulse', label: 'Pulse Programs', icon: FaPoll });
+        }
+        return tabs;
+    }, [engSettings, isManagerUser, surveys.length]);
+
+    const feedbackSubTabs = useMemo(() => {
+        const tabs = [];
+        if (engSettings?.features?.feedback !== false) {
+            tabs.push({ id: 'feedback', label: `Feedback (${generalFeedback.length})`, icon: FaComments });
+        }
+        if (engSettings?.features?.suggestions !== false) {
+            tabs.push({ id: 'suggestions', label: `Suggestions (${suggestions.length})`, icon: FaLightbulb });
+        }
+        return tabs;
+    }, [engSettings, generalFeedback.length, suggestions.length]);
+
+    const showSearch =
+        (activeSection === 'surveys' && activeSub === 'surveys') ||
+        (activeSection === 'feedback' && (activeSub === 'feedback' || activeSub === 'suggestions'));
+
+    const sectionTitle = (() => {
+        if (activeSection === 'dashboard' && activeSub === 'insights') return 'Insights';
+        if (activeSection === 'dashboard') return 'Overview';
+        if (activeSection === 'surveys' && activeSub === 'pulse') return 'Pulse Programs';
+        if (activeSection === 'surveys') return `Surveys (${filteredSurveys.length})`;
+        if (activeSection === 'feedback' && activeSub === 'suggestions') {
+            return `Suggestions (${filteredSuggestions.length})`;
+        }
+        if (activeSection === 'feedback') return `Feedback (${filteredFeedback.length})`;
+        if (activeSection === 'recognition') return 'Recognition';
+        if (activeSection === 'actions') return 'Action Plans';
+        if (activeSection === 'settings') return 'Settings';
+        if (activeSection === 'lifecycle') return 'Lifecycle';
+        if (activeSection === 'team') return 'My Team';
+        return 'Employee Engagement';
+    })();
 
     if (loading) {
         return (
@@ -356,62 +538,44 @@ const EngagementPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
-            <div className="page-shell-inner hrms-stack">
-                <header className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="flex items-center gap-4">
+        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-[#F5F7FB]">
+            <div className="page-shell-inner hrms-stack min-w-0">
+                <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+                        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                             <div
-                                className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-md"
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-md sm:h-14 sm:w-14 sm:rounded-2xl"
                                 style={{ background: MINT_GRADIENT }}
                             >
-                                <FaChartLine className="h-7 w-7" />
+                                <FaChartLine className="h-5 w-5 sm:h-7 sm:w-7" />
                             </div>
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 sm:text-xs">
                                     HR Workspace
                                 </p>
-                                <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">
+                                <h1 className="truncate text-xl font-bold text-slate-900 sm:text-2xl md:text-3xl">
                                     Employee Engagement
                                 </h1>
-                                <p className="mt-0.5 text-sm text-slate-500">
-                                    Dashboard, insights, action plans, suggestions, recognition, and lifecycle
+                                <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">
+                                    Surveys, feedback, recognition, and action plans
                                 </p>
                             </div>
                         </div>
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <label className="relative block min-w-[240px] flex-1 sm:max-w-sm">
-                                <FaSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    type="search"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder={
-                                        activeTab === 'surveys'
-                                            ? 'Search surveys...'
-                                            : activeTab === 'suggestions'
-                                              ? 'Search suggestions...'
-                                              : 'Search feedback...'
-                                    }
-                                    className="h-11 w-full rounded-full border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none transition focus:border-[#20C997] focus:bg-white focus:ring-2 focus:ring-[#20C997]/20"
-                                />
-                            </label>
-                            {isManagerUser && (
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/engagement/create-survey')}
-                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold text-white shadow-md transition hover:opacity-95"
-                                    style={{ background: MINT_GRADIENT }}
-                                >
-                                    <FaPlus className="h-5 w-5" />
-                                    Create Survey
-                                </button>
-                            )}
-                        </div>
+                        {isManagerUser && (
+                            <button
+                                type="button"
+                                onClick={() => navigate('/engagement/create-survey')}
+                                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-md transition hover:opacity-95 sm:h-11 sm:w-auto sm:px-6 lg:w-auto"
+                                style={{ background: MINT_GRADIENT }}
+                            >
+                                <FaPlus className="h-4 w-4 sm:h-5 sm:w-5" />
+                                Create Survey
+                            </button>
+                        )}
                     </div>
                 </header>
 
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-6">
+                <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
                     <KpiStat label="Total Surveys" value={stats.totalSurveys} icon={FaClipboardList} accent={MINT} />
                     <KpiStat label="Active" value={stats.active} icon={FaPoll} accent="#10b981" />
                     <KpiStat label="Survey Responses" value={stats.totalResponses} icon={FaInbox} accent={MINT_DARK} />
@@ -420,84 +584,100 @@ const EngagementPage = () => {
                     <KpiStat label="eNPS" value={stats.eNPS ?? '—'} icon={FaChartBar} accent="#0ea5e9" />
                 </div>
 
-                <div className="rounded-2xl border border-slate-100 bg-white p-2 shadow-sm">
-                    <div className="flex flex-wrap gap-2">
-                        {[
-                            ...(canViewAnalytics
-                                ? [{ id: 'analytics', label: 'Dashboard', icon: FaChartBar, show: true }]
-                                : []),
-                            ...(isManagerUser
-                                ? [{ id: 'insights', label: 'Insights', icon: FaStream, show: true }]
-                                : []),
-                            { id: 'surveys', label: `Surveys (${surveys.length})`, icon: FaClipboardList, show: engSettings?.features?.surveys !== false },
-                            ...(isManagerUser && engSettings?.features?.pulse !== false ? [{ id: 'pulse', label: 'Pulse', icon: FaPoll, show: true }] : []),
-                            { id: 'feedback', label: `Feedback (${generalFeedback.length})`, icon: FaComments, show: engSettings?.features?.feedback !== false },
-                            { id: 'suggestions', label: `Suggestions (${suggestions.length})`, icon: FaLightbulb, show: engSettings?.features?.suggestions !== false },
-                            { id: 'recognition', label: `Recognition (${recognitions.length})`, icon: FaAward, show: engSettings?.features?.recognition !== false },
-                            ...(canViewTeamAnalytics
-                                ? [{ id: 'team', label: 'My Team', icon: FaUsers, show: true }]
-                                : []),
-                            ...(isManagerUser
-                                ? [
-                                      { id: 'actions', label: 'Action Plans', icon: FaTasks, show: true },
-                                      { id: 'lifecycle', label: 'Lifecycle', icon: FaUserClock, show: engSettings?.features?.surveys !== false },
-                                      { id: 'settings', label: 'Settings', icon: FaCog, show: true },
-                                  ]
-                                : []),
-                        ].filter((tab) => tab.show !== false).map((tab) => (
+                <nav
+                    aria-label="Engagement sections"
+                    className="min-w-0 overflow-visible rounded-2xl border border-slate-100 bg-white p-2 shadow-sm sm:p-2.5"
+                >
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                        {mainNavItems.map((tab) => (
                             <button
                                 key={tab.id}
                                 type="button"
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition ${
-                                    activeTab === tab.id
+                                onClick={() => goToNav(tab.id, tab.defaultSub)}
+                                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
+                                    activeSection === tab.id
                                         ? 'bg-[#20C997]/10 text-[#0d9488] ring-1 ring-[#20C997]/30'
                                         : 'text-slate-600 hover:bg-slate-50'
                                 }`}
                             >
-                                <tab.icon className="h-4 w-4" />
-                                {tab.label}
+                                <tab.icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+                                <span className="whitespace-nowrap sm:hidden">{tab.shortLabel || tab.label}</span>
+                                <span className="hidden whitespace-nowrap sm:inline">{tab.label}</span>
                             </button>
                         ))}
                     </div>
-                </div>
+                </nav>
 
-                <section className="rounded-[28px] border border-slate-100 bg-white shadow-sm">
-                    <div className="border-b border-slate-100 px-5 py-4 md:px-6">
-                        <h2 className="text-lg font-semibold text-slate-900">
-                            {activeTab === 'surveys' && `Surveys (${filteredSurveys.length})`}
-                            {activeTab === 'pulse' && 'Employee Pulse'}
-                            {activeTab === 'feedback' && `Feedback (${filteredFeedback.length})`}
-                            {activeTab === 'suggestions' && `Suggestions (${filteredSuggestions.length})`}
-                            {activeTab === 'recognition' && 'Recognition Wall'}
-                            {activeTab === 'team' && 'Team Engagement'}
-                            {activeTab === 'analytics' && 'Engagement Dashboard'}
-                            {activeTab === 'insights' && 'Closed-Loop Insights'}
-                            {activeTab === 'actions' && 'Action Plans'}
-                            {activeTab === 'lifecycle' && 'Lifecycle Engagement'}
-                            {activeTab === 'settings' && 'Engagement Settings'}
+                <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-[28px]">
+                    <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5 sm:py-4 md:px-6">
+                        <h2 className="min-w-0 truncate text-base font-semibold text-slate-900 sm:text-lg">
+                            {sectionTitle}
                         </h2>
-                        <p className="text-sm text-slate-500">
-                            {activeTab === 'surveys' && 'Pulse checks, annual surveys, and custom forms'}
-                            {activeTab === 'pulse' && 'Recurring pulse survey programs'}
-                            {activeTab === 'feedback' && 'Complaints, questions, and support requests'}
-                            {activeTab === 'suggestions' && 'Employee ideas with full review workflow'}
-                            {activeTab === 'recognition' && 'Approved public peer and HR recognition'}
-                            {activeTab === 'team' && 'Engagement for your direct reports only. Anonymous identities are never shown.'}
-                            {activeTab === 'analytics' &&
-                                'Organization engagement health, closed-loop actions, lifecycle participation, and trends.'}
-                            {activeTab === 'insights' &&
-                                'Insight identified → action plan → owner → due date → completion — privacy-safe.'}
-                            {activeTab === 'actions' && 'Convert engagement insights into assigned follow-up.'}
-                            {activeTab === 'lifecycle' &&
-                                'Automated Day 7 / 30 / 90 and Exit surveys using the existing Survey engine.'}
-                            {activeTab === 'settings' && 'Organization-wide Engagement configuration.'}
-                        </p>
+                        {showSearch && (
+                            <label className="relative block w-full sm:max-w-xs sm:flex-1">
+                                <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder={
+                                        activeSection === 'surveys'
+                                            ? 'Search surveys...'
+                                            : activeSub === 'suggestions'
+                                              ? 'Search suggestions...'
+                                              : 'Search feedback...'
+                                    }
+                                    className="h-9 w-full rounded-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-[#20C997] focus:bg-white focus:ring-2 focus:ring-[#20C997]/20 sm:h-10"
+                                />
+                            </label>
+                        )}
                     </div>
 
-                    <div className="p-5 md:p-6">
-                        {activeTab === 'surveys' && (
+                    <div className="p-4 sm:p-5 md:p-6">
+                        {activeSection === 'dashboard' && canViewAnalytics && (
                             <>
+                                <SubTabBar
+                                    tabs={dashboardSubTabs}
+                                    active={activeSub || 'overview'}
+                                    onChange={(id) => setActiveSub(id)}
+                                    trailing={
+                                        activeSub !== 'insights' && canViewAnalytics ? (
+                                            <button
+                                                type="button"
+                                                disabled={exporting === 'summary'}
+                                                onClick={() => handleExport('summary')}
+                                                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
+                                            >
+                                                <FaDownload className="h-3 w-3" />
+                                                {exporting === 'summary' ? 'Exporting...' : 'Export Summary CSV'}
+                                            </button>
+                                        ) : null
+                                    }
+                                />
+                                {activeSub === 'insights' && isManagerUser ? (
+                                    <ClosedLoopInsightsPanel onNavigateTab={onNavigateTab} />
+                                ) : analyticsError ? (
+                                            <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
+                                                <p className="text-sm text-red-800">{analyticsError}</p>
+                                                <button type="button" onClick={fetchAll} className="mt-3 rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-700">Retry</button>
+                                            </div>
+                                        ) : (
+                                            <EngagementDashboard onNavigateTab={onNavigateTab} />
+                                        )}
+                            </>
+                        )}
+
+                        {activeSection === 'surveys' && (
+                            <>
+                                <SubTabBar
+                                    tabs={surveysSubTabs}
+                                    active={activeSub || 'surveys'}
+                                    onChange={(id) => setActiveSub(id)}
+                                />
+                                {activeSub === 'pulse' ? (
+                                    <PulsePrograms />
+                                ) : (
+                                    <>
                             <DraftAwaitingBanner count={draftSurveyCount} entityLabel="survey" />
                             {surveysError ? (
                                 <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
@@ -579,13 +759,49 @@ const EngagementPage = () => {
                                     ))}
                                 </div>
                             )}
+                                    </>
+                                )}
                             </>
                         )}
 
-                        {activeTab === 'pulse' && <PulsePrograms />}
-
-                        {activeTab === 'feedback' && (
+                        {activeSection === 'feedback' && (
                             <>
+                                <SubTabBar
+                                    tabs={feedbackSubTabs}
+                                    active={activeSub || 'feedback'}
+                                    onChange={(id) => setActiveSub(id)}
+                                />
+                                {activeSub === 'suggestions' ? (
+                                    <>
+                            {isManagerUser && (
+                                <div className="mb-4 flex justify-end">
+                                    <button
+                                        type="button"
+                                        disabled={exporting === 'suggestions'}
+                                        onClick={() => handleExport('suggestions')}
+                                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-60"
+                                    >
+                                        <FaDownload className="h-3 w-3" />
+                                        {exporting === 'suggestions' ? 'Exporting...' : 'Export CSV'}
+                                    </button>
+                                </div>
+                            )}
+                            {feedbackError ? (
+                                <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
+                                    <p className="text-sm text-red-800">{feedbackError}</p>
+                                    <button type="button" onClick={fetchAll} className="mt-3 rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-700">Retry</button>
+                                </div>
+                            ) : (
+                            <SuggestionsPanel
+                                suggestions={suggestions}
+                                filteredSuggestions={filteredSuggestions}
+                                isManagerUser={isManagerUser}
+                                onRefresh={fetchAll}
+                            />
+                            )}
+                                    </>
+                                ) : (
+                                    <>
                             {isManagerUser && (
                                 <div className="mb-4 flex justify-end">
                                     <button
@@ -614,41 +830,12 @@ const EngagementPage = () => {
                                 onRefresh={fetchAll}
                             />
                             )}
+                                    </>
+                                )}
                             </>
                         )}
 
-                        {activeTab === 'suggestions' && (
-                            <>
-                            {isManagerUser && (
-                                <div className="mb-4 flex justify-end">
-                                    <button
-                                        type="button"
-                                        disabled={exporting === 'suggestions'}
-                                        onClick={() => handleExport('suggestions')}
-                                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                                    >
-                                        <FaDownload className="h-3 w-3" />
-                                        {exporting === 'suggestions' ? 'Exporting...' : 'Export CSV'}
-                                    </button>
-                                </div>
-                            )}
-                            {feedbackError ? (
-                                <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
-                                    <p className="text-sm text-red-800">{feedbackError}</p>
-                                    <button type="button" onClick={fetchAll} className="mt-3 rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-700">Retry</button>
-                                </div>
-                            ) : (
-                            <SuggestionsPanel
-                                suggestions={suggestions}
-                                filteredSuggestions={filteredSuggestions}
-                                isManagerUser={isManagerUser}
-                                onRefresh={fetchAll}
-                            />
-                            )}
-                            </>
-                        )}
-
-                        {activeTab === 'recognition' && (
+                        {activeSection === 'recognition' && (
                             <>
                             {isManagerUser && (
                                 <div className="mb-4 flex justify-end">
@@ -677,50 +864,21 @@ const EngagementPage = () => {
                             </>
                         )}
 
-                        {activeTab === 'analytics' && canViewAnalytics && (
-                            <>
-                            {isManagerUser && (
-                                <div className="mb-4 flex justify-end">
-                                    <button
-                                        type="button"
-                                        disabled={exporting === 'summary'}
-                                        onClick={() => handleExport('summary')}
-                                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                                    >
-                                        <FaDownload className="h-3 w-3" />
-                                        {exporting === 'summary' ? 'Exporting...' : 'Export Summary CSV'}
-                                    </button>
-                                </div>
-                            )}
-                            {analyticsError ? (
-                                <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
-                                    <p className="text-sm text-red-800">{analyticsError}</p>
-                                    <button type="button" onClick={fetchAll} className="mt-3 rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-700">Retry</button>
-                                </div>
-                            ) : (
-                            <EngagementDashboard onNavigateTab={setActiveTab} />
-                            )}
-                            </>
-                        )}
-
-                        {activeTab === 'team' && canViewTeamAnalytics && (
-                            <TeamEngagementPanel onNavigateTab={setActiveTab} />
-                        )}
-
-                        {activeTab === 'insights' && isManagerUser && (
-                            <ClosedLoopInsightsPanel onNavigateTab={setActiveTab} />
-                        )}
-
-                        {activeTab === 'actions' && isManagerUser && (
+                        {activeSection === 'actions' && isManagerUser && (
                             <ActionPlansPanel canCreate={isManagerUser} />
                         )}
 
-                        {activeTab === 'lifecycle' && isManagerUser && (
-                            <LifecycleEngagementPanel />
+                        {activeSection === 'settings' && isManagerUser && (
+                            <EngagementSettingsPanel />
                         )}
 
-                        {activeTab === 'settings' && isManagerUser && (
-                            <EngagementSettingsPanel />
+                        {/* Deep-link only — removed from main nav */}
+                        {activeSection === 'team' && canViewTeamAnalytics && (
+                            <TeamEngagementPanel onNavigateTab={onNavigateTab} />
+                        )}
+
+                        {activeSection === 'lifecycle' && isManagerUser && (
+                            <LifecycleEngagementPanel />
                         )}
                     </div>
                 </section>

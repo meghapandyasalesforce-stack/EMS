@@ -2,7 +2,11 @@ import PushSubscription from '../../models/pushSubscription.model.js';
 import User from '../../models/user.model.js';
 import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
-import { sendPushNotification, createPushPayload } from '../../helpers/pushNotificationService.js';
+import {
+  sendPushNotification,
+  createPushPayload,
+  resolvePushIdentityIds,
+} from '../../helpers/pushNotificationService.js';
 
 /**
  * Get VAPID public key for client subscription
@@ -10,11 +14,12 @@ import { sendPushNotification, createPushPayload } from '../../helpers/pushNotif
 export const getVapidPublicKey = (req, res) => {
   try {
     const publicKey = process.env.VAPID_PUBLIC_KEY;
+    const privateKey = process.env.VAPID_PRIVATE_KEY;
     
-    if (!publicKey) {
+    if (!publicKey || !privateKey) {
       return res.status(503).json({ 
         success: false, 
-        message: 'Push notifications not configured' 
+        message: 'Push notifications not configured. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY on the server.' 
       });
     }
 
@@ -36,8 +41,8 @@ export const getVapidPublicKey = (req, res) => {
  */
 export const subscribe = async (req, res) => {
   try {
-    const userId = req.user?._id || req.employee?._id;
-    const userType = req.user ? 'User' : 'Employee';
+    let userId = req.user?._id || req.employee?._id;
+    let userType = req.user ? 'User' : 'Employee';
     const { subscription } = req.body;
     let organizationId = req.user?.organizationId || req.employee?.organizationId;
 
@@ -46,6 +51,19 @@ export const subscribe = async (req, res) => {
         success: false, 
         message: 'User not authenticated' 
       });
+    }
+
+    // Prefer linked User._id when an employee has a user account so sends (which often
+    // normalize to User ids) find this device. Delivery also expands identities as a backup.
+    if (userType === 'Employee') {
+      const employee = await Employee.findById(userId).select('userId organizationId').lean();
+      if (employee?.userId) {
+        userId = employee.userId;
+        userType = 'User';
+      }
+      if (!organizationId && employee?.organizationId) {
+        organizationId = employee.organizationId;
+      }
     }
 
     // PushSubscription collection requires organizationId (multi-tenancy)
@@ -127,7 +145,6 @@ export const subscribe = async (req, res) => {
 export const unsubscribe = async (req, res) => {
   try {
     const userId = req.user?._id || req.employee?._id;
-    const userType = req.user ? 'User' : 'Employee';
     const { endpoint } = req.body;
 
     if (!userId) {
@@ -137,13 +154,13 @@ export const unsubscribe = async (req, res) => {
       });
     }
 
+    const identityIds = await resolvePushIdentityIds(userId);
     const result = await PushSubscription.deleteMany({
-      userId,
-      userType,
+      userId: { $in: identityIds.length ? identityIds : [userId] },
       ...(endpoint ? { endpoint } : {})
     });
 
-    logger.info(`Push subscription removed for user ${userId} (${userType}): ${result.deletedCount} subscriptions`);
+    logger.info(`Push subscription removed for user ${userId}: ${result.deletedCount} subscriptions`);
     res.json({ 
       success: true, 
       message: 'Unsubscribed successfully',
@@ -164,7 +181,6 @@ export const unsubscribe = async (req, res) => {
 export const getSubscriptionStatus = async (req, res) => {
   try {
     const userId = req.user?._id || req.employee?._id;
-    const userType = req.user ? 'User' : 'Employee';
 
     if (!userId) {
       return res.status(401).json({ 
@@ -173,10 +189,10 @@ export const getSubscriptionStatus = async (req, res) => {
       });
     }
 
+    const identityIds = await resolvePushIdentityIds(userId);
     const subscriptions = await PushSubscription.find({
-      userId,
-      userType
-    }).select('endpoint createdAt');
+      userId: { $in: identityIds.length ? identityIds : [userId] },
+    }).select('endpoint createdAt userType');
 
     res.json({
       success: true,

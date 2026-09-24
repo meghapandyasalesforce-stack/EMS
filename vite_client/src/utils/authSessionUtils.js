@@ -74,6 +74,10 @@ export function resolveSessionAuthUser(payload, existingUser, permissionFlags = 
       ...payloadEmployee,
       _id: adminBase?._id ?? payloadEmployee._id ?? payloadEmployee.id,
       role: 'admin',
+      employeeProfileId:
+        adminBase?.employeeProfileId ??
+        payloadEmployee._id ??
+        payloadEmployee.id,
       organizationId:
         adminBase?.organizationId ??
         payloadEmployee.organizationId ??

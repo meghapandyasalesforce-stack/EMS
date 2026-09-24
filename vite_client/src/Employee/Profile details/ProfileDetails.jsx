@@ -12,6 +12,7 @@ import FinancialDetails from './FinancialDetails';
 import { fetchEmployeeOwnInfo, updateEmployeeInfo, setEmployeeProfile } from '../../context/employeeDetailsSlice';
 import { setUser } from '../../context/Auth/authSlice';
 import { mergeSessionProfile } from '../../utils/profileUtils';
+import { invalidateProfilePhotoCache } from '../../utils/axios';
 import { toast } from 'react-toastify';
 import { FiUser, FiEdit2, FiCalendar, FiX } from 'react-icons/fi';
 import ChangePasswordForm from '../../components/ChangePasswordForm';
@@ -283,7 +284,9 @@ function ProfileDetails() {
                   <div className="mb-2 flex justify-center">
                       <ProfilePicture
                         key={
-                          profileSource?.profilePhoto?.url
+                          profileSource?.profilePhoto?.s3Key
+                          || profileSource?.profilePhoto?.uploadedAt
+                          || profileSource?.profilePhoto?.url
                           || profileSource?.profilePhoto?.filename
                           || profileSource?.id
                           || user?.id
@@ -489,6 +492,15 @@ function ProfileDetails() {
                 profilePhoto={profileSource?.profilePhoto || profileSource?.profilePicture}
                 onPhotoUpdate={(photoData) => {
                   const profilePhoto = photoData?.profilePhoto || photoData;
+                  const ownerId =
+                    employeeDetails?._id ||
+                    employeeDetails?.id ||
+                    profileSource?._id ||
+                    profileSource?.id ||
+                    user?.employeeProfileId ||
+                    user?._id ||
+                    user?.id;
+                  invalidateProfilePhotoCache('employee', ownerId);
                   dispatch(setEmployeeProfile({ ...employeeDetails, profilePhoto }));
                   if (user) {
                     dispatch(setUser({ ...user, profilePhoto }));

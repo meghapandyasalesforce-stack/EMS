@@ -1,7 +1,6 @@
 /**
  * Subscription plan helpers — reads DB-backed cache when available, else code defaults.
  */
-
 import {
     SUBSCRIPTION_PLANS as DEFAULT_PLANS,
     PLAN_MODULE_FEATURES as DEFAULT_MODULE_FEATURES,
