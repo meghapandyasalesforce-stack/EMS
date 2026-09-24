@@ -45,6 +45,8 @@ import {
   renderOrgChartToCanvas,
 } from './orgChart/chartUtils';
 import { ORG_POSITION_LEVELS } from '../../constants/orgPositionLevels';
+import { useAuthPermissions } from '../../Hooks/useAuthPermissions';
+import { PERMISSIONS } from '../../utils/permissions';
 
 const POSITION_LEVELS = ORG_POSITION_LEVELS;
 
@@ -56,6 +58,14 @@ function downloadPngFromCanvas(canvas, filename) {
 }
 
 function OrganizationChartPage() {
+  const { isOrgOwner, isHrManager, isHrExecutive, hasPermission } = useAuthPermissions();
+  // Structure settings: HR / admin only — hide for normal line/project managers
+  const canOpenOrgStructure =
+    isOrgOwner ||
+    isHrManager ||
+    isHrExecutive ||
+    hasPermission(PERMISSIONS.ORG_SETTINGS_MANAGE);
+
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [positionLevels, setPositionLevels] = useState([]);
@@ -630,13 +640,15 @@ function OrganizationChartPage() {
               >
                 Dashboard
               </Link>
-              <Link
-                to="/organization/structure"
-                className="org-action-btn"
-                title="Org structure settings"
-              >
-                Structure
-              </Link>
+              {canOpenOrgStructure ? (
+                <Link
+                  to="/organization/structure"
+                  className="org-action-btn"
+                  title="Org structure settings"
+                >
+                  Structure
+                </Link>
+              ) : null}
             </div>
           </header>
 
