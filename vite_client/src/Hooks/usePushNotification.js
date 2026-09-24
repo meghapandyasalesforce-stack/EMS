@@ -8,6 +8,7 @@ import {
   syncPushSubscriptionIfGranted,
   getServiceWorkerRegistration,
   getMobilePushGuidance,
+  notePushSubscriptionRefreshed,
 } from '../utils/push';
 
 /**
@@ -92,6 +93,7 @@ export const usePushNotification = () => {
         await saveSubscriptionToServer(sub);
         setSubscription(sub);
         setIsSubscribed(true);
+        notePushSubscriptionRefreshed();
       } catch (serverError) {
         logger.error('Failed to save subscription to server', serverError);
         setError('Failed to save subscription to server. Please try again.');

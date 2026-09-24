@@ -226,66 +226,110 @@ export async function subscribeUser() {
     forceNew: true,
   });
   await saveSubscriptionToServer(subscription);
+  markPushSubscriptionRefreshed();
 
   return subscription;
 }
 
+const PUSH_REFRESH_STORAGE_KEY = 'ems_push_subscription_refreshed_at';
+/** Refresh before a typical next workday so overnight zombie FCM endpoints heal on login. */
+const PUSH_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000;
+
+function shouldForceDailyPushRefresh() {
+  try {
+    const last = Number(localStorage.getItem(PUSH_REFRESH_STORAGE_KEY) || '0');
+    if (!Number.isFinite(last) || last <= 0) return true;
+    return Date.now() - last >= PUSH_REFRESH_INTERVAL_MS;
+  } catch {
+    return false;
+  }
+}
+
+function markPushSubscriptionRefreshed() {
+  try {
+    localStorage.setItem(PUSH_REFRESH_STORAGE_KEY, String(Date.now()));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+/** Call after an explicit Enable that created a fresh endpoint. */
+export function notePushSubscriptionRefreshed() {
+  markPushSubscriptionRefreshed();
+}
+
+let syncPushInFlight = null;
+
 /**
  * If permission is already granted, re-sync this device's subscription with the server.
  * Safe to call on every login / page load.
- * Does not recreate a working endpoint (avoids interrupting delivery).
- * If the browser still has a local subscription but the server does not (e.g. cleaned
- * after 410 Gone), recreate once so the UI cannot show "enabled" with no delivery.
+ * - Recreates when the local endpoint is missing on the server (post-410 cleanup)
+ * - Recreates about once per ~20h so overnight-stale FCM endpoints heal without Disable/Enable
+ * Working endpoints within the refresh window are left alone.
  */
 export async function syncPushSubscriptionIfGranted() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    return null;
-  }
-  if (!('Notification' in window) || Notification.permission !== 'granted') {
-    return null;
+  if (syncPushInFlight) {
+    return syncPushInFlight;
   }
 
-  try {
-    const registration = await getServiceWorkerRegistration(2500);
-    if (!registration || !registration.pushManager) {
+  syncPushInFlight = (async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      return null;
+    }
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
       return null;
     }
 
-    const { data: keyData } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
-    if (!keyData?.success || !keyData?.publicKey) {
-      return null;
-    }
-
-    const existing = await registration.pushManager.getSubscription();
-    if (!existing) {
-      return null;
-    }
-
-    let endpointOnServer = false;
     try {
-      const { data: status } = await axios.get(
-        `${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscription-status`
-      );
-      const endpoints = (status?.subscriptions || []).map((s) => s.endpoint).filter(Boolean);
-      endpointOnServer = endpoints.includes(existing.endpoint);
+      const registration = await getServiceWorkerRegistration(2500);
+      if (!registration || !registration.pushManager) {
+        return null;
+      }
+
+      const { data: keyData } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
+      if (!keyData?.success || !keyData?.publicKey) {
+        return null;
+      }
+
+      const existing = await registration.pushManager.getSubscription();
+      if (!existing) {
+        return null;
+      }
+
+      let endpointOnServer = false;
+      try {
+        const { data: status } = await axios.get(
+          `${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscription-status`
+        );
+        const endpoints = (status?.subscriptions || []).map((s) => s.endpoint).filter(Boolean);
+        endpointOnServer = endpoints.includes(existing.endpoint);
+      } catch {
+        // If status check fails, keep existing behavior: re-save local sub (do not drop push).
+        endpointOnServer = true;
+      }
+
+      const forceNew = !endpointOnServer || shouldForceDailyPushRefresh();
+      const subscription = await ensurePushSubscription(registration, keyData.publicKey, {
+        forceNew,
+      });
+
+      if (!subscription) {
+        return null;
+      }
+      // Must succeed on the server — otherwise UI would show "enabled" while pushes cannot be delivered
+      await saveSubscriptionToServer(subscription);
+      if (forceNew) {
+        markPushSubscriptionRefreshed();
+      }
+      return subscription;
     } catch {
-      // If status check fails, keep existing behavior: re-save local sub (do not drop push).
-      endpointOnServer = true;
-    }
-
-    const subscription = endpointOnServer
-      ? await ensurePushSubscription(registration, keyData.publicKey)
-      : await ensurePushSubscription(registration, keyData.publicKey, { forceNew: true });
-
-    if (!subscription) {
       return null;
     }
-    // Must succeed on the server — otherwise UI would show "enabled" while pushes cannot be delivered
-    await saveSubscriptionToServer(subscription);
-    return subscription;
-  } catch {
-    return null;
-  }
+  })().finally(() => {
+    syncPushInFlight = null;
+  });
+
+  return syncPushInFlight;
 }
 
 export async function isPushNotificationSupported() {
