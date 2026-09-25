@@ -2,6 +2,7 @@ import LeaveBalance from '../models/leaveBalance.model.js';
 import LeavePolicy from '../models/leavePolicy.model.js';
 import Leave from '../models/leave.model.js';
 import Employee from '../models/employee.model.js';
+import Calendar from '../models/calendar.model.js';
 import logger from '../helpers/logger.js';
 import { getLeaveTypeVariantsForBalance } from '../helpers/leaveTypeHelper.js';
 import {
@@ -44,6 +45,7 @@ import {
     isProbationNoCarryForwardConfig,
 } from '../helpers/leaveProbationHelper.js';
 import { OnboardingWorkflow } from '../models/onboarding.model.js';
+import { allocateLeaveDurationAcrossMonths } from '../helpers/leaveMonthUsageHelper.js';
 
 class LeaveBalanceEngine {
     /**
@@ -1260,16 +1262,45 @@ class LeaveBalanceEngine {
             employee: employeeId,
             leaveType: { $in: types },
             status: 'approved',
-            startDate: { $gte: fromDate, $lte: toDate },
+            startDate: { $lte: toDate },
+            endDate: { $gte: fromDate },
         })
-            .select('startDate duration')
+            .select('startDate endDate duration isHalfDay')
             .lean();
 
         const map = new Map();
+        if (!leaves.length) return map;
+
+        const employee = await Employee.findById(employeeId).lean();
+        const policies = employee
+            ? await this.loadOrganizationLeavePolicies(organizationId)
+            : [];
+        const years = new Set();
         for (const leave of leaves) {
-            const d = new Date(leave.startDate);
-            const key = `${d.getFullYear()}-${d.getMonth()}`;
-            map.set(key, roundLeaveDays((map.get(key) || 0) + (leave.duration || 0)));
+            years.add(new Date(leave.startDate).getFullYear());
+            years.add(new Date(leave.endDate).getFullYear());
+        }
+        const calendars = await Calendar.find({
+            organizationId,
+            year: { $in: [...years] },
+        }).lean();
+        const calendarsByYear = new Map(calendars.map((calendar) => [calendar.year, calendar]));
+
+        for (const leave of leaves) {
+            const leaveStart = new Date(leave.startDate);
+            const policy = employee
+                ? selectApplicableLeavePolicy(policies, employee, leaveStart, {
+                      requireUsable: true,
+                      hasUsableLeaveTypes: (candidate) => this.hasUsableLeaveTypes(candidate),
+                  })
+                : null;
+            const slices = allocateLeaveDurationAcrossMonths(leave, {
+                dateHandlingRules: policy?.dateHandlingRules,
+                calendarsByYear,
+            });
+            for (const [key, value] of slices.entries()) {
+                map.set(key, roundLeaveDays((map.get(key) || 0) + value));
+            }
         }
         return map;
     }
@@ -1674,19 +1705,18 @@ class LeaveBalanceEngine {
         return leaves.reduce((total, leave) => total + (leave.duration || 0), 0);
     }
 
-    /** Used leave days in a specific calendar month */
+    /** Used leave days in a specific calendar month, including the slice of a cross-month leave. */
     async calculateUsedInMonth(employeeId, leaveType, year, monthIndex, organizationId) {
-        const types = getLeaveTypeVariantsForBalance(leaveType);
         const monthStart = new Date(year, monthIndex, 1);
-        const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59);
-        const leaves = await Leave.find({
+        const monthEnd = this.endOfMonthDate(year, monthIndex);
+        const usedByMonth = await this.buildApprovedLeaveUsedByMonthMap(
+            employeeId,
+            leaveType,
             organizationId,
-            employee: employeeId,
-            leaveType: { $in: types },
-            status: 'approved',
-            startDate: { $gte: monthStart, $lte: monthEnd },
-        });
-        return leaves.reduce((total, leave) => total + (leave.duration || 0), 0);
+            monthStart,
+            monthEnd
+        );
+        return usedByMonth.get(`${year}-${monthIndex}`) || 0;
     }
 
     endOfMonthDate(year, monthIndex) {
