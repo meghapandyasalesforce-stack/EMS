@@ -73,6 +73,13 @@ function getLeaveApplicationWindowError(startDateStr, todayStr = getTodayDateInp
   return '';
 }
 
+function leaveErrorText(error) {
+  if (!error) return '';
+  if (typeof error === 'string') return error;
+  if (typeof error?.message === 'string') return error.message;
+  return 'Leave could not be submitted.';
+}
+
 /** Days of an existing leave that fall in a given calendar month. */
 function getLeaveDaysInMonth(leave, year, monthIndex) {
   const monthStart = new Date(year, monthIndex, 1);
@@ -298,6 +305,8 @@ const LeaveApplication = () => {
     const formErrors = validateForm();
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
+      const message = Object.values(formErrors).filter(Boolean).join(' ');
+      if (message) toast.error(message);
       return;
     }
 
@@ -341,7 +350,7 @@ const LeaveApplication = () => {
         .catch(() => {});
     }
     if (error) {
-      toast.error(`Submission failed: ${error}`);
+      toast.error(leaveErrorText(error));
       dispatch(resetStatus());
     }
   }, [success, error, dispatch, user, submitToast]);
@@ -417,7 +426,16 @@ const LeaveApplication = () => {
                   type="date"
                   name={field}
                   value={leaveForm[field]}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    e.target.setCustomValidity('');
+                    handleChange(e);
+                  }}
+                  onInvalid={(e) => {
+                    if (field !== 'startDate') return;
+                    const message = `Leave can only be applied from ${minStartStr} to ${maxStartStr}.`;
+                    e.target.setCustomValidity(message);
+                    toast.error(message);
+                  }}
                   disabled={
                     submitting || (field === 'endDate' && leaveForm.isHalfDay)
                   }
