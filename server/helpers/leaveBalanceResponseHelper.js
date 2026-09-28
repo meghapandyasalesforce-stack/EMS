@@ -16,6 +16,7 @@ import {
     getTypeMonthlyAccrualForViewMonth,
     roundDaysForDisplay,
     normalizePolicyLeaveTypes,
+    getJoinAccrualCutoffDay,
 } from './leavePolicyAccrualHelper.js';
 import {
     getEmployeeLeaveYearBounds,
@@ -281,6 +282,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
 
     const enabledPolicyTypes = getEnabledPolicyTypes(balanceObj.policy);
     const employeeForAccrual = employee || { joiningDate: bounds.joiningDate, _id: employeeId };
+    const joinAccrualCutoffDay = getJoinAccrualCutoffDay(balanceObj.policy?.leaveCycle);
     const policyWindowStartDate = leaveBalanceEngine.resolvePolicyWindowStartDate(
         balanceObj.policy,
         employeeForAccrual,
@@ -398,7 +400,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 employee || { joiningDate: bounds.joiningDate },
                 viewYear,
                 asOfDate,
-                persistedOpening
+                persistedOpening,
+                joinAccrualCutoffDay
             );
             b.monthsCompleted = accrualRange.monthsCompleted;
             b.monthsWithCredit = accrualRange.monthsCompleted;
@@ -429,7 +432,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                     displayConfig,
                     employeeForAccrual,
                     viewYear,
-                    viewMonth
+                    viewMonth,
+                    joinAccrualCutoffDay
                 );
                 b.currentMonthAccrual = b.earnedThisMonth;
                 b.lifetimeEarned = b.earnedToDate;
@@ -460,7 +464,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                     viewYear,
                     null,
                     resolveTypeForMonth,
-                    rollingInitialBalance
+                    rollingInitialBalance,
+                    joinAccrualCutoffDay
                 );
                 const rollingFull = await leaveBalanceEngine.computeRollingMonthlyBalance(
                     baseTypeConfig,
@@ -471,7 +476,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                     viewYear,
                     null,
                     resolveTypeForMonth,
-                    rollingInitialBalance
+                    rollingInitialBalance,
+                    joinAccrualCutoffDay
                 );
 
                 b.monthlyLedger = rollingAtView.ledger || [];
@@ -482,7 +488,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                     displayConfig,
                     employeeForAccrual,
                     viewYear,
-                    viewMonth
+                    viewMonth,
+                    joinAccrualCutoffDay
                 );
                 b.currentMonthAccrual = b.earnedThisMonth;
                 b.earnedToDate = roundLeaveDays(Number(b.accrued) || rollingAtView.totalEarned || 0);

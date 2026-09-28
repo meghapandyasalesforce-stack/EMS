@@ -1,6 +1,17 @@
-import { roundLeaveDays, getEffectiveJoiningDate, calendarMonthSortKey } from './leaveBalanceRulesHelper.js';
+import {
+    roundLeaveDays,
+    getEffectiveJoiningDate,
+    calendarMonthSortKey,
+    getJoinAccrualCutoffDay,
+    getFirstAccrualCalendarMonth,
+    isEligibleForMonthlyAccrualCredit,
+} from './leaveBalanceRulesHelper.js';
 import { getEmployeeAppliableDaysThisMonth } from './leaveEmployeeTakeLimitHelper.js';
 import { normalizeProbationRestrictions } from './leaveProbationHelper.js';
+import {
+    DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY,
+    DEFAULT_LEAVE_CYCLE,
+} from '../constants/leaveConstants.js';
 
 /**
  * Policy-driven leave accrual helpers — Leave Policy is the single source of truth.
@@ -9,9 +20,33 @@ import { normalizeProbationRestrictions } from './leaveProbationHelper.js';
  * - Annual Entitlement (Amount)     → accrual.maxAccrual
  * - Monthly Entitlement (days/mo)   → accrual.amount
  * - Max days taken per calendar mo  → maxDaysPerMonth (synced from monthly entitlement on save)
+ * - Join-month cutoff day           → leaveCycle.joinAccrualCutoffDay
  */
 
 export const MONTHS_PER_LEAVE_CYCLE = 12;
+
+export {
+    DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY,
+    getJoinAccrualCutoffDay,
+    getFirstAccrualCalendarMonth,
+    isEligibleForMonthlyAccrualCredit,
+};
+
+export function normalizeLeaveCycle(leaveCycle = {}) {
+    const startMonth = Number(leaveCycle?.startMonth);
+    const endMonth = Number(leaveCycle?.endMonth);
+    return {
+        startMonth:
+            Number.isInteger(startMonth) && startMonth >= 1 && startMonth <= 12
+                ? startMonth
+                : DEFAULT_LEAVE_CYCLE.startMonth,
+        endMonth:
+            Number.isInteger(endMonth) && endMonth >= 1 && endMonth <= 12
+                ? endMonth
+                : DEFAULT_LEAVE_CYCLE.endMonth,
+        joinAccrualCutoffDay: getJoinAccrualCutoffDay(leaveCycle),
+    };
+}
 
 const FREQUENCY_PERIODS = {
     daily: 365,
@@ -222,22 +257,35 @@ export function getEnabledAccruableLeaveTypes(policy) {
     );
 }
 
-export function isEmployedInViewMonth(employee, viewYear, viewMonth) {
+export function isEmployedInViewMonth(
+    employee,
+    viewYear,
+    viewMonth,
+    joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
+) {
     const joiningDate = getEffectiveJoiningDate(employee);
-    const joinKey = calendarMonthSortKey(joiningDate.getFullYear(), joiningDate.getMonth() + 1);
+    const start = getFirstAccrualCalendarMonth(joiningDate, joinAccrualCutoffDay);
+    const startKey = calendarMonthSortKey(start.year, start.monthIndex + 1);
     const viewKey = calendarMonthSortKey(viewYear, viewMonth);
-    return viewKey >= joinKey;
+    return viewKey >= startKey;
 }
 
 export function sumPolicyMonthlyAccrualForViewMonth(policy, employee, viewYear, viewMonth) {
-    if (!isEmployedInViewMonth(employee, viewYear, viewMonth)) {
+    const cutoff = getJoinAccrualCutoffDay(policy?.leaveCycle);
+    if (!isEmployedInViewMonth(employee, viewYear, viewMonth, cutoff)) {
         return 0;
     }
     return sumPolicyMonthlyAccrual(policy);
 }
 
-export function getTypeMonthlyAccrualForViewMonth(leaveTypeConfig, employee, viewYear, viewMonth) {
-    if (!isEmployedInViewMonth(employee, viewYear, viewMonth)) {
+export function getTypeMonthlyAccrualForViewMonth(
+    leaveTypeConfig,
+    employee,
+    viewYear,
+    viewMonth,
+    joinAccrualCutoffDay = DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY
+) {
+    if (!isEmployedInViewMonth(employee, viewYear, viewMonth, joinAccrualCutoffDay)) {
         return 0;
     }
     return usesMonthlyAccrual(leaveTypeConfig) ? getPolicyMonthlyAccrualAmount(leaveTypeConfig) : 0;
@@ -311,9 +359,17 @@ export function validateLeaveTypeAccrual(leaveTypeConfig, leaveCycle = {}) {
 }
 
 export function validateLeavePolicyAccrual(policyData = {}) {
-    const leaveCycle = policyData.leaveCycle || { startMonth: 1, endMonth: 12 };
+    const leaveCycle = normalizeLeaveCycle(policyData.leaveCycle || {});
     const leaveTypes = normalizePolicyLeaveTypes(policyData.leaveTypes || []);
     const errors = [];
+
+    const rawCutoff = policyData.leaveCycle?.joinAccrualCutoffDay;
+    if (rawCutoff != null && rawCutoff !== '') {
+        const day = Number(rawCutoff);
+        if (!Number.isInteger(day) || day < 1 || day > 31) {
+            errors.push('Join-month accrual cutoff day must be an integer between 1 and 31.');
+        }
+    }
 
     for (const lt of leaveTypes) {
         errors.push(...validateLeaveTypeAccrual(lt, leaveCycle));

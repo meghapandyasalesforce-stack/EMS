@@ -34,4 +34,11 @@ export const LEAVE_REASON_OPTIONS = [
 
 export const DEFAULT_MONTHLY_ALLOCATION = 1.5;
 export const DEFAULT_ANNUAL_ENTITLEMENT = 18;
-export const DEFAULT_LEAVE_CYCLE = { startMonth: 1, endMonth: 12 };
+/** Default 31 = credit join month for any join day (legacy behavior). */
+export const DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY = 31;
+
+export const DEFAULT_LEAVE_CYCLE = {
+    startMonth: 1,
+    endMonth: 12,
+    joinAccrualCutoffDay: DEFAULT_JOIN_ACCRUAL_CUTOFF_DAY,
+};
