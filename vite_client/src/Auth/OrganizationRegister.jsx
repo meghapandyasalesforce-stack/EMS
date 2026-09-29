@@ -305,6 +305,17 @@ const OrganizationRegister = () => {
                     formData.password
                 );
 
+                if (response.data.csrfToken) {
+                    localStorage.setItem('csrfToken', response.data.csrfToken);
+                }
+
+                const pendingPlan = response.data.pendingPlan;
+                if (response.data.checkoutRequired && pendingPlan) {
+                    toast.success('Account created on Free. Complete payment to activate your plan.');
+                    navigate(`/organization/subscription?startCheckout=${encodeURIComponent(pendingPlan)}`);
+                    return;
+                }
+
                 toast.success('Organization registered successfully!');
                 
                 // Redirect to onboarding or dashboard
@@ -786,7 +797,7 @@ const OrganizationRegister = () => {
         <div className="space-y-4">
             <h3 className="text-xl font-semibold text-gray-900 mb-4">Choose Your Plan</h3>
             <p className="text-sm text-gray-600 mb-6">
-                Select a subscription plan that fits your organization. You can upgrade or downgrade at any time.
+                Free is available immediately. Paid plans are activated only after Razorpay payment, right after you finish signup.
             </p>
 
             {loadingPlans ? (

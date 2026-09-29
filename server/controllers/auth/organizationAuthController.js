@@ -10,6 +10,8 @@ import asyncHandler from '../../helpers/asyncHandler.js';
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from '../../helpers/authHelpers.js';
 import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
 import { PLATFORM_ROLES } from '../../config/identity.constants.js';
+import { isPaidPlan } from '../../services/razorpayBillingService.js';
+import { getPlanMaxEmployees } from '../../helpers/subscriptionPlans.js';
 
 /**
  * @swagger
@@ -145,14 +147,21 @@ export const registerOrganization = asyncHandler(async (req, res) => {
         // Generate email verification token
         const { token: verificationToken, expires: verificationExpires } = generateVerificationTokenWithExpiry(24);
 
-        // Create organization
+        const requestedPlan = String(subscriptionPlan || 'free').toLowerCase();
+        const checkoutRequired = isPaidPlan(requestedPlan);
+        const activePlan = 'free';
+
+        // Create organization — paid plans stay pending until Razorpay checkout succeeds
         const organization = new Organization({
             name: name.trim(),
             email: normalizedEmail,
             phone: phone?.trim(),
             address: address || {},
             domain: domain?.toLowerCase().trim(),
-            subscriptionPlan,
+            subscriptionPlan: activePlan,
+            maxEmployees: getPlanMaxEmployees(activePlan),
+            pendingPlan: checkoutRequired ? requestedPlan : undefined,
+            subscriptionStatus: 'active',
             industry,
             companySize,
             emailVerified: false,
@@ -319,6 +328,8 @@ export const registerOrganization = asyncHandler(async (req, res) => {
                 id: organization._id,
                 name: organization.name,
                 email: organization.email,
+                subscriptionPlan: organization.subscriptionPlan,
+                pendingPlan: organization.pendingPlan || null,
                 lifecycleEnterpriseEnabled: Boolean(organization.lifecycleEnterpriseEnabled),
             },
             user: {
@@ -339,7 +350,11 @@ export const registerOrganization = asyncHandler(async (req, res) => {
             token: tokens.token || tokens.accessToken,
             refreshToken: tokens.refreshToken,
             csrfToken: tokens.csrfToken,
-            message: 'Organization registered successfully. Please check your email to verify your account.'
+            checkoutRequired,
+            pendingPlan: checkoutRequired ? requestedPlan : null,
+            message: checkoutRequired
+                ? 'Organization created on the Free plan. Complete payment to activate the selected plan.'
+                : 'Organization registered successfully. Please check your email to verify your account.'
         }, 'Registration successful', 201);
 });
 

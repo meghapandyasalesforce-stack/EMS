@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { ORGANIZATION_SUBSCRIPTION_ENDPOINT } from '../../utils/constant';
+import { checkAuthSession } from '../../context/Auth/authSlice';
 import {
   FiCheck,
   FiArrowUp,
@@ -78,6 +80,8 @@ const statusTone = (status) => {
 };
 
 const SubscriptionManagement = () => {
+  const dispatch = useDispatch();
+  const checkoutStarted = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [plans, setPlans] = useState([]);
   const [subscription, setSubscription] = useState(null);
@@ -101,6 +105,33 @@ const SubscriptionManagement = () => {
     }
   }, []);
 
+  const refreshPlanAccess = useCallback(async () => {
+    await load();
+    try {
+      await dispatch(checkAuthSession()).unwrap();
+    } catch {
+      // Session refresh is best-effort; subscription page still updated.
+    }
+  }, [dispatch, load]);
+
+  const downloadInvoice = async (payment) => {
+    try {
+      const res = await axios.get(
+        `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/payments/${payment.id}/invoice`,
+        { withCredentials: true, responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${payment.invoiceNumber || 'invoice'}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error('Could not download invoice');
+    }
+  };
+
   useEffect(() => {
     load();
   }, [load]);
@@ -117,7 +148,7 @@ const SubscriptionManagement = () => {
     const run = async () => {
       if (checkout === 'paid') {
         toast.success('Subscription updated after payment');
-        await load();
+        await refreshPlanAccess();
         finishParams();
         return;
       }
@@ -136,7 +167,7 @@ const SubscriptionManagement = () => {
     if (checkout || searchParams.get('portal')) {
       run();
     }
-  }, [searchParams, setSearchParams, load]);
+  }, [searchParams, setSearchParams, refreshPlanAccess]);
 
   const openRazorpayCheckout = async (checkout) => {
     const ok = await loadRazorpayScript();
@@ -169,16 +200,14 @@ const SubscriptionManagement = () => {
           toast.success(
             res.data?.message || 'Payment successful — subscription updated'
           );
-          await load();
+          await refreshPlanAccess();
         } catch (error) {
           const code = error.response?.data?.code;
-          // Race with webhook may surface as duplicate; plan is usually already active
           if (code === 'DUPLICATE_VALUE' || code === 'ALREADY_APPLIED') {
             toast.success('Payment successful — subscription updated');
-            await load();
+            await refreshPlanAccess();
           } else {
-            // Still refresh — webhook may have activated the plan
-            await load();
+            await refreshPlanAccess();
             toast.error(
               error.response?.data?.message || 'Payment verification failed'
             );
@@ -221,7 +250,7 @@ const SubscriptionManagement = () => {
         setBusyPlan(id);
         await axios.post(`${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/switch-free`, {}, { withCredentials: true });
         toast.success('Switched to Free plan');
-        await load();
+        await refreshPlanAccess();
       } catch (error) {
         toast.error(error.response?.data?.message || 'Failed to switch plan');
       } finally {
@@ -264,6 +293,16 @@ const SubscriptionManagement = () => {
       setBusyPlan(null);
     }
   };
+
+  useEffect(() => {
+    const plan = searchParams.get('startCheckout');
+    if (!plan || loading || checkoutStarted.current) return;
+    checkoutStarted.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('startCheckout');
+    setSearchParams(next, { replace: true });
+    handleSelectPlan(plan);
+  }, [loading, searchParams, setSearchParams]);
 
   const openPortal = async () => {
     try {
@@ -321,6 +360,19 @@ const SubscriptionManagement = () => {
             <FiExternalLink /> Manage billing
           </button>
         </div>
+
+        {subscription?.pendingPlan && subscription.subscriptionPlan === 'free' && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            You selected the <strong className="capitalize">{subscription.pendingPlan}</strong> plan at signup.
+            It stays inactive until payment succeeds. Use Upgrade &amp; checkout below if the payment window was closed.
+          </div>
+        )}
+
+        {subscription?.subscriptionStatus === 'expired' && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+            This plan ended on {formatDate(subscription.subscriptionEndDate)}. Paid features are locked until you renew. Employee records are still saved.
+          </div>
+        )}
 
         {subscription && (
           <div className="rounded-xl border border-theme-secondary/30 bg-white p-6 shadow-sm">
@@ -480,8 +532,7 @@ const SubscriptionManagement = () => {
           <h2 className="text-lg font-semibold text-gray-900">How billing works</h2>
           <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-gray-600">
             <li>
-              Paid plans create a <strong>Razorpay Subscription</strong> (recurring monthly). Checkout
-              authorizes the mandate; renewals are charged automatically.
+              Paid access lasts until the period end date. A daily job emails you about 3 days before it ends, then locks paid features if you do not renew. A receipt is emailed after each successful payment.
             </li>
             <li>
               Webhooks (<code className="text-xs">subscription.charged</code>, etc.) are the source of
@@ -509,7 +560,8 @@ const SubscriptionManagement = () => {
                     <th className="py-2 pr-4">Plan</th>
                     <th className="py-2 pr-4">Amount</th>
                     <th className="py-2 pr-4">Status</th>
-                    <th className="py-2">Date</th>
+                    <th className="py-2 pr-4">Date</th>
+                    <th className="py-2">PDF</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -524,6 +576,19 @@ const SubscriptionManagement = () => {
                       </td>
                       <td className="py-2.5 pr-4 capitalize">{p.status}</td>
                       <td className="py-2.5">{formatDate(p.createdAt)}</td>
+                      <td className="py-2.5">
+                        {p.status === 'succeeded' ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-indigo-700 underline"
+                            onClick={() => downloadInvoice(p)}
+                          >
+                            Download
+                          </button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

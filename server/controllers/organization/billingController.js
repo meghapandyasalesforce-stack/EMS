@@ -7,6 +7,7 @@ import asyncHandler from '../../helpers/asyncHandler.js';
 import Organization from '../../models/organization.model.js';
 import Employee from '../../models/employee.model.js';
 import BillingPayment from '../../models/billingPayment.model.js';
+import { buildSubscriptionInvoicePdf } from '../../helpers/subscriptionInvoicePdf.js';
 import {
   sendSuccess,
   sendError,
@@ -59,6 +60,7 @@ const serializeBilling = (org, usage = null) => {
     billingMode: getBillingMode(),
     razorpayConfigured: isRazorpayConfigured(),
     recurring: Boolean(org.razorpaySubscriptionId),
+    pendingPlan: org.pendingPlan || null,
     usage: usage || null,
   };
 };
@@ -143,6 +145,27 @@ export const listBillingPayments = asyncHandler(async (req, res) => {
     .limit(limit)
     .lean();
   return sendSuccess(res, { payments: payments.map(serializePayment) });
+});
+
+/**
+ * GET /api/v1/organization/subscription/payments/:paymentId/invoice
+ */
+export const downloadBillingInvoice = asyncHandler(async (req, res) => {
+  const organizationId = getOrganizationId(req);
+  const payment = await BillingPayment.findOne({
+    _id: req.params.paymentId,
+    organizationId,
+    status: 'succeeded',
+  });
+  if (!payment) return sendNotFound(res, 'Invoice not found');
+
+  const org = await Organization.findById(organizationId);
+  if (!org) return sendNotFound(res, 'Organization not found');
+
+  const pdf = await buildSubscriptionInvoicePdf({ org, payment });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${pdf.filename}"`);
+  return res.send(pdf.buffer);
 });
 
 /**

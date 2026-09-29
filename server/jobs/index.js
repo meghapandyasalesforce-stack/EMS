@@ -21,6 +21,7 @@ import { scheduleOnboardingJobs } from './onboardingScheduledJob.js';
 import { scheduleEngagementSurveyJobs } from './engagementSurveyJob.js';
 import { scheduleCelebrationNotificationJobs } from './celebrationNotificationJob.js';
 import { scheduleOneOnOneReminderJobs } from './oneOnOneReminderJob.js';
+import { scheduleSubscriptionLifecycleJobs } from './subscriptionLifecycleJob.js';
 
 /**
  * Initialize all job workers
@@ -117,6 +118,13 @@ export const initializeWorkers = async () => {
                 logger.info('One-on-one reminder jobs registered (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule one-on-one reminder jobs', { error: error.message });
+            }
+
+            try {
+                scheduleSubscriptionLifecycleJobs();
+                logger.info('Subscription lifecycle jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule subscription lifecycle jobs', { error: error.message });
             }
 
             return;
@@ -239,6 +247,13 @@ export const initializeWorkers = async () => {
             logger.info('One-on-one reminder jobs scheduled');
         } catch (error) {
             logger.error('Failed to schedule one-on-one reminder jobs', { error: error.message });
+        }
+
+        try {
+            scheduleSubscriptionLifecycleJobs();
+            logger.info('Subscription lifecycle jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule subscription lifecycle jobs', { error: error.message });
         }
 
         if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker && approvalTimeoutWorker) {

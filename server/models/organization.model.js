@@ -58,6 +58,11 @@ const organizationSchema = new mongoose.Schema({
         enum: ['free', 'basic', 'premium', 'enterprise'],
         default: 'free'
     },
+    /** Paid plan chosen at signup; not active until checkout succeeds */
+    pendingPlan: {
+        type: String,
+        enum: ['basic', 'premium', 'enterprise'],
+    },
     maxEmployees: {
         type: Number,
         default: 10,
@@ -306,6 +311,14 @@ const organizationSchema = new mongoose.Schema({
     },
     subscriptionEndDate: {
         type: Date
+    },
+    /** Period end we already emailed a 3-day renewal reminder for */
+    billingRenewalReminderFor: {
+        type: Date,
+    },
+    /** Period end we already emailed an expiry notice for */
+    billingExpiredNoticeFor: {
+        type: Date,
     },
     // Organization verification
     verificationStatus: {

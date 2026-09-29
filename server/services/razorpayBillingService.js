@@ -18,6 +18,7 @@ import BillingPayment from '../models/billingPayment.model.js';
 import BillingWebhookEvent from '../models/billingWebhookEvent.model.js';
 import Organization from '../models/organization.model.js';
 import logger from '../helpers/logger.js';
+import { sendPaymentReceiptEmail, sendPaymentFailedEmail } from '../helpers/subscriptionEmail.js';
 
 const PAID_PLANS = new Set(['basic', 'premium', 'enterprise']);
 
@@ -129,6 +130,8 @@ export const applyPlanToOrganization = (org, planId, extras = {}) => {
     org.isTrialActive = false;
     if (!extras.subscriptionStatus) org.subscriptionStatus = 'active';
   }
+  // Chosen-at-signup plan is no longer pending once a plan is applied
+  org.pendingPlan = undefined;
   return { org, plan: getPlanDetails(id) };
 };
 
@@ -365,6 +368,20 @@ export const activatePaidSubscription = async ({
     source,
     alreadyApplied: !created,
   });
+
+  if (created && org.email) {
+    const major = payment?.amountMinor != null ? payment.amountMinor / 100 : undefined;
+    sendPaymentReceiptEmail(org, {
+      planId: id,
+      amount: major,
+      currency: payment?.currency,
+      periodStart: payment?.periodStart,
+      periodEnd: org.subscriptionEndDate || payment?.periodEnd,
+      invoiceNumber: payment?.invoiceNumber,
+      razorpayPaymentId: payment?.razorpayPaymentId || paymentId,
+      createdAt: payment?.createdAt,
+    }).catch(() => {});
+  }
 
   return { org, payment, alreadyApplied: !created };
 };
@@ -759,6 +776,7 @@ export const processRazorpayWebhookEvent = async (event) => {
         { eventId },
         { $set: { organizationId: org._id } }
       );
+      sendPaymentFailedEmail(org, type).catch(() => {});
     }
     return { handled: true, type };
   }
@@ -809,6 +827,10 @@ export const processRazorpayWebhookEvent = async (event) => {
         { eventId },
         { $set: { organizationId: org._id } }
       );
+      sendPaymentFailedEmail(
+        org,
+        paymentEntity.error_description || 'payment.failed'
+      ).catch(() => {});
     }
     return { handled: true, type };
   }

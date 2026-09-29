@@ -13,6 +13,7 @@ import {
   switchToFreePlan,
   syncCheckoutSession,
   listBillingPayments,
+  downloadBillingInvoice,
   cancelRecurringSubscription,
 } from '../../controllers/organization/billingController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
@@ -26,6 +27,7 @@ router.route('/plans/:planId').get(getSubscriptionPlanDetails);
 // Authenticated org billing
 router.get('/current', isAdminAuthenticated, getCurrentSubscription);
 router.get('/payments', isAdminAuthenticated, listBillingPayments);
+router.get('/payments/:paymentId/invoice', isAdminAuthenticated, downloadBillingInvoice);
 router.post('/checkout', isAdminAuthenticated, createSubscriptionCheckout);
 router.get('/checkout/preview', isAdminAuthenticated, previewMockCheckout);
 router.post('/confirm-mock', isAdminAuthenticated, confirmMockCheckout);
