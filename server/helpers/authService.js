@@ -94,7 +94,7 @@ export const performLogin = async ({ email, password, userType, res, requestId }
   });
 
   // Generate token with organizationId and passwordChangedAt for token invalidation
-  const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+  const passwordChangedAt = user.passwordChangedAt || null;
   const tokenResult = generateToken(user._id, userType, organizationId, res, passwordChangedAt);
   const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
   const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;

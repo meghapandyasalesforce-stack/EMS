@@ -1,5 +1,5 @@
 import logger from "../helpers/logger.js";
-import { extractToken, verifyToken, handleAuthError, attachUserToRequest, verifyPasswordNotChanged } from "./authHelpers.js";
+import { extractToken, verifyToken, handleAuthError, attachUserToRequest, verifyPasswordNotChanged, getSessionPasswordChangedAt } from "./authHelpers.js";
 import User from "../models/user.model.js";
 import Employee from "../models/employee.model.js";
 
@@ -66,8 +66,9 @@ const isUserAuthenticated = async (req, res, next) => {
                             code: 'ACCOUNT_INACTIVE'
                         });
                     }
+                    const passwordChangedAt = await getSessionPasswordChangedAt(decoded, employee);
                     // SECURITY: Check if password was changed after token was issued
-                    if (!verifyPasswordNotChanged(decoded, employee.passwordChangedAt)) {
+                    if (!verifyPasswordNotChanged(decoded, passwordChangedAt)) {
                         logger.warn('Token invalidated due to password change', { userId: decoded.userId });
                         return res.status(401).json({
                             success: false,

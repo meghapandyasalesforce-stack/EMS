@@ -77,7 +77,6 @@ export function buildLeaveProbationContext({
 /**
  * Whether the employee is on probation as of a calendar day.
  * Exit is effective on confirmedAt / rejectedAt (day of confirmation → not on probation that day).
- * Accrual uses the 1st of each month, so mid-month confirmation keeps probation rates for that month.
  */
 export function isOnProbationAsOf(probationContext, asOfDate = new Date()) {
     const primary = probationContext?.primary;
@@ -115,9 +114,32 @@ export function isOnProbationAsOf(probationContext, asOfDate = new Date()) {
     return false;
 }
 
-/** Accrual month YYYY-M uses status as of the 1st of that month. */
+/**
+ * Date used to classify a whole accrual month.
+ * The month probation starts uses the start date when that date is after the 1st
+ * (the joining date when probation starts on joining). Later months use the 1st,
+ * so a mid-month confirmation keeps probation rates for that month.
+ */
+export function probationMonthCheckDate(probationContext, year, monthIndex) {
+    const monthStart = new Date(year, monthIndex, 1, 12, 0, 0, 0);
+    const primary = probationContext?.primary;
+    const start =
+        startOfLocalDay(primary?.startDate) ||
+        startOfLocalDay(probationContext?.joiningDate);
+    if (!start) return monthStart;
+    const inThisMonth = start.getFullYear() === year && start.getMonth() === monthIndex;
+    if (inThisMonth && start.getDate() > 1) {
+        return new Date(year, monthIndex, start.getDate(), 12, 0, 0, 0);
+    }
+    return monthStart;
+}
+
+/** Accrual month uses the probation start day in the start month, otherwise the 1st. */
 export function isProbationAccrualMonth(probationContext, year, monthIndex) {
-    return isOnProbationAsOf(probationContext, new Date(year, monthIndex, 1));
+    return isOnProbationAsOf(
+        probationContext,
+        probationMonthCheckDate(probationContext, year, monthIndex)
+    );
 }
 
 /**

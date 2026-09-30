@@ -33,8 +33,8 @@ import { LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
 import { resolveLeaveBalanceOrganizationId } from './leaveBalanceAccessHelper.js';
 import {
     applyProbationAccrualOverlay,
-    firstOfMonth,
     isOnProbationAsOf,
+    probationMonthCheckDate,
 } from './leaveProbationHelper.js';
 
 function buildYearSummaries(ledgerByYear = {}, monthlyRate = 0, periodsPerYear = 12) {
@@ -293,7 +293,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         resolvedOrganizationId,
         employeeForAccrual
     );
-    const viewMonthAsOf = firstOfMonth(new Date(viewYear, viewMonth - 1, 1)) || monthStart;
+    const viewMonthAsOf = probationMonthCheckDate(probationContext, viewYear, viewMonth - 1);
     const employeeInProbation = isOnProbationAsOf(probationContext, viewMonthAsOf);
 
     balanceObj.probation = {
@@ -453,7 +453,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                     applyProbationAccrualOverlay(
                         baseTypeConfig,
                         probationContext,
-                        new Date(year, monthIndex, 1)
+                        probationMonthCheckDate(probationContext, year, monthIndex)
                     );
                 const rollingAtView = await leaveBalanceEngine.computeRollingMonthlyBalance(
                     baseTypeConfig,

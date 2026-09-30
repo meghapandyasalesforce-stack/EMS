@@ -9,9 +9,9 @@ import {
     applyProbationAccrualOverlay,
     buildLeaveProbationContext,
     evaluateLeaveProbationRestriction,
-    firstOfMonth,
     isOnProbationAsOf,
     isProbationNoCarryForwardConfig,
+    probationMonthCheckDate,
 } from '../helpers/leaveProbationHelper.js';
 import { OnboardingWorkflow } from '../models/onboarding.model.js';
 import {
@@ -345,7 +345,11 @@ class LeaveValidationService {
                         const monthOverlay = applyProbationAccrualOverlay(
                             leaveTypeConfig,
                             probationContext,
-                            firstOfMonth(monthStart) || monthStart
+                            probationMonthCheckDate(
+                                probationContext,
+                                monthCursor.getFullYear(),
+                                monthCursor.getMonth()
+                            )
                         );
                         const noCarryThisMonth =
                             isOnProbationAsOf(probationContext, segmentStart) &&
@@ -843,7 +847,7 @@ class LeaveValidationService {
             organizationId,
             employee
         );
-        const viewMonthAsOf = firstOfMonth(monthStart) || monthStart;
+        const viewMonthAsOf = probationMonthCheckDate(probationContext, year, month - 1);
         const employeeInProbation = isOnProbationAsOf(probationContext, viewMonthAsOf);
 
         const types = [];

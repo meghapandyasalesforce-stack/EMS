@@ -6,6 +6,7 @@ import {
   isOrgOwnerUser,
   verifyEmployeeLoginPassword,
   getEmployeeLoginAuthRecord,
+  getEmployeeTokenPasswordChangedAt,
 } from './identityService.js';
 import { PLATFORM_ROLES, isPlatformOperatorRoles } from '../config/identity.constants.js';
 import { getDashboardRouteForUser } from './dashboardRouteHelper.js';
@@ -302,8 +303,8 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
 
   const passwordChangedAt =
     session.authRecordType === 'user'
-      ? session.authRecord.passwordChangedAt || session.authRecord.createdAt
-      : employee?.passwordChangedAt || employee?.createdAt;
+      ? session.authRecord.passwordChangedAt || null
+      : await getEmployeeTokenPasswordChangedAt(employee);
 
   const extraClaims = {};
   if (session.employeeProfileId) {

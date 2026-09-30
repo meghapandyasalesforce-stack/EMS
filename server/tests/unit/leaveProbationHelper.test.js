@@ -4,6 +4,7 @@ import {
     buildLeaveProbationContext,
     isOnProbationAsOf,
     isProbationAccrualMonth,
+    probationMonthCheckDate,
     applyProbationAccrualOverlay,
     evaluateLeaveProbationRestriction,
     normalizeProbationRestrictions,
@@ -48,6 +49,41 @@ describe('leaveProbationHelper', () => {
                 lifecycleProbation: null,
             });
             expect(isOnProbationAsOf(ctx, new Date(2026, 2, 1))).toBe(true);
+        });
+
+        it('uses the joining date in the start month when probation begins after the 1st', () => {
+            const join = new Date(2026, 8, 2);
+            const ctx = buildLeaveProbationContext({
+                employee: { joiningDate: join },
+                lifecycleProbation: {
+                    status: 'Active',
+                    startDate: join,
+                    endDate: new Date(2027, 2, 2),
+                },
+            });
+            const septemberCheck = probationMonthCheckDate(ctx, 2026, 8);
+            expect(septemberCheck.getDate()).toBe(2);
+            expect(isProbationAccrualMonth(ctx, 2026, 8)).toBe(true);
+            expect(isOnProbationAsOf(ctx, new Date(2026, 8, 1))).toBe(false);
+
+            const octoberCheck = probationMonthCheckDate(ctx, 2026, 9);
+            expect(octoberCheck.getDate()).toBe(1);
+            expect(isProbationAccrualMonth(ctx, 2026, 9)).toBe(true);
+        });
+
+        it('uses the probation start day when probation begins after joining', () => {
+            const ctx = buildLeaveProbationContext({
+                employee: { joiningDate: new Date(2026, 0, 1) },
+                lifecycleProbation: {
+                    status: 'Active',
+                    startDate: new Date(2026, 9, 15),
+                },
+            });
+            expect(isProbationAccrualMonth(ctx, 2026, 8)).toBe(false);
+            expect(probationMonthCheckDate(ctx, 2026, 9).getDate()).toBe(15);
+            expect(isProbationAccrualMonth(ctx, 2026, 9)).toBe(true);
+            expect(probationMonthCheckDate(ctx, 2026, 10).getDate()).toBe(1);
+            expect(isProbationAccrualMonth(ctx, 2026, 10)).toBe(true);
         });
 
         it('prefers Lifecycle over employee fallback', () => {

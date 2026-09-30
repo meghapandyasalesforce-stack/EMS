@@ -88,13 +88,14 @@ export const getEmployeeLoginAuthRecord = async (employee) => {
 
 /** Password-changed timestamp for JWT when employee uses unified auth. */
 export const getEmployeeTokenPasswordChangedAt = async (employee) => {
+  if (!employee) return null;
   if (employee.userId) {
-    const linkedUser = await User.findById(employee.userId).select('passwordChangedAt createdAt');
+    const linkedUser = await User.findById(employee.userId).select('passwordChangedAt');
     if (linkedUser) {
-      return linkedUser.passwordChangedAt || linkedUser.createdAt;
+      return linkedUser.passwordChangedAt || null;
     }
   }
-  return employee.passwordChangedAt || employee.createdAt;
+  return employee?.passwordChangedAt || null;
 };
 
 /** Link an existing org User to a new Employee HR profile. */

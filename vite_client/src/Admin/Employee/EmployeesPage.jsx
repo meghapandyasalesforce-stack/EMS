@@ -139,16 +139,16 @@ const EmployeesPage = () => {
       const isInactive = emp?.active === false || employmentStatus === 'inactive' || employmentStatus === 'suspended';
       const departmentText = String(emp?.department || '').toLowerCase();
       const titleText = String(emp?.jobTitle || '').toLowerCase();
-      const positionText = String(emp?.position || '').toLowerCase();
-      const probationText = `${departmentText} ${titleText}`.toLowerCase();
+      const roleText = `${departmentText} ${titleText}`.toLowerCase();
       const workLocationText = String(attendance?.workLocation || '').toLowerCase();
       const onLeaveToday = !!onLeaveTodayMap[empId];
+      const probationStatus = String(emp?.probation?.status || '').trim();
 
       if (isInactive || isTerminated) return false;
       if (activeFilter === 'present') return !onLeaveToday && statusText !== 'absent' && statusText !== 'inactive';
       if (activeFilter === 'leave') return onLeaveToday;
-      if (activeFilter === 'remote') return workLocationText.includes('remote') || probationText.includes('remote') || probationText.includes('wfh');
-      if (activeFilter === 'probation') return probationText.includes('probation') || probationText.includes('intern') || positionText.includes('junior');
+      if (activeFilter === 'remote') return workLocationText.includes('remote') || roleText.includes('remote') || roleText.includes('wfh');
+      if (activeFilter === 'probation') return probationStatus === 'Active' || probationStatus === 'Extended';
       return true;
     });
   }, [employees, activeFilter, todayStatusMap, onLeaveTodayMap]);

@@ -83,6 +83,30 @@ export const verifyPasswordNotChanged = (decoded, passwordChangedAt) => {
 };
 
 /**
+ * Password-change time for the account that signed in.
+ * Account creation and the org-chart employee profile are not password changes.
+ * Admin and platform tokens use the User record. A workforce profile linked to a
+ * User uses that User. A standalone employee uses their own passwordChangedAt.
+ */
+export const getSessionPasswordChangedAt = async (decoded, employee = null) => {
+    if (!decoded?.userId) return null;
+
+    if (decoded.role === 'admin' || decoded.role === 'platform') {
+        const User = (await import('../models/user.model.js')).default;
+        const user = await User.findById(decoded.userId).select('passwordChangedAt').lean();
+        return user?.passwordChangedAt || null;
+    }
+
+    if (employee?.userId) {
+        const User = (await import('../models/user.model.js')).default;
+        const user = await User.findById(employee.userId).select('passwordChangedAt').lean();
+        return user?.passwordChangedAt || null;
+    }
+
+    return employee?.passwordChangedAt || null;
+};
+
+/**
  * Create standardized authentication error response
  * @param {Error} error - Error object
  * @param {Object} res - Express response object

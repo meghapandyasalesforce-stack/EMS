@@ -311,7 +311,7 @@ export const registerOrganization = asyncHandler(async (req, res) => {
         }
 
         // Generate tokens — employeeProfileId is Me only (separate from permanent CEO root)
-        const passwordChangedAt = adminUser.passwordChangedAt || adminUser.createdAt;
+        const passwordChangedAt = adminUser.passwordChangedAt || null;
         const tokens = generateToken(
             adminUser._id,
             adminUser.role,
@@ -552,7 +552,7 @@ export const loginOrganization = asyncHandler(async (req, res) => {
     }
 
     // Generate tokens
-    const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+    const passwordChangedAt = user.passwordChangedAt || null;
     const tokens = generateToken(
         user._id,
         user.role,

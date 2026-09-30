@@ -589,8 +589,7 @@ const employeeSchema = new mongoose.Schema({
     // Token invalidation: track when password was last changed
     // Tokens issued before this timestamp are invalid
     passwordChangedAt: {
-        type: Date,
-        default: Date.now
+        type: Date
     },
     
     // Location permission tracking

@@ -94,8 +94,15 @@ export const refreshToken = async (req, res) => {
             return sendError(res, 'Account is inactive', 403, 'ACCOUNT_INACTIVE');
         }
 
+        // Account creation is not a password change. Linked workforce logins use the User stamp.
+        let passwordChangedAt = user.passwordChangedAt || null;
+        if (!isPlatformSession && userType === 'employee' && user.userId) {
+            const linkedUser = await User.findById(user.userId).select('passwordChangedAt').lean();
+            passwordChangedAt = linkedUser?.passwordChangedAt || null;
+        }
+
         // SECURITY: Invalidate refresh if password changed after token issuance
-        if (!verifyPasswordNotChanged(decoded, user.passwordChangedAt || user.createdAt)) {
+        if (!verifyPasswordNotChanged(decoded, passwordChangedAt)) {
             return sendUnauthorized(res, 'Session expired due to password change. Please login again.');
         }
 
@@ -104,7 +111,6 @@ export const refreshToken = async (req, res) => {
         const organizationId = isPlatformSession
             ? null
             : (decoded.organizationId || user.organizationId);
-        const passwordChangedAt = user.passwordChangedAt || user.createdAt;
         const tokenResult = generateToken(
             user._id,
             role,

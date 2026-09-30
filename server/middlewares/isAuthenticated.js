@@ -4,8 +4,8 @@ import {
     verifyToken,
     handleAuthError,
     verifyPasswordNotChanged,
+    getSessionPasswordChangedAt,
 } from "./authHelpers.js";
-import User from "../models/user.model.js";
 import { enrichEmployeeRoleFlags } from "../helpers/functionalRolesHelper.js";
 import { loadEmployeeContext } from "./loadEmployeeContext.js";
 
@@ -62,15 +62,7 @@ const isAuthenticated = async (req, res, next) => {
             });
         }
 
-        let passwordChangedAt = employee.passwordChangedAt;
-        if (decoded.role === 'admin' && employee.userId) {
-            const linkedUser = await User.findById(employee.userId)
-                .select('passwordChangedAt createdAt')
-                .lean();
-            if (linkedUser) {
-                passwordChangedAt = linkedUser.passwordChangedAt || linkedUser.createdAt;
-            }
-        }
+        const passwordChangedAt = await getSessionPasswordChangedAt(decoded, employee);
 
         if (!verifyPasswordNotChanged(decoded, passwordChangedAt)) {
             logger.warn('Token invalidated due to password change', { employeeId: employee._id });

@@ -740,7 +740,7 @@ export const registerEmployee = async (req, res) => {
         // Only generate tokens if NOT created by authenticated admin/HR (self-registration scenario)
         // This should rarely happen since the route requires admin/HR auth, but kept for safety.
         if (!isPrivilegedCreating) {
-            const passwordChangedAt = employee.passwordChangedAt || employee.createdAt;
+            const passwordChangedAt = employee.passwordChangedAt || null;
             const tokenResult = generateToken(employee._id, "employee", organizationId, res, passwordChangedAt);
             token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
             refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;

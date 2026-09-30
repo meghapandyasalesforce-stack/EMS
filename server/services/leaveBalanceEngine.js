@@ -41,8 +41,8 @@ import {
 import {
     applyProbationAccrualOverlay,
     buildLeaveProbationContext,
-    firstOfMonth,
     isProbationNoCarryForwardConfig,
+    probationMonthCheckDate,
 } from '../helpers/leaveProbationHelper.js';
 import { OnboardingWorkflow } from '../models/onboarding.model.js';
 import { allocateLeaveDurationAcrossMonths } from '../helpers/leaveMonthUsageHelper.js';
@@ -175,8 +175,8 @@ class LeaveBalanceEngine {
     buildLeaveTypeConfigResolver(policies, employee, fallbackConfig, probationContext = null) {
         const leaveType = fallbackConfig?.type;
         return (year, monthIndex) => {
-            const asOf = new Date(year, monthIndex, 1, 12, 0, 0, 0);
-            const policy = selectApplicableLeavePolicy(policies, employee, asOf, {
+            const policyAsOf = new Date(year, monthIndex, 1, 12, 0, 0, 0);
+            const policy = selectApplicableLeavePolicy(policies, employee, policyAsOf, {
                 requireUsable: true,
                 hasUsableLeaveTypes: (p) => this.hasUsableLeaveTypes(p),
             });
@@ -188,7 +188,11 @@ class LeaveBalanceEngine {
                 carryForward: getEffectiveCarryForwardConfig(lt),
                 _sourcePolicyId: policy._id,
             };
-            return applyProbationAccrualOverlay(base, probationContext, asOf);
+            return applyProbationAccrualOverlay(
+                base,
+                probationContext,
+                probationMonthCheckDate(probationContext, year, monthIndex)
+            );
         };
     }
 
@@ -438,10 +442,17 @@ class LeaveBalanceEngine {
             ...leaveTypeConfig,
             carryForward: getEffectiveCarryForwardConfig(leaveTypeConfig),
         };
+        const asOfDay = new Date(asOfDate);
         const asOfAccrualConfig = applyProbationAccrualOverlay(
             effectiveConfig,
             probationContext,
-            firstOfMonth(asOfDate) || asOfDate
+            Number.isNaN(asOfDay.getTime())
+                ? asOfDate
+                : probationMonthCheckDate(
+                      probationContext,
+                      asOfDay.getFullYear(),
+                      asOfDay.getMonth()
+                  )
         );
         
         // Find or create balance entry for this leave type

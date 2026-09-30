@@ -59,7 +59,7 @@ export const platformLogin = asyncHandler(async (req, res) => {
 
     await resetLoginAttempts(user);
 
-    const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+    const passwordChangedAt = user.passwordChangedAt || null;
     const tokenResult = generateToken(
         user._id,
         'platform',

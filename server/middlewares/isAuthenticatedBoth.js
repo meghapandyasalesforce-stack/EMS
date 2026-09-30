@@ -1,5 +1,5 @@
 import logger from '../helpers/logger.js';
-import { extractToken, verifyToken, handleAuthError, verifyPasswordNotChanged } from './authHelpers.js';
+import { extractToken, verifyToken, handleAuthError, verifyPasswordNotChanged, getSessionPasswordChangedAt } from './authHelpers.js';
 import { loadEmployeeContext } from './loadEmployeeContext.js';
 
 /**
@@ -50,17 +50,8 @@ const isAuthenticatedBoth = async (req, res, next) => {
       });
     }
 
-    if (ctx.loaded && req.employee) {
-      let passwordChangedAt = req.employee.passwordChangedAt;
-      if (decoded.role === 'admin' && req.employee.userId) {
-        const User = (await import('../models/user.model.js')).default;
-        const linkedUser = await User.findById(req.employee.userId)
-          .select('passwordChangedAt createdAt')
-          .lean();
-        if (linkedUser) {
-          passwordChangedAt = linkedUser.passwordChangedAt || linkedUser.createdAt;
-        }
-      }
+    if (decoded.role === 'admin' || (ctx.loaded && req.employee)) {
+      const passwordChangedAt = await getSessionPasswordChangedAt(decoded, req.employee);
 
       if (!verifyPasswordNotChanged(decoded, passwordChangedAt)) {
         return res.status(401).json({

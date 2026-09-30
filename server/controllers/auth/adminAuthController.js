@@ -185,7 +185,7 @@ export const registerUser = asyncHandler(async (req, res) => {
         }
 
         // Generate JWT token with organizationId
-        const passwordChangedAt = newUser.passwordChangedAt || newUser.createdAt;
+        const passwordChangedAt = newUser.passwordChangedAt || null;
         const tokenResult = generateToken(newUser._id, newUser.role, newUser.organizationId, res, passwordChangedAt);
         const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
         const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
@@ -360,7 +360,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     });
 
     // Generate token with organizationId
-    const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+    const passwordChangedAt = user.passwordChangedAt || null;
     const tokenResult = generateToken(user._id, 'admin', organizationId, res, passwordChangedAt);
     const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
     const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
