@@ -7,6 +7,11 @@ import { getLeaveNotificationEmails } from "../../helpers/leaveEmailHelper.js";
 import { sendWfhApprovalEmail, sendWfhRejectionEmail, sendWfhRequestEmail } from "../../helpers/emailSender.js";
 import { runInBackground } from "../../helpers/backgroundTasks.js";
 import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
+import {
+    persistThreadRootMessageId,
+    resolveStoredThreadRootMessageId,
+    THREAD_ROOT_REPLY_LOOKUP
+} from "../../helpers/emailThreadPersistenceHelper.js";
 
 /**
  * Create a Work From Home request (employee).
@@ -114,8 +119,9 @@ export const createWfhRequest = async (req, res) => {
             const toEmail = managerEmail || ccEmails[0];
             const cc = managerEmail ? ccEmails : ccEmails.slice(1);
 
-            await sendWfhRequestEmail(
+            const sendResult = await sendWfhRequestEmail(
                 {
+                    _id: wfhRequest._id,
                     employeeName: [employee.name, employee.lastName].filter(Boolean).join(' '),
                     employeeId: employee.employeeId,
                     department: employee.department,
@@ -134,6 +140,7 @@ export const createWfhRequest = async (req, res) => {
                 employee.email
             );
 
+            await persistThreadRootMessageId(WfhRequest, wfhRequest._id, sendResult?.threadRootMessageId);
             await WfhRequest.updateOne({ _id: wfhRequest._id }, { $set: { emailSent: true } });
 
             logger.info('WFH request email dispatched', {
@@ -350,7 +357,16 @@ export const reviewWfhRequest = async (req, res) => {
             );
             const decisionCc = [...new Set([managerEmail, ...(ccEmails || [])].filter(Boolean))];
 
+            const threadRootMessageId = await resolveStoredThreadRootMessageId(
+                WfhRequest,
+                wfhRequest._id,
+                wfhRequest.emailThreadMessageId,
+                THREAD_ROOT_REPLY_LOOKUP
+            );
+
             const wfhEmailData = {
+                _id: wfhRequest._id,
+                emailThreadMessageId: threadRootMessageId,
                 employeeName,
                 employeeId: employee.employeeId,
                 wfhDate: wfhRequest.wfhDate,
@@ -364,11 +380,11 @@ export const reviewWfhRequest = async (req, res) => {
                 reviewNote: wfhRequest.reviewNote
             };
 
-            if (wfhRequest.status === 'approved') {
-                await sendWfhApprovalEmail(wfhEmailData, employee.email, decisionCc);
-            } else {
-                await sendWfhRejectionEmail(wfhEmailData, employee.email, decisionCc);
-            }
+            const sendResult = wfhRequest.status === 'approved'
+                ? await sendWfhApprovalEmail(wfhEmailData, employee.email, decisionCc, { threadRootMessageId })
+                : await sendWfhRejectionEmail(wfhEmailData, employee.email, decisionCc, { threadRootMessageId });
+
+            await persistThreadRootMessageId(WfhRequest, wfhRequest._id, sendResult?.threadRootMessageId);
 
             logger.info('WFH decision email sent', {
                 wfhRequestId: wfhRequest._id,

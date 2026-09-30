@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FaClipboardList, FaLayerGroup } from 'react-icons/fa';
 import DocumentTemplateManager from './DocumentTemplateManager';
 import AdminEmployeeDocumentRequests from './AdminEmployeeDocumentRequests';
 import HREmployeeDocumentRequests from '../../HR/Documents/HREmployeeDocumentRequests';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import useDocumentModeSettings from '../../Hooks/useDocumentModeSettings';
 
 /**
  * Document Management — Requests queue + Templates.
@@ -13,21 +14,34 @@ const DocumentManagement = () => {
   const [activeSection, setActiveSection] = useState('requests');
   const { isOrgOwner } = useAuthPermissions();
   const useAdminQueue = Boolean(isOrgOwner);
+  const { enableDocumentRequests, enableSelfServiceDocuments, ready } = useDocumentModeSettings();
 
-  const tabs = [
-    {
-      key: 'requests',
-      label: 'Document Requests',
-      hint: 'Review & approve',
-      icon: FaClipboardList,
-    },
-    {
-      key: 'templates',
-      label: 'Document Templates',
-      hint: 'Self-service setup',
-      icon: FaLayerGroup,
-    },
-  ];
+  const tabs = useMemo(() => {
+    const all = [
+      {
+        key: 'requests',
+        label: 'Document Requests',
+        hint: 'Review & approve',
+        icon: FaClipboardList,
+        enabled: enableDocumentRequests,
+      },
+      {
+        key: 'templates',
+        label: 'Document Templates',
+        hint: 'Self-service setup',
+        icon: FaLayerGroup,
+        enabled: enableSelfServiceDocuments,
+      },
+    ];
+    return all.filter((tab) => tab.enabled);
+  }, [enableDocumentRequests, enableSelfServiceDocuments]);
+
+  useEffect(() => {
+    if (!ready || !tabs.length) return;
+    if (!tabs.some((tab) => tab.key === activeSection)) {
+      setActiveSection(tabs[0].key);
+    }
+  }, [ready, tabs, activeSection]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-white">
@@ -45,6 +59,7 @@ const DocumentManagement = () => {
             </p>
           </div>
 
+          {tabs.length > 0 ? (
           <div className="flex w-full gap-1 rounded-2xl border border-slate-200 bg-slate-100/80 p-1.5 sm:w-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -75,14 +90,20 @@ const DocumentManagement = () => {
               );
             })}
           </div>
+          ) : null}
         </div>
       </div>
 
       <div className="mx-auto max-w-[1600px]">
-        {activeSection === 'requests' && (
+        {ready && tabs.length === 0 ? (
+          <div className="px-4 py-10 text-sm text-slate-500 sm:px-6">
+            Document requests and self-service documents are turned off in settings.
+          </div>
+        ) : null}
+        {ready && activeSection === 'requests' && enableDocumentRequests && (
           useAdminQueue ? <AdminEmployeeDocumentRequests /> : <HREmployeeDocumentRequests />
         )}
-        {activeSection === 'templates' && <DocumentTemplateManager />}
+        {ready && activeSection === 'templates' && enableSelfServiceDocuments && <DocumentTemplateManager />}
       </div>
     </div>
   );

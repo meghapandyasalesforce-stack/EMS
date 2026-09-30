@@ -1,5 +1,6 @@
 import logger from './logger.js';
 import { createEmailTransporter, getEmailFrom } from '../config/email.config.js';
+import { queueSentMailboxCopy } from './emailSentMailboxHelper.js';
 
 /**
  * Send organization welcome email with verification link
@@ -158,6 +159,7 @@ export const sendOrganizationWelcomeEmail = async (email, organizationName, admi
         
         await transporter.verify();
         const info = await transporter.sendMail(mailOptions);
+        queueSentMailboxCopy(mailOptions);
         logger.info('Organization welcome email sent', { 
             email, 
             messageId: info.messageId 
@@ -220,6 +222,7 @@ export const sendVerificationReminder = async (email, organizationName, verifica
         };
         
         await transporter.sendMail(mailOptions);
+        queueSentMailboxCopy(mailOptions);
         logger.info('Verification reminder email sent', { email });
     } catch (error) {
         logger.error('Error sending verification reminder', { error: error.message, email });

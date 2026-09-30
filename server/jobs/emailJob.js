@@ -3,7 +3,7 @@
  * Handles email sending in background queue
  */
 
-import sendWelcomeEmail from '../helpers/emailSender.js';
+import { sendWelcomeEmail } from '../helpers/emailSender.js';
 import logger from '../helpers/logger.js';
 
 /**

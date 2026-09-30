@@ -531,7 +531,13 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
 
             <button
               type="button"
-              onClick={() => navigate('/my-attendance-regularization')}
+              onClick={() => {
+                if (activeSection === 'wfh') {
+                  navigate('/my-leave', { state: { panelTab: 'wfh-request' } });
+                  return;
+                }
+                navigate('/my-attendance-regularization');
+              }}
               className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#0a8f6c]/30 hover:bg-[#0a8f6c]/5 hover:text-[#0a8f6c] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 sm:w-auto"
             >
               <FiUser className="h-4 w-4 shrink-0" />

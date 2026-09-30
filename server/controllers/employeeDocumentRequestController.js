@@ -220,9 +220,14 @@ export const createEmployeeDocumentRequest = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Document requests are disabled for this organization' });
     }
 
-    const targetEmployeeId = isAdmin(req) && req.body.employeeId ? req.body.employeeId : req.employee?._id;
+    const requestingAsEmployee = req.body.requestAsEmployee === true;
+    const targetEmployeeId = isAdmin(req) && req.body.employeeId && !requestingAsEmployee
+      ? req.body.employeeId
+      : req.employee?._id;
     if (!targetEmployeeId) return res.status(400).json({ success: false, message: 'employeeId is required' });
-    const approvalRequiredFrom = resolveApprovalRequirement(req);
+    const approvalRequiredFrom = requestingAsEmployee && isAdmin(req)
+      ? 'hr_or_admin'
+      : resolveApprovalRequirement(req);
     const status = approvalRequiredFrom === 'none' ? 'approved' : 'pending';
     const request = await EmployeeDocumentRequest.create({
       organizationId, employeeId: targetEmployeeId, requestedBy: requester,

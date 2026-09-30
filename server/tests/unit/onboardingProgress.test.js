@@ -5,6 +5,7 @@ import {
     applyProgressToWorkflow,
     calculateProgressBreakdown,
     getOnboardingReminderStage,
+    silenceCurrentOnboardingReminders,
     getTaskCompletionBlockers,
     hasWorkflowActivity,
     resolveInitialWorkflowStatus,
@@ -215,6 +216,36 @@ describe('onboarding progress', () => {
         workflow.documents[1].status = 'Verified';
         synchronizeDocumentDrivenTasks(workflow);
         expect(task.status).toBe('Completed');
+    });
+
+    it('holds the reminder that is already due when onboarding is assigned', () => {
+        const now = new Date('2026-07-21T10:00:00.000Z');
+        const workflow = {
+            status: 'Not Started',
+            startDate: now,
+            employeeId: 'employee-1',
+            notificationHistory: [],
+            tasks: [{
+                _id: 'task-1',
+                title: 'Upload identity documents',
+                status: 'Pending',
+                dueDate: new Date('2026-07-24T18:00:00.000Z'),
+                assignedTo: 'employee-1',
+            }],
+            documents: [],
+            checklist: [],
+            trainingModules: [],
+            policySignatures: [],
+        };
+
+        expect(silenceCurrentOnboardingReminders(workflow, now)).toBe(true);
+        expect(workflow.notificationHistory.map((entry) => entry.key))
+            .toEqual(['task:task-1:due-in-3-days']);
+
+        workflow.status = 'Scheduled';
+        const before = workflow.notificationHistory.length;
+        expect(silenceCurrentOnboardingReminders(workflow, now)).toBe(false);
+        expect(workflow.notificationHistory).toHaveLength(before);
     });
 
     it('schedules reminders three days, one day, on due date, and daily overdue', () => {

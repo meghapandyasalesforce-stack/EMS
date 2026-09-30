@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { BOTH_DOCUMENT_TEMPLATES_ENDPOINT } from '../../utils/constant';
+import useDocumentModeSettings from '../../Hooks/useDocumentModeSettings';
 
 const DOCUMENT_TYPES = [
   'Experience Letter', 'Employment Letter', 'Appreciation Letter',
@@ -239,6 +240,7 @@ function detectFieldsFromBody(bodyContent) {
 }
 
 export default function DocumentTemplateManager() {
+  const { enableSelfServiceDocuments, ready: documentModesReady } = useDocumentModeSettings();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -520,29 +522,31 @@ export default function DocumentTemplateManager() {
   };
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6">
-      <div className="space-y-5">
+    <div className="px-4 py-4 sm:px-6">
+      {documentModesReady && !enableSelfServiceDocuments ? (
+        <p className="py-6 text-sm text-slate-500">Self-service documents are turned off in settings.</p>
+      ) : (
+      <>
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
 
-        {/* Header */}
-        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div>
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#20C997]">Self-service</p>
-            <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">Templates</h2>
-            <p className="mt-1 max-w-xl text-sm text-slate-500">
+            <h2 className="mt-1 text-base font-semibold text-slate-900">Templates</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
               Create and manage predefined templates for employee self-service document generation.
             </p>
           </div>
           <button
             type="button"
             onClick={() => { resetForm(); setShowForm(true); }}
-            className="shrink-0 rounded-xl bg-[#20C997] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1bae83]"
+            className="shrink-0 self-start rounded-xl bg-[#20C997] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1bae83] sm:self-center"
           >
             + New Template
           </button>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
           <select
             value={filters.documentType}
             onChange={(e) => setFilters(prev => ({ ...prev, documentType: e.target.value }))}
@@ -555,21 +559,21 @@ export default function DocumentTemplateManager() {
             value={filters.country}
             onChange={(e) => setFilters(prev => ({ ...prev, country: e.target.value }))}
             placeholder="Filter by country..."
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#20C997] focus:outline-none focus:ring-2 focus:ring-[#20C997]/15"
+            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#20C997] focus:outline-none focus:ring-2 focus:ring-[#20C997]/15 sm:max-w-xs sm:flex-none"
           />
-          <div className="ml-auto self-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+          <div className="ml-auto rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
             {templates.length} template{templates.length !== 1 ? 's' : ''}
           </div>
         </div>
 
         {/* Template List */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-white py-16 shadow-sm">
+          <div className="flex flex-col items-center justify-center py-16">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#20C997]" />
             <p className="mt-3 text-sm text-slate-400">Loading templates...</p>
           </div>
         ) : templates.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-8 py-16 text-center shadow-sm">
+          <div className="px-8 py-16 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#20C997]/10 text-[#20C997]">
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
             </div>
@@ -580,15 +584,14 @@ export default function DocumentTemplateManager() {
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-slate-100">
             {templates.map(tpl => {
               const creatorName = tpl.createdBy ? `${tpl.createdBy.name || ''} ${tpl.createdBy.lastName || ''}`.trim() : '';
               const creatorRole = tpl.createdBy?.functionalRoles?.length
                 ? tpl.createdBy.functionalRoles[0].charAt(0).toUpperCase() + tpl.createdBy.functionalRoles[0].slice(1)
                 : (tpl.createdBy?.jobTitle || tpl.createdBy?.position || '');
               return (
-                <div key={tpl._id} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-[#20C997]/25 hover:shadow-md">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div key={tpl._id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5">
                     {/* Left: Template info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5">
@@ -627,7 +630,7 @@ export default function DocumentTemplateManager() {
                       </div>
                     </div>
                     {/* Right: Actions */}
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       <button onClick={() => handleEdit(tpl._id)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
                         Edit
                       </button>
@@ -640,12 +643,12 @@ export default function DocumentTemplateManager() {
                         Delete
                       </button>
                     </div>
-                  </div>
                 </div>
               );
             })}
           </div>
         )}
+      </div>
 
         {/* ─── Create/Edit Form Modal ──────────────────────────────────────── */}
         {showForm && (
@@ -899,7 +902,8 @@ export default function DocumentTemplateManager() {
             </div>
           </div>
         )}
-      </div>
+      </>
+      )}
     </div>
   );
 }

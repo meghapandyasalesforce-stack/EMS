@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import axios from '../utils/axios';
 import { BOTH_CELEBRATION_ENDPOINT } from '../utils/constant';
 import ProfilePicture from '../Shared/ProfilePicture';
@@ -102,7 +102,7 @@ function WishForm({ onSubmit, submitting, eventType = 'birthday' }) {
   );
 }
 
-function CelebrationCard({ event, onReact, onWish, onDelete, actionLoading }) {
+function CelebrationCard({ event, onReact, onWish, actionLoading }) {
   const isMarriage = event.type === 'marriage_anniversary';
   const isWorkAnniversary = event.type === 'anniversary';
   const isBirthday = !isMarriage && !isWorkAnniversary;
@@ -177,18 +177,6 @@ function CelebrationCard({ event, onReact, onWish, onDelete, actionLoading }) {
               </div>
             ))}
           </div>
-          {event.isSubject && onDelete ? (
-            <div className="mt-3 flex justify-end sm:col-span-3">
-              <button
-                type="button"
-                disabled={actionLoading}
-                onClick={() => onDelete(event)}
-                className="rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
-              >
-                Delete
-              </button>
-            </div>
-          ) : null}
         </div>
         <div className="relative mt-6 sm:mt-8">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -264,7 +252,6 @@ function CelebrationCard({ event, onReact, onWish, onDelete, actionLoading }) {
 
 export default function CelebrationEventPage() {
   const { eventId } = useParams();
-  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -323,26 +310,6 @@ export default function CelebrationEventPage() {
   };
 
 
-  const handleDelete = async (event) => {
-    if (!event?._id) return;
-    const confirmed = window.confirm('Delete this celebration?');
-    if (!confirmed) return;
-
-    setActionLoading(true);
-    try {
-      await axios.delete(`${BOTH_CELEBRATION_ENDPOINT}/events/${event._id}`);
-      toast.success('Celebration deleted');
-      setEvents((prev) => prev.filter((item) => item._id !== event._id));
-      if (eventId) {
-        navigate('/celebrations');
-      }
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to delete celebration');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-amber-50 via-rose-50/40 to-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -381,7 +348,6 @@ export default function CelebrationEventPage() {
                 event={event}
                 onReact={handleReact}
                 onWish={handleWish}
-                onDelete={handleDelete}
                 actionLoading={actionLoading}
               />
             ))}

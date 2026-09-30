@@ -290,32 +290,38 @@ function DashboardAdmin() {
       label: "Total Employees",
       value: employeeCount.toLocaleString("en-IN"),
       sub: `${projects.length} active projects`,
-      icon: <FiUsers className="h-5 w-5" />
+      icon: <FiUsers className="h-4 w-4" />,
+      iconWrap: "bg-slate-100 text-slate-600"
     },
     {
       label: "Present Today",
       value: todayAttendanceStats.present.toLocaleString("en-IN"),
       sub: `${todayAttendanceStats.total || 0} tracked`,
-      icon: <FiCheckCircle className="h-5 w-5" />
+      icon: <FiCheckCircle className="h-4 w-4" />,
+      iconWrap: "bg-emerald-50 text-emerald-600"
     },
     {
       label: "Pending Leaves",
       value: pendingLeaves.toLocaleString("en-IN"),
       sub: "Needs review",
-      icon: <FiCalendar className="h-5 w-5" />
+      icon: <FiCalendar className="h-4 w-4" />,
+      iconWrap: "bg-amber-50 text-amber-600"
     },
     {
       label: "Overdue Approvals",
       value: escalatedApprovalsCount.toLocaleString("en-IN"),
       sub: escalatedApprovalsCount > 0 ? "Pending beyond review window" : "Clear",
-      icon: <FiClock className="h-5 w-5" />,
+      icon: <FiClock className="h-4 w-4" />,
+      iconWrap: "bg-rose-50 text-rose-600",
       onClick: () => navigate("/admin/pending-approvals?escalated=1")
     },
     {
       label: "Payroll This Month",
       value: formatCurrency(monthlyPayrollTotal),
       sub: `${payrolls.length} payroll records`,
-      icon: <FiDollarSign className="h-5 w-5" />
+      icon: <FiDollarSign className="h-4 w-4" />,
+      iconWrap: "bg-emerald-50 text-emerald-600",
+      wide: true
     }
   ];
 
@@ -326,6 +332,17 @@ function DashboardAdmin() {
     month: "long",
     year: "numeric"
   });
+  const todayShort = new Date().toLocaleDateString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short"
+  });
+  const pillClass =
+    "inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50";
+  const pillPrimaryClass =
+    "inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white hover:opacity-90";
+  const mobileLinkClass =
+    "inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-2 text-[13px] font-medium text-slate-700 active:bg-slate-50";
 
   const getInitials = (name = "") => {
     const parts = name.trim().split(" ").filter(Boolean);
@@ -425,40 +442,63 @@ function DashboardAdmin() {
         </div>
       )}
     <div className="page-shell min-h-screen bg-[#F3F7F5]">
-      <div className="page-shell-inner space-y-4 sm:space-y-5">
-        <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h1 className="truncate text-xl font-bold text-slate-900 sm:text-2xl md:text-3xl">Good morning, {greetingName}</h1>
-            <p className="mt-1 text-sm text-slate-500">{todayLabel}</p>
+      <div className="page-shell-inner space-y-3 sm:space-y-5">
+        <div className="flex flex-col gap-2 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold text-slate-900 sm:text-2xl md:text-3xl">Good morning, {greetingName}</h1>
+            <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm">
+              <span className="sm:hidden">{todayShort}</span>
+              <span className="hidden sm:inline">{todayLabel}</span>
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => navigate("/helpdesk")}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-            >
+          <div className="flex flex-col gap-2 sm:hidden">
+            {permissionFlags.isOrgOwner ? (
+              <button
+                onClick={() => navigate("/add-employee")}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white"
+                style={{ backgroundColor: "var(--color-primary)" }}
+              >
+                <FiPlus className="h-4 w-4" />
+                Add employee
+              </button>
+            ) : null}
+            <div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <button type="button" onClick={() => navigate("/helpdesk")} className={mobileLinkClass}>
+                <FiHeadphones className="h-4 w-4 shrink-0 text-slate-500" />
+                Helpdesk
+              </button>
+              <button type="button" onClick={() => navigate("/today-attendance")} className={`${mobileLinkClass} border-l border-slate-200`}>
+                <FiCheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                Attendance
+              </button>
+              <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
+                <button type="button" onClick={() => navigate("/admin-payroll")} className={`${mobileLinkClass} border-l border-slate-200`}>
+                  <FiDollarSign className="h-4 w-4 shrink-0 text-slate-500" />
+                  Payroll
+                </button>
+              </PermissionGate>
+            </div>
+          </div>
+          <div className="hidden flex-wrap justify-end gap-2 sm:flex">
+            <button type="button" onClick={() => navigate("/helpdesk")} className={pillClass}>
               <FiHeadphones className="h-4 w-4" />
               Helpdesk
             </button>
-            <button
-              onClick={() => navigate("/today-attendance")}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-            >
+            <button type="button" onClick={() => navigate("/today-attendance")} className={pillClass}>
               <FiCheckCircle className="h-4 w-4" />
               Today's Live Attendance
             </button>
             <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
-              <button
-                onClick={() => navigate("/admin-payroll")}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-              >
+              <button type="button" onClick={() => navigate("/admin-payroll")} className={pillClass}>
                 <FiDollarSign className="h-4 w-4" />
                 Run Payroll
               </button>
             </PermissionGate>
             {permissionFlags.isOrgOwner ? (
               <button
+                type="button"
                 onClick={() => navigate("/add-employee")}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
+                className={pillPrimaryClass}
                 style={{ backgroundColor: "var(--color-primary)" }}
               >
                 <FiPlus className="h-4 w-4" />
@@ -474,7 +514,7 @@ function DashboardAdmin() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-5">
           {statCards.map((card) => (
             <div
               key={card.label}
@@ -491,23 +531,37 @@ function DashboardAdmin() {
                     }
                   : undefined
               }
-              className={`rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 ${card.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+              className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${
+                card.wide
+                  ? "col-span-2 flex items-center justify-between gap-3 px-3.5 py-3 xl:col-span-1 xl:block xl:p-4"
+                  : "p-3 sm:p-4"
+              } ${card.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
             >
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <p className="text-sm text-slate-500">{card.label}</p>
-                <span className="rounded-lg bg-slate-100 p-2 text-slate-600">{card.icon}</span>
+              <div className={card.wide ? "flex min-w-0 flex-1 items-center gap-2.5 xl:mb-2 xl:w-full xl:flex-none xl:justify-between" : "flex items-center justify-between gap-2"}>
+                {card.wide ? (
+                  <span className={`shrink-0 rounded-lg p-1.5 xl:order-2 xl:p-2 ${card.iconWrap}`}>{card.icon}</span>
+                ) : null}
+                <div className="min-w-0">
+                  <p className="truncate text-xs leading-tight text-slate-500 sm:text-sm">{card.label}</p>
+                  {card.wide ? (
+                    <p className="mt-0.5 truncate text-[11px] text-slate-400 xl:hidden">{card.sub}</p>
+                  ) : null}
+                </div>
+                {card.wide ? null : (
+                  <span className={`shrink-0 rounded-lg p-1.5 sm:p-2 ${card.iconWrap}`}>{card.icon}</span>
+                )}
               </div>
-              <p className="break-words text-2xl font-bold text-slate-900">{card.value}</p>
-              <p className="mt-1 text-xs text-slate-500">{card.sub}</p>
+              <p className={`break-words font-bold leading-none text-slate-900 ${card.wide ? "shrink-0 text-xl xl:mt-3 xl:text-2xl" : "mt-2 text-xl sm:mt-3 sm:text-2xl"}`}>{card.value}</p>
+              <p className={`truncate text-[11px] text-slate-400 sm:text-xs ${card.wide ? "hidden xl:mt-1 xl:block" : "mt-1.5"}`}>{card.sub}</p>
             </div>
           ))}
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-          <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-slate-900">Attendance overview</h2>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 sm:mb-3">
+              <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Attendance overview</h2>
+              <div className="hidden flex-wrap items-center gap-3 text-xs text-slate-500 sm:flex">
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   Present
@@ -670,7 +724,7 @@ function DashboardAdmin() {
             </div>
           </div>
 
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-1">
+          <div className="hidden min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 md:block xl:col-span-1">
             <h2 className="mb-3 text-lg font-semibold text-slate-900">Quick shortcuts</h2>
             <div className="grid grid-cols-2 gap-2.5">
               {quickShortcuts.map((shortcut) => (

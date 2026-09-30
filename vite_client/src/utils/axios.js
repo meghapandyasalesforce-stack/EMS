@@ -641,8 +641,10 @@ instance.interceptors.response.use(
           }
         }
 
-        // If no refresh token flag is present, skip refresh to avoid noisy 401s
-        if (!refreshTokenPresent) {
+        // The readable flag can be missing while the httpOnly refresh cookie is still
+        // sent. NO_TOKEN means the access cookie is gone, so still try that refresh.
+        const canRefreshWithoutFlag = errorCode === 'NO_TOKEN' || errorCode === 'TOKEN_EXPIRED';
+        if (!refreshTokenPresent && !canRefreshWithoutFlag) {
           isRefreshing = false;
           processQueue(error, null);
           if (onPlatformRoute) {

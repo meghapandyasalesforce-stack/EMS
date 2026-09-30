@@ -81,6 +81,11 @@ const wfhRequestSchema = new mongoose.Schema({
     emailSent: {
         type: Boolean,
         default: false
+    },
+    // Root Message-ID so approval and rejection stay in the request thread
+    emailThreadMessageId: {
+        type: String,
+        default: null
     }
 }, {
     timestamps: true

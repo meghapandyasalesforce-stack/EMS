@@ -871,6 +871,7 @@ export async function createEmployeeOnboardingWorkflow({
                 onboardingWorkflowId: workflow._id,
                 checkTypes,
                 actor: initiatedBy ? { _id: initiatedBy } : null,
+                silent: true,
             });
             workflow.backgroundVerificationCaseId = bgvCase._id;
             await workflow.save();
@@ -879,26 +880,19 @@ export async function createEmployeeOnboardingWorkflow({
         }
     }
 
-    emitOnboardingChangedAsync(organizationId, workflow._id);
-
-    if (workflowStatus !== 'Draft') {
-        runInBackground('onboarding-workflow-notify', async () => {
-            await notify({
-                type: 'onboarding_workflow_assigned',
-                organizationId,
-                data: { employee, workflow },
-            });
-            await Promise.all(workflow.tasks
-                .filter((task) => task.assignedTo)
-                .map((task) => notify({
-                    type: 'onboarding_task_assigned',
-                    organizationId,
-                    data: { workflow, task },
-                })));
-        });
+    silenceCurrentOnboardingReminders(workflow);
+    if (workflow.__silencedReminders?.length) {
+        await OnboardingWorkflow.updateOne(
+            { _id: workflow._id },
+            { $push: { notificationHistory: { $each: workflow.__silencedReminders } } },
+        );
+        workflow.unmarkModified?.('notificationHistory');
     }
 
-    return workflow;
+    emitOnboardingChangedAsync(organizationId, workflow._id);
+    await notifyOnboardingStarted(workflow, organizationId, employee);
+
+    return OnboardingWorkflow.findById(workflow._id);
 }
 
 /** Activate workflows whose scheduled start date has arrived */
@@ -935,6 +929,7 @@ export async function activateScheduledWorkflows(organizationId = null) {
         applyProgressToWorkflow(workflow);
         await workflow.save();
         emitOnboardingChangedAsync(workflow.organizationId, workflow._id);
+        await notifyOnboardingStarted(workflow, workflow.organizationId);
         activated += 1;
     }
 
@@ -1035,6 +1030,66 @@ function buildOnboardingReminderItems(workflow, now) {
         });
     }
     return records;
+}
+
+const ONBOARDING_WELCOME_KEY = 'onboarding-welcome';
+
+/** One generic notice when onboarding is assigned. Task and duplicate alerts stay off. */
+export async function notifyOnboardingStarted(workflow, organizationId, employee = null) {
+    if (!workflow?._id || !organizationId) return;
+    if (['Draft', 'Cancelled'].includes(workflow.status)) return;
+    if (!workflow.notificationHistory) workflow.notificationHistory = [];
+    if (workflow.notificationHistory.some((entry) => entry.key === ONBOARDING_WELCOME_KEY)) return;
+
+    const sentAt = new Date();
+    const entry = {
+        key: ONBOARDING_WELCOME_KEY,
+        eventType: 'onboarding_workflow_assigned',
+        sentAt,
+    };
+    const updated = await OnboardingWorkflow.updateOne(
+        { _id: workflow._id, 'notificationHistory.key': { $ne: ONBOARDING_WELCOME_KEY } },
+        { $push: { notificationHistory: entry } },
+    );
+    if (!updated.modifiedCount) return;
+
+    workflow.notificationHistory.push(entry);
+    workflow.unmarkModified?.('notificationHistory');
+
+    await notify({
+        type: 'onboarding_workflow_assigned',
+        organizationId,
+        data: { employee: employee || workflow.employeeId, workflow },
+    }).catch((err) => {
+        logger.warn('Onboarding start notification failed', { error: err.message, workflowId: workflow._id });
+    });
+}
+
+const ONBOARDING_REMINDER_STATUSES = ['Not Started', 'In Progress', 'Overdue', 'Completed'];
+
+/**
+ * Mark reminders that are already due at assignment time as handled.
+ * The assignee still gets the single welcome notice. Later stages
+ * (due tomorrow, due today, overdue) use different keys and still send.
+ */
+export function silenceCurrentOnboardingReminders(workflow, now = new Date()) {
+    if (!ONBOARDING_REMINDER_STATUSES.includes(workflow?.status)) return false;
+    if (!workflow.notificationHistory) workflow.notificationHistory = [];
+    const sent = new Set(workflow.notificationHistory.map((entry) => entry.key));
+    const addedEntries = [];
+    for (const reminder of buildOnboardingReminderItems(workflow, now)) {
+        if (!reminder.key || sent.has(reminder.key)) continue;
+        const entry = {
+            key: reminder.key,
+            eventType: reminder.eventType,
+            sentAt: now,
+        };
+        workflow.notificationHistory.push(entry);
+        addedEntries.push(entry);
+        sent.add(reminder.key);
+    }
+    if (addedEntries.length) workflow.__silencedReminders = addedEntries;
+    return addedEntries.length > 0;
 }
 
 /**

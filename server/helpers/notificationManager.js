@@ -8,6 +8,8 @@ import logger from './logger.js';
 import { sendNotification, sendBroadcastNotification } from './notificationService.js';
 import { getCachedEffectiveTimezone } from './orgContextCache.js';
 
+const announcedNewEmployees = new Set();
+
 // Event registry - maps event types to their configuration and handlers
 const eventRegistry = new Map();
 
@@ -184,11 +186,33 @@ export const notify = async (params) => {
       });
     }
 
+    if (type === 'new_employee_joined' && data?.employee?._id) {
+      const employeeKey = String(data.employee._id);
+      if (announcedNewEmployees.has(employeeKey)) {
+        return { success: true, notified: 0, skipped: true, reason: 'ALREADY_SENT' };
+      }
+      const Notification = (await import('../models/notification.model.js')).default;
+      const alreadySent = await Notification.exists({
+        organizationId,
+        type: 'new_employee',
+        'metadata.employeeId': data.employee._id,
+      });
+      if (alreadySent) {
+        announcedNewEmployees.add(employeeKey);
+        return { success: true, notified: 0, skipped: true, reason: 'ALREADY_SENT' };
+      }
+      announcedNewEmployees.add(employeeKey);
+    }
+
     logger.info('Processing notification event', { type, organizationId, hasData: !!data, dataKeys: Object.keys(data) });
 
-    // Resolve recipients
+    // Resolve recipients, then collapse an employee profile and its login into one person
     const resolvedRecipients = await resolveRecipients(eventConfig, { ...data, recipients: providedRecipients, organizationId });
-    const recipients = deduplicateRecipients(resolvedRecipients);
+    const { normalizeLifecycleRecipientIds } = await import('./lifecycleNotificationRecipients.js');
+    const recipients = await normalizeLifecycleRecipientIds(
+      deduplicateRecipients(resolvedRecipients),
+      organizationId,
+    );
 
     logger.info('Recipients resolved', { type, recipientCount: recipients.length, recipients });
 

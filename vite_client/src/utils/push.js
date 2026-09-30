@@ -232,8 +232,10 @@ export async function subscribeUser() {
 }
 
 const PUSH_REFRESH_STORAGE_KEY = 'ems_push_subscription_refreshed_at';
-/** Refresh before a typical next workday so overnight zombie FCM endpoints heal on login. */
-const PUSH_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000;
+/** Overnight gap: an open tab heals on return once this age is reached. */
+const PUSH_REFRESH_INTERVAL_MS = 8 * 60 * 60 * 1000;
+/** One fresh endpoint per page load — same result as Disable then Enable. */
+let healedThisPageLoad = false;
 
 function shouldForceDailyPushRefresh() {
   try {
@@ -246,6 +248,7 @@ function shouldForceDailyPushRefresh() {
 }
 
 function markPushSubscriptionRefreshed() {
+  healedThisPageLoad = true;
   try {
     localStorage.setItem(PUSH_REFRESH_STORAGE_KEY, String(Date.now()));
   } catch {
@@ -262,10 +265,9 @@ let syncPushInFlight = null;
 
 /**
  * If permission is already granted, re-sync this device's subscription with the server.
- * Safe to call on every login / page load.
- * - Recreates when the local endpoint is missing on the server (post-410 cleanup)
- * - Recreates about once per ~20h so overnight-stale FCM endpoints heal without Disable/Enable
- * Working endpoints within the refresh window are left alone.
+ * First sync on each page load recreates the endpoint (the working Disable → Enable path).
+ * Later calls in the same load keep that endpoint unless it is missing on the server
+ * or older than the refresh window.
  */
 export async function syncPushSubscriptionIfGranted() {
   if (syncPushInFlight) {
@@ -292,23 +294,27 @@ export async function syncPushSubscriptionIfGranted() {
       }
 
       const existing = await registration.pushManager.getSubscription();
-      if (!existing) {
-        return null;
-      }
 
       let endpointOnServer = false;
-      try {
-        const { data: status } = await axios.get(
-          `${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscription-status`
-        );
-        const endpoints = (status?.subscriptions || []).map((s) => s.endpoint).filter(Boolean);
-        endpointOnServer = endpoints.includes(existing.endpoint);
-      } catch {
-        // If status check fails, keep existing behavior: re-save local sub (do not drop push).
-        endpointOnServer = true;
+      if (existing) {
+        try {
+          const { data: status } = await axios.get(
+            `${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscription-status`
+          );
+          const endpoints = (status?.subscriptions || []).map((s) => s.endpoint).filter(Boolean);
+          endpointOnServer = endpoints.includes(existing.endpoint);
+        } catch {
+          // If status check fails, don't drop a working endpoint on later calls.
+          endpointOnServer = true;
+        }
       }
 
-      const forceNew = !endpointOnServer || shouldForceDailyPushRefresh();
+      const forceNew =
+        !existing ||
+        !healedThisPageLoad ||
+        !endpointOnServer ||
+        shouldForceDailyPushRefresh();
+
       const subscription = await ensurePushSubscription(registration, keyData.publicKey, {
         forceNew,
       });
@@ -320,6 +326,7 @@ export async function syncPushSubscriptionIfGranted() {
       await saveSubscriptionToServer(subscription);
       if (forceNew) {
         markPushSubscriptionRefreshed();
+        healedThisPageLoad = true;
       }
       return subscription;
     } catch {
@@ -330,6 +337,69 @@ export async function syncPushSubscriptionIfGranted() {
   });
 
   return syncPushInFlight;
+}
+
+/**
+ * Keep a granted subscription fresh while the app stays open (no reload).
+ * Runs once after login, again when the tab is shown after the refresh window,
+ * and once when that window ends.
+ */
+export function installPushSubscriptionKeepAlive() {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {
+    return () => {};
+  }
+
+  let timer = null;
+  let boot = null;
+  let stopped = false;
+
+  const runIfDue = () => {
+    if (stopped) return;
+    if (document.visibilityState === 'hidden') return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (healedThisPageLoad && !shouldForceDailyPushRefresh()) return;
+    syncPushSubscriptionIfGranted().catch(() => {});
+  };
+
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    if (stopped) return;
+    let delay = PUSH_REFRESH_INTERVAL_MS;
+    try {
+      const last = Number(localStorage.getItem(PUSH_REFRESH_STORAGE_KEY) || '0');
+      if (Number.isFinite(last) && last > 0) {
+        delay = Math.max(1000, PUSH_REFRESH_INTERVAL_MS - (Date.now() - last));
+      } else {
+        delay = PUSH_REFRESH_INTERVAL_MS;
+      }
+    } catch {
+      delay = PUSH_REFRESH_INTERVAL_MS;
+    }
+    timer = setTimeout(async () => {
+      if (!stopped && document.visibilityState !== 'hidden' && shouldForceDailyPushRefresh()) {
+        await syncPushSubscriptionIfGranted().catch(() => {});
+      }
+      schedule();
+    }, delay);
+  };
+
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') runIfDue();
+  };
+
+  document.addEventListener('visibilitychange', onVisible);
+  schedule();
+  // Heal on open even when this page is not the dashboard and the user does not reload later.
+  boot = setTimeout(() => {
+    runIfDue();
+  }, 1500);
+
+  return () => {
+    stopped = true;
+    document.removeEventListener('visibilitychange', onVisible);
+    if (timer) clearTimeout(timer);
+    if (boot) clearTimeout(boot);
+  };
 }
 
 export async function isPushNotificationSupported() {

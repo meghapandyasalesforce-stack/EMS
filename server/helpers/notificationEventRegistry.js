@@ -15,6 +15,7 @@ import {
   getOnboardingHrRecipients,
   getOnboardingProgressRecipients,
   getAuthoritativeHrRecipients,
+  normalizeLifecycleRecipientIds,
 } from './lifecycleNotificationRecipients.js';
 
 // Helper function to normalize role text
@@ -421,7 +422,14 @@ registerEvent({
   defaultType: 'new_employee',
   defaultPriority: 'medium',
   recipientResolver: async ({ organizationId }) => {
-    return await getHrAdminCeoRecipients(organizationId);
+    const employees = await Employee.find({
+      organizationId,
+      status: 'active',
+    }).select('_id').lean();
+    return normalizeLifecycleRecipientIds(
+      employees.map((person) => person._id),
+      organizationId,
+    );
   },
   messageBuilder: ({ employee }) => {
     return `Welcome ${employee.name} ${employee.lastName || ''} to Paarsiv Technologies Private Limited. We wish you a successful and rewarding journey with us!`;
@@ -701,17 +709,18 @@ const onboardingName = (employee) => {
 
 registerEvent({
   type: 'onboarding_workflow_assigned',
-  defaultTitle: 'New Onboarding Assigned',
+  defaultTitle: 'Welcome to the onboarding process of Paarsiv',
   defaultType: 'onboarding',
   defaultPriority: 'medium',
   recipientResolver: async ({ workflow, employee, organizationId }) =>
     expandOnboardingRecipients([employee?._id, workflow?.employeeId], organizationId),
   messageBuilder: () =>
-    'Welcome! Your onboarding process has been assigned. Please log in and start completing your onboarding tasks.',
+    'Please complete the process.',
   metadataBuilder: ({ employee, workflow }) => ({
-    employeeId: employee?._id,
+    employeeId: employee?._id || workflow?.employeeId,
     workflowId: workflow?._id,
     eventType: 'onboarding_workflow_assigned',
+    url: '/onboarding',
   }),
 });
 

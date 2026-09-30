@@ -30,6 +30,7 @@ import {
   renderPlatformRoutes,
 } from './routes/index.jsx';
 import { isHrmsAuthenticatedUser } from './utils/authSessionUtils';
+import { installPushSubscriptionKeepAlive } from './utils/push';
 
 function ScrollToTop() {
     const { pathname } = useLocation();
@@ -67,6 +68,7 @@ function App() {
         || location.pathname.startsWith('/application/')
         || isPlatformRoute;
     const useHrmsShell = !shouldHideLayout && (!isCareerRoute || isHrmsUser);
+    const pushKeepAliveUserId = authUser?._id || employee?._id || null;
     const sessionBootstrapped = useRef(false);
     const platformBootstrapped = useRef(false);
 
@@ -88,6 +90,11 @@ function App() {
             cancelled = true;
         };
     }, [dispatch, isPlatformRoute]);
+
+    useEffect(() => {
+        if (!useHrmsShell || !pushKeepAliveUserId) return undefined;
+        return installPushSubscriptionKeepAlive();
+    }, [useHrmsShell, pushKeepAliveUserId]);
 
     useEffect(() => {
         if (isPlatformRoute) return undefined;

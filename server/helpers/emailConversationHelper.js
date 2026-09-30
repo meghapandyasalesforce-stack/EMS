@@ -1,6 +1,7 @@
 import { getEmailFrom, getEmailConfig } from '../config/email.config.js';
 export const LEAVE_EMAIL_THREAD_MODULE = 'leave';
 export const REGULARIZATION_EMAIL_THREAD_MODULE = 'regularization';
+export const WFH_EMAIL_THREAD_MODULE = 'wfh';
 
 /** @deprecated Use LEAVE_EMAIL_THREAD_MODULE */
 export const EMAIL_THREAD_MODULES = {
@@ -11,6 +12,7 @@ export const EMAIL_THREAD_MODULES = {
 const MODULE_MESSAGE_ID_PREFIX = {
     [LEAVE_EMAIL_THREAD_MODULE]: 'leave',
     [REGULARIZATION_EMAIL_THREAD_MODULE]: 'attendance-regularization',
+    [WFH_EMAIL_THREAD_MODULE]: 'wfh',
 };
 
 /**
