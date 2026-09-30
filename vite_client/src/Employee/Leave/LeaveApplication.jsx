@@ -33,8 +33,9 @@ function getTodayDateInputValue() {
 }
 
 /**
- * Calendar bounds for leave start: the 5 leave dates still submittable today.
- * today = 8 Sep → selectable leave starts are 4–8 Sep (leave date + 4 includes today).
+ * Calendar bounds for leave start.
+ * Past leave can still be submitted only within 5 days of the leave date.
+ * Future leave start dates are allowed.
  */
 function getLeaveStartCalendarBounds(todayStr = getTodayDateInputValue()) {
   const today = parseLocalDateInput(todayStr) || new Date();
@@ -44,7 +45,6 @@ function getLeaveStartCalendarBounds(todayStr = getTodayDateInputValue()) {
   return {
     todayStr: toDateInputValue(today),
     minStartStr: toDateInputValue(minDate),
-    maxStartStr: toDateInputValue(today),
   };
 }
 
@@ -59,10 +59,6 @@ function getLeaveApplicationWindowError(startDateStr, todayStr = getTodayDateInp
   const startDate = parseLocalDateInput(startDateStr);
   const today = parseLocalDateInput(todayStr);
   if (!startDate || !today) return '';
-
-  if (startDate > today) {
-    return 'Leave start date cannot be in the future.';
-  }
 
   const lastSubmissionDate = new Date(startDate);
   lastSubmissionDate.setDate(lastSubmissionDate.getDate() + (LEAVE_APPLICATION_WINDOW_DAYS - 1));
@@ -144,7 +140,7 @@ const LeaveApplication = () => {
   const [errors, setErrors] = useState({});
   const [myLeaves, setMyLeaves] = useState([]);
   const leaveTypeOptions = useMemo(() => getAllLeaveTypeOptions(), []);
-  const { todayStr, minStartStr, maxStartStr } = getLeaveStartCalendarBounds();
+  const { todayStr, minStartStr } = getLeaveStartCalendarBounds();
 
   useEffect(() => {
     if (user) {
@@ -432,7 +428,7 @@ const LeaveApplication = () => {
                   }}
                   onInvalid={(e) => {
                     if (field !== 'startDate') return;
-                    const message = `Leave can only be applied from ${minStartStr} to ${maxStartStr}.`;
+                    const message = `Leave before ${minStartStr} can only be applied within ${LEAVE_APPLICATION_WINDOW_DAYS} days of the leave date.`;
                     e.target.setCustomValidity(message);
                     toast.error(message);
                   }}
@@ -444,7 +440,6 @@ const LeaveApplication = () => {
                       ? minStartStr
                       : leaveForm.startDate || minStartStr
                   }
-                  max={field === 'startDate' ? maxStartStr : undefined}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base disabled:bg-gray-100"
                 />
                 {field === 'endDate' && leaveForm.isHalfDay && (

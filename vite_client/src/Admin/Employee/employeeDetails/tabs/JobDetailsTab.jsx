@@ -71,24 +71,26 @@ const JobDetailsTab = ({
         icon={FiBriefcase}
         action={
           !isManagerReadOnly ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
               {canPromoteToHr && !isHrManagerProfile && onPromoteToHr ? (
                 <button
                   type="button"
                   onClick={onPromoteToHr}
                   disabled={promotingToHr}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60 sm:h-auto sm:py-1.5"
                 >
-                  <FiUserCheck className="h-4 w-4" />
+                  <FiUserCheck className="h-4 w-4 shrink-0" />
                   {promotingToHr ? 'Updating…' : 'Make HR Manager'}
                 </button>
               ) : null}
               <button
                 type="button"
                 onClick={onEditWork}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:h-auto sm:py-1.5 ${
+                  canPromoteToHr && !isHrManagerProfile && onPromoteToHr ? '' : 'col-span-2 sm:col-span-1'
+                }`}
               >
-                <FiEdit className="h-4 w-4" />
+                <FiEdit className="h-4 w-4 shrink-0" />
                 Edit
               </button>
             </div>

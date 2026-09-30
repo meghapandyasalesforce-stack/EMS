@@ -129,19 +129,12 @@ const EmployeeDetailsPage = () => {
     deductEsi: true,
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [deletingEmployee, setDeletingEmployee] = useState(false);
   const [managerOptions, setManagerOptions] = useState([]);
   const [jobTitleOptions, setJobTitleOptions] = useState([]);
   const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
   const [managerPreview, setManagerPreview] = useState(null);
   const [promotingToHr, setPromotingToHr] = useState(false);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 640);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const {
     employee,
@@ -716,7 +709,7 @@ const EmployeeDetailsPage = () => {
 
   return (
     <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
-      <div className="page-shell-inner hrms-stack px-4 pt-4 sm:px-0 sm:pt-0">
+      <div className="page-shell-inner hrms-stack">
         <nav className="flex flex-wrap items-center gap-3 text-base text-slate-500">
           <Link to="/employees" className="font-semibold text-[#0d9488] hover:underline">
             Employee Directory
@@ -759,29 +752,30 @@ const EmployeeDetailsPage = () => {
           onDeleteClick={() => setOpenDeleteDialog(true)}
         />
 
-        <div className="border-b border-slate-200">
-          <div className="hrms-tabs-scroll" role="tablist">
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`border-b-2 px-4 py-3 text-sm font-medium transition ${
-                  activeTab === tab.id
-                    ? 'border-[#20C997] text-[#0d9488]'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="hrms-main-rail">
-          <div className="min-w-0">{renderTabContent()}</div>
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+            <div className="employee-profile-tabs border-b border-slate-100">
+              <div className="hrms-tabs-scroll px-1" role="tablist">
+                {visibleTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition ${
+                      activeTab === tab.id
+                        ? 'border-[#20C997] text-[#0d9488]'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="employee-detail-body min-w-0">{renderTabContent()}</div>
+          </div>
           <aside className="min-w-0 space-y-4">
             {!hidePayrollForHrExecutive && <PayrollHighlightWidget employee={employee} />}
             <CareerTimelineWidget employee={employee} />
@@ -791,7 +785,13 @@ const EmployeeDetailsPage = () => {
       </div>
 
       {/* Status dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullScreen={isMobile}>
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{ sx: { borderRadius: '16px', mx: 2 } }}
+      >
         <DialogTitle>Confirm status change</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -811,7 +811,13 @@ const EmployeeDetailsPage = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)} fullScreen={isMobile}>
+      <Dialog
+        open={openDeleteDialog}
+        onClose={() => setOpenDeleteDialog(false)}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{ sx: { borderRadius: '16px', mx: 2 } }}
+      >
         <DialogTitle>Delete employee</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -829,7 +835,9 @@ const EmployeeDetailsPage = () => {
       <Dialog
         open={openTerminateDialog}
         onClose={() => !terminatingEmployee && setOpenTerminateDialog(false)}
-        fullScreen={isMobile}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: '16px', mx: 2 } }}
       >
         <DialogTitle>Terminate employee</DialogTitle>
         <DialogContent>
@@ -899,7 +907,6 @@ const EmployeeDetailsPage = () => {
         onClose={() => setOpenEditNameDialog(false)}
         maxWidth="sm"
         fullWidth
-        fullScreen={isMobile}
         PaperProps={{
           sx: {
             borderRadius: '12px',
@@ -948,7 +955,6 @@ const EmployeeDetailsPage = () => {
         onClose={() => setOpenEditWorkDialog(false)}
         maxWidth="md"
         fullWidth
-        fullScreen={isMobile}
         PaperProps={{
           sx: {
             borderRadius: '12px',
@@ -1280,7 +1286,6 @@ const EmployeeDetailsPage = () => {
         onClose={() => setOpenEditPerformanceDialog(false)}
         maxWidth="sm"
         fullWidth
-        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1317,7 +1322,6 @@ const EmployeeDetailsPage = () => {
         onClose={() => setOpenEditPayrollSettingsDialog(false)}
         maxWidth="sm"
         fullWidth
-        fullScreen={isMobile}
       >
         <DialogTitle>Statutory deduction settings</DialogTitle>
         <DialogContent>

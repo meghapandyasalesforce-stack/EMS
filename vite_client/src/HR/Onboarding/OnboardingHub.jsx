@@ -118,8 +118,6 @@ const OnboardingHub = () => {
         [employees, createForm.employeeId],
     );
 
-    const templates = dashboard?.templates || [];
-
     const pickWorkflow = (workflows, preferredId, { fallbackToFirst = false } = {}) => {
         if (!workflows?.length) return null;
         if (preferredId) {
@@ -1164,7 +1162,7 @@ const OnboardingHub = () => {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-lg font-bold mb-1">Start Employee Onboarding</h3>
-                        <p className="text-sm text-gray-500 mb-4">Select employee, template, assignees, and joining date. Workflow stays Scheduled until joining date.</p>
+                        <p className="text-sm text-gray-500 mb-4">Select employee, assignees, and joining date. Workflow stays Scheduled until joining date.</p>
                         <form onSubmit={createWorkflow} className="space-y-4">
                             <div>
                                 <label className="text-sm font-medium">Employee *</label>
@@ -1210,16 +1208,6 @@ const OnboardingHub = () => {
                                         <option key={emp._id || emp.id} value={emp._id || emp.id}>
                                             {emp.name} {emp.lastName} ({emp.email})
                                         </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium">Onboarding Template</label>
-                                <select className="w-full p-2 border rounded-lg mt-1" value={createForm.templateId}
-                                    onChange={(e) => setCreateForm({ ...createForm, templateId: e.target.value })}>
-                                    <option value="">Default template</option>
-                                    {templates.map((t) => (
-                                        <option key={t._id} value={t._id}>{t.name}{t.isDefault ? ' (Default)' : ''}</option>
                                     ))}
                                 </select>
                             </div>

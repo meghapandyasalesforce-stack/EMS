@@ -3,6 +3,8 @@ import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import {
     createEmployeeOnboardingWorkflow,
+    notifyOnboardingStarted,
+    silenceCurrentOnboardingReminders,
     applyProgressToWorkflow,
     addActivity,
     calculateProgressBreakdown,
@@ -120,7 +122,23 @@ const saveWorkflowAndBroadcast = async (workflow, organizationId, { recalculate 
         });
     }
 
-    await workflow.save();
+    try {
+        await workflow.save();
+    } catch (err) {
+        const stale = err?.name === 'VersionError' || /No matching document found/i.test(err?.message || '');
+        if (!stale) throw err;
+        const fresh = await OnboardingWorkflow.findById(workflow._id);
+        if (!fresh) throw err;
+        if (workflow.expectedCompletionDate) fresh.expectedCompletionDate = workflow.expectedCompletionDate;
+        if (workflow.assignedManager) fresh.assignedManager = workflow.assignedManager;
+        if (recalculate) {
+            await synchronizeWorkflowDocuments(fresh);
+            applyProgressToWorkflow(fresh);
+        }
+        await fresh.save();
+        emitOnboardingChangedAsync(organizationId, fresh._id);
+        return;
+    }
     emitOnboardingChangedAsync(organizationId, workflow._id);
 
     if (!wasCompleted && workflow.status === 'Completed') {
@@ -191,6 +209,9 @@ export const createOnboardingWorkflow = asyncHandler(async (req, res) => {
             actorName: req.employee?.name || req.user?.name || 'HR',
         });
         await saveWorkflowAndBroadcast(existing, organizationId);
+        if (!saveAsDraft) {
+            await notifyOnboardingStarted(existing, organizationId, employee);
+        }
         const populated = await lightPopulate(OnboardingWorkflow.findById(existing._id));
         return res.status(200).json({
             success: true,
@@ -653,22 +674,14 @@ export const performWorkflowAction = asyncHandler(async (req, res) => {
         actorName: req.employee?.name || req.user?.name || 'HR',
         metadata: { previousStatus },
     });
+    if (action === 'publish') {
+        silenceCurrentOnboardingReminders(workflow);
+    }
     await saveWorkflowAndBroadcast(workflow, organizationId);
 
     if (action === 'publish') {
         const employee = await getNotificationEmployee(workflow);
-        void Promise.all([
-            notifyOnboarding({
-                type: 'onboarding_workflow_assigned',
-                organizationId,
-                data: { employee, workflow },
-            }),
-            ...(workflow.tasks || []).filter((task) => task.assignedTo).map((task) => notifyOnboarding({
-                type: 'onboarding_task_assigned',
-                organizationId,
-                data: { employee, workflow, task },
-            })),
-        ]);
+        await notifyOnboardingStarted(workflow, organizationId, employee);
     }
 
     const populated = await populateWorkflow(OnboardingWorkflow.findById(workflow._id));

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -34,8 +34,119 @@ const VISIBLE_STEPS = [
 ];
 
 const inputClass =
-    'flex-1 rounded-lg border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30';
+    'w-full min-w-0 max-w-full flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30';
 const selectClass = inputClass;
+
+function ResponsiveSelect({ name, value, onChange, required, disabled, options, placeholder }) {
+    const rootRef = useRef(null);
+    const [open, setOpen] = useState(false);
+    const [menuStyle, setMenuStyle] = useState(null);
+    const selected = options.find((option) => String(option.value) === String(value));
+
+    const placeMenu = useCallback(() => {
+        const rect = rootRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const gap = 4;
+        const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
+        const spaceAbove = rect.top - gap - 8;
+        const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+        const maxHeight = Math.max(120, Math.min(240, openUp ? spaceAbove : spaceBelow));
+        setMenuStyle({
+            position: 'fixed',
+            left: rect.left,
+            width: rect.width,
+            maxHeight,
+            zIndex: 60,
+            ...(openUp
+                ? { bottom: window.innerHeight - rect.top + gap }
+                : { top: rect.bottom + gap }),
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!open) return undefined;
+        placeMenu();
+        const close = () => setOpen(false);
+        const onPointer = (event) => {
+            if (!rootRef.current?.contains(event.target)) close();
+        };
+        window.addEventListener('resize', placeMenu);
+        window.addEventListener('scroll', placeMenu, true);
+        document.addEventListener('pointerdown', onPointer);
+        return () => {
+            window.removeEventListener('resize', placeMenu);
+            window.removeEventListener('scroll', placeMenu, true);
+            document.removeEventListener('pointerdown', onPointer);
+        };
+    }, [open, placeMenu]);
+
+    return (
+        <div ref={rootRef} className="relative min-w-0 w-full flex-1">
+            <button
+                type="button"
+                disabled={disabled}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-required={required || undefined}
+                onClick={() => {
+                    if (disabled) return;
+                    setOpen((current) => !current);
+                }}
+                className={`${selectClass} flex items-center justify-between gap-2 bg-white text-left disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
+            >
+                <span className={`truncate ${selected ? 'text-slate-900' : 'text-slate-500'}`}>
+                    {selected?.label || placeholder}
+                </span>
+                <svg className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+            </button>
+            {open && menuStyle ? (
+                <ul
+                    role="listbox"
+                    style={menuStyle}
+                    className="overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                >
+                    <li>
+                        <button
+                            type="button"
+                            role="option"
+                            aria-selected={!value}
+                            className="block w-full px-3 py-2.5 text-left text-sm text-slate-500 hover:bg-slate-50"
+                            onClick={() => {
+                                onChange({ target: { name, value: '' } });
+                                setOpen(false);
+                            }}
+                        >
+                            {placeholder}
+                        </button>
+                    </li>
+                    {options.map((option) => {
+                        const isSelected = String(option.value) === String(value);
+                        return (
+                            <li key={option.value}>
+                                <button
+                                    type="button"
+                                    role="option"
+                                    aria-selected={isSelected}
+                                    className={`block w-full break-words px-3 py-2.5 text-left text-sm ${
+                                        isSelected ? 'bg-emerald-50 font-medium text-emerald-800' : 'text-slate-800 hover:bg-slate-50'
+                                    }`}
+                                    onClick={() => {
+                                        onChange({ target: { name, value: option.value } });
+                                        setOpen(false);
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            ) : null}
+        </div>
+    );
+}
 
 function AddEmployee() {
     const queryClient = useQueryClient();
@@ -689,135 +800,100 @@ function AddEmployee() {
             {catalogLoading ? (
                 <p className="text-sm text-slate-500">Loading organization structure…</p>
             ) : null}
-            <div className="flex flex-col gap-4 lg:flex-row">
-                <select
-                    className={selectClass}
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
+                <ResponsiveSelect
                     name="departmentId"
                     value={form.departmentId}
                     onChange={handleChange}
                     required
-                >
-                    <option value="">Select department</option>
-                    {(catalog.departments || []).map((dep) => (
-                        <option key={dep._id} value={dep._id}>{dep.name}</option>
-                    ))}
-                </select>
-                <select
-                    className={selectClass}
+                    placeholder="Select department"
+                    options={(catalog.departments || []).map((dep) => ({ value: dep._id, label: dep.name }))}
+                />
+                <ResponsiveSelect
                     name="teamId"
                     value={form.teamId}
                     onChange={handleChange}
                     disabled={!form.departmentId}
-                >
-                    <option value="">Team (optional)</option>
-                    {filteredTeams.map((team) => (
-                        <option key={team._id} value={team._id}>{team.name}</option>
-                    ))}
-                </select>
+                    placeholder="Team (optional)"
+                    options={filteredTeams.map((team) => ({ value: team._id, label: team.name }))}
+                />
             </div>
-            <div className="flex flex-col gap-4 lg:flex-row">
-                <select
-                    className={selectClass}
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
+                <ResponsiveSelect
                     name="jobRoleId"
                     value={form.jobRoleId}
                     onChange={handleChange}
                     required
                     disabled={!form.departmentId}
-                >
-                    <option value="">Select job role</option>
-                    {filteredJobRoles.map((role) => (
-                        <option key={role._id} value={role._id}>{role.name}</option>
-                    ))}
-                </select>
-                <select
-                    className={selectClass}
+                    placeholder="Select job role"
+                    options={filteredJobRoles.map((role) => ({ value: role._id, label: role.name }))}
+                />
+                <ResponsiveSelect
                     name="designationId"
                     value={form.designationId}
                     onChange={handleChange}
                     required
-                >
-                    <option value="">Select designation</option>
-                    {(catalog.designations || []).map((des) => (
-                        <option key={des._id} value={des._id}>{des.name}</option>
-                    ))}
-                </select>
+                    placeholder="Select designation"
+                    options={(catalog.designations || []).map((des) => ({ value: des._id, label: des.name }))}
+                />
             </div>
-            <div className="flex flex-col gap-4 lg:flex-row">
-                <select
-                    className={selectClass}
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
+                <ResponsiveSelect
                     name="employmentTypeId"
                     value={form.employmentTypeId}
                     onChange={handleChange}
-                >
-                    <option value="">Employment type (optional)</option>
-                    {(catalog.employmentTypes || []).map((et) => (
-                        <option key={et._id} value={et._id}>{et.name}</option>
-                    ))}
-                </select>
-                <select
-                    className={selectClass}
+                    placeholder="Employment type (optional)"
+                    options={(catalog.employmentTypes || []).map((et) => ({ value: et._id, label: et.name }))}
+                />
+                <ResponsiveSelect
                     name="workModeId"
                     value={form.workModeId}
                     onChange={handleChange}
-                >
-                    <option value="">Work mode (optional)</option>
-                    {(catalog.workModes || []).map((wm) => (
-                        <option key={wm._id} value={wm._id}>{wm.name}</option>
-                    ))}
-                </select>
+                    placeholder="Work mode (optional)"
+                    options={(catalog.workModes || []).map((wm) => ({ value: wm._id, label: wm.name }))}
+                />
             </div>
-            <div className="flex flex-col gap-4 lg:flex-row">
-                <select
-                    className={selectClass}
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
+                <ResponsiveSelect
                     name="locationId"
                     value={form.locationId}
                     onChange={handleChange}
-                >
-                    <option value="">Location (optional)</option>
-                    {(catalog.locations || []).map((loc) => (
-                        <option key={loc._id} value={loc._id}>{loc.name}</option>
-                    ))}
-                </select>
-                <select
-                    className={selectClass}
+                    placeholder="Location (optional)"
+                    options={(catalog.locations || []).map((loc) => ({ value: loc._id, label: loc.name }))}
+                />
+                <ResponsiveSelect
                     name="shiftId"
                     value={form.shiftId}
                     onChange={handleChange}
-                >
-                    <option value="">No Shift</option>
-                    {shiftOptions.map((s) => (
-                        <option key={s.key} value={s.key}>
-                            {s.name}
-                            {s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}
-                        </option>
-                    ))}
-                </select>
+                    placeholder="No Shift"
+                    options={shiftOptions.map((s) => ({
+                        value: s.key,
+                        label: `${s.name}${s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}`,
+                    }))}
+                />
             </div>
-            <div className="flex flex-col gap-4 lg:flex-row">
-                <select
-                    className={selectClass}
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
+                <ResponsiveSelect
                     name="manager"
                     value={form.manager}
                     onChange={handleChange}
                     required={managers.length > 0}
                     disabled={loadingManagers}
-                >
-                    <option value="">
-                        {loadingManagers ? 'Loading managers...' : managers.length > 0 ? 'Select manager (required)' : 'Select manager'}
-                    </option>
-                    {managers.length === 0 && !loadingManagers ? (
-                        <option value="Admin">Admin profile — organization root (no manager)</option>
-                    ) : null}
-                    {managers.map((mgr) => {
-                        const fullName = `${mgr.name}${mgr.lastName ? ` ${mgr.lastName}` : ''}`.trim();
-                        const isRoot = !mgr.managerId;
-                        return (
-                            <option key={mgr._id || mgr.employeeId} value={mgr._id || fullName}>
-                                {fullName} — {mgr.position}{isRoot ? ' (Admin root)' : ''}
-                            </option>
-                        );
-                    })}
-                </select>
+                    placeholder={loadingManagers ? 'Loading managers...' : managers.length > 0 ? 'Select manager (required)' : 'Select manager'}
+                    options={[
+                        ...(managers.length === 0 && !loadingManagers
+                            ? [{ value: 'Admin', label: 'Admin profile — organization root (no manager)' }]
+                            : []),
+                        ...managers.map((mgr) => {
+                            const fullName = `${mgr.name}${mgr.lastName ? ` ${mgr.lastName}` : ''}`.trim();
+                            const isRoot = !mgr.managerId;
+                            return {
+                                value: mgr._id || fullName,
+                                label: `${fullName} — ${mgr.position}${isRoot ? ' (Admin root)' : ''}`,
+                            };
+                        }),
+                    ]}
+                />
             </div>
             {!loadingManagers && managers.length === 0 ? (
                 <p className="text-xs text-slate-500">
@@ -830,19 +906,15 @@ function AddEmployee() {
                     can report directly to Admin; others follow their department hierarchy.
                 </p>
             ) : null}
-            <div className="flex flex-col gap-4 lg:flex-row">
-                <select
-                    className={selectClass}
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
+                <ResponsiveSelect
                     name="jobCategory"
                     value={form.jobCategory}
                     onChange={handleChange}
                     required
-                >
-                    <option value="">Select job category</option>
-                    {jobCategories.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                </select>
+                    placeholder="Select job category"
+                    options={jobCategories.map((cat) => ({ value: cat, label: cat }))}
+                />
                 <input
                     className={inputClass}
                     name="salary"
@@ -860,24 +932,18 @@ function AddEmployee() {
                         This controls which dashboard and modules they get after login. Department and job title are labels only — they do not pick the home screen.
                     </p>
                 </div>
-                <select
-                    className={selectClass}
+                <ResponsiveSelect
                     name="systemRole"
                     value={form.systemRole || DEFAULT_SYSTEM_ROLE}
                     onChange={handleChange}
                     required
                     disabled={loadingRoles}
-                >
-                    <option value="">{loadingRoles ? 'Loading access options…' : 'Select access & home'}</option>
-                    {roleCatalog.map((role) => {
-                        const home = getSystemRoleHome(role.id);
-                        return (
-                            <option key={role.id} value={role.id}>
-                                {role.label} → {home.label}
-                            </option>
-                        );
-                    })}
-                </select>
+                    placeholder={loadingRoles ? 'Loading access options…' : 'Select access & home'}
+                    options={roleCatalog.map((role) => ({
+                        value: role.id,
+                        label: `${role.label} → ${getSystemRoleHome(role.id).label}`,
+                    }))}
+                />
                 {form.systemRole ? (
                     <p className="text-xs text-slate-600">
                         Opens <span className="font-medium text-slate-800">{getSystemRoleHome(form.systemRole).label}</span>
@@ -1018,9 +1084,9 @@ function AddEmployee() {
     }
 
     return (
-        <div className="min-h-screen bg-[#F5F7FB]">
+        <div className="min-h-screen overflow-x-hidden bg-[#F5F7FB]">
             <div className="page-shell">
-                <div className="page-shell-inner rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-8">
+                <div className="page-shell-inner min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
                     <h1 className="mb-2 text-xl font-semibold text-slate-900 sm:text-2xl">Add employee</h1>
                     <p className="mb-6 text-sm text-slate-500">
                         Job details describe where they sit. Access &amp; home screen chooses their dashboard and modules (like Zoho roles).

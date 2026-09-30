@@ -64,19 +64,12 @@ class LeaveValidationService {
     }
 
     /**
-     * Leave start must be today or in the past.
-     * Application day must be on or before (leave start + 4 calendar days).
+     * Past leave must be submitted on or before (leave start + 4 calendar days).
+     * Future leave start dates are allowed.
      * End date is not constrained by this window (must still be on/after start elsewhere).
      */
     checkLeaveApplicationWindow(startDate, endDate, applicationDate = this.getTodayLocal()) {
         const today = applicationDate;
-
-        if (startDate > today) {
-            return {
-                allowed: false,
-                reason: 'Leave start date cannot be in the future.',
-            };
-        }
 
         const lastSubmissionDate = new Date(startDate);
         lastSubmissionDate.setDate(

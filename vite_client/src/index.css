@@ -431,6 +431,14 @@
   border-bottom: 1px solid rgb(243 244 246);
 }
 
+.employee-detail-body > .space-y-6 > section,
+.employee-detail-body > section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .employee-profile-tabs .hrms-tabs-scroll {
   display: flex;
   width: 100%;
@@ -802,6 +810,11 @@ canvas {
 
   .main-scroll-area button {
     white-space: normal;
+  }
+
+  .main-scroll-area .hrms-tabs-scroll > button {
+    max-width: none;
+    white-space: nowrap;
   }
 
   /*

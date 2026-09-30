@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 import { getAuthEmployeeId } from '../../utils/authUser';
@@ -221,6 +221,7 @@ const CircleMeter = ({ value, total, label, used, valueLabel = LEAVE_UI.youCanTa
 const LeaveAttendanceHub = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const attendance = useSelector((state) => state.attendance);
   const leaveState = useSelector((state) => state.employeeLeave);
   const authUser = useSelector((state) => state.auth.user);
@@ -234,7 +235,12 @@ const LeaveAttendanceHub = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [leaveBalanceError, setLeaveBalanceError] = useState('');
-  const [panelTab, setPanelTab] = useState('attendance-log');
+  const requestedPanel = location.state?.panelTab;
+  const [panelTab, setPanelTab] = useState(
+    ['attendance-log', 'leave-summary', 'regularization-history', 'wfh-request'].includes(requestedPanel)
+      ? requestedPanel
+      : 'attendance-log'
+  );
   const [selectedMobileDateKey, setSelectedMobileDateKey] = useState(null);
   const [regularizationRequestsAll, setRegularizationRequestsAll] = useState([]);
   const [regularizationLimits, setRegularizationLimits] = useState(null);

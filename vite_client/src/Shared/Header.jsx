@@ -17,6 +17,7 @@ import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portal
 import PortalSwitcher from '../components/PortalSwitcher';
 import RoleBucketBadges from '../components/RoleBucketBadges';
 import useHrmsPopupDismiss from '../Hooks/useHrmsPopupDismiss';
+import useDocumentModeSettings from '../Hooks/useDocumentModeSettings';
 import { mergeSessionProfile, getProfileDisplayName } from '../utils/profileUtils';
 import { clearOrgAdminCredentials } from '../utils/orgAdminCredentials';
 import { isHrmsAuthenticatedUser } from '../utils/authSessionUtils';
@@ -127,9 +128,10 @@ const Header = () => {
     );
 
     const saasFeatures = useSelector((state) => state.auth.saasFeatures) || {};
+    const documentModes = useDocumentModeSettings();
 
     const navItems = useMemo(() => {
-        return getNavigationItems(
+        const items = getNavigationItems(
             user,
             employee,
             permissions,
@@ -137,7 +139,16 @@ const Header = () => {
             effectivePortal,
             saasFeatures
         );
-    }, [user, employee, permissions, permissionFlags, effectivePortal, saasFeatures]);
+        if (!documentModes.ready) return items;
+        const requestsOn = documentModes.enableDocumentRequests;
+        const selfServiceOn = documentModes.enableSelfServiceDocuments;
+        if (requestsOn && selfServiceOn) return items;
+        return items.filter((item) => {
+            if (item.path === '/employee/document-requests') return requestsOn || selfServiceOn;
+            if (item.path === '/admin/document-management') return requestsOn || selfServiceOn;
+            return true;
+        });
+    }, [user, employee, permissions, permissionFlags, effectivePortal, saasFeatures, documentModes]);
 
     const handleLogout = async () => {
         try {

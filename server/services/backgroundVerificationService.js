@@ -336,6 +336,7 @@ export async function createBgvCase({
     checkTypes,
     actor,
     req,
+    silent = false,
 }) {
     const settings = await getOrCreateLifecycleSettings(organizationId);
     if (!isFeatureEnabled(settings, 'backgroundVerification')) {
@@ -410,11 +411,13 @@ export async function createBgvCase({
         after: bgvCase.toObject(),
     });
 
-    await notify({
-        type: 'lifecycle_bgv_initiated',
-        organizationId,
-        data: { bgvCase },
-    }).catch(() => {});
+    if (!silent) {
+        await notify({
+            type: 'lifecycle_bgv_initiated',
+            organizationId,
+            data: { bgvCase },
+        }).catch(() => {});
+    }
 
     await syncBgvProgressToWorkflow(bgvCase, { actor }).catch(() => {});
 

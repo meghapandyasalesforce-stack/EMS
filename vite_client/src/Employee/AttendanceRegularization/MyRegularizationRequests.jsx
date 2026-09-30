@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSelector } from 'react-redux';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
@@ -50,6 +51,7 @@ const MyRegularizationRequests = () => {
         reason: ''
     });
     const [submitting, setSubmitting] = useState(false);
+    const [formError, setFormError] = useState('');
     const [limits, setLimits] = useState(null);
     const [limitsLoading, setLimitsLoading] = useState(true);
 
@@ -131,27 +133,30 @@ const MyRegularizationRequests = () => {
             return;
         }
         
-        if (!formData.attendanceDate || !formData.reason) {
-            toast.warning('Please fill in all required fields');
+        const needsClockIn = formData.regularizationType === 'missing_clock_in'
+            || formData.regularizationType === 'both'
+            || formData.regularizationType === 'incorrect_time';
+        const needsClockOut = formData.regularizationType === 'missing_clock_out'
+            || formData.regularizationType === 'both'
+            || formData.regularizationType === 'incorrect_time';
+
+        if (!formData.attendanceDate) {
+            setFormError('attendanceDate');
             return;
         }
-
-        if (formData.regularizationType !== 'full_day') {
-            // Validate based on regularization type
-            if ((formData.regularizationType === 'missing_clock_in' || 
-                 formData.regularizationType === 'both' || 
-                 formData.regularizationType === 'incorrect_time') && !formData.requestedClockIn) {
-                toast.warning('Requested Clock In time is required');
-                return;
-            }
-
-            if ((formData.regularizationType === 'missing_clock_out' || 
-                 formData.regularizationType === 'both' || 
-                 formData.regularizationType === 'incorrect_time') && !formData.requestedClockOut) {
-                toast.warning('Requested Clock Out time is required');
-                return;
-            }
+        if (needsClockIn && !formData.requestedClockIn) {
+            setFormError('requestedClockIn');
+            return;
         }
+        if (needsClockOut && !formData.requestedClockOut) {
+            setFormError('requestedClockOut');
+            return;
+        }
+        if (!formData.reason.trim()) {
+            setFormError('reason');
+            return;
+        }
+        setFormError('');
 
         try {
             setSubmitting(true);
@@ -179,6 +184,7 @@ const MyRegularizationRequests = () => {
             toast.success('Regularization request submitted successfully');
             setShowCreateModal(false);
             fetchLimits();
+            setFormError('');
             setFormData({
                 attendanceDate: '',
                 regularizationType: 'missing_clock_in',
@@ -381,11 +387,11 @@ const MyRegularizationRequests = () => {
             </div>
 
             {/* Create Request Modal */}
-            {showCreateModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
-                    <div className="bg-white rounded-lg p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-x-hidden overflow-y-auto">
+            {showCreateModal && createPortal(
+                <div className="fixed inset-0 z-[11000] flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:items-center sm:p-4">
+                    <div className="my-auto w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-lg bg-white p-4 sm:p-6 max-h-[calc(100dvh-1.5rem)]">
                         <h3 className="text-lg font-semibold mb-4">Create Attendance Regularization Request</h3>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form noValidate onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Attendance Date <span className="text-red-500">*</span>
@@ -393,11 +399,16 @@ const MyRegularizationRequests = () => {
                                 <input
                                     type="date"
                                     value={formData.attendanceDate}
-                                    onChange={(e) => setFormData({ ...formData, attendanceDate: e.target.value })}
+                                    onChange={(e) => {
+                                        setFormError('');
+                                        setFormData({ ...formData, attendanceDate: e.target.value });
+                                    }}
                                     max={new Date().toISOString().split('T')[0]}
-                                    className="w-full p-3 border rounded-lg"
-                                    required
+                                    className={`w-full p-3 border rounded-lg ${formError === 'attendanceDate' ? 'border-red-500' : ''}`}
                                 />
+                                {formError === 'attendanceDate' && (
+                                    <p className="mt-1 text-sm text-red-600">Please fill out this field</p>
+                                )}
                             </div>
 
                             <div>
@@ -406,16 +417,17 @@ const MyRegularizationRequests = () => {
                                 </label>
                                 <select
                                     value={formData.regularizationType}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                        setFormError('');
                                         setFormData({
                                             ...formData,
                                             regularizationType: e.target.value,
                                             ...(e.target.value === 'full_day'
                                                 ? { requestedClockIn: '', requestedClockOut: '', clockOutNextDay: false }
                                                 : {})
-                                        })}
+                                        });
+                                    }}
                                     className="w-full p-3 border rounded-lg"
-                                    required
                                 >
                                     <option value="missing_clock_in">Missing Clock In</option>
                                     <option value="missing_clock_out">Missing Clock Out</option>
@@ -435,10 +447,15 @@ const MyRegularizationRequests = () => {
                                     <input
                                         type="time"
                                         value={formData.requestedClockIn}
-                                        onChange={(e) => setFormData({ ...formData, requestedClockIn: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                        required
+                                        onChange={(e) => {
+                                            setFormError('');
+                                            setFormData({ ...formData, requestedClockIn: e.target.value });
+                                        }}
+                                        className={`w-full p-3 border rounded-lg ${formError === 'requestedClockIn' ? 'border-red-500' : ''}`}
                                     />
+                                    {formError === 'requestedClockIn' && (
+                                        <p className="mt-1 text-sm text-red-600">Please fill out this field</p>
+                                    )}
                                 </div>
                             )}
 
@@ -453,10 +470,15 @@ const MyRegularizationRequests = () => {
                                     <input
                                         type="time"
                                         value={formData.requestedClockOut}
-                                        onChange={(e) => setFormData({ ...formData, requestedClockOut: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                        required
+                                        onChange={(e) => {
+                                            setFormError('');
+                                            setFormData({ ...formData, requestedClockOut: e.target.value });
+                                        }}
+                                        className={`w-full p-3 border rounded-lg ${formError === 'requestedClockOut' ? 'border-red-500' : ''}`}
                                     />
+                                    {formError === 'requestedClockOut' && (
+                                        <p className="mt-1 text-sm text-red-600">Please fill out this field</p>
+                                    )}
                                 </div>
                                 <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-700">
                                     <input
@@ -480,13 +502,18 @@ const MyRegularizationRequests = () => {
                                 </label>
                                 <textarea
                                     value={formData.reason}
-                                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                                    onChange={(e) => {
+                                        setFormError('');
+                                        setFormData({ ...formData, reason: e.target.value });
+                                    }}
                                     placeholder="Please provide a reason for this regularization request..."
-                                    className="w-full p-3 border rounded-lg"
+                                    className={`w-full p-3 border rounded-lg ${formError === 'reason' ? 'border-red-500' : ''}`}
                                     rows="4"
-                                    required
                                     maxLength={500}
                                 />
+                                {formError === 'reason' && (
+                                    <p className="mt-1 text-sm text-red-600">Please fill out this field</p>
+                                )}
                                 <p className="text-xs text-gray-500 mt-1">{formData.reason.length}/500 characters</p>
                             </div>
 
@@ -495,6 +522,7 @@ const MyRegularizationRequests = () => {
                                     type="button"
                                     onClick={() => {
                                         setShowCreateModal(false);
+                                        setFormError('');
                                         setFormData({
                                             attendanceDate: '',
                                             regularizationType: 'missing_clock_in',
@@ -525,7 +553,8 @@ const MyRegularizationRequests = () => {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

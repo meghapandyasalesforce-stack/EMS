@@ -5,8 +5,9 @@ import {
   resolveThreadRootAfterSend,
   LEAVE_EMAIL_THREAD_MODULE,
   REGULARIZATION_EMAIL_THREAD_MODULE,
+  WFH_EMAIL_THREAD_MODULE,
 } from './emailConversationHelper.js';
-import { sendMailWithSentCopy, verifyEmailTransporter } from './emailSentMailboxHelper.js';
+import { sendMailWithSentCopy, verifyEmailTransporter, queueSentMailboxCopy } from './emailSentMailboxHelper.js';
 
 const LEAVE_EMAIL_SENDER_NAME = 'Paarsiv Technologies Private Limited';
 const LOGO_URL_LIGHT = 'https://www.paarsiv.com/wp-content/uploads/2024/08/paarsiv-1.png';
@@ -254,6 +255,7 @@ export const sendWelcomeEmail = async (email, name, password = null, resetUrl = 
     // Send the email
     logger.info('Sending welcome email...', { to: email });
     const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     logger.info('Welcome email sent successfully', { 
       email, 
       messageId: info.messageId,
@@ -466,6 +468,7 @@ export const sendPasswordResetEmail = async (email, name, resetUrl) => {
   try {
     await transporter.verify();
     const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     logger.info('Password reset email sent', { email, messageId: info.messageId });
   } catch (error) {
     logger.error('Error sending password reset email', { email, error: error.message });
@@ -607,6 +610,7 @@ export const sendNotificationEmail = async (email, subject, message, html) => {
   try {
     await transporter.verify();
     const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     logger.info('Notification email sent', { email, messageId: info.messageId });
   } catch (error) {
     logger.error('Error sending notification email', { email, error: error.message });
@@ -1306,7 +1310,8 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
 
   try {
     await verifyEmailTransporter(transporter);
-    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     const threadRootMessageId = resolveThreadRootAfterSend(
       threadOptions.threadRootMessageId || leaveData.emailThreadMessageId,
       conversationOptions,
@@ -1498,30 +1503,30 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
     <p class="message">Dear ${data.employeeName || 'Employee'},</p>
     <p class="message">Your leave request has been <strong>${statusText}</strong>.</p>
     
-    <table class="info-table">
+    <table class="info-table" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background-color:#5a5a5a;border-radius:8px;">
       <tr>
-        <td class="info-label">Employee Name</td>
-        <td class="info-value">${data.employeeName || 'N/A'}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Employee Name</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${data.employeeName || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">Employee ID</td>
-        <td class="info-value">${data.employeeId || 'N/A'}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Employee ID</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${data.employeeId || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">Leave Dates</td>
-        <td class="info-value">${startDate} to ${endDate}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Leave Dates</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${startDate} to ${endDate}</td>
       </tr>
       <tr>
-        <td class="info-label">Number of Days</td>
-        <td class="info-value">${numberOfDays}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Number of Days</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${numberOfDays}</td>
       </tr>
       <tr>
-        <td class="info-label">${remarksLabel}</td>
-        <td class="info-value">${remarks}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">${remarksLabel}</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${remarks}</td>
       </tr>
       <tr>
-        <td class="info-label">Status</td>
-        <td class="info-value"><span class="status-badge status-${status}">${statusText}</span></td>
+        <td class="info-label" style="padding:14px 16px;font-weight:bold;color:#ffffff;width:40%;">Status</td>
+        <td class="info-value" style="padding:14px 16px;color:#f3f4f6;"><span class="status-badge status-${status}" style="display:inline-block;padding:6px 12px;border-radius:4px;font-weight:bold;font-size:14px;background-color:${isApproved ? '#E8F8EF' : '#FDECEC'};color:${isApproved ? '#2E7D32' : '#C62828'};">${statusText}</span></td>
       </tr>
     </table>
 
@@ -1589,7 +1594,8 @@ export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails 
 
   try {
     await verifyEmailTransporter(transporter);
-    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     const threadRootMessageId = resolveThreadRootAfterSend(
       threadOptions.threadRootMessageId || leaveData.emailThreadMessageId,
       conversationOptions,
@@ -1656,7 +1662,8 @@ export const sendLeaveRejectionEmail = async (leaveData, employeeEmail, ccEmails
 
   try {
     await verifyEmailTransporter(transporter);
-    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     const threadRootMessageId = resolveThreadRootAfterSend(
       threadOptions.threadRootMessageId || leaveData.emailThreadMessageId,
       conversationOptions,
@@ -1720,7 +1727,8 @@ export const sendRegularizationRequestEmail = async (regularizationData, approve
 
   try {
     await verifyEmailTransporter(transporter);
-    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     const threadRootMessageId = resolveThreadRootAfterSend(
       threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId,
       conversationOptions,
@@ -1786,7 +1794,8 @@ export const sendRegularizationApprovalEmail = async (regularizationData, employ
 
   try {
     await verifyEmailTransporter(transporter);
-    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     const threadRootMessageId = resolveThreadRootAfterSend(
       threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId,
       conversationOptions,
@@ -1853,7 +1862,8 @@ export const sendRegularizationRejectionEmail = async (regularizationData, emplo
 
   try {
     await verifyEmailTransporter(transporter);
-    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
     const threadRootMessageId = resolveThreadRootAfterSend(
       threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId,
       conversationOptions,
@@ -2132,7 +2142,7 @@ const generateWfhRequestEmailTemplate = (data) => {
  * @param {string} employeeEmail - Employee email address (used for reply-to)
  * @returns {Promise<void>}
  */
-export const sendWfhRequestEmail = async (wfhData, approverEmail, ccEmails = [], employeeEmail = null) => {
+export const sendWfhRequestEmail = async (wfhData, approverEmail, ccEmails = [], employeeEmail = null, threadOptions = {}) => {
   const transporter = createEmailTransporter();
   const emailFrom = getLeaveEmailFrom();
 
@@ -2141,13 +2151,23 @@ export const sendWfhRequestEmail = async (wfhData, approverEmail, ccEmails = [],
   }
 
   const ccList = buildLeaveCcList(ccEmails, approverEmail);
+  const recordId = wfhData._id || wfhData.id || threadOptions.recordId;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || wfhData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: WFH_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'initial',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: approverEmail,
     cc: ccList.length > 0 ? ccList : undefined,
     subject: `Work From Home Request - ${wfhData.employeeName || 'Employee'}`,
-    html: generateWfhRequestEmailTemplate(wfhData)
+    html: generateWfhRequestEmailTemplate(wfhData),
+    ...conversationOptions,
   };
 
   // Always send from system SMTP account; allow manager to reply to the employee
@@ -2158,13 +2178,22 @@ export const sendWfhRequestEmail = async (wfhData, approverEmail, ccEmails = [],
   try {
     await transporter.verify();
     const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
+    const resolvedThreadRootMessageId = resolveThreadRootAfterSend(
+      threadRootMessageId,
+      conversationOptions,
+      info.messageId,
+      'initial'
+    );
     logger.info('WFH request email sent', {
       from: emailFrom,
       replyTo: employeeEmail,
       to: approverEmail,
       cc: ccList,
-      messageId: info.messageId
+      messageId: info.messageId,
+      threadRootMessageId: resolvedThreadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId: resolvedThreadRootMessageId };
   } catch (error) {
     logger.error('Error sending WFH request email', {
       from: emailFrom,
@@ -2319,38 +2348,38 @@ const generateWfhDecisionEmailTemplate = (data, status) => {
     <p class="message">Dear ${data.employeeName || 'Employee'},</p>
     <p class="message">Your Work From Home request has been <strong>${statusText}</strong>.</p>
 
-    <table class="info-table">
+    <table class="info-table" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background-color:#5a5a5a;border-radius:8px;">
       <tr>
-        <td class="info-label">Employee Name</td>
-        <td class="info-value">${data.employeeName || 'N/A'}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Employee Name</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${data.employeeName || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">Employee ID</td>
-        <td class="info-value">${data.employeeId || 'N/A'}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Employee ID</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${data.employeeId || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">WFH Period</td>
-        <td class="info-value">${wfhDate}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">WFH Period</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${wfhDate}</td>
       </tr>
       <tr>
-        <td class="info-label">WFH Type</td>
-        <td class="info-value">${wfhType}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">WFH Type</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${wfhType}</td>
       </tr>
       <tr>
-        <td class="info-label">Manager Name</td>
-        <td class="info-value">${data.managerName || 'N/A'}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Manager Name</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${data.managerName || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">Reviewed By</td>
-        <td class="info-value">${data.reviewerName || 'N/A'}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">Reviewed By</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${data.reviewerName || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">${remarksLabel}</td>
-        <td class="info-value">${remarks}</td>
+        <td class="info-label" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;font-weight:bold;color:#ffffff;width:40%;">${remarksLabel}</td>
+        <td class="info-value" style="padding:14px 16px;border-bottom:1px solid #d0d0d0;color:#f3f4f6;">${remarks}</td>
       </tr>
       <tr>
-        <td class="info-label">Status</td>
-        <td class="info-value"><span class="status-badge status-${status}">${statusText}</span></td>
+        <td class="info-label" style="padding:14px 16px;font-weight:bold;color:#ffffff;width:40%;">Status</td>
+        <td class="info-value" style="padding:14px 16px;color:#f3f4f6;"><span class="status-badge status-${status}" style="display:inline-block;padding:6px 12px;border-radius:4px;font-weight:bold;font-size:14px;background-color:${isApproved ? '#E8F8EF' : '#FDECEC'};color:${isApproved ? '#2E7D32' : '#C62828'};">${statusText}</span></td>
       </tr>
     </table>
 
@@ -2373,7 +2402,7 @@ const generateWfhDecisionEmailTemplate = (data, status) => {
 /**
  * Send WFH approval email to employee (same format as leave approval).
  */
-export const sendWfhApprovalEmail = async (wfhData, employeeEmail, ccEmails = []) => {
+export const sendWfhApprovalEmail = async (wfhData, employeeEmail, ccEmails = [], threadOptions = {}) => {
   const transporter = createEmailTransporter();
   const emailFrom = getLeaveEmailFrom();
 
@@ -2382,24 +2411,48 @@ export const sendWfhApprovalEmail = async (wfhData, employeeEmail, ccEmails = []
   }
 
   const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+  const recordId = wfhData._id || wfhData.id || threadOptions.recordId;
+  const requestSubject = `Work From Home Request - ${wfhData.employeeName || 'Employee'}`;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || wfhData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: WFH_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'reply',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: employeeEmail,
     cc: ccList.length > 0 ? ccList : undefined,
-    subject: `Work From Home Request Approved - ${wfhData.employeeName || 'Employee'}`,
-    html: generateWfhDecisionEmailTemplate(wfhData, 'approved')
+    subject: buildThreadReplySubject(
+      requestSubject,
+      threadRootMessageId,
+      `Work From Home Request Approved - ${wfhData.employeeName || 'Employee'}`
+    ),
+    html: generateWfhDecisionEmailTemplate(wfhData, 'approved'),
+    ...conversationOptions,
   };
 
   try {
     await transporter.verify();
     const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
+    const resolvedThreadRootMessageId = resolveThreadRootAfterSend(
+      threadRootMessageId,
+      conversationOptions,
+      info.messageId,
+      'reply'
+    );
     logger.info('WFH approval email sent', {
       from: emailFrom,
       to: employeeEmail,
       cc: ccList,
-      messageId: info.messageId
+      messageId: info.messageId,
+      threadRootMessageId: resolvedThreadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId: resolvedThreadRootMessageId };
   } catch (error) {
     logger.error('Error sending WFH approval email', {
       from: emailFrom,
@@ -2413,7 +2466,7 @@ export const sendWfhApprovalEmail = async (wfhData, employeeEmail, ccEmails = []
 /**
  * Send WFH rejection email to employee (same format as leave rejection).
  */
-export const sendWfhRejectionEmail = async (wfhData, employeeEmail, ccEmails = []) => {
+export const sendWfhRejectionEmail = async (wfhData, employeeEmail, ccEmails = [], threadOptions = {}) => {
   const transporter = createEmailTransporter();
   const emailFrom = getLeaveEmailFrom();
 
@@ -2422,24 +2475,48 @@ export const sendWfhRejectionEmail = async (wfhData, employeeEmail, ccEmails = [
   }
 
   const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+  const recordId = wfhData._id || wfhData.id || threadOptions.recordId;
+  const requestSubject = `Work From Home Request - ${wfhData.employeeName || 'Employee'}`;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || wfhData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: WFH_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'reply',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: employeeEmail,
     cc: ccList.length > 0 ? ccList : undefined,
-    subject: `Work From Home Request Rejected - ${wfhData.employeeName || 'Employee'}`,
-    html: generateWfhDecisionEmailTemplate(wfhData, 'rejected')
+    subject: buildThreadReplySubject(
+      requestSubject,
+      threadRootMessageId,
+      `Work From Home Request Rejected - ${wfhData.employeeName || 'Employee'}`
+    ),
+    html: generateWfhDecisionEmailTemplate(wfhData, 'rejected'),
+    ...conversationOptions,
   };
 
   try {
     await transporter.verify();
     const info = await transporter.sendMail(mailOptions);
+    queueSentMailboxCopy(mailOptions);
+    const resolvedThreadRootMessageId = resolveThreadRootAfterSend(
+      threadRootMessageId,
+      conversationOptions,
+      info.messageId,
+      'reply'
+    );
     logger.info('WFH rejection email sent', {
       from: emailFrom,
       to: employeeEmail,
       cc: ccList,
-      messageId: info.messageId
+      messageId: info.messageId,
+      threadRootMessageId: resolvedThreadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId: resolvedThreadRootMessageId };
   } catch (error) {
     logger.error('Error sending WFH rejection email', {
       from: emailFrom,

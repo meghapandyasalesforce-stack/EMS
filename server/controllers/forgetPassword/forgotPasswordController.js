@@ -6,6 +6,7 @@ import logger from '../../helpers/logger.js';
 import { normalizeEmail } from '../../helpers/authHelpers.js';
 import { resolvePasswordResetTarget } from '../../helpers/identityService.js';
 import { createEmailTransporter, getEmailFrom } from '../../config/email.config.js';
+import { queueSentMailboxCopy } from '../../helpers/emailSentMailboxHelper.js';
 
 const GENERIC_RESET_MESSAGE =
   'If an account exists for this email, you will receive a password reset link shortly. Check your inbox and spam folder.';
@@ -99,7 +100,7 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    await transporter.sendMail({
+    const resetMailOptions = {
       from: emailFrom,
       to: user.email,
       subject: 'Password Reset Request - Paarsiv HR System',
@@ -210,7 +211,9 @@ export const forgotPassword = async (req, res) => {
         </body>
         </html>
       `,
-    });
+    };
+    await transporter.sendMail(resetMailOptions);
+    queueSentMailboxCopy(resetMailOptions);
     logger.info('Forgot password email sent', {
       maskedEmail,
       userType,
