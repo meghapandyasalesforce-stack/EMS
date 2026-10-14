@@ -15,18 +15,15 @@ import NotificationDropdown from '../components/NotificationDropdown';
 import { getNavigationItems } from '../utils/navigationConfig';
 import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portalConfig';
 import PortalSwitcher from '../components/PortalSwitcher';
-import RoleBucketBadges from '../components/RoleBucketBadges';
-import useHrmsPopupDismiss from '../Hooks/useHrmsPopupDismiss';
+import ProfileDropdown from '../components/ProfileDropdown';
 import useDocumentModeSettings from '../Hooks/useDocumentModeSettings';
-import { mergeSessionProfile, getProfileDisplayName } from '../utils/profileUtils';
+import { mergeSessionProfile } from '../utils/profileUtils';
 import { clearOrgAdminCredentials } from '../utils/orgAdminCredentials';
 import { isHrmsAuthenticatedUser } from '../utils/authSessionUtils';
 
 const Header = () => {
-    const [dropdownOpen, setDropdownOpen] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-    const mobileProfileRef = useRef(null);
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const location = useLocation();
@@ -39,15 +36,11 @@ const Header = () => {
     const activePortal = useSelector((state) => state.auth.activePortal);
     const availablePortals = useSelector((state) => state.auth.availablePortals) || [];
     const sessionValidated = useSelector((state) => state.auth.sessionValidated);
-    const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
-    const { username, email } = useMemo(() => {
-        const name = getProfileDisplayName(profile, user, employee);
-        return user || employee
-            ? { username: name || null, email: (user?.email || employee?.email) ?? null }
-            : { username: null, email: null };
-    }, [profile, user, employee]);
+    const email = useMemo(() => (user?.email || employee?.email) ?? null, [user, employee]);
 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [mobileProfileDropdownOpen, setMobileProfileDropdownOpen] = useState(false);
+    const profileDropdownRef = useRef(null);
 
     useEffect(() => {
         const handleResize = () => {
@@ -72,13 +65,26 @@ const Header = () => {
     // Close nav overlays on route change so leftover backdrops cannot block sidebar clicks
     useEffect(() => {
         setMobileMenuOpen(false);
-        setDropdownOpen(false);
         setLogoutModalOpen(false);
+        setMobileProfileDropdownOpen(false);
         document.body.style.overflow = '';
     }, [location.pathname]);
 
-    const closeProfileDropdown = useCallback(() => setDropdownOpen(false), []);
-    useHrmsPopupDismiss(closeProfileDropdown, dropdownOpen);
+    // Close profile dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+                setMobileProfileDropdownOpen(false);
+            }
+        };
+
+        if (mobileProfileDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => {
+                document.removeEventListener('mousedown', handleClickOutside);
+            };
+        }
+    }, [mobileProfileDropdownOpen]);
 
     useEffect(() => {
         if (!sessionValidated || (!user && !employee)) return;
@@ -198,7 +204,6 @@ const Header = () => {
         }
     };
 
-    const toggleDropdown = () => setDropdownOpen(!dropdownOpen);
     const toggleMobileMenu = () => setMobileMenuOpen(!mobileMenuOpen);
     const openLogoutModal = () => setLogoutModalOpen(true);
     const closeLogoutModal = () => setLogoutModalOpen(false);
@@ -225,7 +230,6 @@ const Header = () => {
     const goTo = useCallback(
         (path) => {
             flushSync(() => {
-                setDropdownOpen(false);
                 setMobileMenuOpen(false);
             });
             navigate(path);
@@ -309,40 +313,23 @@ const Header = () => {
                                 <FaEnvelope className="hover:opacity-80" />
                             </div>
 
-                            <div className="relative shrink-0" ref={mobileProfileRef}>
+                            <div className="relative" ref={profileDropdownRef}>
                                 <button
                                     type="button"
-                                    className={
-                                        useLightEmployeeNav
-                                            ? 'cursor-pointer rounded-lg p-1 text-2xl text-gray-600 transition-colors hover:bg-gray-100 hover:opacity-90'
-                                            : 'cursor-pointer rounded-lg p-1 text-2xl text-white transition-colors hover:bg-gray-700/50 hover:opacity-90'
-                                    }
-                                    onClick={toggleDropdown}
+                                    onClick={() => setMobileProfileDropdownOpen(!mobileProfileDropdownOpen)}
+                                    className="relative shrink-0 rounded-full p-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                                     aria-label="Profile menu"
-                                    aria-expanded={dropdownOpen}
-                                    data-hrms-popup-trigger
                                 >
-                                    <FaUserCircle className="text-2xl" />
+                                    <FaUserCircle className="h-9 w-9 text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-300 dark:hover:text-white" />
                                 </button>
-                                {dropdownOpen && (
-                                    <div
-                                        className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-[min(14rem,calc(100vw-2rem))] border border-gray-100 animate-scaleIn"
-                                        role="menu"
-                                        data-hrms-popup
-                                    >
-                                        <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Welcome,</p>
-                                            <p className="text-sm font-bold text-gray-900 truncate mt-1">{username}</p>
-                                            <RoleBucketBadges className="mt-2" />
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="flex items-center w-full px-4 py-3 text-sm text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
-                                            onClick={openLogoutModal}
-                                        >
-                                            <FaSignOutAlt className="mr-2 shrink-0" />
-                                            Logout
-                                        </button>
+                                {mobileProfileDropdownOpen && (
+                                    <div className="absolute right-0 top-12 z-50 w-64 rounded-xl bg-white shadow-xl ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+                                        <ProfileDropdown
+                                            isOpen={true}
+                                            onClose={() => setMobileProfileDropdownOpen(false)}
+                                            onLogout={handleLogout}
+                                            onViewProfile={() => navigate('/profile-details')}
+                                        />
                                     </div>
                                 )}
                             </div>
@@ -468,7 +455,7 @@ const Header = () => {
                         className={
                             useLightEmployeeNav
                                 ? 'flex flex-shrink-0 items-center justify-center border-b border-gray-200 bg-white p-6'
-                                : 'flex flex-shrink-0 items-center justify-between border-b border-gray-700/50 bg-gray-800/50 p-5 backdrop-blur-sm'
+                                : 'flex flex-shrink-0 items-center justify-center border-b border-gray-700/50 bg-gray-800/50 p-5 backdrop-blur-sm'
                         }
                     >
                         <h3 className={`text-3xl font-extrabold tracking-tight ${useLightEmployeeNav ? '' : ''}`}>

@@ -235,6 +235,11 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, profilePhoto: profi
       return;
     }
 
+    if (!photoUserId) {
+      toast.error('User ID is required to upload photo');
+      return;
+    }
+
     setUploading(true);
     try {
       const blob = await cropToBlob({
@@ -249,7 +254,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, profilePhoto: profi
       formData.append('profilePhoto', file);
 
       const response = await axios.post(
-        `/v1/both/profile-photo/${userType}/upload`,
+        `/v1/both/profile-photo/${photoUserType}/${photoUserId}/upload`,
         formData,
         {
           headers: {
@@ -270,7 +275,9 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, profilePhoto: profi
 
       resetEditor();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to update photo');
+      console.error('Upload error:', error);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to upload profile photo';
+      toast.error(errorMessage);
     } finally {
       setUploading(false);
     }

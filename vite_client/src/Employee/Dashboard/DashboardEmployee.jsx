@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -31,11 +31,22 @@ import AttendanceBox from '../Attendance/AttendanceBox';
 import NotificationFeed from './NotificationFeed';
 import PasswordResetPopup from '../PasswordResetPopup';
 import ProfilePicture from '../../Shared/ProfilePicture';
+import ProfileDropdown from '../../components/ProfileDropdown';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
+import { logoutUser } from '../../context/Auth/authSlice';
+import { clearEmployeeDetails } from '../../context/employeeDetailsSlice';
+import { clearTimezoneContext } from '../../context/timezoneSlice';
+import { resetAttendance } from '../../context/attendanceSlice';
+import { clearPortals } from '../../context/Auth/authSlice';
+import { persistor } from '../../context/store';
 import { mergeSessionProfile, getProfileDisplayName } from '../../utils/profileUtils';
+import { clearOrgAdminCredentials } from '../../utils/orgAdminCredentials';
+import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday } from 'date-fns';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
+import { Dialog, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 
 import {
     BOTH_ATTENDANCE_ENDPOINT,
@@ -273,6 +284,9 @@ function DashboardEmployee() {
     const [showResetPopup, setShowResetPopup] = useState(false);
     const [hasFetched, setHasFetched] = useState(false);
     const [calendarViewDate, setCalendarViewDate] = useState(() => new Date());
+    const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+    const profileDropdownRef = useRef(null);
     const [dashboardStats, setDashboardStats] = useState({
         todayHours: '0h',
         leaveBalance: '0 days',
@@ -317,6 +331,60 @@ function DashboardEmployee() {
         if (!d) return '';
         return typeof d === 'string' ? d : '';
     }, [profile?.department]);
+
+    const closeProfileDropdown = useCallback(() => setProfileDropdownOpen(false), []);
+    useHrmsPopupDismiss(closeProfileDropdown, profileDropdownOpen);
+
+    const handleLogout = async () => {
+        try {
+            dispatch(resetAttendance());
+            dispatch(clearEmployeeDetails());
+            dispatch(clearTimezoneContext());
+            dispatch(clearPortals());
+
+            const email = user?.email || employee?.email;
+            await dispatch(logoutUser(email)).unwrap();
+
+            await persistor.purge();
+
+            localStorage.removeItem('csrfToken');
+            localStorage.removeItem('role');
+            localStorage.removeItem('email');
+            localStorage.removeItem('organizationId');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('isOrganizationLogin');
+            localStorage.removeItem('activePortal');
+            localStorage.removeItem('availablePortals');
+            localStorage.removeItem('employeeDashboardRoute');
+            clearOrgAdminCredentials();
+            setProfileDropdownOpen(false);
+            setLogoutModalOpen(false);
+            toast.success('Logged out successfully');
+            navigate('/login');
+        } catch (error) {
+            toast.error(error.message || 'Logout failed. Please try again.');
+
+            dispatch(resetAttendance());
+            dispatch(clearEmployeeDetails());
+            dispatch(clearTimezoneContext());
+            dispatch(clearPortals());
+            await persistor.purge();
+
+            localStorage.removeItem('csrfToken');
+            localStorage.removeItem('role');
+            localStorage.removeItem('email');
+            localStorage.removeItem('organizationId');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('isOrganizationLogin');
+            localStorage.removeItem('activePortal');
+            localStorage.removeItem('availablePortals');
+            localStorage.removeItem('employeeDashboardRoute');
+            clearOrgAdminCredentials();
+            setProfileDropdownOpen(false);
+            setLogoutModalOpen(false);
+            navigate('/login');
+        }
+    };
 
     const handleEditProfile = () => navigate('/profile-details');
     const selfEmployeeId = String(employee?._id || profile?._id || '');
@@ -818,12 +886,31 @@ function DashboardEmployee() {
                             style={{ borderColor: WS.border }}
                         >
                             <div className="flex min-w-0 items-center gap-4">
-                                <ProfilePicture user={profile || user} size="lg" />
+                                <div className="relative shrink-0" ref={profileDropdownRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                                        className="shrink-0 rounded-full transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#20C997] focus:ring-offset-2"
+                                        aria-label="Profile menu"
+                                        aria-expanded={profileDropdownOpen}
+                                        data-hrms-popup-trigger
+                                    >
+                                        <ProfilePicture user={user} size="lg" />
+                                    </button>
+                                    <ProfileDropdown
+                                        isOpen={profileDropdownOpen}
+                                        onClose={() => setProfileDropdownOpen(false)}
+                                        username={displayName}
+                                        onLogout={() => setLogoutModalOpen(true)}
+                                        onViewProfile={() => navigate('/profile-details')}
+                                        position="right"
+                                    />
+                                </div>
                                 <div className="min-w-0">
-                                    <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
+                                    <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl md:text-2xl">
                                         Welcome back{displayName ? `, ${displayName}` : ''}!
                                     </h1>
-                                    <p className="mt-0.5 text-sm text-slate-600">
+                                    <p className="mt-0.5 text-sm text-slate-600 hidden sm:block">
                                         {[profile?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
                                     </p>
                                 </div>
@@ -1322,6 +1409,70 @@ function DashboardEmployee() {
                     </aside>
                 </div>
             </div>
+
+            {/* Logout Confirmation Modal */}
+            <Transition appear show={logoutModalOpen} as={Fragment}>
+                <Dialog as="div" className="relative z-[11000]" onClose={() => setLogoutModalOpen(false)}>
+                    <Transition.Child
+                        as={Fragment}
+                        enter="ease-out duration-300"
+                        enterFrom="opacity-0"
+                        enterTo="opacity-100"
+                        leave="ease-in duration-200"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                    >
+                        <div className="fixed inset-0 bg-black bg-opacity-25" />
+                    </Transition.Child>
+
+                    <div className="fixed inset-0 overflow-y-auto">
+                        <div className="flex min-h-full items-center justify-center p-4 text-center">
+                            <Transition.Child
+                                as={Fragment}
+                                enter="ease-out duration-300"
+                                enterFrom="opacity-0 scale-95"
+                                enterTo="opacity-100 scale-100"
+                                leave="ease-in duration-200"
+                                leaveFrom="opacity-100 scale-100"
+                                leaveTo="opacity-0 scale-95"
+                            >
+                                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                                    <Dialog.Title
+                                        as="h3"
+                                        className="text-lg font-medium leading-6 text-gray-900"
+                                    >
+                                        Confirm Logout
+                                    </Dialog.Title>
+                                    <div className="mt-2">
+                                        <p className="text-sm text-gray-500">
+                                            Are you sure you want to logout?
+                                        </p>
+                                    </div>
+                                    <div className="mt-4 flex justify-end space-x-3">
+                                        <button
+                                            type="button"
+                                            className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#20C997] focus:ring-offset-2"
+                                            onClick={() => {
+                                                setLogoutModalOpen(false);
+                                                setProfileDropdownOpen(false);
+                                            }}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="inline-flex justify-center rounded-md border border-transparent bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                            onClick={handleLogout}
+                                        >
+                                            Logout
+                                        </button>
+                                    </div>
+                                </Dialog.Panel>
+                            </Transition.Child>
+                        </div>
+                    </div>
+                </Dialog>
+            </Transition>
         </div>
     );
 }

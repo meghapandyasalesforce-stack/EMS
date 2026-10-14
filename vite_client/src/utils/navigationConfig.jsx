@@ -362,7 +362,6 @@ const getProjectManagerNavigation = () => [
     { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill /> },
     { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
     { path: "/employee/document-requests", name: "Document requests", icon: <FaFileAlt /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
 ];
 
 /**
@@ -389,9 +388,8 @@ const getManagerNavigation = (profile) => {
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill /> },
     { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
-    { path: "/employee/document-requests", name: "Document requests", icon: <FaFileAlt /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
-    ];
+    { path: "/employee/document-requests", name: "Document requests", icon: <FaFileAlt /> }
+];
     
 
     if (isProjectManager(profile)) {
@@ -434,7 +432,7 @@ const HR_NAV_ITEMS = [
     { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_SELF] },
     { path: "/id-card-generator", name: "ID cards", icon: <FaCreditCard /> },
     { path: "/admin/reports", name: "HR reports", icon: <FaFileAlt /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
+,
 ];
 
 /** HR Manager — all HR options except Projects */
@@ -472,8 +470,7 @@ const getFinanceNavigation = () => [
     { path: "/my-attendance-regularization", name: "Regularization", icon: <FaClock /> },
     { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
-    { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
+    { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill /> }
 ];
 
 /**
@@ -489,7 +486,7 @@ const getTechNavigation = () => [
     { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
+
 ];
 
 /**
@@ -508,7 +505,6 @@ const getEmployeeNavigation = () => [
     { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
     { path: "/employee/document-requests", name: "Document requests", icon: <FaFileAlt /> },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
-    { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
+    { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> }
 ];
 
