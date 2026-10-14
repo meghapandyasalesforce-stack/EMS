@@ -350,10 +350,10 @@ const JobDetails = () => {
 
         return (
             <div className="rounded-xl border border-gray-200 bg-white">
-                <div className="px-5 py-4 border-b border-gray-100">
+                <div className="px-4 sm:px-5 py-4 border-b border-gray-100">
                     <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
                 </div>
-                <div className="px-5 py-4 space-y-4">
+                <div className="px-4 sm:px-5 py-4 space-y-4">
                     {loadingDocs ? (
                         <p className="text-sm text-gray-400">Loading…</p>
                     ) : (
@@ -437,9 +437,9 @@ const JobDetails = () => {
     };
 
     return (
-        <div className="w-full min-w-0 space-y-6">
+        <div className="w-full min-w-0 space-y-4">
             <div className="rounded-xl border border-gray-200 bg-white">
-                <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+                <div className="px-4 sm:px-5 py-4 border-b border-gray-100 flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50">
                         <FiFolder className="h-4.5 w-4.5 text-blue-600" />
                     </div>
@@ -460,10 +460,10 @@ const JobDetails = () => {
                                 : ''
                         }`}
                     >
-                        <div className="px-5 py-4 border-b border-gray-100">
+                        <div className="px-4 sm:px-5 py-4 border-b border-gray-100">
                             <h3 className="text-sm font-semibold text-gray-900">{section.title}</h3>
                         </div>
-                        <div className="px-5 py-4 space-y-4">
+                        <div className="px-4 sm:px-5 py-4 space-y-4">
                             {loadingDocs ? (
                                 <p className="text-sm text-gray-400">Loading…</p>
                             ) : (

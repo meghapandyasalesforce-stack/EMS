@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ProfilePhotoUpload from '../Profile/ProfilePhotoUpload';
@@ -22,6 +22,7 @@ function ProfileDetails() {
   const [isSavingPersonalDetails, setIsSavingPersonalDetails] = useState(false);
   const [isPersonalEditing, setIsPersonalEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('personalDetails');
+  const tabsRef = useRef(null);
   const [formValues, setFormValues] = useState({
     firstName: '',
     lastName: '',
@@ -218,6 +219,20 @@ function ProfileDetails() {
     }
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reveal the active tab on direct navigation without moving the page vertically.
+  useEffect(() => {
+    const tabList = tabsRef.current;
+    const selectedTab = tabList?.querySelector('[aria-selected="true"]');
+    if (!selectedTab) return;
+    const listRect = tabList.getBoundingClientRect();
+    const tabRect = selectedTab.getBoundingClientRect();
+    if (tabRect.left < listRect.left) {
+      tabList.scrollLeft -= listRect.left - tabRect.left;
+    } else if (tabRect.right > listRect.right) {
+      tabList.scrollLeft += tabRect.right - listRect.right;
+    }
+  }, [activeTab, profileLoading]);
+
   const handleTabClick = (tabId) => {
     const targetPath = tabPathMap[tabId] || '/profile-details';
     setActiveTab(tabId);
@@ -280,7 +295,7 @@ function ProfileDetails() {
             <aside className="employee-profile-sidebar min-w-0">
               <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden lg:sticky lg:top-4">
                 <div className="relative bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]/80 h-20" />
-                <div className="px-4 pb-4 text-center -mt-10 sm:px-5 sm:pb-5">
+                <div className="px-4 pb-4 text-center -mt-10 sm:px-5">
                   <div className="mb-2 flex justify-center">
                       <ProfilePicture
                         key={
@@ -303,7 +318,7 @@ function ProfileDetails() {
                   </h2>
                   <p className="mt-0.5 truncate text-xs font-medium text-[var(--color-primary)]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
-                  <div className="mt-4 w-full min-w-0 text-left">
+                  <div className="mt-3 grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-1 w-full min-w-0 text-left">
                     {[
                       { label: 'Department', value: user?.department },
                       { label: 'Employee ID', value: user?.employeeId },
@@ -311,14 +326,14 @@ function ProfileDetails() {
                       { label: 'Manager', value: managerAssignedName },
                       { label: 'HR', value: hrContactName },
                     ].map((item) => (
-                      <div key={item.label} className="profile-meta-row flex items-center justify-between gap-3 border-b border-gray-50 py-2.5 last:border-0">
+                      <div key={item.label} className="profile-meta-row flex items-center justify-between gap-3 border-b border-gray-50 py-2 last:border-0">
                         <span className="shrink-0 text-xs text-gray-500">{item.label}</span>
                         <span className="min-w-0 text-right text-xs font-semibold text-gray-800">{item.value || 'N/A'}</span>
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-4 rounded-lg bg-gray-50 p-3">
+                  <div className="mt-3 rounded-lg bg-gray-50 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-gray-800">Profile completion</span>
                       <span className="text-xs font-bold text-[var(--color-primary)]">{completionPercent}%</span>
@@ -335,7 +350,7 @@ function ProfileDetails() {
             <div className="employee-profile-main min-w-0 w-full">
               <div className="employee-profile-panel rounded-2xl border border-gray-200 bg-white overflow-hidden">
                 <div className="employee-profile-tabs px-1 sm:px-4">
-                  <div className="hrms-tabs-scroll" role="tablist">
+                  <div ref={tabsRef} className="hrms-tabs-scroll" role="tablist" aria-label="Profile sections">
                     {tabs.map((tab) => (
                       <button
                         key={tab.id}

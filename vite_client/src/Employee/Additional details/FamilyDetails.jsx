@@ -105,7 +105,7 @@ const FamilyDetails = () => {
     'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="w-full min-w-0 space-y-4">
       <div className="rounded-xl border border-gray-200 bg-white">
         {/* Header */}
         <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
@@ -134,7 +134,7 @@ const FamilyDetails = () => {
         </div>
 
         {/* Body */}
-        <div className="p-5">
+        <div className="p-4 sm:p-5">
           {!formOpen && familyDetails.length > 0 ? (
             <div className="divide-y divide-gray-100">
               {familyDetails.map((member, index) => (

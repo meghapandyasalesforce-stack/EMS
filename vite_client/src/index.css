@@ -526,6 +526,7 @@
 
 @media (min-width: 1024px) {
   .employee-profile-layout {
+    --profile-sidebar-width: clamp(240px, 22vw, 280px);
     flex-direction: row;
     gap: 1.25rem;
     align-items: start;
@@ -533,16 +534,16 @@
 
   .employee-profile-sidebar {
     align-self: start;
-    flex: 0 0 320px;
-    width: 320px;
-    max-width: 320px;
+    flex: 0 0 var(--profile-sidebar-width);
+    width: var(--profile-sidebar-width);
+    max-width: var(--profile-sidebar-width);
   }
 
   .employee-profile-main {
     align-self: start;
     flex: 1 1 0%;
     width: auto;
-    max-width: calc(100% - 320px - 1.25rem);
+    max-width: calc(100% - var(--profile-sidebar-width) - 1.25rem);
   }
 
   .employee-profile-main,

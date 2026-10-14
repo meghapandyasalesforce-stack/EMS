@@ -181,7 +181,7 @@ const FinancialDetails = () => {
   }
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="w-full min-w-0 space-y-4">
       {pendingNaRequest && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Your request to set tax regime to <strong>N/A (no TDS)</strong> is pending HR/Admin approval.
@@ -203,7 +203,7 @@ const FinancialDetails = () => {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-5 space-y-6">
+          <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-800 mb-4">Bank Information</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -299,7 +299,7 @@ const FinancialDetails = () => {
                 Edit
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 sm:p-5">
               <DetailItem label="Bank Name" value={formData.bankName} />
               <DetailItem label="IFSC Code" value={formData.ifsc} />
               <DetailItem label="Account Number" value={formData.accountNo ? '••••••••' + formData.accountNo.slice(-4) : null} />
@@ -320,7 +320,7 @@ const FinancialDetails = () => {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 sm:p-5">
               <DetailItem label="PAN Number" value={formData.panNumber} />
               <DetailItem label="EPF UAN" value={formData.epfUan} />
               <DetailItem

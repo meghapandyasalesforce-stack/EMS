@@ -201,7 +201,7 @@ const EducationQualifications = () => {
   const inputCls = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition placeholder:text-gray-400';
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="w-full min-w-0 space-y-4">
       {apiError && (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
           <span className="flex-1">{apiError}</span>
@@ -238,7 +238,7 @@ const EducationQualifications = () => {
         </div>
 
         {showAcademicForm && (
-          <div className="border-b border-gray-100 px-5 py-4 bg-gray-50/50">
+          <div className="border-b border-gray-100 px-4 sm:px-5 py-4 bg-gray-50/50">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Institution <span className="text-red-500">*</span></label>
@@ -282,7 +282,7 @@ const EducationQualifications = () => {
           </div>
         )}
 
-        <div className="px-5 py-3">
+        <div className="px-4 sm:px-5 py-3">
           {academics.length === 0 ? (
             <div>
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-5 text-center">
@@ -364,7 +364,7 @@ const EducationQualifications = () => {
         </div>
 
         {/* Drag & drop upload area */}
-        <div className="px-5 py-4 border-b border-gray-100">
+        <div className="px-4 sm:px-5 py-4 border-b border-gray-100">
           <div
             ref={dragRef}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -395,7 +395,7 @@ const EducationQualifications = () => {
           </div>
         </div>
 
-        <div className="px-5 py-3">
+        <div className="px-4 sm:px-5 py-3">
           {certifications.length === 0 ? (
             <div>
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-5 text-center">
