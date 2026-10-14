@@ -97,7 +97,7 @@ const ContactDetails = () => {
     if (isEditing) {
         return (
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="profile-fields grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div><label className={labelClass}>Phone 1 <span className="text-red-500">*</span></label><input type="text" name="phone1" value={formData.phone1} onChange={handleChange} className={inputClass} placeholder="Primary phone" required /></div>
                     <div><label className={labelClass}>Phone 2</label><input type="text" name="phone2" value={formData.phone2} onChange={handleChange} className={inputClass} placeholder="Secondary phone" /></div>
                     <div><label className={labelClass}>Personal email <span className="text-red-500">*</span></label><input type="email" name="personalEmail" value={formData.personalEmail} onChange={handleChange} className={inputClass} placeholder="you@example.com" required /></div>
@@ -109,7 +109,7 @@ const ContactDetails = () => {
                 </div>
                 <div><label className={labelClass}>Address <span className="text-red-500">*</span></label><textarea name="address" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} rows={2} placeholder="Full address" required /></div>
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="profile-fields grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div><label className={labelClass}>Marital status</label>
                         <select name="maritalStatus" value={formData.maritalStatus} onChange={handleChange} className={inputClass}>
                             <option value="">Select</option><option value="Single">Single</option><option value="Married">Married</option><option value="Divorced">Divorced</option><option value="Widowed">Widowed</option>
@@ -118,14 +118,14 @@ const ContactDetails = () => {
                     {formData.maritalStatus === 'Married' && <div><label className={labelClass}>Spouse name</label><input type="text" name="spouseName" value={formData.spouseName} onChange={handleChange} className={inputClass} placeholder="Spouse name" /></div>}
                 </div>
                 {formData.maritalStatus === 'Married' && (
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="profile-fields grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div><label className={labelClass}>Anniversary date</label><input type="date" name="anniversaryDate" value={formData.anniversaryDate} onChange={handleChange} className={inputClass} /></div>
                     </div>
                 )}
 
                 <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4 space-y-3">
                     <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Emergency contact</p>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="profile-fields grid grid-cols-1 gap-3 md:grid-cols-3">
                         <div><label className={labelClass}>Name</label><input type="text" name="emergencyContactName" value={formData.emergencyContactName} onChange={handleChange} className={inputClass} placeholder="Contact name" /></div>
                         <div><label className={labelClass}>Phone</label><input type="text" name="emergencyContactPhone" value={formData.emergencyContactPhone} onChange={handleChange} className={inputClass} placeholder="Phone" /></div>
                         <div><label className={labelClass}>Relationship</label>
@@ -138,7 +138,7 @@ const ContactDetails = () => {
 
                 <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4 space-y-3">
                     <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">National ID</p>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="profile-fields grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div><label className={labelClass}>Document type</label>
                             <select name="nationalIdType" value={formData.nationalIdType} onChange={handleChange} className={inputClass}>
                                 <option value="">Select</option>{NATIONAL_ID_TYPE_VALUES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -166,7 +166,7 @@ const ContactDetails = () => {
                     <FiEdit2 size={13} /> Edit
                 </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="profile-fields grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 <InfoItem label="Phone 1" value={formData.phone1} />
                 <InfoItem label="Phone 2" value={formData.phone2} />
                 <InfoItem label="Personal email" value={formData.personalEmail} />

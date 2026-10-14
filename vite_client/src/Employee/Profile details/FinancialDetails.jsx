@@ -76,7 +76,7 @@ const InputField = ({ label, name, value, onChange, required, placeholder }) => 
 );
 
 const DetailItem = ({ label, value }) => (
-  <div className="space-y-1">
+  <div className="profile-field-card space-y-1">
     <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</p>
     <p className="text-sm font-medium text-gray-900">{value || 'N/A'}</p>
   </div>
@@ -206,7 +206,7 @@ const FinancialDetails = () => {
           <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-800 mb-4">Bank Information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="profile-fields grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
                   { label: 'Bank Name', name: 'bankName', required: true },
                   { label: 'IFSC Code', name: 'ifsc', required: true },
@@ -220,7 +220,7 @@ const FinancialDetails = () => {
 
             <div>
               <h3 className="text-sm font-semibold text-gray-800 mb-4">Tax & Statutory</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="profile-fields grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InputField label="PAN Number" name="panNumber" value={formData.panNumber} onChange={handleChange} required={false} placeholder="e.g. ABCDE1234F" />
                 <InputField label="EPF UAN" name="epfUan" value={formData.epfUan} onChange={handleChange} required={false} placeholder="Universal Account Number" />
 
@@ -299,7 +299,7 @@ const FinancialDetails = () => {
                 Edit
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 sm:p-5">
+            <div className="profile-fields grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 sm:p-5">
               <DetailItem label="Bank Name" value={formData.bankName} />
               <DetailItem label="IFSC Code" value={formData.ifsc} />
               <DetailItem label="Account Number" value={formData.accountNo ? '••••••••' + formData.accountNo.slice(-4) : null} />
@@ -320,7 +320,7 @@ const FinancialDetails = () => {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 sm:p-5">
+            <div className="profile-fields grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 sm:p-5">
               <DetailItem label="PAN Number" value={formData.panNumber} />
               <DetailItem label="EPF UAN" value={formData.epfUan} />
               <DetailItem

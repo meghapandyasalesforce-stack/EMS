@@ -377,7 +377,7 @@ function ProfileDetails() {
                   <div className="space-y-4">
                     {isPersonalEditing ? (
                       <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="profile-fields grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">First name</label>
                             <input
@@ -425,7 +425,7 @@ function ProfileDetails() {
                             <FiEdit2 size={13} /> Edit
                           </button>
                         </div>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="profile-fields grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                           {[
                             { label: 'First name', value: formValues.firstName },
                             { label: 'Last name', value: formValues.lastName },

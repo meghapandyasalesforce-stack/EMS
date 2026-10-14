@@ -657,9 +657,35 @@
     background: color-mix(in srgb, var(--color-primary) 8%, white);
   }
 
-  /* Narrower content column: avoid cramming four fields into one row. */
+  /* Keep specialized grids at their existing desktop width. */
   .employee-profile-content .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Ordinary profile fields stack; specialized upload/form grids stay intact. */
+  .employee-profile-content .profile-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .employee-profile-content .profile-fields > * {
+    grid-column: 1 / -1;
+  }
+
+  .employee-profile-content .profile-field-card {
+    border-radius: 0.5rem;
+    background: rgb(249 250 251);
+    padding: 0.75rem 0.875rem;
+  }
+
+  .employee-profile-content {
+    height: auto;
+    min-height: 0;
+    align-self: start;
+  }
+
+  .employee-profile-content > .max-w-lg {
+    max-width: none;
   }
 }
 
