@@ -560,19 +560,106 @@
   }
 }
 
+/* Desktop only: use the app's flex-allocated canvas height and its single scrollbar. */
 @media (min-width: 1024px) {
+  .main-scroll-area:has(> .employee-profile-page) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .main-scroll-area > .employee-profile-page {
+    display: flex;
+    flex: 1 0 auto;
+  }
+
+  .employee-profile-page > .page-shell-inner {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .employee-profile-layout {
+    display: grid;
+    grid-template-columns: minmax(10rem, 0.9fr) minmax(11rem, 0.95fr) minmax(0, 2.3fr);
+    align-items: start;
+    flex: 1 0 auto;
+  }
+
+  .employee-profile-main,
+  .employee-profile-panel {
+    display: contents;
+  }
+
+  .employee-profile-sidebar,
+  .employee-profile-tabs {
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+  }
+
+  .employee-profile-summary-banner {
+    height: 3rem;
+  }
+
   .employee-profile-summary-body {
-    grid-template-columns: 160px minmax(0, 1fr) 180px;
+    display: block;
+    margin-top: -1.5rem;
+    padding: 0 1rem 0.75rem;
+  }
+
+  .employee-profile-meta {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 0.5rem;
+  }
+
+  .employee-profile-meta .profile-meta-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .employee-profile-meta .profile-meta-row > span:last-child {
+    text-align: right;
   }
 
   .employee-profile-completion {
-    grid-column: auto;
+    margin-top: 0.5rem;
   }
-}
 
-@media (min-width: 1280px) {
-  .employee-profile-meta {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .employee-profile-tabs,
+  .employee-profile-content {
+    border: 1px solid rgb(229 231 235);
+    border-radius: 1rem;
+    background: white;
+  }
+
+  .employee-profile-tabs {
+    padding: 0.5rem;
+  }
+
+  .employee-profile-tabs .hrms-tabs-scroll {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .employee-profile-tabs .hrms-tabs-scroll > button {
+    width: 100%;
+    white-space: normal;
+    text-align: left;
+    border-bottom-width: 0;
+    border-left: 2px solid transparent;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .employee-profile-tabs .hrms-tabs-scroll > button[aria-selected='true'] {
+    border-left-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 8%, white);
+  }
+
+  /* Narrower content column: avoid cramming four fields into one row. */
+  .employee-profile-content .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

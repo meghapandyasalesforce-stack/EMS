@@ -10,7 +10,7 @@ vi.mock('../context/store', () => ({ persistor: { purge: vi.fn() } }));
 vi.mock('../components/NotificationDropdown', () => ({ default: () => null }));
 vi.mock('../components/PortalSwitcher', () => ({ default: () => null }));
 vi.mock('../Hooks/useDocumentModeSettings', () => ({ default: () => ({ ready: true, enableDocumentRequests: true, enableSelfServiceDocuments: true }) }));
-vi.mock('../utils/navigationConfig', async (importOriginal) => ({ ...(await importOriginal()), getNavigationItems: () => [{ path: '/dashboard-employee', name: 'Dashboard', icon: null }] }));
+vi.mock('../utils/navigationConfig', async (importOriginal) => ({ ...(await importOriginal()), getNavigationItems: () => [{ path: '/dashboard-employee', name: 'Dashboard', icon: null }, { path: '/employee-payroll', name: 'Payroll', icon: null }, { path: '/projects', name: 'Projects', icon: null }] }));
 
 function Location() {
   return <output data-testid="location">{useLocation().pathname}</output>;
@@ -29,6 +29,8 @@ describe('desktop Profile navigation', () => {
   it.each(['admin', 'hr', 'manager', 'employee'])('opens the own-profile route for %s', role => {
     renderHeader(role);
     const nav = document.querySelector('[data-hrms-sidebar-nav]');
+    const labels = within(nav).getAllByRole('button').map(button => button.textContent);
+    expect(labels.indexOf('Profile')).toBe(labels.indexOf('Payroll') + 1);
     fireEvent.click(within(nav).getByRole('button', { name: 'Profile', exact: true }));
     expect(screen.getByTestId('location')).toHaveTextContent('/profile-details');
     expect(within(nav).getByRole('button', { name: 'Profile', exact: true })).toHaveClass('text-white', 'shadow-md');

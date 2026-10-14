@@ -159,11 +159,15 @@ const Header = () => {
     // Own-profile navigation is available to every HRMS role on desktop only.
     const desktopNavItems = useMemo(() => {
         if (!user && !employee) return navItems;
-        if (navItems.some((item) => item.path === '/profile-details')) return navItems;
-        const profileItem = { path: '/profile-details', name: 'Profile', icon: <FaUserCircle /> };
-        const homeIndex = navItems.findIndex((item) => item.name === 'Dashboard');
-        const insertAt = homeIndex >= 0 ? homeIndex + 1 : 0;
-        return [...navItems.slice(0, insertAt), profileItem, ...navItems.slice(insertAt)];
+        const existingProfile = navItems.find((item) => item.path === '/profile-details');
+        const profileItem = existingProfile || { path: '/profile-details', name: 'Profile', icon: <FaUserCircle /> };
+        const otherItems = navItems.filter((item) => item.path !== '/profile-details');
+        const payrollIndex = otherItems.findIndex((item) => item.path === '/admin-payroll');
+        const ownPayrollIndex = otherItems.findIndex((item) => item.path === '/employee-payroll');
+        const homeIndex = otherItems.findIndex((item) => item.name === 'Dashboard');
+        const anchorIndex = payrollIndex >= 0 ? payrollIndex : ownPayrollIndex >= 0 ? ownPayrollIndex : homeIndex;
+        const insertAt = anchorIndex >= 0 ? anchorIndex + 1 : 0;
+        return [...otherItems.slice(0, insertAt), profileItem, ...otherItems.slice(insertAt)];
     }, [navItems, user, employee]);
 
     const handleLogout = async () => {
