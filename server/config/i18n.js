@@ -51,14 +51,22 @@ export const initI18n = async () => {
  * @param {string} key - Translation key
  * @param {Object} options - Translation options
  * @param {string} lng - Language code
- * @returns {string} Translated string
+ * @returns {string|null} Translated string, or null when the key is missing
  */
 export const translate = (key, options = {}, lng = null) => {
     try {
-        return i18next.t(key, { ...options, lng: lng || i18next.language });
+        const language = lng || i18next.language;
+        // Missing keys come back as the key itself, which is truthy and blocks
+        // the English sentence fallback in response helpers.
+        if (!i18next.isInitialized || !i18next.exists(key, { lng: language })) {
+            return null;
+        }
+        const translated = i18next.t(key, { ...options, lng: language });
+        if (!translated || translated === key) return null;
+        return translated;
     } catch (error) {
         logger.warn('Translation failed', { key, error: error.message });
-        return key; // Return key if translation fails
+        return null;
     }
 };
 

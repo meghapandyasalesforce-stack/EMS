@@ -21,8 +21,16 @@ const ChangePasswordForm = ({ className = '' }) => {
     confirm: false,
   });
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  const report = (type, text) => {
+    setStatus({ type, text });
+    if (type === 'success') toast.success(text);
+    else toast.error(text);
+  };
 
   const onChange = (field) => (e) => {
+    setStatus(null);
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
@@ -31,15 +39,19 @@ const ChangePasswordForm = ({ className = '' }) => {
     if (saving) return;
 
     if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
-      toast.error('Please fill in all password fields');
+      report('error', 'Please fill in all password fields');
       return;
     }
     if (form.newPassword !== form.confirmPassword) {
-      toast.error('New password and confirmation do not match');
+      report('error', 'New password and confirmation do not match');
+      return;
+    }
+    if (form.currentPassword === form.newPassword) {
+      report('error', 'New password must be different from your current password');
       return;
     }
     if (form.newPassword.length < 8) {
-      toast.error('New password must be at least 8 characters');
+      report('error', 'New password must be at least 8 characters');
       return;
     }
 
@@ -59,10 +71,11 @@ const ChangePasswordForm = ({ className = '' }) => {
         localStorage.setItem('csrfToken', res.data.csrfToken);
       }
 
-      toast.success(res.data?.message || 'Password updated successfully');
+      report('success', res.data?.message || 'Password updated successfully');
       setForm(emptyForm);
     } catch (error) {
-      toast.error(
+      report(
+        'error',
         error.response?.data?.message || 'Failed to update password'
       );
     } finally {
@@ -150,6 +163,15 @@ const ChangePasswordForm = ({ className = '' }) => {
       >
         {saving ? 'Updating…' : 'Update password'}
       </button>
+
+      {status?.text && (
+        <p
+          role="status"
+          className={`text-sm ${status.type === 'success' ? 'text-green-700' : 'text-red-600'}`}
+        >
+          {status.text}
+        </p>
+      )}
     </form>
   );
 };
