@@ -1,3 +1,4 @@
+import { desktopConnectorPath } from './desktopConnectorPath';
 /** @typedef {{ id: string, reportsTo: string|null, department?: string, departmentId?: string|null, position?: string, [key: string]: unknown }} ChartEmployee */
 
 export const NODE_WIDTH = 214;
@@ -221,9 +222,10 @@ export function buildConnectorEdges(positions, employees, pathIds) {
   const pathSet = new Set([...(pathIds || [])].map(String));
   const pos = (id) => (id == null ? null : positions.get(String(id)) || null);
   const edges = [];
+  const byId = new Map(employees.map(employee => [String(employee.id), employee]));
 
   for (const id of positions.keys()) {
-    const emp = getById(employees, id);
+    const emp = byId.get(String(id));
     if (!emp?.reportsTo) continue;
 
     const parent = pos(emp.reportsTo);
@@ -239,7 +241,7 @@ export function buildConnectorEdges(positions, employees, pathIds) {
 
     edges.push({
       id: `${emp.reportsTo}-${id}`,
-      d: `M ${x1} ${y1} V ${mid} H ${x2} V ${y2}`,
+      d: child.width ? desktopConnectorPath(child, parent) : `M ${x1} ${y1} V ${mid} H ${x2} V ${y2}`,
       highlighted,
     });
   }
@@ -279,9 +281,10 @@ export function renderOrgChartToCanvas({
   scale = 2,
   padding = 48,
   title = 'Organization Chart',
+  viewport = null,
 }) {
-  const contentW = Math.max(Number(dimensions?.width) || 0, NODE_WIDTH + 80);
-  const contentH = Math.max(Number(dimensions?.height) || 0, NODE_HEIGHT + 80);
+  const contentW = viewport?.width ?? Math.max(Number(dimensions?.width) || 0, NODE_WIDTH + 80);
+  const contentH = viewport?.height ?? Math.max(Number(dimensions?.height) || 0, NODE_HEIGHT + 80);
   const titleH = title ? 36 : 0;
   const width = contentW + padding * 2;
   const height = contentH + padding * 2 + titleH;
@@ -304,14 +307,26 @@ export function renderOrgChartToCanvas({
     ctx.textAlign = 'left';
   }
 
-  const ox = padding;
-  const oy = padding + titleH;
+  const ox = padding - (viewport?.x || 0);
+  const oy = padding + titleH - (viewport?.y || 0);
+  const byId = new Map(employees.map(employee => [String(employee.id), employee]));
+
+  const directReportCounts = new Map();
+  for (const [id] of positions) {
+    const parent = byId.get(String(id))?.reportsTo;
+    if (parent != null) directReportCounts.set(String(parent), (directReportCounts.get(String(parent)) || 0) + 1);
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(padding, padding + titleH, contentW, contentH);
+  ctx.clip();
 
   // Connectors (orthogonal: parent → mid → child)
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const [id, childPos] of positions.entries()) {
-    const emp = getById(employees, id);
+    const emp = byId.get(String(id));
     if (!emp?.reportsTo) continue;
     const parentPos = positions.get(String(emp.reportsTo));
     if (!parentPos) continue;
@@ -323,6 +338,16 @@ export function renderOrgChartToCanvas({
     const mid = y1 + Math.max(28, (y2 - y1) * 0.42);
 
     ctx.beginPath();
+    if (childPos.width) {
+      const path = new Path2D(desktopConnectorPath(childPos, parentPos));
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.strokeStyle = '#c5cfc0';
+      ctx.lineWidth = 1.6;
+      ctx.stroke(path);
+      ctx.restore();
+      continue;
+    }
     ctx.moveTo(x1, y1);
     ctx.lineTo(x1, mid);
     ctx.lineTo(x2, mid);
@@ -334,16 +359,16 @@ export function renderOrgChartToCanvas({
 
   // Employee cards
   for (const [id, pos] of positions.entries()) {
-    const emp = getById(employees, id);
+    const emp = byId.get(String(id));
     if (!emp) continue;
     const x = ox + pos.x;
     const y = oy + pos.y;
-    const childCount = getChildren(employees, emp.id).filter((c) =>
-      positions.has(String(c.id))
-    ).length;
+    const nodeWidth = pos.width || NODE_WIDTH;
+    const nodeHeight = pos.height || NODE_HEIGHT;
+    const childCount = directReportCounts.get(String(emp.id)) || 0;
 
     // Card
-    roundRectPath(ctx, x, y, NODE_WIDTH, NODE_HEIGHT, 14);
+    roundRectPath(ctx, x, y, nodeWidth, nodeHeight, 14);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
     ctx.strokeStyle = '#e2e8f0';
@@ -367,7 +392,7 @@ export function renderOrgChartToCanvas({
 
     // Name + role
     const textLeft = x + 46;
-    const textMax = NODE_WIDTH - 58;
+    const textMax = nodeWidth - 58;
     ctx.fillStyle = '#0f172a';
     ctx.font = '700 13px Inter, Segoe UI, system-ui, sans-serif';
     ctx.textBaseline = 'alphabetic';
@@ -400,8 +425,8 @@ export function renderOrgChartToCanvas({
     // Footer
     ctx.strokeStyle = '#f1f5f9';
     ctx.beginPath();
-    ctx.moveTo(x + 10, y + 92);
-    ctx.lineTo(x + NODE_WIDTH - 10, y + 92);
+    ctx.moveTo(x + 10, y + nodeHeight - 36);
+    ctx.lineTo(x + nodeWidth - 10, y + nodeHeight - 36);
     ctx.stroke();
 
     ctx.fillStyle = '#64748b';
@@ -413,9 +438,10 @@ export function renderOrgChartToCanvas({
         : emp.employeeId
           ? String(emp.employeeId)
           : 'No direct reports';
-    ctx.fillText(fitCanvasText(ctx, footer, NODE_WIDTH - 28), x + 14, y + 110);
+    ctx.fillText(fitCanvasText(ctx, footer, nodeWidth - 28), x + 14, y + nodeHeight - 18);
   }
 
+  ctx.restore();
   return canvas;
 }
 

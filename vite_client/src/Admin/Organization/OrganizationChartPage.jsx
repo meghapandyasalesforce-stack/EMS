@@ -22,6 +22,19 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import DesktopEmployeeNode from './orgChart/DesktopEmployeeNode';
+import OrgChartMinimap from './orgChart/OrgChartMinimap';
+import {
+  buildDesktopLayout,
+  employeeSearchText,
+  hiddenDescendantCounts,
+  indexHierarchy,
+  initialDesktopExpansion,
+  MIN_DESKTOP_ZOOM,
+  READABLE_FIT_ZOOM,
+  REPORT_BATCH,
+  safeExportScale,
+} from './orgChart/desktopChartUtils';
 import OrgChartConnectors from './orgChart/OrgChartConnectors';
 import OrgChartLevelsView from './orgChart/OrgChartLevelsView';
 import OrgChartRecordsView from './orgChart/OrgChartRecordsView';
@@ -74,11 +87,17 @@ function OrganizationChartPage() {
   const [error, setError] = useState('');
   const [activeView, setActiveView] = useState('chart');
 
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 961px)').matches);
+  const [reportLimits, setReportLimits] = useState(new Map());
+  const [revealedIds, setRevealedIds] = useState(new Set());
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [fullscreen, setFullscreen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [expanded, setExpanded] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLimit, setSearchLimit] = useState(30);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
@@ -93,10 +112,39 @@ function OrganizationChartPage() {
   const touchesRef = useRef(new Map());
   const pinchRef = useRef(null);
   const fitPendingRef = useRef(false);
+  const pendingFocusRef = useRef(null);
+  const branchFocusRef = useRef(null);
+  const worldRef = useRef(null);
+  const fullscreenRef = useRef(null);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 961px)');
+    const update = () => setIsDesktop(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (activeView !== 'chart' || loading) return undefined;
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const update = () => setViewport({ width: canvas.clientWidth, height: canvas.clientHeight });
+    const observer = new ResizeObserver(update);
+    observer.observe(canvas);
+    update();
+    return () => observer.disconnect();
+  }, [activeView, loading, selectedId]);
+
+  useEffect(() => {
+    const update = () => setFullscreen(document.fullscreenElement === fullscreenRef.current);
+    document.addEventListener('fullscreenchange', update);
+    return () => document.removeEventListener('fullscreenchange', update);
+  }, []);
 
   const loadChart = useCallback(async () => {
     setLoading(true);
     setError('');
+    pendingFocusRef.current = null;
     try {
       const res = await axios.get('/v1/admin/org-structure/chart', { withCredentials: true });
       const data = res.data?.data || res.data || {};
@@ -106,8 +154,7 @@ function OrganizationChartPage() {
       setPositionLevels(Array.isArray(data.positionLevels) ? data.positionLevels : []);
       setMeta(data.meta || null);
 
-      const allowed = getAllowedIds(list, 'all');
-      // Always show the full expanded tree by default
+      // Preserve mobile expansion; the desktop initialization chooses a bounded default.
       setExpanded(new Set(list.map((e) => String(e.id))));
       // Side details panel opens only when a card is clicked
       setSelectedId(null);
@@ -130,32 +177,37 @@ function OrganizationChartPage() {
     [departments, employees]
   );
 
-  useEffect(() => {
-    if (!employees.length) return;
-    const allowed = getAllowedIds(employees, departmentFilter, departmentList);
-    setExpanded(new Set([...allowed].map(String)));
-    setSelectedId(null);
-    setMobilePanelOpen(false);
-    fitPendingRef.current = true;
-  }, [departmentFilter, employees, departmentList]);
-
   const allowedIds = useMemo(
     () => getAllowedIds(employees, departmentFilter, departmentList),
     [employees, departmentFilter, departmentList]
   );
 
+  const hierarchy = useMemo(() => indexHierarchy(employees), [employees]);
+  const scopedHierarchy = useMemo(() => indexHierarchy(employees.filter(employee => allowedIds.has(String(employee.id)))), [employees, allowedIds]);
+
   useEffect(() => {
-    const { positions: nextPositions, dimensions: nextDimensions } = buildChartLayout(
-      employees,
-      allowedIds,
-      expanded
-    );
+    if (!employees.length) return;
+    const initial = isDesktop ? initialDesktopExpansion(scopedHierarchy, departmentFilter !== 'all') : new Set([...allowedIds].map(String));
+    const focus = pendingFocusRef.current;
+    if (isDesktop && focus) getAncestors(employees, focus).slice(0, -1).forEach(employee => initial.add(String(employee.id)));
+    setExpanded(initial);
+    setReportLimits(isDesktop && scopedHierarchy.byId.size > 50 ? new Map([...allowedIds].map(id => [id, REPORT_BATCH])) : new Map());
+    setRevealedIds(isDesktop && focus ? new Set(getAncestors(employees, focus).map(employee => String(employee.id))) : new Set());
+    if (!focus || !isDesktop) setSelectedId(null);
+    setMobilePanelOpen(false);
+    fitPendingRef.current = !focus;
+  }, [employees, departmentFilter, scopedHierarchy, allowedIds, isDesktop]);
+
+  useEffect(() => {
+    const { positions: nextPositions, dimensions: nextDimensions } = isDesktop
+      ? buildDesktopLayout(scopedHierarchy, expanded, reportLimits, revealedIds)
+      : buildChartLayout(employees, allowedIds, expanded);
     setPositions(nextPositions);
     setDimensions(nextDimensions);
-  }, [employees, allowedIds, expanded]);
+  }, [employees, allowedIds, expanded, isDesktop, scopedHierarchy, reportLimits, revealedIds]);
 
   const applyTransform = useCallback(() => {
-    const world = document.getElementById('org-chart-world');
+    const world = worldRef.current;
     if (world) {
       world.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
     }
@@ -179,22 +231,23 @@ function OrganizationChartPage() {
     const w = el.clientWidth;
     const h = el.clientHeight;
     const nextZoom = Math.max(
-      0.2,
+      isDesktop ? READABLE_FIT_ZOOM : 0.2,
       Math.min(1, (w - 36) / dimensions.width, (h - 125) / dimensions.height)
     );
     setZoom(nextZoom);
     applyPan(
       {
         x: (w - dimensions.width * nextZoom) / 2,
-        y: 54 + Math.max(0, (h - 125 - dimensions.height * nextZoom) / 2),
+        y: isDesktop ? 28 : 54 + Math.max(0, (h - 125 - dimensions.height * nextZoom) / 2),
       },
       nextZoom
     );
-  }, [dimensions, applyPan]);
+  }, [dimensions, applyPan, isDesktop]);
 
+  const transformView = isDesktop ? activeView : null;
   useEffect(() => {
     applyTransform();
-  }, [applyTransform]);
+  }, [applyTransform, transformView]);
 
   useEffect(() => {
     if (fitPendingRef.current && dimensions.width > 0) {
@@ -204,27 +257,70 @@ function OrganizationChartPage() {
   }, [dimensions, fitChart]);
 
   const centerOn = useCallback(
-    (id) => {
+    (id, preserveZoom = false) => {
       const p = positions.get(id);
       const el = canvasRef.current;
       if (!p || !el) return;
-      setZoom((z) => Math.max(0.7, z));
-      const nextZoom = Math.max(0.7, zoom);
+      const nextZoom = preserveZoom ? zoom : Math.max(isDesktop ? READABLE_FIT_ZOOM : 0.7, zoom);
       applyPan(
         {
-          x: el.clientWidth / 2 - (p.x + NODE_CENTER_X) * nextZoom,
-          y: Math.max(65, el.clientHeight * 0.39) - (p.y + 64) * nextZoom,
+          x: el.clientWidth / 2 - (p.x + (p.width ? p.width / 2 : NODE_CENTER_X)) * nextZoom,
+          y: Math.max(65, el.clientHeight * 0.39) - (p.y + (p.height ? p.height / 2 : 64)) * nextZoom,
         },
         nextZoom
       );
       setZoom(nextZoom);
     },
-    [positions, zoom, applyPan]
+    [positions, zoom, applyPan, isDesktop]
   );
+
+  useEffect(() => {
+    const id = pendingFocusRef.current;
+    if (!isDesktop || !id || !positions.has(id)) return;
+    centerOn(id);
+    pendingFocusRef.current = null;
+  }, [positions, centerOn, isDesktop]);
+
+  useEffect(() => {
+    const id = branchFocusRef.current;
+    if (!isDesktop || !id || !positions.has(id)) return;
+    centerOn(id, true);
+    branchFocusRef.current = null;
+  }, [positions, centerOn, isDesktop]);
+
+  useEffect(() => {
+    if (!isDesktop || !viewport.width) return;
+    setPan(previous => clampPan(previous, zoom, dimensions, viewport.width, viewport.height));
+  }, [dimensions, viewport, zoom, isDesktop]);
+
+  const expandAllDesktop = useCallback(() => {
+    setExpanded(new Set([...scopedHierarchy.byId.keys()]));
+    setReportLimits(new Map());
+  }, [scopedHierarchy]);
+
+  const toggleDesktopBranch = useCallback((id) => {
+    branchFocusRef.current = id;
+    setExpanded(previous => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const showMoreReports = useCallback((id) => {
+    branchFocusRef.current = id;
+    setReportLimits(previous => new Map(previous).set(id, (previous.get(id) ?? REPORT_BATCH) + REPORT_BATCH));
+  }, []);
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (fullscreenRef.current?.requestFullscreen) await fullscreenRef.current.requestFullscreen();
+      else toast.info('Fullscreen is not supported in this browser.');
+    } catch { toast.error('Fullscreen could not be opened.'); }
+  }, []);
 
   const changeZoom = useCallback((delta, point) => {
     setZoom((prevZoom) => {
-      const next = Math.min(1.7, Math.max(0.2, prevZoom + delta));
+      const next = Math.min(1.7, Math.max(isDesktop ? MIN_DESKTOP_ZOOM : 0.2, prevZoom + delta));
       const el = canvasRef.current;
       const c = point || { x: (el?.clientWidth || 0) / 2, y: (el?.clientHeight || 0) / 2 };
       setPan((prevPan) => {
@@ -239,7 +335,20 @@ function OrganizationChartPage() {
       });
       return next;
     });
-  }, [dimensions]);
+  }, [dimensions, isDesktop]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!isDesktop || !canvas || loading || activeView !== 'chart') return undefined;
+    const wheel = event => {
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      if (event.ctrlKey || event.metaKey) changeZoom(-event.deltaY * 0.006, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+      else applyPan({ x: pan.x - event.deltaX, y: pan.y - event.deltaY });
+    };
+    canvas.addEventListener('wheel', wheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', wheel);
+  }, [isDesktop, loading, activeView, pan, changeZoom, applyPan]);
 
   /**
    * Export full flowchart by drawing layout onto a canvas (no html2canvas / oklch).
@@ -256,11 +365,9 @@ function OrganizationChartPage() {
       setExporting(true);
       try {
         const expandIds = new Set([...allowedIds].map(String));
-        const { positions: exportPositions, dimensions: exportDim } = buildChartLayout(
-          employees,
-          allowedIds,
-          expandIds
-        );
+        const { positions: exportPositions, dimensions: exportDim } = isDesktop
+          ? buildDesktopLayout(scopedHierarchy, expandIds)
+          : buildChartLayout(employees, allowedIds, expandIds);
         if (!exportDim.width || !exportDim.height || !exportPositions.size) {
           toast.error('Chart is not ready to export yet.');
           return;
@@ -276,11 +383,49 @@ function OrganizationChartPage() {
             ? 'Organization Chart'
             : `Organization Chart · ${deptLabel}`;
 
+        if (isDesktop && format === 'pdf') {
+          const { jsPDF } = await import('jspdf');
+          const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+          const tileWidth = 1200;
+          const tileHeight = 740;
+          const columns = Math.ceil(exportDim.width / tileWidth);
+          const rows = Math.ceil(exportDim.height / tileHeight);
+          const totalPages = columns * rows;
+          if (totalPages > 200) throw new Error('This chart exceeds the PDF page limit. Select a department and export again.');
+          for (let row = 0; row < rows; row += 1) {
+            for (let column = 0; column < columns; column += 1) {
+              const pageNumber = row * columns + column + 1;
+              if (pageNumber > 1) pdf.addPage();
+              const tile = renderOrgChartToCanvas({
+                employees,
+                positions: exportPositions,
+                dimensions: exportDim,
+                scale: 1.5,
+                padding: 24,
+                title: `${title} · ${pageNumber}/${totalPages}`,
+                viewport: {
+                  x: column * tileWidth,
+                  y: row * tileHeight,
+                  width: Math.min(tileWidth, exportDim.width - column * tileWidth),
+                  height: Math.min(tileHeight, exportDim.height - row * tileHeight),
+                },
+              });
+              const ratio = Math.min(281 / tile.width, 194 / tile.height);
+              pdf.addImage(tile.toDataURL('image/png'), 'PNG', 8, 8, tile.width * ratio, tile.height * ratio, undefined, 'FAST');
+              tile.width = 0;
+              tile.height = 0;
+            }
+          }
+          pdf.save(`organization-chart-${departmentFilter === 'all' ? 'all' : 'department'}-${new Date().toISOString().slice(0, 10)}.pdf`);
+          toast.success('Organization chart exported as PDF');
+          return;
+        }
+
         const canvas = renderOrgChartToCanvas({
           employees,
           positions: exportPositions,
           dimensions: exportDim,
-          scale: 2,
+          scale: isDesktop ? safeExportScale(exportDim) : 2,
           padding: 48,
           title,
         });
@@ -321,7 +466,7 @@ function OrganizationChartPage() {
         setExporting(false);
       }
     },
-    [exporting, employees, allowedIds, departmentFilter, departmentList]
+    [exporting, employees, allowedIds, departmentFilter, departmentList, isDesktop, scopedHierarchy]
   );
 
   const selectEmployee = useCallback(
@@ -330,7 +475,14 @@ function OrganizationChartPage() {
       if (!emp) return;
       setSelectedId(id);
       setMobilePanelOpen(true);
-      if (reveal) {
+      if (reveal && isDesktop) {
+        const key = String(id);
+        pendingFocusRef.current = key;
+        if (!allowedIds.has(key)) setDepartmentFilter('all');
+        const chain = getAncestors(employees, key).map(employee => String(employee.id));
+        setExpanded(previous => new Set([...previous, ...chain.slice(0, -1)]));
+        setRevealedIds(previous => new Set([...previous, ...chain]));
+      } else if (reveal) {
         if (departmentFilter !== 'all') {
           const inDept = matchesDepartment(emp, departmentFilter, departmentList);
           if (!inDept && !isExecutive(emp)) setDepartmentFilter('all');
@@ -343,7 +495,7 @@ function OrganizationChartPage() {
         setTimeout(() => centerOn(id), 50);
       }
     },
-    [employees, departmentFilter, departmentList, centerOn]
+    [employees, departmentFilter, departmentList, centerOn, isDesktop, allowedIds]
   );
 
   const closeEmployeePanel = useCallback(() => {
@@ -359,20 +511,28 @@ function OrganizationChartPage() {
     [selectEmployee]
   );
 
+  const indexedSearch = useMemo(() => employees.map(employee => ({ employee, text: employeeSearchText(employee) })), [employees]);
+  const matchingDesktopEmployees = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return query && isDesktop ? indexedSearch.filter(entry => entry.text.includes(query)).map(entry => entry.employee) : [];
+  }, [indexedSearch, searchQuery, isDesktop]);
   const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return employees
-      .filter((e) =>
-        [getFullName(e), e.jobTitle, e.employeeId, e.department, e.position].some((x) =>
-          String(x || '')
-            .toLowerCase()
-            .includes(q)
-        )
-      )
-      .slice(0, 30);
-  }, [employees, searchQuery]);
+    if (isDesktop) return matchingDesktopEmployees.slice(0, searchLimit);
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+    return employees.filter(employee => [getFullName(employee), employee.jobTitle, employee.employeeId, employee.department, employee.position].some(value => String(value || '').toLowerCase().includes(query))).slice(0, 30);
+  }, [employees, searchQuery, isDesktop, matchingDesktopEmployees, searchLimit]);
 
+  const hiddenCounts = useMemo(() => hiddenDescendantCounts(scopedHierarchy, positions), [scopedHierarchy, positions]);
+  const viewportNodes = useMemo(() => {
+    if (!isDesktop || !viewport.width) return [...positions.entries()];
+    const left = -pan.x / zoom - 300;
+    const top = -pan.y / zoom - 200;
+    const right = (viewport.width - pan.x) / zoom + 300;
+    const bottom = (viewport.height - pan.y) / zoom + 200;
+    return [...positions].filter(([, position]) => position.x + position.width >= left && position.x <= right && position.y + position.height >= top && position.y <= bottom);
+  }, [positions, pan, zoom, viewport, isDesktop]);
+  const departmentCounts = useMemo(() => new Map(departmentList.map(department => [String(department.name).trim().toLowerCase(), department.employeeCount])), [departmentList]);
   const selected = getById(employees, selectedId);
   const pathIds = useMemo(
     () => new Set(getAncestors(employees, selectedId).map((e) => String(e.id))),
@@ -430,7 +590,6 @@ function OrganizationChartPage() {
         y: (a.y + b.y) / 2 - rect.top,
       });
     } else if (dragRef.current) {
-      const el = canvasRef.current;
       const raw = {
         x: dragRef.current.px + event.clientX - dragRef.current.x,
         y: dragRef.current.py + event.clientY - dragRef.current.y,
@@ -802,6 +961,7 @@ function OrganizationChartPage() {
                     type="button"
                     className={`dept-chip${departmentFilter === 'all' ? ' active' : ''}`}
                     onClick={() => {
+                      pendingFocusRef.current = null;
                       setDepartmentFilter('all');
                       fitPendingRef.current = true;
                     }}
@@ -818,6 +978,7 @@ function OrganizationChartPage() {
                         className={`dept-chip${departmentFilter === key ? ' active' : ''}`}
                         title={`${d.name} (${d.employeeCount})`}
                         onClick={() => {
+                          pendingFocusRef.current = null;
                           setDepartmentFilter(key);
                           fitPendingRef.current = true;
                         }}
@@ -838,6 +999,7 @@ function OrganizationChartPage() {
                       value={searchQuery}
                       onChange={(e) => {
                         setSearchQuery(e.target.value);
+                        setSearchLimit(30);
                         setSearchOpen(Boolean(e.target.value.trim()));
                       }}
                       onFocus={() => searchQuery.trim() && setSearchOpen(true)}
@@ -875,6 +1037,7 @@ function OrganizationChartPage() {
                             No employees found. Try a name, role or employee ID.
                           </div>
                         )}
+                        {matchingDesktopEmployees.length > searchResults.length ? <button type="button" className="search-result" onClick={() => setSearchLimit(limit => limit + 30)}>Show more matches ({matchingDesktopEmployees.length - searchResults.length} remaining)</button> : null}
                       </div>
                     ) : null}
                   </div>
@@ -884,12 +1047,13 @@ function OrganizationChartPage() {
                       className="org-tool-btn org-tool-btn-primary"
                       onClick={() => {
                         setExpanded(new Set(employees.map((e) => String(e.id))));
-                        fitPendingRef.current = true;
+                        if (isDesktop) setReportLimits(new Map());
+                        fitPendingRef.current = !isDesktop;
                       }}
                       title="Expand all branches"
                     >
                       <FiChevronDown />
-                      <span>Expand</span>
+                      <span>Expand All</span>
                     </button>
                     <button
                       type="button"
@@ -932,22 +1096,22 @@ function OrganizationChartPage() {
                     </button>
                     <button
                       type="button"
-                      className="icon-button"
+                      className="org-tool-btn"
                       aria-label="Collapse all branches"
                       title="Collapse all"
                       onClick={() => {
                         setExpanded(new Set());
-                        fitPendingRef.current = true;
+                        fitPendingRef.current = !isDesktop;
                       }}
                     >
-                      <FiChevronUp />
+                      <FiChevronUp /><span>Collapse All</span>
                     </button>
                   </div>
                 </div>
               </div>
 
               <div className="chart-layout">
-                <div className="canvas-column">
+                <div ref={fullscreenRef} className="canvas-column">
                   <div className="canvas-breadcrumb">
                     <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                     <span className="truncate">
@@ -980,6 +1144,7 @@ function OrganizationChartPage() {
                     onPointerCancel={endPointer}
                     onDoubleClick={fitChart}
                     onWheel={(e) => {
+                      if (isDesktop) return;
                       e.preventDefault();
                       const rect = canvasRef.current.getBoundingClientRect();
                       if (e.ctrlKey || e.metaKey) {
@@ -993,6 +1158,7 @@ function OrganizationChartPage() {
                     }}
                   >
                     <div
+                      ref={worldRef}
                       id="org-chart-world"
                       className="chart-world"
                       style={{
@@ -1008,7 +1174,12 @@ function OrganizationChartPage() {
                         height={dimensions.height}
                       />
                       <div id="org-chart-nodes">
-                        {[...positions.entries()].map(([id, p]) => {
+                        {isDesktop ? viewportNodes.map(([id, position]) => {
+                          const employee = hierarchy.byId.get(id);
+                          const children = scopedHierarchy.children.get(id) || [];
+                          const limit = reportLimits.get(id) ?? Infinity;
+                          return <DesktopEmployeeNode key={id} employee={employee} position={position} selected={String(selectedId) === id} expanded={expanded.has(id)} childCount={children.length} hiddenCount={hiddenCounts.get(id) || 0} canShowMore={children.some((child, offset) => offset >= limit && !revealedIds.has(String(child.id)))} departmentCount={departmentCounts.get(String(employee.department || '').trim().toLowerCase()) || 0} onSelect={selectEmployee} onToggle={toggleDesktopBranch} onMore={showMoreReports} />;
+                        }) : [...positions.entries()].map(([id, p]) => {
                           const e = getById(employees, id);
                           if (!e) return null;
                           const childCount = getChildren(employees, e.id).length;
@@ -1072,6 +1243,7 @@ function OrganizationChartPage() {
                         })}
                       </div>
                     </div>
+                    {isDesktop && employees.length > 50 ? <OrgChartMinimap positions={positions} dimensions={dimensions} viewport={viewport} zoom={zoom} pan={pan} total={allowedIds.size} onExpandAll={expandAllDesktop} onNavigate={point => applyPan({ x: viewport.width / 2 - point.x * zoom, y: viewport.height / 2 - point.y * zoom })} /> : null}
                   </div>
                   <div className="canvas-bottom">
                     <span className="canvas-bottom-hint hide-mobile">
@@ -1161,12 +1333,13 @@ function OrganizationChartPage() {
                         ) : null}
                       </div>
 
+                      {isDesktop ? <button type="button" className="canvas-pill-btn" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}><FiMaximize2 /><span>{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span></button> : null}
                       <div className="zoom-cluster" aria-label="Zoom controls">
                         <button
                           type="button"
                           className="zoom-cluster-btn"
                           aria-label="Zoom out"
-                          disabled={zoom <= 0.2}
+                          disabled={zoom <= (isDesktop ? MIN_DESKTOP_ZOOM : 0.2)}
                           onClick={() => changeZoom(-0.1)}
                         >
                           <FiMinus />
