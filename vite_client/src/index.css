@@ -621,7 +621,9 @@
 
   .employee-profile-summary-card,
   .employee-profile-tabs {
-    min-height: var(--profile-panel-height, 0px);
+    height: auto;
+    min-height: 0;
+    align-self: start;
   }
 
   .employee-profile-avatar,
@@ -637,7 +639,7 @@
   .employee-profile-summary-body {
     display: block;
     margin-top: -4rem;
-    padding: 0 1rem 1rem;
+    padding: 0 1rem 20px;
   }
 
   .employee-profile-identity h2 {
@@ -790,6 +792,31 @@
 
   .employee-profile-content > .max-w-lg {
     max-width: none;
+  }
+
+  /* Only these short tabs opt out of the other tabs' spare-space distribution. */
+  .employee-profile-content:is([data-profile-tab='personalDetails'], [data-profile-tab='security']) {
+    --profile-extra-space: 0px;
+    min-height: 0;
+    height: auto;
+    align-self: start;
+  }
+
+  .employee-profile-content[data-profile-tab='personalDetails'] .profile-fields {
+    gap: 14px;
+  }
+
+  .employee-profile-content[data-profile-tab='personalDetails'] .profile-fields > :not(:has(input, select, textarea)) {
+    padding: 18px;
+  }
+
+  .employee-profile-content[data-profile-tab='personalDetails'] .space-y-4,
+  .employee-profile-content[data-profile-tab='security'] .space-y-4 {
+    gap: 18px;
+  }
+
+  .employee-profile-content[data-profile-tab='security'] form > div:has(input) {
+    padding-block: 0;
   }
 }
 

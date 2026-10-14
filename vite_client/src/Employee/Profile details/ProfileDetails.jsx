@@ -425,7 +425,7 @@ function ProfileDetails() {
                   </div>
                 </div>
 
-                <div className="employee-profile-content">
+                <div className="employee-profile-content" data-profile-tab={activeTab}>
                 {activeTab === 'personalDetails' && (
                   <div className="space-y-4">
                     {isPersonalEditing ? (
