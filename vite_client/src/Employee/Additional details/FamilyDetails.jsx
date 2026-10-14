@@ -108,7 +108,7 @@ const FamilyDetails = () => {
     <div className="w-full min-w-0 space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-50">
               <FiUsers className="h-4 w-4 text-purple-600" />
@@ -272,7 +272,7 @@ const FamilyDetails = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-1">
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
                 {familyDetails.length > 0 && (
                   <button
                     type="button"

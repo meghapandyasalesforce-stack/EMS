@@ -470,6 +470,31 @@
   min-width: 0;
 }
 
+/* Keep long profile values and form controls within their own column. */
+.employee-profile-content :where(.grid > *, .flex > *),
+.employee-profile-view :where(.grid > *, .flex > *) {
+  min-width: 0;
+}
+
+.employee-profile-content,
+.employee-profile-view,
+.employee-profile-sidebar .profile-meta-row > span:last-child {
+  overflow-wrap: anywhere;
+}
+
+.employee-profile-content :where(input, select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.employee-profile-content .profile-section-header {
+  flex-wrap: wrap;
+}
+
+.employee-profile-content .profile-section-header > button {
+  flex-shrink: 0;
+}
+
 @media (max-width: 1023px) {
   .employee-profile-sidebar .profile-meta-row {
     gap: 0.75rem;
@@ -676,6 +701,10 @@ body,
   min-height: auto;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 249, 0.96) 100%);
   border-radius: 1.25rem;
+}
+
+.main-scroll-area.hrms-page-canvas > .employee-profile-view:only-child {
+  min-height: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {

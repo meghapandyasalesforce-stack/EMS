@@ -52,7 +52,15 @@ const ProfileDropdown = ({
         >
             <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Welcome,</p>
-                <p className="text-sm font-bold text-gray-900 truncate mt-1">{username}</p>
+                <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleViewProfile}
+                    className="block w-full text-left text-sm font-bold text-gray-900 truncate mt-1 hover:underline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] rounded"
+                    title={username}
+                >
+                    {username}
+                </button>
                 <RoleBucketBadges className="mt-2" />
             </div>
             {onViewProfile && (

@@ -293,7 +293,7 @@ const ProfessionalExperience = () => {
       )}
 
       <div className="rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-50">
               <FiBriefcase className="h-4.5 w-4.5 text-indigo-600" />
@@ -448,8 +448,8 @@ const ProfessionalExperience = () => {
         )}
 
         {experiences.length === 0 ? (
-          <div className="px-5 py-12">
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-6 py-10 text-center">
+          <div className="px-4 sm:px-5 py-4">
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-5 text-center">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50">
                 <FiBriefcase className="h-5 w-5 text-indigo-500" />
               </div>

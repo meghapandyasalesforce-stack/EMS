@@ -211,7 +211,7 @@ const EducationQualifications = () => {
 
       {/* Academic Records */}
       <div className="rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
               <FiBookOpen className="text-blue-600" size={18} />
@@ -284,8 +284,8 @@ const EducationQualifications = () => {
 
         <div className="px-5 py-3">
           {academics.length === 0 ? (
-            <div className="py-8">
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-6 py-8 text-center">
+            <div>
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-5 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
                   <FiBookOpen className="text-blue-500" size={20} />
                 </div>
@@ -351,7 +351,7 @@ const EducationQualifications = () => {
 
       {/* Certifications Upload */}
       <div className="rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50">
               <FiAward className="text-amber-600" size={18} />
@@ -397,8 +397,8 @@ const EducationQualifications = () => {
 
         <div className="px-5 py-3">
           {certifications.length === 0 ? (
-            <div className="py-8">
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-6 py-8 text-center">
+            <div>
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-5 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
                   <FiAward className="text-amber-500" size={20} />
                 </div>

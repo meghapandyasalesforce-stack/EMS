@@ -311,7 +311,7 @@ function ProfileDetails() {
                       { label: 'Manager', value: managerAssignedName },
                       { label: 'HR', value: hrContactName },
                     ].map((item) => (
-                      <div key={item.label} className="profile-meta-row flex items-center justify-between border-b border-gray-50 py-2.5 last:border-0">
+                      <div key={item.label} className="profile-meta-row flex items-center justify-between gap-3 border-b border-gray-50 py-2.5 last:border-0">
                         <span className="shrink-0 text-xs text-gray-500">{item.label}</span>
                         <span className="min-w-0 text-right text-xs font-semibold text-gray-800">{item.value || 'N/A'}</span>
                       </div>
@@ -395,20 +395,20 @@ function ProfileDetails() {
                             </select>
                           </div>
                         </div>
-                        <div className="flex justify-end gap-2 pt-1">
+                        <div className="flex flex-wrap justify-end gap-2 pt-1">
                           <button type="button" onClick={() => { resetPersonalDetailsForm(); setIsPersonalEditing(false); }} disabled={isSavingPersonalDetails} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-60">Cancel</button>
                           <button type="button" onClick={handlePersonalDetailsSave} disabled={isSavingPersonalDetails} className="rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-60">{isSavingPersonalDetails ? 'Saving...' : 'Save changes'}</button>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
+                        <div className="profile-section-header flex items-center justify-between gap-3">
                           <h3 className="text-sm font-semibold text-gray-900">Personal details</h3>
                           <button type="button" onClick={() => setIsPersonalEditing(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-90 transition">
                             <FiEdit2 size={13} /> Edit
                           </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                           {[
                             { label: 'First name', value: formValues.firstName },
                             { label: 'Last name', value: formValues.lastName },

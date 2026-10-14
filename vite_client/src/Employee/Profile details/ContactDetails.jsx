@@ -150,7 +150,7 @@ const ContactDetails = () => {
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex flex-wrap justify-end gap-2 pt-1">
                     <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
                     <button type="submit" disabled={updatingInfo} className="rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50">{updatingInfo ? 'Saving...' : 'Save'}</button>
                 </div>
@@ -160,13 +160,13 @@ const ContactDetails = () => {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="profile-section-header flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-gray-900">Contact details</h3>
                 <button type="button" onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-90 transition">
                     <FiEdit2 size={13} /> Edit
                 </button>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 <InfoItem label="Phone 1" value={formData.phone1} />
                 <InfoItem label="Phone 2" value={formData.phone2} />
                 <InfoItem label="Personal email" value={formData.personalEmail} />

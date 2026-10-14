@@ -191,7 +191,7 @@ const FinancialDetails = () => {
 
       {isEditing ? (
         <div className="rounded-xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                 <FiDollarSign className="h-4 w-4" />
@@ -259,7 +259,7 @@ const FinancialDetails = () => {
               </label>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-wrap justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
@@ -281,7 +281,7 @@ const FinancialDetails = () => {
         <>
           {/* Bank Information Card */}
           <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                   <FiDollarSign className="h-4 w-4" />
@@ -309,7 +309,7 @@ const FinancialDetails = () => {
 
           {/* Tax & Statutory Card */}
           <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="profile-section-header flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                   <FiShield className="h-4 w-4" />

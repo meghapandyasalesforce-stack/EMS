@@ -92,7 +92,7 @@ const EmployeeProfile = ({ employeeId }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="employee-profile-view bg-gray-50">
       <div className="page-shell">
         <div className="page-shell-inner">
           {/* Profile Header */}
@@ -240,8 +240,8 @@ const EmployeeProfile = ({ employeeId }) => {
                 <Section title="Documents">
                   <div className="hrms-form-grid">
                     {employee.documents.map((doc, index) => (
-                      <div key={index} className="border rounded-lg p-4 flex items-center justify-between">
-                        <div>
+                      <div key={index} className="border rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
                           <h3 className="font-semibold text-gray-800 capitalize">{doc.documentType}</h3>
                           <p className="text-gray-500 text-sm">{doc.fileName}</p>
                           <p className="text-gray-400 text-xs mt-1">Uploaded: {formatDate(doc.uploadedAt)}</p>
