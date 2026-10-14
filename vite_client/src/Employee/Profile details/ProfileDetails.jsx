@@ -294,9 +294,9 @@ function ProfileDetails() {
         <section className="employee-profile-layout">
             <aside className="employee-profile-sidebar min-w-0">
               <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden lg:sticky lg:top-4">
-                <div className="relative bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]/80 h-20" />
-                <div className="px-4 pb-4 text-center -mt-10 sm:px-5">
-                  <div className="mb-2 flex justify-center">
+                <div className="relative bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]/80 h-12" />
+                <div className="px-4 pb-3 text-center -mt-6">
+                  <div className="mb-1 flex justify-center">
                       <ProfilePicture
                         key={
                           profileSource?.profilePhoto?.s3Key
@@ -307,7 +307,7 @@ function ProfileDetails() {
                           || user?.id
                         }
                         user={profileSource}
-                        size="2xl"
+                        size="xl"
                         showWhiteRing
                         showEditButton={true}
                         onEditClick={() => setShowPhotoUpload(true)}
@@ -318,7 +318,7 @@ function ProfileDetails() {
                   </h2>
                   <p className="mt-0.5 truncate text-xs font-medium text-[var(--color-primary)]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
-                  <div className="mt-3 grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-1 w-full min-w-0 text-left">
+                  <div className="mt-2 grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-1 w-full min-w-0 text-left">
                     {[
                       { label: 'Department', value: user?.department },
                       { label: 'Employee ID', value: user?.employeeId },
@@ -326,22 +326,22 @@ function ProfileDetails() {
                       { label: 'Manager', value: managerAssignedName },
                       { label: 'HR', value: hrContactName },
                     ].map((item) => (
-                      <div key={item.label} className="profile-meta-row flex items-center justify-between gap-3 border-b border-gray-50 py-2 last:border-0">
+                      <div key={item.label} className="profile-meta-row flex items-center justify-between gap-3 border-b border-gray-50 py-1.5 last:border-0">
                         <span className="shrink-0 text-xs text-gray-500">{item.label}</span>
                         <span className="min-w-0 text-right text-xs font-semibold text-gray-800">{item.value || 'N/A'}</span>
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-3 rounded-lg bg-gray-50 p-3">
-                    <div className="flex items-center justify-between mb-2">
+                  <div className="mt-2 rounded-lg bg-gray-50 p-2.5">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
                       <span className="text-xs font-semibold text-gray-800">Profile completion</span>
                       <span className="text-xs font-bold text-[var(--color-primary)]">{completionPercent}%</span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-gray-200">
                       <div className="h-2 rounded-full bg-[var(--color-primary)] transition-all duration-500" style={{ width: `${completionPercent}%` }} />
                     </div>
-                    <p className="text-[11px] text-gray-500 mt-1.5">{stepsLeft} section{stepsLeft !== 1 ? 's' : ''} remaining</p>
+                    <p className="text-[11px] text-gray-500 mt-1">{stepsLeft} section{stepsLeft !== 1 ? 's' : ''} remaining</p>
                   </div>
                 </div>
               </div>
