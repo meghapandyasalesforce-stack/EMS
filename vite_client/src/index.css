@@ -830,16 +830,16 @@
   }
 
   .employee-profile-content[data-profile-tab='personalDetails'] .profile-fields {
-    gap: 14px;
+    gap: 18px;
   }
 
   .employee-profile-content[data-profile-tab='personalDetails'] .profile-fields > :not(:has(input, select, textarea)) {
-    padding: 18px;
+    padding: 20px;
   }
 
   .employee-profile-content[data-profile-tab='personalDetails'] .space-y-4,
   .employee-profile-content[data-profile-tab='security'] .space-y-4 {
-    gap: 18px;
+    gap: 20px;
   }
 
   .employee-profile-content[data-profile-tab='security'] form > div:has(input) {
