@@ -22,6 +22,7 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import MobileOrgHierarchy from './orgChart/MobileOrgHierarchy';
 import DesktopEmployeeNode from './orgChart/DesktopEmployeeNode';
 import OrgChartMinimap from './orgChart/OrgChartMinimap';
 import {
@@ -1090,8 +1091,16 @@ function OrganizationChartPage() {
                 </div>
               </div>
 
-              <div className="chart-layout">
+              <div className={`chart-layout${desktopScreen ? '' : ' mobile-vertical-chart'}`}>
                 <div ref={fullscreenRef} className="canvas-column">
+                  {!desktopScreen ? <MobileOrgHierarchy
+                    index={scopedHierarchy} expanded={expanded} limits={reportLimits} revealed={revealedIds}
+                    selectedId={selectedId} departments={departmentList} departmentFilter={departmentFilter} total={employees.length}
+                    onDepartment={key => { pendingFocusRef.current = null; setDepartmentFilter(key); }}
+                    onSelect={selectEmployee} onToggle={toggleDesktopBranch} onMore={showMoreReports}
+                    onExpandAll={expandAllDesktop} onCollapseAll={() => setExpanded(new Set())}
+                    onExport={exportChart} exporting={exporting} onFullscreen={toggleFullscreen} fullscreen={fullscreen}
+                  /> : <>
                   <div className="canvas-breadcrumb">
                     <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                     <span className="truncate">
@@ -1276,6 +1285,7 @@ function OrganizationChartPage() {
                       </div>
                     </div>
                   </div>
+                  </>}
                 </div>
                 {selected ? (
                   <aside

@@ -1771,3 +1771,226 @@
   .org-chart-page .org-minimap > svg { width: 132px; height: 80px; }
   .org-chart-page .org-minimap-all { padding: 8px; font-size: 11px; }
 }
+
+/* Compact reporting list at the existing mobile breakpoint only. */
+@media (max-width: 960px) {
+  .org-chart-page .mobile-vertical-chart .canvas-column {
+    height: auto;
+    min-height: 0;
+  }
+  .org-chart-page .mobile-org-hierarchy {
+    min-width: 0;
+    background: white;
+  }
+  .org-chart-page .mobile-org-departments {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px;
+  }
+  .org-chart-page .mobile-org-departments button {
+    white-space: nowrap;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 10px;
+    background: white;
+    color: rgb(71 85 105);
+  }
+  .org-chart-page .mobile-org-departments button.active {
+    background: rgb(236 253 245);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+  .org-chart-page .mobile-org-departments span {
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .org-chart-page .mobile-org-actions {
+    display: flex;
+    gap: 6px;
+    padding: 0 10px 10px;
+  }
+  .org-chart-page .mobile-org-actions button {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 8px;
+    background: white;
+    color: rgb(51 65 85);
+    font-size: 12px;
+  }
+  .org-chart-page .mobile-org-scroll, .org-chart-page .mobile-org-department-list {
+    height: max(320px, calc(100dvh - 290px));
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    padding: 0 10px;
+  }
+  .org-chart-page .mobile-org-department-list {
+    height: auto;
+    max-height: max(320px, calc(100dvh - 290px));
+  }
+  .org-chart-page .mobile-org-rows {
+    position: relative;
+    min-width: 0;
+  }
+  .org-chart-page .mobile-org-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 126px;
+    box-sizing: border-box;
+    padding-bottom: 10px;
+  }
+  .org-chart-page .mobile-org-row.has-parent::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--mobile-indent) - 8px);
+    top: 0;
+    height: 100%;
+    border-left: 1px solid rgb(203 213 225);
+    pointer-events: none;
+  }
+  .org-chart-page .mobile-org-card {
+    position: relative;
+    height: 116px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 10px;
+    background: white;
+    overflow: hidden;
+  }
+  .org-chart-page .mobile-org-row.has-parent::after {
+    content: '';
+    position: absolute;
+    left: calc(var(--mobile-indent) - 8px);
+    top: 36px;
+    width: 8px;
+    border-top: 1px solid rgb(203 213 225);
+    pointer-events: none;
+  }
+  .org-chart-page .mobile-org-card.flagged {
+    border-color: rgb(251 191 36);
+  }
+  .org-chart-page .mobile-org-card.selected {
+    border-color: var(--color-primary);
+    background: rgb(236 253 245);
+  }
+  .org-chart-page .mobile-org-person {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 70px;
+    text-align: left;
+    padding: 8px;
+    border: 0;
+    background: transparent;
+  }
+  .org-chart-page .mobile-org-person > :first-child {
+    flex-shrink: 0;
+  }
+  .org-chart-page .mobile-org-person > svg {
+    flex-shrink: 0;
+    color: rgb(100 116 139);
+  }
+  .org-chart-page .mobile-org-identity {
+    flex: 1;
+    min-width: 0;
+  }
+  .org-chart-page .mobile-org-identity strong, .org-chart-page .mobile-org-identity small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .org-chart-page .mobile-org-identity strong {
+    font-size: 14px;
+    line-height: 20px;
+    color: rgb(15 23 42);
+  }
+  .org-chart-page .mobile-org-identity small {
+    font-size: 12px;
+    line-height: 16px;
+    color: rgb(100 116 139);
+  }
+  .org-chart-page .mobile-org-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 44px;
+    padding: 0 8px;
+    border-top: 1px solid rgb(241 245 249);
+    font-size: 11px;
+    color: rgb(71 85 105);
+  }
+  .org-chart-page .mobile-org-card-footer button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+  }
+  .org-chart-page .mobile-org-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 8px;
+    background: rgb(236 253 245);
+    color: var(--color-primary);
+  }
+  .org-chart-page .mobile-org-department-list > button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 76px;
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 12px;
+    background: white;
+    text-align: left;
+  }
+  .org-chart-page .mobile-org-department-list span {
+    flex: 1;
+    min-width: 0;
+  }
+  .org-chart-page .mobile-org-department-list strong, .org-chart-page .mobile-org-department-list small {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+  .org-chart-page .mobile-org-department-list > button > svg {
+    color: var(--color-primary);
+    flex-shrink: 0;
+  }
+  .org-chart-page .mobile-org-export {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-top: 1px solid rgb(226 232 240);
+    font-size: 12px;
+    color: rgb(100 116 139);
+  }
+  .org-chart-page .mobile-org-export span {
+    flex: 1;
+  }
+  .org-chart-page .mobile-org-export button {
+    min-width: 44px;
+    min-height: 44px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 8px;
+    background: white;
+    color: rgb(51 65 85);
+  }
+}
