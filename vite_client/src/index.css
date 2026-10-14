@@ -618,9 +618,17 @@
 
   .employee-profile-summary-card,
   .employee-profile-tabs {
+    display: flex;
+    flex-direction: column;
     height: auto;
-    min-height: 0;
+    min-height: var(--profile-panel-height, 0px);
     align-self: start;
+  }
+
+  .employee-profile-summary-banner,
+  .employee-profile-identity,
+  .employee-profile-completion {
+    flex-shrink: 0;
   }
 
   .employee-profile-avatar {
@@ -639,7 +647,9 @@
   }
 
   .employee-profile-summary-body {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    flex: 1 0 auto;
     position: relative;
     margin-top: -1rem;
     padding: 1px 1rem 20px;
@@ -657,13 +667,17 @@
   }
 
   .employee-profile-meta {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 1 0 auto;
     margin-top: 1.5rem;
     padding-top: 0.5rem;
     border-top: 1px solid rgb(243 244 246);
   }
 
   .employee-profile-meta .profile-meta-row {
+    flex: 1 0 auto;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -694,6 +708,8 @@
 
   .employee-profile-tabs .hrms-tabs-scroll {
     flex-direction: column;
+    flex: 1 0 auto;
+    justify-content: space-between;
     overflow: visible;
   }
 
@@ -808,7 +824,7 @@
   /* Only these short tabs opt out of the other tabs' spare-space distribution. */
   .employee-profile-content:is([data-profile-tab='personalDetails'], [data-profile-tab='security']) {
     --profile-extra-space: 0px;
-    min-height: 0;
+    min-height: var(--profile-panel-height, 0px);
     height: auto;
     align-self: start;
   }
