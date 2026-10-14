@@ -293,9 +293,10 @@ function ProfileDetails() {
 
         <section className="employee-profile-layout">
             <aside className="employee-profile-sidebar min-w-0">
-              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden lg:sticky lg:top-4">
-                <div className="relative bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]/80 h-12" />
-                <div className="px-4 pb-3 text-center -mt-6">
+              <div className="employee-profile-summary-card rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                <div className="employee-profile-summary-banner relative bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]/80 h-12" />
+                <div className="employee-profile-summary-body px-4 pb-3 text-center -mt-6">
+                  <div className="employee-profile-identity min-w-0">
                   <div className="mb-1 flex justify-center">
                       <ProfilePicture
                         key={
@@ -318,7 +319,8 @@ function ProfileDetails() {
                   </h2>
                   <p className="mt-0.5 truncate text-xs font-medium text-[var(--color-primary)]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
-                  <div className="mt-2 grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-1 w-full min-w-0 text-left">
+                  </div>
+                  <div className="employee-profile-meta mt-2 grid grid-cols-1 gap-x-4 sm:grid-cols-2 w-full min-w-0 text-left">
                     {[
                       { label: 'Department', value: user?.department },
                       { label: 'Employee ID', value: user?.employeeId },
@@ -333,7 +335,7 @@ function ProfileDetails() {
                     ))}
                   </div>
 
-                  <div className="mt-2 rounded-lg bg-gray-50 p-2.5">
+                  <div className="employee-profile-completion mt-2 rounded-lg bg-gray-50 p-2.5">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <span className="text-xs font-semibold text-gray-800">Profile completion</span>
                       <span className="text-xs font-bold text-[var(--color-primary)]">{completionPercent}%</span>

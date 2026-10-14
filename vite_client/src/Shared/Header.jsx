@@ -156,6 +156,16 @@ const Header = () => {
         });
     }, [user, employee, permissions, permissionFlags, effectivePortal, saasFeatures, documentModes]);
 
+    // Own-profile navigation is available to every HRMS role on desktop only.
+    const desktopNavItems = useMemo(() => {
+        if (!user && !employee) return navItems;
+        if (navItems.some((item) => item.path === '/profile-details')) return navItems;
+        const profileItem = { path: '/profile-details', name: 'Profile', icon: <FaUserCircle /> };
+        const homeIndex = navItems.findIndex((item) => item.name === 'Dashboard');
+        const insertAt = homeIndex >= 0 ? homeIndex + 1 : 0;
+        return [...navItems.slice(0, insertAt), profileItem, ...navItems.slice(insertAt)];
+    }, [navItems, user, employee]);
+
     const handleLogout = async () => {
         try {
             dispatch(resetAttendance());
@@ -219,7 +229,9 @@ const Header = () => {
     // Highlight active route — exact match for '/', startsWith for all others
     const isActive = useCallback(
         (path) =>
-            path === '/'
+            path === '/profile-details'
+                ? ['/profile-details', '/contact-details', '/education-qualifications', '/professional-experience', '/family-details', '/job-details', '/financial-details', '/profile-security', '/view-profile'].includes(location.pathname)
+                : path === '/'
                 ? location.pathname === '/'
                 : location.pathname === path || location.pathname.startsWith(path + '/'),
         [location.pathname]
@@ -495,7 +507,7 @@ const Header = () => {
                                 : 'scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-2 py-3'
                         }
                     >
-                        {navItems.map((item, index) => (
+                        {desktopNavItems.map((item, index) => (
                             <button
                                 key={item.path}
                                 type="button"

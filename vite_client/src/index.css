@@ -524,32 +524,55 @@
   }
 }
 
+/* A compact summary above the tabs avoids a tall rail beside short content. */
+@media (min-width: 640px) {
+  .employee-profile-summary-banner {
+    height: 0.75rem;
+  }
+
+  .employee-profile-summary-body {
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem 1.5rem;
+    margin-top: 0;
+    padding: 1rem;
+  }
+
+  .employee-profile-meta,
+  .employee-profile-completion {
+    margin-top: 0;
+  }
+
+  .employee-profile-completion {
+    grid-column: 1 / -1;
+  }
+
+  .employee-profile-meta .profile-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.25rem;
+  }
+
+  .employee-profile-meta .profile-meta-row > span:last-child {
+    text-align: left;
+  }
+}
+
 @media (min-width: 1024px) {
-  .employee-profile-layout {
-    --profile-sidebar-width: clamp(240px, 22vw, 280px);
-    flex-direction: row;
-    gap: 1.25rem;
-    align-items: start;
+  .employee-profile-summary-body {
+    grid-template-columns: 160px minmax(0, 1fr) 180px;
   }
 
-  .employee-profile-sidebar {
-    align-self: start;
-    flex: 0 0 var(--profile-sidebar-width);
-    width: var(--profile-sidebar-width);
-    max-width: var(--profile-sidebar-width);
+  .employee-profile-completion {
+    grid-column: auto;
   }
+}
 
-  .employee-profile-main {
-    align-self: start;
-    flex: 1 1 0%;
-    width: auto;
-    max-width: calc(100% - var(--profile-sidebar-width) - 1.25rem);
-  }
-
-  .employee-profile-main,
-  .employee-profile-panel,
-  .employee-profile-content {
-    height: auto;
+@media (min-width: 1280px) {
+  .employee-profile-meta {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
