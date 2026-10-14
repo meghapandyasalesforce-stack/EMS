@@ -14,7 +14,7 @@ import { setUser } from '../../context/Auth/authSlice';
 import { mergeSessionProfile } from '../../utils/profileUtils';
 import { invalidateProfilePhotoCache } from '../../utils/axios';
 import { toast } from 'react-toastify';
-import { FiUser, FiEdit2, FiCalendar, FiX } from 'react-icons/fi';
+import { FiUser, FiEdit2, FiCalendar, FiX, FiPhone, FiBookOpen, FiBriefcase, FiUsers, FiFileText, FiCreditCard, FiShield } from 'react-icons/fi';
 import ChangePasswordForm from '../../components/ChangePasswordForm';
 
 function ProfileDetails() {
@@ -23,6 +23,7 @@ function ProfileDetails() {
   const [isPersonalEditing, setIsPersonalEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('personalDetails');
   const tabsRef = useRef(null);
+  const pageRef = useRef(null);
   const [formValues, setFormValues] = useState({
     firstName: '',
     lastName: '',
@@ -180,14 +181,14 @@ function ProfileDetails() {
   };
 
   const tabs = [
-    { id: 'personalDetails', label: 'Personal Details' },
-    { id: 'contactDetails', label: 'Contact Details' },
-    { id: 'educationQualifications', label: 'Education Qualifications' },
-    { id: 'professionalExperience', label: 'Professional Experience' },
-    { id: 'familyDetails', label: 'Family Details' },
-    { id: 'jobDetails', label: 'Documents' },
-    { id: 'financialDetails', label: 'Financial Details' },
-    { id: 'security', label: 'Security' },
+    { id: 'personalDetails', icon: FiUser, label: 'Personal Details' },
+    { id: 'contactDetails', icon: FiPhone, label: 'Contact Details' },
+    { id: 'educationQualifications', icon: FiBookOpen, label: 'Education Qualifications' },
+    { id: 'professionalExperience', icon: FiBriefcase, label: 'Professional Experience' },
+    { id: 'familyDetails', icon: FiUsers, label: 'Family Details' },
+    { id: 'jobDetails', icon: FiFileText, label: 'Documents' },
+    { id: 'financialDetails', icon: FiCreditCard, label: 'Financial Details' },
+    { id: 'security', icon: FiShield, label: 'Security' },
   ];
 
   const tabPathMap = {
@@ -218,6 +219,30 @@ function ProfileDetails() {
       setActiveTab(mappedTab);
     }
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Use the existing app canvas height; no navbar or viewport dimensions are fixed here.
+  useEffect(() => {
+    const page = pageRef.current;
+    const canvas = page?.closest('.main-scroll-area');
+    if (!canvas) return undefined;
+    const updateHeight = () => {
+      if (!window.matchMedia('(min-width: 1024px)').matches) {
+        page.style.removeProperty('--profile-panel-height');
+        return;
+      }
+      const style = window.getComputedStyle(page);
+      const availableHeight = canvas.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      page.style.setProperty('--profile-panel-height', `${Math.max(0, availableHeight)}px`);
+    };
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(canvas);
+    window.addEventListener('resize', updateHeight);
+    updateHeight();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [profileLoading]);
 
   // Reveal the active tab on direct navigation without moving the page vertically.
   useEffect(() => {
@@ -288,7 +313,7 @@ function ProfileDetails() {
   const inputCls = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition placeholder:text-gray-400';
 
   return (
-    <div className="page-shell employee-profile-page w-full transition-all duration-300">
+    <div ref={pageRef} className="page-shell employee-profile-page w-full transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
 
         <section className="employee-profile-layout">
@@ -309,6 +334,7 @@ function ProfileDetails() {
                         }
                         user={profileSource}
                         size="xl"
+                        className="employee-profile-avatar"
                         showWhiteRing
                         showEditButton={true}
                         onEditClick={() => setShowPhotoUpload(true)}
@@ -366,6 +392,7 @@ function ProfileDetails() {
                             : 'text-gray-400 hover:text-gray-700'
                         }`}
                       >
+                        <tab.icon className="profile-tab-icon hidden lg:block" aria-hidden="true" />
                         {tab.label}
                       </button>
                     ))}
