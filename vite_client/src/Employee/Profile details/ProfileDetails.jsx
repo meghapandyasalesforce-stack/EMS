@@ -228,18 +228,44 @@ function ProfileDetails() {
     const updateHeight = () => {
       if (!window.matchMedia('(min-width: 1024px)').matches) {
         page.style.removeProperty('--profile-panel-height');
+        page.style.removeProperty('--profile-extra-space');
         return;
       }
       const style = window.getComputedStyle(page);
       const availableHeight = canvas.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       page.style.setProperty('--profile-panel-height', `${Math.max(0, availableHeight)}px`);
+      const content = page.querySelector('.employee-profile-content');
+      if (!content) return;
+      // Measure intrinsic content with baseline gaps before allocating spare room.
+      page.style.setProperty('--profile-extra-space', '0px');
+      const visible = (element) => element.getBoundingClientRect().height > 0;
+      const children = Array.from(content.children).filter(visible);
+      if (!children.length) return;
+      const naturalHeight = children.at(-1).getBoundingClientRect().bottom - children[0].getBoundingClientRect().top;
+      const contentStyle = window.getComputedStyle(content);
+      const innerHeight = availableHeight - parseFloat(contentStyle.paddingTop) - parseFloat(contentStyle.paddingBottom) - 2;
+      let spacingUnits = 0;
+      content.querySelectorAll('.space-y-4, .space-y-5, .space-y-6, .profile-fields, [class~="space-y-1.5"]').forEach((stack) => {
+        if (!visible(stack)) return;
+        const count = Array.from(stack.children).filter(visible).length;
+        const weight = stack.classList.contains('space-y-1.5') ? 0.5 : 1;
+        spacingUnits += Math.max(0, count - 1) * weight;
+      });
+      const paddedRows = content.querySelectorAll('.profile-fields > :not(:has(input, select, textarea)), .divide-y > *, .max-w-lg form > div:has(input), .rounded-xl.border > div:last-child:not(.grid):not(:has(> h2, > h3))');
+      spacingUnits += Array.from(paddedRows).filter(visible).length;
+      const rootFontSize = parseFloat(window.getComputedStyle(document.documentElement).fontSize);
+      const extraSpace = spacingUnits ? Math.max(0, Math.min((innerHeight - naturalHeight) / spacingUnits, rootFontSize * 4)) : 0;
+      page.style.setProperty('--profile-extra-space', `${extraSpace}px`);
     };
     const observer = new ResizeObserver(updateHeight);
     observer.observe(canvas);
+    const contentObserver = new MutationObserver(updateHeight);
+    contentObserver.observe(page, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'hidden'] });
     window.addEventListener('resize', updateHeight);
     updateHeight();
     return () => {
       observer.disconnect();
+      contentObserver.disconnect();
       window.removeEventListener('resize', updateHeight);
     };
   }, [profileLoading]);
