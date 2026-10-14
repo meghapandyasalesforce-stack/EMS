@@ -16,6 +16,7 @@ import { getNavigationItems } from '../utils/navigationConfig';
 import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portalConfig';
 import PortalSwitcher from '../components/PortalSwitcher';
 import ProfileDropdown from '../components/ProfileDropdown';
+import ProfilePicture from './ProfilePicture';
 import useDocumentModeSettings from '../Hooks/useDocumentModeSettings';
 import { mergeSessionProfile } from '../utils/profileUtils';
 import { clearOrgAdminCredentials } from '../utils/orgAdminCredentials';
@@ -37,6 +38,7 @@ const Header = () => {
     const availablePortals = useSelector((state) => state.auth.availablePortals) || [];
     const sessionValidated = useSelector((state) => state.auth.sessionValidated);
     const email = useMemo(() => (user?.email || employee?.email) ?? null, [user, employee]);
+    const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [mobileProfileDropdownOpen, setMobileProfileDropdownOpen] = useState(false);
@@ -336,7 +338,7 @@ const Header = () => {
                                     className="relative shrink-0 rounded-full p-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                                     aria-label="Profile menu"
                                 >
-                                    <FaUserCircle className="h-9 w-9 text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-300 dark:hover:text-white" />
+                                    <ProfilePicture user={profile} size="header" />
                                 </button>
                                 {mobileProfileDropdownOpen && (
                                     <ProfileDropdown

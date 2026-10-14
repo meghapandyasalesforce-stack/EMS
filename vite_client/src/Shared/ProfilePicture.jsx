@@ -16,6 +16,7 @@ const ProfilePicture = ({
 }) => {
   const sizeClasses = {
     sm: 'w-8 h-8',
+    header: 'w-9 h-9',
     md: 'w-12 h-12',
     lg: 'w-16 h-16',
     xl: 'w-24 h-24',
@@ -24,6 +25,7 @@ const ProfilePicture = ({
 
   const textSizeClasses = {
     sm: 'text-xs',
+    header: 'text-sm',
     md: 'text-sm',
     lg: 'text-lg',
     xl: 'text-2xl',
@@ -32,6 +34,7 @@ const ProfilePicture = ({
 
   const cameraButtonSizes = {
     sm: 'h-4 w-4',
+    header: 'h-4 w-4',
     md: 'h-5 w-5',
     lg: 'h-6 w-6',
     xl: 'h-7 w-7',
@@ -40,6 +43,7 @@ const ProfilePicture = ({
 
   const cameraIconSizes = {
     sm: 'w-2 h-2',
+    header: 'w-2 h-2',
     md: 'w-2.5 h-2.5',
     lg: 'w-3 h-3',
     xl: 'w-3.5 h-3.5',
