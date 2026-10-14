@@ -339,14 +339,12 @@ const Header = () => {
                                     <FaUserCircle className="h-9 w-9 text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-300 dark:hover:text-white" />
                                 </button>
                                 {mobileProfileDropdownOpen && (
-                                    <div className="absolute right-0 top-12 z-50 w-64 rounded-xl bg-white shadow-xl ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                                        <ProfileDropdown
-                                            isOpen={true}
-                                            onClose={() => setMobileProfileDropdownOpen(false)}
-                                            onLogout={handleLogout}
-                                            onViewProfile={() => navigate('/profile-details')}
-                                        />
-                                    </div>
+                                    <ProfileDropdown
+                                        isOpen={true}
+                                        onClose={() => setMobileProfileDropdownOpen(false)}
+                                        onLogout={handleLogout}
+                                        onViewProfile={() => navigate('/profile-details')}
+                                    />
                                 )}
                             </div>
                         </div>
