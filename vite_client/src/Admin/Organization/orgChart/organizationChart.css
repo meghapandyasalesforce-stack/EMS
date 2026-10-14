@@ -1796,6 +1796,7 @@
     border-radius: 10px;
     background: white;
     color: rgb(71 85 105);
+    font-size: 11.5px;
   }
   .org-chart-page .mobile-org-departments button.active {
     background: rgb(236 253 245);
@@ -1819,7 +1820,7 @@
     border-radius: 8px;
     background: white;
     color: rgb(51 65 85);
-    font-size: 12px;
+    font-size: 11.5px;
   }
   .org-chart-page .mobile-org-scroll, .org-chart-page .mobile-org-department-list {
     height: max(320px, calc(100dvh - 290px));
@@ -1906,12 +1907,12 @@
     white-space: nowrap;
   }
   .org-chart-page .mobile-org-identity strong {
-    font-size: 14px;
+    font-size: 13.5px;
     line-height: 20px;
     color: rgb(15 23 42);
   }
   .org-chart-page .mobile-org-identity small {
-    font-size: 12px;
+    font-size: 11.5px;
     line-height: 16px;
     color: rgb(100 116 139);
   }
@@ -1922,7 +1923,7 @@
     height: 44px;
     padding: 0 8px;
     border-top: 1px solid rgb(241 245 249);
-    font-size: 11px;
+    font-size: 10.5px;
     color: rgb(71 85 105);
   }
   .org-chart-page .mobile-org-card-footer button {
@@ -1969,6 +1970,12 @@
     display: block;
     overflow-wrap: anywhere;
   }
+  .org-chart-page .mobile-org-department-list strong {
+    font-size: 13.5px;
+  }
+  .org-chart-page .mobile-org-department-list small {
+    font-size: 11.5px;
+  }
   .org-chart-page .mobile-org-department-list > button > svg {
     color: var(--color-primary);
     flex-shrink: 0;
@@ -1979,7 +1986,7 @@
     gap: 8px;
     padding: 8px 10px;
     border-top: 1px solid rgb(226 232 240);
-    font-size: 12px;
+    font-size: 11.5px;
     color: rgb(100 116 139);
   }
   .org-chart-page .mobile-org-export span {
@@ -1992,5 +1999,6 @@
     border-radius: 8px;
     background: white;
     color: rgb(51 65 85);
+    font-size: 11.5px;
   }
 }
