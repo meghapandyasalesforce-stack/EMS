@@ -1631,8 +1631,8 @@
   }
 }
 
-/* Scalable desktop chart. The original mobile node/canvas styles stay intact. */
-@media (min-width: 961px) {
+/* Scalable chart nodes shared across screen sizes. */
+@media (min-width: 0px) {
   .org-chart-page .desktop-employee-node {
     width: 244px;
     height: 144px;
@@ -1758,4 +1758,16 @@
     color: rgb(5 150 105);
     font-size: 10px;
   }
+}
+
+@media (max-width: 960px) {
+  .org-chart-page .desktop-node-footer .node-footer,
+  .org-chart-page .desktop-node-footer,
+  .org-chart-page .desktop-employee-node .leaf-footer { height: 44px; }
+  .org-chart-page .desktop-employee-node .node-main { height: 97px; }
+  .org-chart-page .node-show-more { width: 44px; }
+  .org-chart-page .org-minimap { top: 8px; right: 8px; }
+  .org-chart-page .org-minimap-toggle { min-width: 36px; min-height: 36px; margin-bottom: 0; }
+  .org-chart-page .org-minimap > svg { width: 132px; height: 80px; }
+  .org-chart-page .org-minimap-all { padding: 8px; font-size: 11px; }
 }

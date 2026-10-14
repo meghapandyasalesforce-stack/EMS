@@ -1,8 +1,8 @@
 import React, { memo, useState } from 'react';
 import { FiMap, FiX } from 'react-icons/fi';
 
-function OrgChartMinimap({ positions, dimensions, viewport, zoom, pan, onNavigate, total, onExpandAll }) {
-  const [open, setOpen] = useState(true);
+function OrgChartMinimap({ positions, dimensions, viewport, zoom, pan, onNavigate, total, onExpandAll, initiallyOpen = true }) {
+  const [open, setOpen] = useState(initiallyOpen);
   if (!dimensions.width || !dimensions.height) return null;
   const left = Math.max(0, -pan.x / zoom);
   const top = Math.max(0, -pan.y / zoom);
