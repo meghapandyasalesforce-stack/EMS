@@ -754,8 +754,8 @@ const EmployeeDetailsPage = () => {
 
         <div className="hrms-main-rail">
           <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-            <div className="employee-profile-tabs border-b border-slate-100">
-              <div className="hrms-tabs-scroll px-1" role="tablist">
+            <div className="border-b border-slate-100 max-lg:px-1">
+              <div className="flex w-full min-w-0 flex-nowrap gap-0.5 overflow-x-auto px-1" role="tablist" aria-label="Employee details">
                 {visibleTabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -763,7 +763,7 @@ const EmployeeDetailsPage = () => {
                     role="tab"
                     aria-selected={activeTab === tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition ${
+                    className={`shrink-0 whitespace-nowrap border-b-2 px-2.5 py-3 text-xs font-medium transition lg:px-3 lg:text-sm ${
                       activeTab === tab.id
                         ? 'border-[#20C997] text-[#0d9488]'
                         : 'border-transparent text-slate-500 hover:text-slate-800'
