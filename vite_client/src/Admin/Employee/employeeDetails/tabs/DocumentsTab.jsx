@@ -9,7 +9,7 @@ const DocumentsTab = ({ employee, onDownload, onView }) => {
   return (
     <SectionCard title={`Documents (${docs.length})`} icon={FiFileText}>
       {docs.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-12 text-center">
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-8 text-center">
           <FiFileText className="mx-auto h-10 w-10 text-slate-300" />
           <p className="mt-3 text-sm font-medium text-slate-600">No documents uploaded</p>
           <p className="mt-1 text-xs text-slate-500">Employee document uploads appear here.</p>

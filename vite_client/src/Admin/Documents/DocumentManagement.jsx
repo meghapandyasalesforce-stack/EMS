@@ -44,7 +44,7 @@ const DocumentManagement = () => {
   }, [ready, tabs, activeSection]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-white">
+    <div className="bg-gradient-to-b from-slate-50 via-slate-50 to-white">
       <div className="border-b border-slate-200/80 bg-white/90 backdrop-blur-sm">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
           <div>

@@ -535,7 +535,7 @@ const DocumentHub = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <div className="cm-card cm-card--dashed flex min-h-[13rem] flex-col items-center justify-center gap-3 text-center text-[var(--cm-muted)]">
+                            <div className="cm-card cm-card--dashed flex flex-col items-center justify-center gap-3 text-center text-[var(--cm-muted)]">
                                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--cm-surface-low)]">
                                     <FaCloudUploadAlt className="text-2xl text-[var(--cm-primary-deep)] opacity-80" />
                                 </div>

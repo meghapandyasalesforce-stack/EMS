@@ -152,8 +152,8 @@ const OrganizationSettings = () => {
         <div className="page-shell">
         <div className="page-shell-inner hrms-stack">
             {/* Organization Settings */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <div className="flex items-center justify-between mb-6">
+            <div className="rounded-lg bg-white p-4 shadow-md sm:p-6">
+                <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center">
                         <FiSettings className="mr-2" />
                         Organization Settings
@@ -161,7 +161,7 @@ const OrganizationSettings = () => {
                     <button
                         onClick={handleSaveSettings}
                         disabled={isSaving}
-                        className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                        className="flex w-full items-center justify-center rounded-md bg-theme-primary px-4 py-2 text-white hover:opacity-90 disabled:opacity-50 sm:w-auto"
                     >
                         <FiSave className="mr-2" />
                         {isSaving ? 'Saving...' : 'Save Settings'}
@@ -349,15 +349,15 @@ const OrganizationSettings = () => {
             </div>
 
             {/* Subscription Management */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <div className="flex items-center justify-between mb-6">
+            <div className="rounded-lg bg-white p-4 shadow-md sm:p-6">
+                <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center">
                         <FiCreditCard className="mr-2" />
                         Subscription Management
                     </h2>
                     <a
                         href="/organization/subscription"
-                        className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90"
+                        className="flex w-full items-center justify-center rounded-md bg-theme-primary px-4 py-2 text-white hover:opacity-90 sm:w-auto"
                     >
                         <FiCreditCard className="mr-2" />
                         Open billing & checkout

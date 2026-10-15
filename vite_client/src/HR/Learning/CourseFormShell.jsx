@@ -3,7 +3,7 @@ import { FaGraduationCap, FaArrowLeft } from 'react-icons/fa';
 
 /** Shared header wrapper for Create/Edit course forms */
 const CourseFormShell = ({ title, subtitle, onBack, children }) => (
-    <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
+    <div className="page-shell bg-[#F3F7F5]">
         <div className="page-shell-inner space-y-5">
             <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex items-start justify-between gap-3 p-4 sm:items-center sm:p-6">

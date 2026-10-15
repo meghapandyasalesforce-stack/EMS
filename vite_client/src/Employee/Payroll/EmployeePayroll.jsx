@@ -260,7 +260,7 @@ const EmployeePayroll = () => {
 
     if (loading && !currentMonthPayroll && !selectedMonthPayroll) {
         return (
-            <div className="page-shell flex min-h-screen items-center justify-center" style={{ background: PAGE_BG }}>
+            <div className="page-shell flex items-center justify-center py-16" style={{ background: PAGE_BG }}>
                 <div className="page-shell-inner text-center">
                     <FiLoader className="mx-auto mb-4 h-10 w-10 animate-spin" style={{ color: TEAL }} />
                     <p className="text-sm text-slate-600">Loading payroll…</p>
@@ -270,7 +270,7 @@ const EmployeePayroll = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen transition-all duration-300" style={{ background: PAGE_BG }}>
+        <div className="page-shell transition-all duration-300" style={{ background: PAGE_BG }}>
             <div className="page-shell-inner hrms-stack">
                 <header>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">My Payroll</h1>

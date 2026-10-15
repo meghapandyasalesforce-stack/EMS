@@ -112,14 +112,14 @@ const OrganizationVerification = () => {
 
     if (loading && !organization) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="flex min-h-64 items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
     }
 
     return (
-        <div className="page-shell min-h-screen bg-gray-50">
+        <div className="page-shell bg-gray-50">
             <div className="page-shell-inner hrms-stack">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Organization Verification</h1>
@@ -129,7 +129,7 @@ const OrganizationVerification = () => {
                 </div>
 
                 {/* Status Banner */}
-                <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                <div className="rounded-lg bg-white p-4 shadow-lg sm:p-6">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-semibold text-gray-900">Verification Status</h2>
                         {getStatusBadge()}
@@ -144,7 +144,7 @@ const OrganizationVerification = () => {
                 </div>
 
                 {/* Verification Form */}
-                <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                <div className="rounded-lg bg-white p-4 shadow-lg sm:p-6">
                     <h2 className="text-xl font-semibold text-gray-900 mb-6">Business Information</h2>
                     
                     <div className="space-y-6">
@@ -191,14 +191,14 @@ const OrganizationVerification = () => {
                 </div>
 
                 {/* Document Upload */}
-                <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="rounded-lg bg-white p-4 shadow-lg sm:p-6">
                     <h2 className="text-xl font-semibold text-gray-900 mb-6">Verification Documents</h2>
                     <p className="text-sm text-gray-600 mb-6">
                         Upload official documents to verify your organization. Accepted formats: PDF, JPG, PNG (max 10MB)
                     </p>
 
                     <div className="space-y-4">
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                        <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 sm:p-6">
                             <div className="text-center">
                                 <FiFileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                                 <label className="cursor-pointer">
@@ -217,7 +217,7 @@ const OrganizationVerification = () => {
                             </div>
                         </div>
 
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                        <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 sm:p-6">
                             <div className="text-center">
                                 <FiFileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                                 <label className="cursor-pointer">
@@ -242,11 +242,11 @@ const OrganizationVerification = () => {
                                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Uploaded Documents</h3>
                                 <div className="space-y-2">
                                     {formData.documents.map((doc, idx) => (
-                                        <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                            <div className="flex items-center space-x-3">
+                                    <div key={idx} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 p-3">
+                                            <div className="flex min-w-0 items-center space-x-3">
                                                 <FiFile className="w-5 h-5 text-gray-400" />
-                                                <div>
-                                                    <p className="text-sm font-medium text-gray-900">{doc.filename || doc.type}</p>
+                                                <div className="min-w-0">
+                                                    <p className="break-words text-sm font-medium text-gray-900">{doc.filename || doc.type}</p>
                                                     <p className="text-xs text-gray-500">
                                                         Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
                                                     </p>

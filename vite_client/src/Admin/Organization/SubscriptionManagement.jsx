@@ -327,7 +327,7 @@ const SubscriptionManagement = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-64 items-center justify-center">
         <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-theme-secondary" />
       </div>
     );
@@ -341,8 +341,8 @@ const SubscriptionManagement = () => {
     .filter(Boolean);
 
   return (
-    <div className="page-shell min-h-screen bg-gray-50">
-      <div className="page-shell-inner hrms-stack space-y-8">
+    <div className="page-shell bg-gray-50">
+      <div className="page-shell-inner hrms-stack">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Subscription & billing</h1>

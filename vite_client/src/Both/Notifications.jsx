@@ -83,7 +83,7 @@ const Notifications = () => {
     : notifications;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
+    <div className="bg-gray-50 p-3 transition-all duration-300 sm:p-4 lg:p-5">
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-200">
         <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">

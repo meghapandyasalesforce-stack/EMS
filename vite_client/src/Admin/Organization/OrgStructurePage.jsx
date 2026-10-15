@@ -92,7 +92,7 @@ export default function OrgStructurePage() {
     const activeResource = RESOURCES.find((r) => r.key === activeTab);
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="bg-gray-50">
             <div className="page-shell">
                 <div className="page-shell-inner hrms-stack">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -139,8 +139,8 @@ export default function OrgStructurePage() {
                         ))}
                     </div>
 
-                    <div className="grid gap-6 lg:grid-cols-3">
-                        <form onSubmit={handleCreate} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
+                    <div className="grid items-start gap-6 lg:grid-cols-3">
+                        <form onSubmit={handleCreate} className="self-start rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
                             <h2 className="mb-3 text-sm font-semibold text-slate-800">
                                 Add {activeResource?.label.slice(0, -1) || 'item'}
                             </h2>
@@ -191,7 +191,7 @@ export default function OrgStructurePage() {
                             </button>
                         </form>
 
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+                        <div className="self-start rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
                             <h2 className="mb-3 text-sm font-semibold text-slate-800">
                                 {activeResource?.label} ({items.length})
                             </h2>
@@ -218,9 +218,9 @@ export default function OrgStructurePage() {
                                             }
                                         }
                                         return (
-                                            <li key={item._id} className="flex items-center justify-between py-3">
-                                                <div>
-                                                    <p className="font-medium text-slate-900">{item.name}</p>
+                                            <li key={item._id} className="flex items-center justify-between gap-3 py-3">
+                                                <div className="min-w-0">
+                                                    <p className="break-words font-medium text-slate-900">{item.name}</p>
                                                     {subtitle ? (
                                                         <p className="text-xs text-slate-500">{subtitle}</p>
                                                     ) : null}
@@ -228,7 +228,7 @@ export default function OrgStructurePage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDelete(item._id)}
-                                                    className="rounded p-2 text-red-500 hover:bg-red-50"
+                                                    className="shrink-0 rounded p-2 text-red-500 hover:bg-red-50"
                                                     title="Deactivate"
                                                 >
                                                     <FiTrash2 />

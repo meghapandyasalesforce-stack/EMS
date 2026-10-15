@@ -164,7 +164,7 @@ const TeamWfhRequestsPanel = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm lg:p-6">
         <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
           <div>

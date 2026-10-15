@@ -538,7 +538,7 @@ const EngagementPage = () => {
     }
 
     return (
-        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-[#F5F7FB]">
+        <div className="engagement-page page-shell overflow-x-visible bg-[#F5F7FB]">
             <div className="page-shell-inner hrms-stack min-w-0">
                 <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
@@ -691,7 +691,7 @@ const EngagementPage = () => {
                                     </button>
                                 </div>
                             ) : filteredSurveys.length === 0 ? (
-                                <div className="py-16 text-center">
+                                <div className="py-8 text-center sm:py-10">
                                     <h3 className="text-lg font-semibold text-slate-900">No surveys found</h3>
                                     {isManagerUser && !searchQuery && (
                                         <button

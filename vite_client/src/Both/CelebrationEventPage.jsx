@@ -231,7 +231,7 @@ function CelebrationCard({ event, onReact, onWish, actionLoading }) {
                 ))}
               </div>
             ) : (
-              <div className="mt-6 rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-12 text-center">
+              <div className="mt-6 rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-8 text-center sm:py-10">
                 <p className="text-4xl">💌</p>
                 <p className="mt-3 font-medium text-slate-700">No wishes yet</p>
                 <p className="mt-1 text-sm text-slate-500">When teammates send a private wish, it will appear here.</p>
@@ -311,8 +311,8 @@ export default function CelebrationEventPage() {
 
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-amber-50 via-rose-50/40 to-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="bg-gradient-to-b from-amber-50 via-rose-50/40 to-slate-50">
+      <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600">Team celebrations</p>
@@ -335,13 +335,13 @@ export default function CelebrationEventPage() {
         ) : error ? (
           <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
         ) : events.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-amber-200 bg-white px-6 py-20 text-center">
+          <div className="rounded-3xl border border-dashed border-amber-200 bg-white px-6 py-8 text-center sm:py-10">
             <p className="text-5xl">🎂</p>
             <p className="mt-4 text-lg font-semibold text-slate-800">No active celebrations right now</p>
             <p className="mt-1 text-sm text-slate-500">When someone has a birthday or work anniversary, it will show here.</p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {events.map((event) => (
               <CelebrationCard
                 key={event._id}

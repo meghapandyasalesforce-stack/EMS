@@ -376,7 +376,7 @@ const IdCardGenerator = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+    <div className="bg-[#F5F7FB]">
       <div className="page-shell">
       <div className="page-shell-inner">
       <div className="hrms-stack">

@@ -87,7 +87,7 @@ const EmployeeLifecycle = () => {
 
     return (
         <>
-            <div className="page-shell hrms-lifecycle bg-gray-50 pt-4">
+            <div className="employee-lifecycle-switcher page-shell hrms-lifecycle bg-gray-50 pt-4">
                 <div className="page-shell-inner">
                     <section className="rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-4">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

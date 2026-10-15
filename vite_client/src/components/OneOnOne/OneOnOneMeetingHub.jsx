@@ -380,7 +380,7 @@ const OneOnOneMeetingHub = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen transition-all duration-300" style={{ background: PAGE_BG }}>
+        <div className="page-shell transition-all duration-300" style={{ background: PAGE_BG }}>
             <div className="page-shell-inner hrms-stack">
                 <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -431,7 +431,7 @@ const OneOnOneMeetingHub = () => {
 
                 <section>
                     {filteredMeetings.length === 0 ? (
-                        <div className="flex flex-col items-center rounded-2xl border border-slate-100 bg-white py-16 text-center shadow-sm">
+                        <div className="flex flex-col items-center rounded-2xl border border-slate-100 bg-white py-8 text-center shadow-sm sm:py-10">
                             <FiCalendar className="mb-3 h-10 w-10 text-slate-300" />
                             <p className="text-sm font-medium text-slate-700">No meetings in this view</p>
                             {canSchedule && activeTab === 'upcoming' ? (

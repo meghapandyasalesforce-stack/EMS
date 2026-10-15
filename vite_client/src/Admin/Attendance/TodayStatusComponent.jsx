@@ -137,7 +137,7 @@ const TodayStatusComponent = () => {
 
   if (loading && !statusData.length)
     return (
-      <div className="min-h-[40vh] flex items-center justify-center text-slate-500 bg-[#f4f7f6]">
+      <div className="flex items-center justify-center bg-[#f4f7f6] py-16 text-slate-500">
         Loading today's roster…
       </div>
     );
@@ -149,7 +149,7 @@ const TodayStatusComponent = () => {
     );
 
   return (
-    <div className="page-shell min-h-screen bg-[#f4f7f6]">
+    <div className="page-shell bg-[#f4f7f6]">
       <div className="page-shell-inner hrms-stack">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

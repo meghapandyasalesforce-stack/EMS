@@ -164,7 +164,7 @@ const OrganizationAnalytics = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="bg-gray-50">
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack">

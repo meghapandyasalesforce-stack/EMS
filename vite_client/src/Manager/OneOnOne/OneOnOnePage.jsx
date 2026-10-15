@@ -389,7 +389,7 @@ const OneOnOnePage = ({ onBackToReceive = null, focusMeetingId: focusMeetingIdPr
     }
 
     return (
-        <div className="page-shell min-h-screen transition-all duration-300" style={{ background: PAGE_BG }}>
+        <div className="page-shell transition-all duration-300" style={{ background: PAGE_BG }}>
             <div className="page-shell-inner hrms-stack">
                 <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
                     <div className="min-w-0">
@@ -473,7 +473,7 @@ const OneOnOnePage = ({ onBackToReceive = null, focusMeetingId: focusMeetingIdPr
 
                 <section className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:p-5 md:p-6">
                     {filteredMeetings.length === 0 ? (
-                        <div className="flex flex-col items-center py-16 text-center">
+                        <div className="flex flex-col items-center py-8 text-center sm:py-10">
                             <div
                                 className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
                                 style={{ background: `${TEAL}12` }}

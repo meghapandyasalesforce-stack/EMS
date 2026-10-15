@@ -111,12 +111,12 @@ const AttendanceDashboard = () => {
     };
 
     if (isLoading) {
-        return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Loading...</div>;
+        return <div className="flex items-center justify-center bg-gray-900 py-16 text-white">Loading...</div>;
     }
 
     return (
-        <div className="p-3 sm:p-4 md:p-6 bg-gray-900 min-h-screen text-white">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+        <div className="bg-gray-900 p-3 text-white sm:p-4 md:p-6">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <h1 className="text-xl sm:text-2xl font-bold">Attendance Dashboard</h1>
                 <div className="text-right">
                     <div className="text-lg sm:text-xl md:text-2xl font-bold">{formatTime(currentTime)}</div>
@@ -124,10 +124,10 @@ const AttendanceDashboard = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8">
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2 bg-gray-800 rounded-xl p-4 sm:p-6">
                     <h2 className="text-lg sm:text-xl font-semibold mb-4">Attendance Stats</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
                         <div>
                             <label className="text-sm text-gray-400 block mb-2">AVG HRS / DAY</label>
                             <div className="text-xl font-bold">{formatDuration(attendanceStats.avgHoursPerDay)}</div>
@@ -159,7 +159,7 @@ const AttendanceDashboard = () => {
 
             <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-semibold mb-4">Attendance Log</h2>
-                <div className="flex flex-wrap gap-2 sm:gap-4 mb-6 sm:mb-8 mt-4">
+                <div className="mb-6 mt-4 flex flex-wrap gap-2 sm:gap-4">
                     <button className="bg-theme-secondary text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">30 DAYS</button>
                     <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">FEB</button>
                     <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">JAN</button>

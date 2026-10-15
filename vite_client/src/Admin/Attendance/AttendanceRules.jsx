@@ -292,7 +292,7 @@ const AttendanceRules = () => {
                         </div>
 
                         {/* Coordinates Input */}
-                        <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Latitude
@@ -390,7 +390,7 @@ const AttendanceRules = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-3">
                                 Manual Coordinate Entry
                             </label>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Latitude
@@ -433,7 +433,7 @@ const AttendanceRules = () => {
                         {/* Office Hours Section */}
                         <div className="mb-8 border-t pt-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Office Hours</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Office Start Time
@@ -463,7 +463,7 @@ const AttendanceRules = () => {
                         <div className="mb-8 border-t pt-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Check-In & Check-Out Times</h3>
                             
-                            <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Check-In Start Time
@@ -488,7 +488,7 @@ const AttendanceRules = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Check-Out Start Time
@@ -514,7 +514,7 @@ const AttendanceRules = () => {
                             </div>
 
                             {/* Grace Periods */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Check-In Grace Period (minutes)
@@ -569,7 +569,7 @@ const AttendanceRules = () => {
                             </div>
 
                             {formData.autoCheckOut.enabled && (
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Auto Check-Out Time
@@ -622,7 +622,7 @@ const AttendanceRules = () => {
                             </div>
 
                             {formData.timeStop.enabled && (
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Time Stop Time
@@ -678,7 +678,7 @@ const AttendanceRules = () => {
                             </div>
 
                             {formData.enableCompOff && (
-                                <div className="ml-8 flex items-center justify-between p-4 bg-theme-secondary/10 rounded-lg">
+                                <div className="ml-0 flex items-center justify-between rounded-lg bg-theme-secondary/10 p-4 sm:ml-8">
                                     <div>
                                         <h4 className="font-medium text-gray-900">Auto Approve</h4>
                                         <p className="text-sm text-gray-600">Automatically approve comp off requests</p>
@@ -721,7 +721,7 @@ const AttendanceRules = () => {
                             </div>
 
                             {formData.regularizationRules.enabled && (
-                                <div className="ml-8 p-4 bg-theme-secondary/10 rounded-lg">
+                                <div className="ml-0 rounded-lg bg-theme-secondary/10 p-4 sm:ml-8">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Max regularization requests per employee per month
                                     </label>

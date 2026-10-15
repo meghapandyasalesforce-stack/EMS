@@ -691,7 +691,7 @@ function AddEmployee() {
     };
 
     const renderStepIndicator = () => (
-        <ol className="mb-8 flex flex-wrap gap-2 sm:gap-4">
+        <ol className="mb-6 flex flex-wrap gap-2 sm:gap-4">
             {VISIBLE_STEPS.map((item, index) => {
                 const isActive = index === step;
                 const isDone = index < step;
@@ -1084,7 +1084,7 @@ function AddEmployee() {
     }
 
     return (
-        <div className="min-h-screen overflow-x-hidden bg-[#F5F7FB]">
+        <div className="overflow-x-hidden bg-[#F5F7FB]">
             <div className="page-shell">
                 <div className="page-shell-inner min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
                     <h1 className="mb-2 text-xl font-semibold text-slate-900 sm:text-2xl">Add employee</h1>
@@ -1114,7 +1114,7 @@ function AddEmployee() {
                         {step === 1 && renderJobStep()}
                         {step === 2 && renderReviewStep()}
 
-                        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+                        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
                             <button
                                 type="button"
                                 onClick={goBack}

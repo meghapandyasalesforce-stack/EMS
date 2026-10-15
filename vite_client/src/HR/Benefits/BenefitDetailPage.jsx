@@ -211,7 +211,7 @@ const BenefitDetailPage = () => {
     const frequency = plan.employeeContribution?.frequency || 'Monthly';
 
     return (
-        <div className="page-shell min-h-screen bg-gradient-to-b from-slate-50 to-white transition-all duration-300">
+        <div className="page-shell bg-gradient-to-b from-slate-50 to-white transition-all duration-300">
             <div className="page-shell-inner hrms-stack">
                 <div>
                     <button

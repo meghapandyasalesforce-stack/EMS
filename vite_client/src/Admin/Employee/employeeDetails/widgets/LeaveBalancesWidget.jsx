@@ -415,7 +415,7 @@ const LeaveBalancesWidget = ({ employeeId }) => {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-10">
+        <div className="flex justify-center py-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
         </div>
       ) : !balance ? (

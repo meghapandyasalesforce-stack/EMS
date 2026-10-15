@@ -92,7 +92,7 @@ const WorkspacePage = () => {
                 ))}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <Widget title="Pending Resume Screening" icon={FaClipboardCheck} items={widgets.pendingScreening} empty="No pending screening" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
                 <Widget title="Interviews Today" icon={FaCalendarAlt} items={widgets.interviewsToday} empty="No interviews today" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
                 <Widget title="Pending Feedback" icon={FaExclamationTriangle} items={widgets.pendingFeedback} empty="No pending feedback" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />

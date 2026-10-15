@@ -451,7 +451,7 @@ const EmployeeOneOnOnePage = ({
     }
 
     return (
-        <div className="min-h-screen bg-[#F8F9FA] transition-all duration-300">
+        <div className="bg-[#F8F9FA] transition-all duration-300">
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack">
@@ -474,7 +474,7 @@ const EmployeeOneOnOnePage = ({
                 </header>
 
                 {meetings.length === 0 ? (
-                    <div className="rounded-xl border border-slate-200 bg-white py-16 text-center">
+                    <div className="rounded-xl border border-slate-200 bg-white py-8 text-center sm:py-10">
                         <FaCalendarAlt className="mx-auto mb-4 text-4xl text-slate-300" />
                         <p className="text-base font-medium text-slate-700">No one-on-one meetings scheduled</p>
                         <p className="mt-1 text-sm text-slate-500">

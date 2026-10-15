@@ -256,13 +256,13 @@ const LifecycleReportsHub = ({ onBack }) => {
     }, [drilldown.category]);
 
     if (loading && !dashboard) {
-        return <div className="flex justify-center py-20"><LoadingSpinner /></div>;
+        return <div className="flex justify-center py-10"><LoadingSpinner /></div>;
     }
 
     return (
-        <div className="cm-hrms hrms-lifecycle min-h-[calc(100vh-4rem)]">
+        <div className="cm-hrms hrms-lifecycle">
             <div className="page-shell !bg-transparent">
-                <div className="page-shell-inner cm-page pb-10">
+                <div className="page-shell-inner cm-page pb-6">
                 {onBack && (
                     <button
                         type="button"
@@ -329,8 +329,8 @@ const LifecycleReportsHub = ({ onBack }) => {
                 {tab === 'overview' && (
                     <div className="space-y-6">
                         {/* Top KPI row */}
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                            <div className="cm-card !p-8">
+                        <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-3">
+                            <div className="cm-card !p-6">
                                 <div className="mb-4 flex items-start justify-between">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(0,108,81,0.1)] text-[var(--cm-primary-deep)]">
                                         <FaCheckCircle />
@@ -346,7 +346,7 @@ const LifecycleReportsHub = ({ onBack }) => {
                                 </p>
                             </div>
 
-                            <div className="cm-card !p-8">
+                            <div className="cm-card !p-6">
                                 <div className="mb-4 flex items-start justify-between">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--cm-secondary-container)] text-[var(--cm-on-primary-container)]">
                                         <FaClock />
@@ -362,7 +362,7 @@ const LifecycleReportsHub = ({ onBack }) => {
                                 </p>
                             </div>
 
-                            <div className="cm-card relative overflow-hidden !p-8">
+                            <div className="cm-card relative overflow-hidden !p-6">
                                 <div className="mb-4 flex items-start justify-between">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--cm-primary)] text-[var(--cm-on-primary-container)]">
                                         <FaChartLine />
@@ -391,9 +391,9 @@ const LifecycleReportsHub = ({ onBack }) => {
                         </div>
 
                         {/* Funnel + right compliance column */}
-                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                            <div className="cm-card !p-8 lg:col-span-2">
-                                <div className="mb-10 flex flex-wrap items-center justify-between gap-3">
+                        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+                            <div className="cm-card !p-6 lg:col-span-2">
+                                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                                     <h3 className="text-xl font-semibold text-[var(--cm-on-surface)]">Onboarding Funnel</h3>
                                     <div className="flex gap-2">
                                         {['Quarterly', 'Monthly'].map((opt) => (
@@ -484,7 +484,7 @@ const LifecycleReportsHub = ({ onBack }) => {
                             </div>
 
                             <div className="space-y-6">
-                                <div className="cm-card !p-8">
+                                <div className="cm-card !p-6">
                                     <h3 className="mb-6 text-lg font-semibold text-[var(--cm-on-surface)]">
                                         Mandatory Docs Completion
                                     </h3>
@@ -540,7 +540,7 @@ const LifecycleReportsHub = ({ onBack }) => {
                                     </div>
                                 </div>
 
-                                <div className="cm-card !p-8">
+                                <div className="cm-card !p-6">
                                     <div className="mb-4 flex items-center justify-between gap-2">
                                         <h3 className="text-lg font-semibold text-[var(--cm-on-surface)]">Critical Depts</h3>
                                         <span className="rounded-full bg-[var(--cm-error-container,#ffdad6)] px-2 py-0.5 text-[10px] font-bold text-[var(--cm-on-error-container,#93000a)]">

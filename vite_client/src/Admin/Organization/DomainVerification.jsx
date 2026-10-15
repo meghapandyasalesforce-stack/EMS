@@ -81,7 +81,7 @@ const DomainVerification = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="flex min-h-64 items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
@@ -92,7 +92,7 @@ const DomainVerification = () => {
     const verificationToken = organization?.domainVerificationToken;
 
     return (
-        <div className="page-shell min-h-screen bg-gray-50">
+        <div className="page-shell bg-gray-50">
             <div className="page-shell-inner hrms-stack">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Domain Verification</h1>
@@ -118,13 +118,13 @@ const DomainVerification = () => {
                 ) : (
                     <>
                         {/* Domain Status */}
-                        <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-                            <div className="flex items-center justify-between mb-4">
+                        <div className="rounded-lg bg-white p-4 shadow-lg sm:p-6">
+                            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h2 className="text-xl font-semibold text-gray-900">Domain Status</h2>
                                     <p className="text-gray-600 mt-1">{domain}</p>
                                 </div>
-                                <div className="flex items-center space-x-4">
+                                <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                                     {isVerified ? (
                                         <div className="flex items-center space-x-2 text-theme-primary">
                                             <FiCheckCircle className="w-6 h-6" />
@@ -150,7 +150,7 @@ const DomainVerification = () => {
 
                         {/* DNS Configuration Instructions */}
                         {!isVerified && verificationToken && (
-                            <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                            <div className="rounded-lg bg-white p-4 shadow-lg sm:p-6">
                                 <h2 className="text-xl font-semibold text-gray-900 mb-4">DNS Configuration</h2>
                                 <p className="text-gray-600 mb-4">
                                     To verify your domain, add the following DNS record to your domain's DNS settings:
@@ -177,7 +177,7 @@ const DomainVerification = () => {
                                         </div>
                                         <div className="flex items-center space-x-2">
                                             <span className="text-gray-600">Value:</span>
-                                            <span className="text-gray-900">ems-verification={verificationToken}</span>
+                                            <span className="break-all text-gray-900">ems-verification={verificationToken}</span>
                                         </div>
                                     </div>
                                 </div>

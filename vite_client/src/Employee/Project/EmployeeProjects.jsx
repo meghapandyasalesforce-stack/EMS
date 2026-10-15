@@ -132,7 +132,7 @@ const EmployeeProjects = () => {
 
   if (status === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F6F8FB] p-6">
+      <div className="flex items-center justify-center bg-[#F6F8FB] px-6 py-12">
         <div className="text-center">
           <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
           <p className="text-sm text-slate-600">Loading projects...</p>
@@ -143,7 +143,7 @@ const EmployeeProjects = () => {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F6F8FB] p-6">
+      <div className="flex items-center justify-center bg-[#F6F8FB] px-6 py-12">
         <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           <div className="flex justify-center mb-3">
             <FiAlertCircle className="h-8 w-8 text-red-500" />
@@ -156,7 +156,7 @@ const EmployeeProjects = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F8FB]">
+    <div className="bg-[#F6F8FB]">
       <div className="page-shell">
       <div className="page-shell-inner">
       <div className="hrms-stack">
@@ -222,7 +222,7 @@ const EmployeeProjects = () => {
           </div>
 
           {filteredProjects.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center">
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center sm:py-10">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#ECFDF5]">
                 <FiAlertCircle className="h-6 w-6 text-[#0F766E]" />
               </div>

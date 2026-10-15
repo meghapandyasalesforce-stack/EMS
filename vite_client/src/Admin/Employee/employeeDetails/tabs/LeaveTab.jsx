@@ -927,11 +927,11 @@ const LeaveTab = ({ employeeId }) => {
         }
       >
         {loading ? (
-          <div className="flex justify-center py-14">
+          <div className="flex justify-center py-8">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
           </div>
         ) : !balance ? (
-          <p className="py-8 text-center text-sm text-slate-500">No leave balance for this period. Assign a leave policy first.</p>
+          <p className="py-6 text-center text-sm text-slate-500">No leave balance for this period. Assign a leave policy first.</p>
         ) : (
           <>
             {balance.policy?.policyName && (
@@ -950,7 +950,7 @@ const LeaveTab = ({ employeeId }) => {
                 ))}
               </div>
             ) : (
-              <p className="py-8 text-center text-sm text-slate-500">No leave types configured for this policy.</p>
+              <p className="py-6 text-center text-sm text-slate-500">No leave types configured for this policy.</p>
             )}
           </>
         )}

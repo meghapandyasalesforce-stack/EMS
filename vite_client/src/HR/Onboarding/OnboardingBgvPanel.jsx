@@ -442,7 +442,7 @@ const OnboardingBgvPanel = ({
             )}
 
             {!hasCase && canInitiate && (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-10 text-center">
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center">
                     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-600">
                         <FaFileAlt className="text-2xl" />
                     </div>
@@ -467,7 +467,7 @@ const OnboardingBgvPanel = ({
             )}
 
             {!hasCase && !canInitiate && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-10 text-center">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-6 text-center">
                     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-200/80 text-slate-500">
                         <FaClock className="text-2xl" />
                     </div>

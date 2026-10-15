@@ -400,7 +400,7 @@ const BenefitsLearningHub = () => {
     const isLearningTab = activeTab === 'learning';
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
+        <div className="page-shell bg-[#F3F7F5]">
             <div className="page-shell-inner hrms-stack">
                 <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-6">

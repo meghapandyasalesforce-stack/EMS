@@ -233,7 +233,7 @@ const LmsDashboard = ({ workflowId, isHRView, onUpdated }) => {
                         <h4 className="mb-3 text-sm font-semibold text-gray-900">Learners</h4>
                         <div className="max-h-72 space-y-2 overflow-y-auto">
                             {employees.length === 0 ? (
-                                <div className="rounded-lg border border-dashed border-gray-200 px-4 py-10 text-center text-sm text-gray-500">
+                                <div className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
                                     <FaGraduationCap className="mx-auto mb-2 text-2xl text-gray-300" />
                                     <p>No training assignments yet.</p>
                                     <p className="mt-1 text-xs">Assign courses from an onboarding workflow to populate this list.</p>
@@ -456,7 +456,7 @@ const LmsDashboard = ({ workflowId, isHRView, onUpdated }) => {
                             <FaPlus className="text-[10px]" /> Add Rule
                         </CmButton>
                     </div>
-                    <div className="rounded-[2rem] border border-dashed border-[rgba(187,202,193,0.8)] bg-[var(--cm-surface-low)] px-6 py-12">
+                    <div className="rounded-[2rem] border border-dashed border-[rgba(187,202,193,0.8)] bg-[var(--cm-surface-low)] p-6">
                         <CmEmpty icon={<FaSlidersH />} title="Rules missing by default">
                             Set up auto-enrollment to automate induction paths for your new hires.
                         </CmEmpty>

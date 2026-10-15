@@ -420,7 +420,7 @@ const ProjectsPageEnhanced = () => {
   return (
     <Box sx={{ width: '100%', minWidth: 0 }}>
       <Container maxWidth="xl" sx={{ 
-          py: 4,
+          py: { xs: 2, sm: 3 },
           px: { xs: 2, sm: 3 },
           maxWidth: { 
             xs: '100%', 
@@ -430,7 +430,7 @@ const ProjectsPageEnhanced = () => {
           }
         }}>
           {/* Header Section */}
-          <Box sx={{ mb: 4 }}>
+          <Box sx={{ mb: 3 }}>
             <Box sx={{ 
               display: 'flex',
               flexDirection: { xs: 'column', sm: 'row' },

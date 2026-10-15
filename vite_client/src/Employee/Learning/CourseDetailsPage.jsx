@@ -384,7 +384,7 @@ const CourseDetailsPage = () => {
 
     if (!course) {
         return (
-            <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
+            <div className="page-shell bg-[#F3F7F5]">
                 <div className="page-shell-inner">
                 <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
                     <p className="text-lg font-semibold text-slate-900">Course not found</p>
@@ -407,7 +407,7 @@ const CourseDetailsPage = () => {
     const courseStatus = course.status || 'Draft';
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
+        <div className="page-shell bg-[#F3F7F5]">
             <div className="page-shell-inner space-y-4">
                 <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="border-b border-slate-100 p-4 sm:p-5">

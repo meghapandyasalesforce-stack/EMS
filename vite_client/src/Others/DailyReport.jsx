@@ -29,11 +29,11 @@ function DailyReport() {
         fetchDailyReport();
     }, []);
 
-    if (loading) return <p className="p-5">Loading daily report...</p>;
-    if (error) return <p className="p-5 text-red-500">{error}</p>;
+    if (loading) return <p className="p-3 sm:p-4 lg:p-5">Loading daily report...</p>;
+    if (error) return <p className="p-3 text-red-500 sm:p-4 lg:p-5">{error}</p>;
 
     return (
-        <div className="p-5">
+        <div className="p-3 sm:p-4 lg:p-5">
             <h2 className="text-xl font-bold mb-4">Daily Report</h2>
             <div className="overflow-x-auto">
                 <table className="w-full border-collapse">

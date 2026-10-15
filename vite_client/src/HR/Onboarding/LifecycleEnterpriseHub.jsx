@@ -90,7 +90,7 @@ const LifecycleEnterpriseHub = () => {
 
     if (!loaded) {
         return (
-            <div className="page-shell bg-gray-50 pb-8">
+            <div className="page-shell bg-gray-50 pb-6">
                 <div className="page-shell-inner">
                     <LoadingSpinner message="Loading enterprise command center..." />
                 </div>
@@ -99,7 +99,7 @@ const LifecycleEnterpriseHub = () => {
     }
 
     return (
-        <div className="page-shell bg-gray-50 pb-8">
+        <div className="page-shell bg-gray-50 pb-6">
             <div className="page-shell-inner space-y-4">
                 {searchEnabled && (
                     <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
@@ -167,13 +167,13 @@ const LifecycleEnterpriseHub = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-600">
+                    <div className="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-600">
                         No enterprise modules are enabled. Turn features on in Employee Lifecycle → Configure.
                     </div>
                 )}
 
                 {visibleTabs.some((t) => t.key === tab) && (
-                    <section className={`rounded-xl bg-white shadow-sm border border-gray-100 ${tab === 'dashboards' ? 'p-4 sm:p-5' : 'p-6'} min-h-[400px]`}>
+                    <section className={`rounded-xl bg-white shadow-sm border border-gray-100 ${tab === 'dashboards' ? 'p-4 sm:p-5' : 'p-6'}`}>
                         {tab === 'dashboards' && (
                             <EnterpriseCommandCenter
                                 isEnabled={isEnabled}

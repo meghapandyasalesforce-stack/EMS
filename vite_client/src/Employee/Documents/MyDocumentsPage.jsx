@@ -231,7 +231,7 @@ const MyDocumentsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB]">
+    <div className="bg-[#F4F6FB]">
       <input
         ref={replaceInputRef}
         type="file"
@@ -291,7 +291,7 @@ const MyDocumentsPage = () => {
           </div>
 
           {documents.length === 0 ? (
-            <div className="px-6 py-16 text-center">
+            <div className="px-5 py-10 text-center sm:px-6 sm:py-12">
               <FaFileAlt className="mx-auto h-10 w-10 text-slate-300" />
               <p className="mt-3 font-medium text-slate-700">No documents yet</p>
               <p className="mt-1 text-sm text-slate-500">

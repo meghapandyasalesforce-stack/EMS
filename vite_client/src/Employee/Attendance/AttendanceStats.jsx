@@ -226,7 +226,7 @@ const AttendanceStats = () => {
   };
 
   return (
-    <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
+    <div className="page-shell bg-gray-100 transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
         <div className="flex items-center gap-4">
           <button

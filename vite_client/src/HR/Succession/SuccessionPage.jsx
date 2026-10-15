@@ -220,7 +220,7 @@ const SuccessionPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+        <div className="page-shell bg-gray-50 transition-all duration-300">
             <div className="page-shell-inner hrms-stack">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
@@ -343,7 +343,7 @@ const SuccessionPage = () => {
                 </div>
 
                 {activeTab === 'plans' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {filteredPlans.map((plan) => (
                             <div key={plan._id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
                                 <div className="flex items-start justify-between mb-4">
@@ -403,7 +403,7 @@ const SuccessionPage = () => {
                             </div>
                         ))}
                         {filteredPlans.length === 0 && (
-                            <div className="col-span-3 text-center py-8 sm:py-10">
+                            <div className="col-span-3 py-6 text-center">
                                 <FaUserTie className="mx-auto text-gray-400 text-5xl mb-4" />
                                 <p className="text-gray-500">
                                     {successionPlans.length === 0 
@@ -469,7 +469,7 @@ const SuccessionPage = () => {
                                 ))}
                                 {filteredTalent.length === 0 && (
                                     <tr>
-                                        <td colSpan="5" className="px-6 py-8 sm:py-10 text-center text-gray-500">
+                                        <td colSpan="5" className="px-6 py-6 text-center text-gray-500">
                                             <FaUsers className="mx-auto text-4xl mb-2 text-gray-400" />
                                             <p>
                                                 {talentPool.length === 0 

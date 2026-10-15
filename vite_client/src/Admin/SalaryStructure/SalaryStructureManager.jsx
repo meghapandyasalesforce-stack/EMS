@@ -246,8 +246,8 @@ const SalaryStructureManager = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F3F7F5] flex items-center justify-center">
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+      <div className="flex items-center justify-center bg-[#F3F7F5] py-16">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-500" />
           <p className="mt-3 text-sm font-medium text-slate-600">Loading salary structures...</p>
         </div>
@@ -256,7 +256,7 @@ const SalaryStructureManager = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F7F5]">
+    <div className="bg-[#F3F7F5]">
       <div className="page-shell">
       <div className="page-shell-inner">
       <div className="hrms-stack">
@@ -538,9 +538,9 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
           </div>
         </div>
         
-        <form onSubmit={onSubmit} className="space-y-8">
+        <form onSubmit={onSubmit} className="space-y-6">
           {/* Basic Information */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600">
                 <FiUser className="h-4 w-4" />

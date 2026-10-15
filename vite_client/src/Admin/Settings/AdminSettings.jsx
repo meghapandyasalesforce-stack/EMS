@@ -104,7 +104,7 @@ const AdminSettings = () => {
     const activeComponent = settingsTabs.find(tab => tab.id === activeTab)?.component;
 
     return (
-        <div className="page-shell min-h-screen w-full min-w-0 bg-[var(--color-bg-soft)] text-[var(--color-text)]">
+        <div className="page-shell w-full min-w-0 bg-[var(--color-bg-soft)] text-[var(--color-text)]">
             <div className="page-shell-inner hrms-stack">
                 {/* Header */}
                 <div className="rounded-lg bg-white p-4 shadow-md sm:p-5 md:p-6">

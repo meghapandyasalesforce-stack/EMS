@@ -468,12 +468,12 @@ const StatutoryCompliancePanel = () => {
                             {loadingPreview ? (
                                 <LoadingSpinner message="Loading module preview..." />
                             ) : needsEmployee && !employeeId ? (
-                                <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-12 text-center text-sm text-gray-500">
+                                <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
                                     <FaUsers className="mx-auto mb-2 text-2xl text-gray-300" />
                                     Select an employee to open the {selectedModule?.label} workspace.
                                 </div>
                             ) : !preview ? (
-                                <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500">
+                                <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
                                     No preview data. Check Configure feature flags or payroll data.
                                 </div>
                             ) : (

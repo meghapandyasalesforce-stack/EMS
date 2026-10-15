@@ -155,7 +155,7 @@ const PendingApprovals = () => {
   if (loading) {
     return (
       <AtsPage>
-        <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex items-center justify-center py-16">
           <LoadingSpinner message="Loading pending approvals…" />
         </div>
       </AtsPage>

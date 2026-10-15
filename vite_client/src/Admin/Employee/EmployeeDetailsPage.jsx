@@ -708,7 +708,7 @@ const EmployeeDetailsPage = () => {
   }
 
   return (
-    <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+    <div className="page-shell bg-[#F5F7FB]">
       <div className="page-shell-inner hrms-stack">
         <nav className="flex flex-wrap items-center gap-3 text-base text-slate-500">
           <Link to="/employees" className="font-semibold text-[#0d9488] hover:underline">

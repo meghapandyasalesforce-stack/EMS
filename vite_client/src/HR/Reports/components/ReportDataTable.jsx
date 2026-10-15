@@ -28,7 +28,7 @@ const ReportDataTable = ({ title, subtitle, columns, rows, footer, actions }) =>
                 <tbody>
                     {rows.length === 0 ? (
                         <tr>
-                            <td colSpan={columns.length} className="px-5 py-10 text-center text-slate-500">
+                            <td colSpan={columns.length} className="px-5 py-6 text-center text-slate-500">
                                 No data available
                             </td>
                         </tr>
