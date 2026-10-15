@@ -1,19 +1,22 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createNotification } from '../context/notificationSlice';
 import { toast } from 'react-toastify';
-import { FiSend } from 'react-icons/fi';
+import { FiSend, FiX } from 'react-icons/fi';
 
-const NotificationSender = ({ onSent }) => {
+const NotificationSender = ({ onSent, onClose }) => {
   const [message, setMessage] = useState('');
+  const sendingRef = useRef(false);
   const dispatch = useDispatch();
   const { status, error } = useSelector((state) => state.notifications);
 
   const handleSend = () => {
+    if (sendingRef.current || status === 'loading') return;
     if (!message.trim()) {
       toast.warning('Please enter a message before sending');
       return;
     }
+    sendingRef.current = true;
     dispatch(createNotification(message))
       .unwrap()
       .then(() => {
@@ -23,6 +26,9 @@ const NotificationSender = ({ onSent }) => {
       })
       .catch((err) => {
         toast.error(`Failed to send: ${err.message}`);
+      })
+      .finally(() => {
+        sendingRef.current = false;
       });
   };
 
@@ -35,13 +41,14 @@ const NotificationSender = ({ onSent }) => {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Send announcement</h2>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <h2 id={onClose ? 'announcement-modal-title' : undefined} className="text-lg font-semibold text-slate-900">Send announcement</h2>
+          <p id={onClose ? 'announcement-modal-description' : undefined} className="mt-0.5 text-sm text-slate-500">
             Message is delivered to all employees in your organization.
           </p>
         </div>
+        {onClose && <button type="button" onClick={onClose} aria-label="Close announcement" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><FiX className="h-5 w-5" /></button>}
       </div>
 
       <textarea
@@ -53,8 +60,8 @@ const NotificationSender = ({ onSent }) => {
         onKeyDown={handleKeyDown}
       />
 
-      <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-h-[1.25rem]">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+        <div className="mr-auto">
           {error ? (
             <p className="text-sm text-red-600">
               <span className="font-medium">Error:</span> {error}
