@@ -1,0 +1,73 @@
+.periodControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 17rem;
+}
+
+.periodControls > select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .periodControls {
+    width: 15rem;
+  }
+}
+
+.summaryPanel {
+  padding: 1.25rem;
+}
+
+.summaryPanel > dl {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.summaryPanel > dl > div {
+  min-width: 0;
+  padding: 0.75rem;
+}
+
+.balanceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.balanceCard {
+  min-width: 0;
+  height: auto;
+}
+
+.balanceCard > dl {
+  margin-top: 0.875rem;
+}
+
+.balanceCard > dl > div {
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.balanceCard dt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.balanceCard dd {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.balanceCard dd > span {
+  display: inline;
+  margin-top: 0;
+}
+
+.balanceCard dd > span + span {
+  margin-left: 0.25rem;
+}
