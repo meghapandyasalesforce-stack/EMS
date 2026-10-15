@@ -1451,7 +1451,7 @@ const DashboardHR = () => {
                 </div>
 
                 <div className="hrms-main-rail gap-4">
-                    <Panel title="Recent Hires">
+                    <Panel title="Recent Hires" className="lg:self-stretch">
                         <div className="mb-4 flex items-center justify-between gap-3">
                             <p className="text-sm text-slate-500">
                                 {searchQuery ? `Filtered by "${searchQuery}"` : 'Newest additions to your workforce'}
@@ -1524,7 +1524,7 @@ const DashboardHR = () => {
                         </div>
                     </Panel>
 
-                    <div className="grid gap-4 content-start">
+                    <div className="grid content-start gap-4 lg:content-stretch lg:self-stretch lg:[&>div]:flex lg:[&>div]:flex-col lg:[&>div]:justify-between">
                         <LeaveBalanceCard />
                     </div>
                 </div>
