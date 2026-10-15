@@ -3,6 +3,7 @@ import { FiClock, FiEdit2, FiLayers, FiRefreshCw } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../../../utils/axios';
 import SectionCard from '../SectionCard';
+import styles from './LeaveTab.module.css';
 import {
   EmployeeLeaveSummaryPanel,
   LeaveBalanceCard,
@@ -878,6 +879,7 @@ const LeaveTab = ({ employeeId }) => {
   return (
     <div className="space-y-5">
       <EmployeeLeaveSummaryPanel
+        className={styles.summaryPanel}
         summary={leaveSummary}
         loading={loading}
         subtitle={!loading ? overviewSubtitle : undefined}
@@ -922,7 +924,7 @@ const LeaveTab = ({ employeeId }) => {
             onYearChange={setViewYear}
             monthOptions={viewMonthOptions}
             yearOptions={yearOptions}
-            className="ml-0"
+            className={`ml-0 ${styles.periodControls}`}
           />
         }
       >
@@ -940,9 +942,10 @@ const LeaveTab = ({ employeeId }) => {
               </div>
             )}
             {displayBalances.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className={styles.balanceGrid}>
                 {displayBalances.map((typeBalance) => (
                   <LeaveBalanceCard
+                    className={styles.balanceCard}
                     key={typeBalance.leaveType}
                     typeBalance={typeBalance}
                     policyLeaveTypes={policyLeaveTypes}

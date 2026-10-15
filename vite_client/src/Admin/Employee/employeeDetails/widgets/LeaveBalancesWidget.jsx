@@ -107,7 +107,7 @@ export const getDisplayLeaveBalances = (balance, policyLeaveTypes = []) => {
   return rows.length > 0 ? rows : [];
 };
 
-export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
+export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes, className = '' }) => {
   const policyType = policyLeaveTypes.find((lt) => lt.type === typeBalance.leaveType);
   const displayName =
     typeBalance.leaveTypeDisplayName ||
@@ -138,7 +138,7 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
     probationAccrualActive && typeBalance.allowLeaveDuringProbation === false;
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className={`rounded-xl border border-slate-100 bg-white p-4 shadow-sm ${className}`}>
       <h4 className="text-base font-semibold text-slate-900">
         {displayName}
         {probationAccrualActive ? (
@@ -222,7 +222,7 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
   );
 };
 
-export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
+export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle, className = '' }) => {
   const totals = summary || {
     totalAvailableLeave: 0,
     totalTakeableThisMonth: null,
@@ -258,7 +258,7 @@ export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
     totals.totalTakeableThisMonth != null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#20C997]/20 bg-gradient-to-br from-[#20C997]/10 via-white to-[#F0FDF4] shadow-md p-6">
+    <div className={`overflow-hidden rounded-2xl border border-[#20C997]/20 bg-gradient-to-br from-[#20C997]/10 via-white to-[#F0FDF4] shadow-md p-6 ${className}`}>
       <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#0d9488]">
         Employee leave summary
       </p>

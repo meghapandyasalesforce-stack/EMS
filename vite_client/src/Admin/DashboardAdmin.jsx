@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
@@ -19,7 +19,7 @@ import { useEmployees, useLeaves, usePayrolls, useProjects } from "../Hooks/useD
 import axios from "../utils/axios";
 import { toast } from "react-toastify";
 import { handleApiError } from "../utils/errorHandler";
-import NotificationSender from "./NotificationSender";
+import AnnouncementModal from "./AnnouncementModal";
 import useAuthPermissions from "../Hooks/useAuthPermissions";
 import { PERMISSIONS, hasAnyPermission } from "../utils/permissions";
 import PermissionGate from "../components/PermissionGate";
@@ -106,6 +106,19 @@ function DashboardAdmin() {
   const [todayStatus, setTodayStatus] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const closeAnnouncementModal = useCallback(() => setShowAnnouncementModal(false), []);
+  const handleAnnouncementSent = async () => {
+    closeAnnouncementModal();
+    try {
+      const { data } = await axios.get('/v1/both/notification/sent-announcements', {
+        params: { scope: 'organization', page: 1, limit: 3 },
+        withCredentials: true
+      });
+      setAnnouncements(Array.isArray(data?.announcements) ? data.announcements : []);
+    } catch {
+      // Keep the current list visible if the optional refresh fails.
+    }
+  };
   const [escalatedApprovalsCount, setEscalatedApprovalsCount] = useState(0);
   const [celebrations, setCelebrations] = useState([]);
   const [celebrationEvents, setCelebrationEvents] = useState({});
@@ -432,14 +445,7 @@ function DashboardAdmin() {
   return (
     <>
       {showAnnouncementModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowAnnouncementModal(false)}
-        >
-          <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <NotificationSender onSent={() => setShowAnnouncementModal(false)} />
-          </div>
-        </div>
+        <AnnouncementModal onClose={closeAnnouncementModal} onSent={handleAnnouncementSent} />
       )}
     <div className="page-shell min-h-screen bg-[#F3F7F5]">
       <div className="page-shell-inner space-y-3 sm:space-y-5">
