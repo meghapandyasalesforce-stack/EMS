@@ -926,7 +926,7 @@ const DashboardHR = () => {
 
     if (user?.mustResetPassword) {
         return (
-            <div className="bg-[#F5F7FB] p-3 sm:p-4">
+            <div className="min-h-screen bg-[#F5F7FB] p-3 sm:p-4">
                 <PasswordResetPopup onClose={() => navigate('/login')} />
             </div>
         );
@@ -934,7 +934,7 @@ const DashboardHR = () => {
 
     if (pageLoading) {
         return (
-            <div className="flex min-h-[50vh] items-center justify-center bg-[#F5F7FB] p-6">
+            <div className="flex min-h-screen items-center justify-center bg-[#F5F7FB] p-6">
                 <div className="text-center">
                     <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
                     <p className="text-sm text-slate-600">Loading dashboard...</p>
@@ -945,7 +945,7 @@ const DashboardHR = () => {
 
     if (error) {
         return (
-            <div className="flex min-h-[50vh] items-center justify-center bg-[#F5F7FB] p-6">
+            <div className="flex min-h-screen items-center justify-center bg-[#F5F7FB] p-6">
                 <div className="text-center">
                     <p className="mb-4 font-medium text-red-600">Error: {error}</p>
                     <button
@@ -962,7 +962,7 @@ const DashboardHR = () => {
 
     if (!user) {
         return (
-            <div className="flex min-h-[50vh] items-center justify-center bg-[#F5F7FB] p-6">
+            <div className="flex min-h-screen items-center justify-center bg-[#F5F7FB] p-6">
                 <div className="text-center">
                     <p className="mb-4 font-medium text-slate-600">Please log in to access the dashboard</p>
                     <button
@@ -978,7 +978,7 @@ const DashboardHR = () => {
     }
 
     return (
-        <div className="bg-[#F5F7FB]">
+        <div className="min-h-screen bg-[#F5F7FB]">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
             {showAnnouncementModal && canManageAnnouncements ? (
@@ -1001,7 +1001,7 @@ const DashboardHR = () => {
             <div className="page-shell-inner">
             <div className="hrms-stack gap-4">
                 <AnnouncementBanner />
-                <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
+                <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
                     <header
                         className="order-1 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur lg:col-start-1 lg:row-start-1"
                         style={{ borderColor: WS.border }}
@@ -1080,9 +1080,9 @@ const DashboardHR = () => {
                     <AttendanceBox variant="dashboard" />
                 </section>
 
-                    <aside className="order-3 flex w-full min-w-0 self-start lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                    <aside className="order-3 flex w-full min-w-0 self-stretch lg:col-start-2 lg:row-span-2 lg:row-start-1">
                         <div
-                            className="flex w-full flex-col rounded-xl border bg-white shadow-sm"
+                            className="flex h-full min-h-0 w-full flex-col rounded-xl border bg-white shadow-sm sm:min-h-[280px]"
                             style={{ borderColor: WS.border }}
                         >
                             <div
@@ -1094,7 +1094,7 @@ const DashboardHR = () => {
                                     Upcoming celebrations
                                 </h3>
                             </div>
-                            <div className="flex flex-col p-3">
+                            <div className="flex flex-1 flex-col p-3">
                                 <ul className="space-y-2">
                                     {sortCelebrations(dashboardExtras.birthdays || []).slice(0, 3).map((item, idx) => {
                                         const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
@@ -1114,7 +1114,7 @@ const DashboardHR = () => {
                                 {(!dashboardExtras.birthdays || dashboardExtras.birthdays.length === 0) ? (
                                     <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
                                 ) : null}
-                                <div className="mt-3 flex flex-col gap-3">
+                                <div className="mt-4 flex flex-1 flex-col justify-evenly gap-3">
                                     {upcomingEvents.filter((eventItem) => eventItem.tone !== 'birthday').slice(0, 2).map((eventItem) => (
                                         <div key={eventItem.id} className="flex min-w-0 items-start gap-2">
                                             <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${getEventToneClasses(eventItem.tone)}`}>
@@ -1516,7 +1516,7 @@ const DashboardHR = () => {
                                     </button>
                                 ))
                             ) : (
-                                <div className="px-5 py-6 text-center text-sm text-slate-500">
+                                <div className="px-5 py-10 text-center text-sm text-slate-500">
                                     No hires matched your current search.
                                 </div>
                             )}

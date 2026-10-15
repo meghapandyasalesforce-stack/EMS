@@ -17,7 +17,7 @@ const RouteErrorBoundary = ({ children, fallback }) => {
         return fallback;
       }
     : (error, handleReset) => (
-        <div className="hrms-route-status min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
           <div className="text-center max-w-lg px-4">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
               Something went wrong

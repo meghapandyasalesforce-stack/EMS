@@ -429,7 +429,7 @@ const UpdatePayroll = () => {
   }
 
   return (
-    <div className="page-shell bg-gray-50 transition-all duration-300">
+    <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
       <div className="page-shell-inner">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Update Payroll</h2>
 

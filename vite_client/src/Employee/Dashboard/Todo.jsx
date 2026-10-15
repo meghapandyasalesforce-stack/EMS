@@ -160,7 +160,7 @@ const Todo = ({ variant = 'default' }) => {
       {/* Todo List */}
       <ul className="space-y-3">
         {todos.length === 0 ? (
-          <li className="rounded-xl border-2 border-dashed border-gray-200 bg-[#F8F9FB] py-6 text-center text-gray-500">
+          <li className="text-center text-gray-500 py-8 border-2 border-dashed border-gray-200 rounded-xl bg-[#F8F9FB]">
             <div className="text-lg font-medium mb-2">All caught up!</div>
             <div className="text-sm">Add a task when you need a reminder.</div>
           </li>

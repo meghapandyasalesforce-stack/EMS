@@ -344,7 +344,7 @@ const EmployeeCalendar = () => {
 
   if (loading) {
     return (
-      <div className="page-shell bg-gray-50 transition-all duration-300">
+      <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
         <div className="page-shell-inner flex items-center justify-center">
           <div className="text-center">
             <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-theme-secondary"></div>
@@ -362,7 +362,7 @@ const EmployeeCalendar = () => {
   const selectedDateEvents = getEventsForDateObj(selectedDate);
 
   return (
-    <div className="page-shell bg-[#F4F6FB] transition-all duration-300">
+    <div className="page-shell min-h-screen bg-[#F4F6FB] transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
         <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5 md:p-6">
           <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">

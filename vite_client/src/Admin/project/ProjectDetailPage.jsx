@@ -823,7 +823,12 @@ const ProjectDetailPage = () => {
   return (
     <Box 
       sx={{ 
-        padding: isMobile ? 2 : 3,
+        padding: isMobile ? 2 : 4,
+        marginLeft: isMobile ? 0 : '16rem',
+        transition: theme.transitions.create('margin', {
+          easing: theme.transitions.easing.sharp,
+          duration: theme.transitions.duration.leavingScreen,
+        }),
       }}
     >
       <Box 

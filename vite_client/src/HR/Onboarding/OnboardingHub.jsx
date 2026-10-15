@@ -693,7 +693,7 @@ const OnboardingHub = () => {
                             </div>
                         </div>
                     )}
-                    <div className="bg-white rounded-xl shadow-md p-6 text-center">
+                    <div className="bg-white rounded-xl shadow-md p-10 text-center">
                         <FaCalendarAlt className="mx-auto text-6xl text-indigo-300 mb-4" />
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">
                             {!wf ? 'No Onboarding Workflow' : 'Onboarding Being Prepared'}
@@ -713,7 +713,7 @@ const OnboardingHub = () => {
 
     return (
         <div className="page-shell hrms-lifecycle cm-hrms bg-gray-50">
-            <div className="page-shell-inner hrms-stack pb-6">
+            <div className="page-shell-inner hrms-stack pb-10">
 
                 {/* ── Header ── */}
                 {!wf && (
@@ -1114,7 +1114,7 @@ const OnboardingHub = () => {
                                 );
                             })}
                             {filteredWorkflows.length === 0 && (
-                                <p className="col-span-full py-6 text-center text-sm text-gray-500 bg-white rounded-xl border border-dashed border-gray-200">
+                                <p className="col-span-full py-10 text-center text-sm text-gray-500 bg-white rounded-xl border border-dashed border-gray-200">
                                     No direct reports are currently onboarding.
                                 </p>
                             )}

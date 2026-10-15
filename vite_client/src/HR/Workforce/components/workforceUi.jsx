@@ -222,7 +222,7 @@ export const WfTable = ({ columns, rows, empty, footer, minWidth = '640px' }) =>
             <tbody className="divide-y divide-slate-100 bg-white">
                 {rows.length === 0 ? (
                     <tr>
-                        <td colSpan={columns.length} className="px-3 py-6 text-center text-sm text-slate-500 sm:px-4 lg:px-5 xl:px-6">
+                        <td colSpan={columns.length} className="px-3 py-8 text-center text-sm text-slate-500 sm:px-4 sm:py-10 lg:px-5 xl:px-6">
                             {empty || 'No data available'}
                         </td>
                     </tr>

@@ -65,7 +65,7 @@ const EmployeeLeaveBalanceViewer = () => {
 
     return (
         <div className="space-y-6">
-            <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-2xl font-bold mb-4">View Employee Leave Balance</h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -117,7 +117,7 @@ const EmployeeLeaveBalanceViewer = () => {
             </div>
 
             {selectedEmployee && balance && (
-                <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+                <div className="bg-white rounded-lg shadow p-6">
                     <h3 className="text-xl font-semibold mb-4">
                         Leave Balance for {selectedEmployee.name} {selectedEmployee.lastName || ''}
                     </h3>
@@ -133,7 +133,7 @@ const EmployeeLeaveBalanceViewer = () => {
                     {(() => {
                         const leaveSummary = getLeaveSummary(balance);
                         return (
-                            <div className="max-w-md rounded-lg bg-gray-50 p-4 shadow sm:p-6">
+                            <div className="max-w-md bg-gray-50 rounded-lg shadow p-6">
                                 <h4 className="text-lg font-semibold mb-4">Employee Leave Summary</h4>
                                 <div className="space-y-2">
                                     <div className="flex justify-between">

@@ -369,7 +369,7 @@ const WorkflowBuilder = () => {
                         </section>
                     </div>
                 ) : (
-                    <div className="rounded-xl border border-dashed p-6 text-center text-sm text-gray-500">Select or create a workflow to begin.</div>
+                    <div className="rounded-xl border border-dashed p-12 text-center text-sm text-gray-500">Select or create a workflow to begin.</div>
                 )}
             </div>
 

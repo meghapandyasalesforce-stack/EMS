@@ -407,7 +407,7 @@ const HelpdeskPage = () => {
     const showRequester = canManageTickets || managerView;
 
     return (
-        <div className="bg-slate-50 p-3 sm:p-5">
+        <div className="min-h-screen bg-slate-50 p-3 sm:p-5">
             <div className="mx-auto w-full max-w-7xl space-y-5">
                 {/* Header */}
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -529,7 +529,7 @@ const HelpdeskPage = () => {
                         ))}
                     </div>
                 ) : visibleTickets.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center">
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-2xl text-slate-400">
                             <FaTicketAlt />
                         </div>

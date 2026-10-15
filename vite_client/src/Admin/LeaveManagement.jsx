@@ -390,14 +390,14 @@ const LeaveManagement = () => {
 
   if (loading && (!leaves || leaves.length === 0)) {
     return (
-      <div className="mt-5 flex items-center justify-center py-16 lg:mt-0">
+      <div className="mt-5 flex min-h-[60vh] items-center justify-center lg:mt-0">
         <div className="text-sm text-slate-500">Loading leave requests…</div>
       </div>
     );
   }
 
   return (
-    <div className="page-shell bg-[#F4F6FB] transition-all duration-300 lg:mt-0">
+    <div className="page-shell min-h-screen bg-[#F4F6FB] pb-10 transition-all duration-300 lg:mt-0">
       <div className="page-shell-inner hrms-stack">
         <div className="min-w-0 space-y-6">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

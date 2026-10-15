@@ -284,12 +284,12 @@ export default function SelfServiceDocuments() {
 
             {/* Template cards */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-white py-10 shadow-sm sm:py-12">
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-white py-14 shadow-sm">
                 <div className="h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-[#20C997]" />
                 <p className="mt-3 text-xs text-slate-400">Loading templates...</p>
               </div>
             ) : !selectedCountry ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center shadow-sm sm:px-6 sm:py-12">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#20C997]/10 text-[#20C997]">
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582" /></svg>
                 </div>
@@ -297,7 +297,7 @@ export default function SelfServiceDocuments() {
                 <p className="mt-1 text-xs text-slate-400">Templates are organized by country/region.</p>
               </div>
             ) : templates.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center shadow-sm sm:px-6 sm:py-12">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
                 <p className="text-sm text-slate-500">No templates available for the selected filters.</p>
               </div>
             ) : (

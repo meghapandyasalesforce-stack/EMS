@@ -507,7 +507,7 @@ const SurveyDetailPage = () => {
 
     if (!survey) {
         return (
-            <div className="page-shell bg-[#F5F7FB]">
+            <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
                 <div className="page-shell-inner">
                     <div className="rounded-[28px] border border-slate-100 bg-white p-8 text-center shadow-sm">
                         <p className="text-lg font-semibold text-slate-900">Survey not found</p>
@@ -528,7 +528,7 @@ const SurveyDetailPage = () => {
     const showAnalyticsDetail = overview?.available === true;
 
     return (
-        <div className="page-shell bg-[#F0F7F4]">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F0F7F4]">
             <div className="page-shell-inner hrms-stack max-w-6xl">
                 <button
                     type="button"

@@ -292,10 +292,10 @@ const AddPayroll = () => {
     const { earningsTotal, deductionsTotal, inHandSalary } = calculateTotals();
 
     return (
-        <div className="page-shell bg-gray-50">
+        <div className="page-shell min-h-screen bg-gray-50">
             <div className="page-shell-inner">
                 {/* Header */}
-                <div className="mb-6">
+                <div className="mb-8">
                     <div className="flex items-center space-x-4 mb-4">
                         <button
                             onClick={() => navigate('/admin-payroll')}
@@ -328,7 +328,7 @@ const AddPayroll = () => {
 
                 <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 lg:p-6">
                     {/* Employee Selection */}
-                    <div className="mb-6">
+                    <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
                             <FiUser className="w-5 h-5 mr-2" />
                             Employee Information
@@ -373,7 +373,7 @@ const AddPayroll = () => {
                     </div>
 
                     {/* Month and Year */}
-                    <div className="mb-6">
+                    <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
                             <FiCalendar className="w-5 h-5 mr-2" />
                             Payroll Period
@@ -413,7 +413,7 @@ const AddPayroll = () => {
                     </div>
 
                     {/* Payroll Entry Type */}
-                    <div className="mb-6">
+                    <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4">Payroll Entry Type</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
@@ -592,7 +592,7 @@ const AddPayroll = () => {
                     </div>
 
                     {/* Summary */}
-                    <div className="mb-6 rounded-lg bg-gray-50 p-4 sm:p-6">
+                    <div className="mb-8 bg-gray-50 rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4">Payroll Summary</h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-theme-primary/10 rounded-lg p-4">

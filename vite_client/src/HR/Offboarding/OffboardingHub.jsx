@@ -533,7 +533,7 @@ const OffboardingHub = () => {
                             </div>
                         </div>
                     )}
-                    <div className="rounded-xl bg-white p-6 text-center shadow-md">
+                    <div className="rounded-xl bg-white p-10 text-center shadow-md">
                         <FaSignOutAlt className="mx-auto mb-4 text-6xl text-gray-300" />
                         <h2 className="mb-2 text-2xl font-bold text-gray-800">No Offboarding Workflow</h2>
                         <p className="text-gray-500">There is no active offboarding process assigned to you.</p>
@@ -547,7 +547,7 @@ const OffboardingHub = () => {
 
     return (
         <div className="page-shell hrms-lifecycle cm-hrms bg-gray-50">
-            <div className="page-shell-inner hrms-stack pb-6">
+            <div className="page-shell-inner hrms-stack pb-10">
                 {!workflow && (
                 <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div className="min-w-0">

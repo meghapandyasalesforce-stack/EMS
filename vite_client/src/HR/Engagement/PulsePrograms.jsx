@@ -182,7 +182,7 @@ const PulsePrograms = () => {
             </div>
 
             {programs.length === 0 ? (
-                <div className="py-8 text-center sm:py-10">
+                <div className="py-16 text-center">
                     <h3 className="text-lg font-semibold text-slate-900">No pulse programs yet</h3>
                     <p className="mt-2 text-sm text-slate-500">Create a recurring pulse program to get started.</p>
                 </div>

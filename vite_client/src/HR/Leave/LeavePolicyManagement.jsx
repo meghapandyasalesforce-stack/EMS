@@ -703,7 +703,7 @@ const LeavePolicyManagement = () => {
 
     return (
         <div className="p-3 sm:p-4">
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-2xl font-bold">Leave Policy Management</h2>
                     <p className="text-sm text-gray-600 mt-1">
@@ -725,12 +725,12 @@ const LeavePolicyManagement = () => {
             </div>
 
             {showForm && (
-                <form onSubmit={handleSubmit} className="mb-6 rounded-lg bg-white p-4 shadow sm:p-6">
+                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow mb-6">
                     <h3 className="text-xl font-semibold mb-4">
                         {editingPolicy ? 'Edit Policy' : 'Create New Policy'}
                     </h3>
                     
-                    <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-medium mb-1">Policy Name *</label>
                             <input
@@ -1100,7 +1100,7 @@ const LeavePolicyManagement = () => {
                                         </button>
                                     )}
                                 </div>
-                                <div className="mb-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="grid grid-cols-2 gap-4 mb-2">
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Type *</label>
                                         <select
@@ -1534,7 +1534,7 @@ const LeavePolicyManagement = () => {
                                         Remove
                                     </button>
                                 </div>
-                                <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <div className="grid grid-cols-2 gap-2 mb-2">
                                     <div>
                                         <label className="block text-xs text-gray-600 mb-1">Start Date</label>
                                         <input
@@ -1593,7 +1593,7 @@ const LeavePolicyManagement = () => {
                         ))}
                     </div>
 
-                    <div className="flex flex-wrap gap-4">
+                    <div className="flex gap-4">
                         <button
                             type="submit"
                             className="bg-theme-primary text-white px-6 py-2 rounded-lg hover:opacity-90"

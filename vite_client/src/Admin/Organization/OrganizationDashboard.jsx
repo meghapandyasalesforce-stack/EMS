@@ -65,7 +65,7 @@ const OrganizationDashboard = () => {
     })) || [];
 
     return (
-        <div className="bg-gray-50 pt-2 lg:pt-0">
+        <div className="min-h-screen bg-gray-50 pt-2 lg:pt-0">
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack">

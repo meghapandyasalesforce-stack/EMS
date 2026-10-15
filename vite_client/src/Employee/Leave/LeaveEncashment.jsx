@@ -80,7 +80,7 @@ const LeaveEncashment = () => {
     ];
 
     return (
-        <div className="page-shell bg-gray-100 transition-all duration-300">
+        <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
             <div className="page-shell-inner hrms-stack">
                 <div className="flex justify-between items-center">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Leave Encashment</h1>

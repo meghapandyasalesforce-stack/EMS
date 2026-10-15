@@ -427,12 +427,12 @@ export default function EmployeeDocumentRequests({ mode = 'employee' }) {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-10 sm:py-12">
+          <div className="flex flex-col items-center justify-center py-14">
             <div className="h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-[#20C997]" />
             <p className="mt-3 text-xs text-slate-400">Loading requests...</p>
           </div>
         ) : filteredItems.length === 0 ? (
-          <div className="px-5 py-10 text-center sm:px-6 sm:py-12">
+          <div className="px-6 py-14 text-center">
             <p className="text-sm text-slate-500">
               {items.length === 0
                 ? (isApproval ? 'No employee document requests yet.' : 'No document requests yet.')

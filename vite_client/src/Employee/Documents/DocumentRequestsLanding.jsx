@@ -65,7 +65,7 @@ export default function DocumentRequestsLanding({ mode = 'employee' }) {
   }, [tabs, activeTab]);
 
   return (
-    <div className="bg-gradient-to-b from-slate-50 via-slate-50 to-white p-3 sm:p-4 lg:p-6">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-white p-3 sm:p-4 lg:p-6">
       <div className="mx-auto max-w-[1200px] space-y-5">
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-r from-white via-white to-[#20C997]/5 px-5 py-5 sm:px-6 sm:py-6">
@@ -118,7 +118,7 @@ export default function DocumentRequestsLanding({ mode = 'employee' }) {
 
         <div>
           {tabs.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center shadow-sm sm:px-6 sm:py-12">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
               <p className="text-sm font-medium text-slate-700">Document options are disabled</p>
               <p className="mt-1 text-sm text-slate-500">
                 Please contact your administrator to enable Raise a Request or Self-Service.

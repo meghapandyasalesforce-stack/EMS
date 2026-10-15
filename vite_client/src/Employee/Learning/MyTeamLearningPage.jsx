@@ -100,7 +100,7 @@ const MyTeamLearningPage = () => {
     const categories = ['all', ...new Set(learnings.map(l => l.category))];
 
     return (
-        <div className="page-shell bg-gray-50 transition-all duration-300">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
             <div className="page-shell-inner hrms-stack">
                 <div className="bg-white rounded-xl shadow-md p-6">
                     <div className="flex items-center gap-4 mb-6">

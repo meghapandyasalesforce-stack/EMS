@@ -511,7 +511,7 @@ const EmployeeEngagementPage = () => {
     }
 
     return (
-        <div className="engagement-page page-shell overflow-x-visible bg-[#F5F7FB]">
+        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-[#F5F7FB]">
             <div className="page-shell-inner hrms-stack min-w-0">
                 <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
                     <div className="flex min-w-0 items-center gap-3 sm:gap-4">

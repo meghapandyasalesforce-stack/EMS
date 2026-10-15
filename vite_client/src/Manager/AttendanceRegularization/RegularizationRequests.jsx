@@ -485,7 +485,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
   const canNext = currentPageNum < totalPagesNum && !loading;
 
   return (
-    <div className={embedded ? 'min-w-0' : 'page-shell bg-[#f4f7f6]'}>
+    <div className={embedded ? 'min-w-0' : 'page-shell min-h-screen bg-[#f4f7f6]'}>
       <div className={embedded ? 'hrms-stack' : 'page-shell-inner hrms-stack'}>
         <header className="flex flex-col gap-4">
           {!embedded && (

@@ -372,7 +372,7 @@ const AdminPayroll = () => {
     };
 
     return (
-        <div className="bg-gray-50 p-3 transition-all duration-300 ease-in-out sm:p-5">
+        <div className="p-5 transition-all duration-300 ease-in-out min-h-screen bg-gray-50">
             {/* Mobile header - only shown on small screens */}
             <div className="sm:block lg:hidden md:hidden mb-4 bg-white p-4 rounded-lg shadow">
                 <h2 className="text-xl font-semibold text-gray-800">Employee Payroll</h2>

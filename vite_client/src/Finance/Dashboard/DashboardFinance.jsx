@@ -100,7 +100,7 @@ const DashboardFinance = () => {
     }
     
     return (
-        <div className="bg-gray-50 p-3 transition-all duration-300 sm:p-4 lg:p-6">
+        <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-6 transition-all duration-300">
             <AnnouncementBanner />
             <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

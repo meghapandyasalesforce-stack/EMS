@@ -115,7 +115,7 @@ const CheckoutPaymentPage = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-64 items-center justify-center bg-slate-100">
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
         <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600" />
       </div>
     );
@@ -123,7 +123,7 @@ const CheckoutPaymentPage = () => {
 
   if (step === 'processing') {
     return (
-      <div className="flex min-h-64 flex-col items-center justify-center bg-slate-950 px-4 text-center text-white">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-white">
         <div className="mb-4 h-12 w-12 animate-spin rounded-full border-2 border-white/30 border-t-white" />
         <p className="text-lg font-medium">Processing payment…</p>
         <p className="mt-1 text-sm text-slate-400">Secure connection · Do not refresh</p>
@@ -133,8 +133,8 @@ const CheckoutPaymentPage = () => {
 
   if (step === 'success') {
     return (
-      <div className="flex min-h-64 flex-col items-center justify-center bg-emerald-50 p-4">
-        <div className="rounded-2xl border border-emerald-200 bg-white px-5 py-6 text-center shadow-lg sm:px-10 sm:py-8">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-emerald-50">
+        <div className="rounded-2xl border border-emerald-200 bg-white px-10 py-8 text-center shadow-lg">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">
             ✓
           </div>
@@ -149,7 +149,7 @@ const CheckoutPaymentPage = () => {
   }
 
   return (
-    <div className="bg-slate-100">
+    <div className="min-h-screen bg-slate-100">
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2 text-slate-800">
@@ -168,8 +168,8 @@ const CheckoutPaymentPage = () => {
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-5xl items-start gap-6 px-4 py-6 lg:grid-cols-5">
-        <aside className="self-start rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:col-span-2">
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 py-8 lg:grid-cols-5">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pay</p>
           <p className="mt-2 text-3xl font-bold text-slate-900">{amountLabel}</p>
           <p className="mt-1 text-sm text-slate-500">per month · subscription</p>
@@ -204,7 +204,7 @@ const CheckoutPaymentPage = () => {
           </div>
         </aside>
 
-        <section className="self-start rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:col-span-3">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
           <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
             <FiCreditCard /> Card details
           </h1>

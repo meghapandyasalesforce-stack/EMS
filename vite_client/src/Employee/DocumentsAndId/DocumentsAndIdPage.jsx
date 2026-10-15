@@ -269,7 +269,7 @@ const DocumentsAndIdPage = () => {
   }
 
   return (
-    <div className="page-shell bg-[#F4F6FB] transition-all duration-300">
+    <div className="page-shell min-h-screen bg-[#F4F6FB] transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
         {returnToOnboarding && (
           <div className="cm-onboarding-return-banner">
@@ -303,8 +303,8 @@ const DocumentsAndIdPage = () => {
         </div>
 
         <div className="hrms-main-rail">
-          <div className="contents min-w-0 lg:block lg:space-y-6">
-            <div className="order-1 grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-2">
+          <div className="min-w-0 space-y-6">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                 <span className="inline-flex rounded-full bg-[#20C997]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#0a8f6c]">
                   Company Identity
@@ -345,7 +345,7 @@ const DocumentsAndIdPage = () => {
               </div>
 
               <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-2xl font-semibold text-slate-900">Recently Updated</h2>
                   <button
                     type="button"
@@ -385,7 +385,7 @@ const DocumentsAndIdPage = () => {
               </div>
             </div>
 
-            <div className="order-2 rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-center shadow-sm">
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-center shadow-sm">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#20C997]/15 text-[#0a8f6c]">
                 <FaUpload />
               </div>
@@ -407,41 +407,9 @@ const DocumentsAndIdPage = () => {
                 {uploading ? 'Uploading...' : 'Upload Document'}
               </button>
             </div>
-        <div ref={companyDocsRef} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm order-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-900">HR Policies & Company Docs</h2>
-          </div>
-          {policyDocs.length === 0 ? (
-            <p className="text-sm text-slate-500">No HR policy documents available yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {policyDocs.map((doc) => (
-                <div key={doc._id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-800">{doc.name}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Updated {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString()} • {formatBytes(doc.fileSize)}
-                    </p>
-                    <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
-                      {statusLabel(doc)}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button type="button" onClick={() => handlePreviewDocument(doc)} title="Preview" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
-                      <FaEye className="w-4 h-4" />
-                    </button>
-                    <button type="button" onClick={() => handleDownloadDocument(doc)} title="Download" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
-                      <FaDownload className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
           </div>
 
-          <div className="order-3 w-full space-y-4 xl:sticky xl:top-6 xl:self-start">
+          <div className="w-full space-y-4 xl:sticky xl:top-6 xl:self-start">
             <div className="w-full rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
               <h2 className="mb-4 text-xl font-semibold text-slate-800">Digital ID Card</h2>
               {idCard ? (
@@ -489,7 +457,39 @@ const DocumentsAndIdPage = () => {
               <span className="font-medium text-slate-800">Report Lost Card</span>
             </button> */}
           </div>
+        </div>
 
+        <div ref={companyDocsRef} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-slate-900">HR Policies & Company Docs</h2>
+          </div>
+          {policyDocs.length === 0 ? (
+            <p className="text-sm text-slate-500">No HR policy documents available yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {policyDocs.map((doc) => (
+                <div key={doc._id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{doc.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Updated {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString()} • {formatBytes(doc.fileSize)}
+                    </p>
+                    <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                      {statusLabel(doc)}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <button type="button" onClick={() => handlePreviewDocument(doc)} title="Preview" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
+                      <FaEye className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => handleDownloadDocument(doc)} title="Download" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
+                      <FaDownload className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">

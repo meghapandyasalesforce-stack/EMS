@@ -198,8 +198,8 @@ const RoleHierarchy = () => {
     const hasChildren = role.childRoles && role.childRoles.length > 0;
 
     return (
-      <div key={role._id} className={`${level > 0 ? 'ml-2 sm:ml-4 lg:ml-8' : ''}`}>
-        <div className="mb-4 flex flex-col rounded-2xl border border-gray-200 bg-gradient-to-r from-gray-50 to-white p-4 transition-all duration-300 hover:border-theme-secondary hover:shadow-lg sm:p-5 lg:flex-row lg:items-center lg:justify-between lg:p-6 group">
+      <div key={role._id} className={`${level > 0 ? 'ml-8' : ''}`}>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-2xl mb-4 hover:shadow-lg hover:border-theme-secondary transition-all duration-300 group">
           <div className="flex items-center space-x-4 flex-1 min-w-0">
             {hasChildren && (
               <button
@@ -231,11 +231,11 @@ const RoleHierarchy = () => {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2 lg:ml-4 lg:mt-0 lg:flex-nowrap">
+          <div className="flex items-center space-x-3 mt-4 lg:mt-0 lg:ml-4">
             <span className="px-4 py-2 bg-gradient-to-r from-blue-500 to-[var(--color-secondary)] text-white text-sm font-semibold rounded-xl shadow-md whitespace-nowrap">
               {role.permissions?.length || 0} permissions
             </span>
-            <div className="flex gap-1 sm:gap-2">
+            <div className="flex space-x-2">
               <button
                 onClick={() => openAssignModal(role)}
                 className="p-3 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all duration-200 group-hover:bg-green-50"
@@ -262,7 +262,7 @@ const RoleHierarchy = () => {
         </div>
 
         {isExpanded && hasChildren && (
-          <div className="ml-2 border-l-2 border-gray-200 pl-2 sm:ml-4 sm:pl-4 lg:ml-6 lg:pl-6">
+          <div className="ml-6 border-l-2 border-gray-200 pl-6">
             {role.childRoles.map(childRole => renderRoleTree(childRole, level + 1))}
           </div>
         )}
@@ -276,7 +276,7 @@ const RoleHierarchy = () => {
 
   if (loading) {
     return (
-      <div className="page-shell bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="page-shell-inner hrms-stack">
           <div>
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Role Management</h1>
@@ -284,11 +284,11 @@ const RoleHierarchy = () => {
           </div>
           
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-            <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
+            <div className="px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
               <h2 className="text-2xl font-bold text-gray-900">Role Hierarchy</h2>
               <p className="text-gray-600 mt-1">Manage and organize your role structure</p>
             </div>
-            <div className="p-8 text-center sm:p-12 lg:p-16">
+            <div className="p-16 text-center">
               <div className="animate-spin rounded-full h-16 w-16 border-4 border-theme-secondary border-t-blue-600 mx-auto mb-6"></div>
               <p className="text-gray-600 text-lg font-medium">Loading roles...</p>
             </div>
@@ -299,7 +299,7 @@ const RoleHierarchy = () => {
   }
 
   return (
-    <div className="page-shell bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="page-shell-inner hrms-stack">
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -307,15 +307,15 @@ const RoleHierarchy = () => {
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Role Management</h1>
             <p className="text-lg text-gray-600">Manage user roles and permissions</p>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3 flex-shrink-0">
+          <div className="flex gap-3 flex-shrink-0">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-theme-primary px-4 py-3 font-medium text-white shadow-md transition-all duration-200 hover:opacity-90 hover:shadow-lg sm:px-6"
+              className="bg-theme-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap font-medium"
             >
               <FiPlus className="w-5 h-5" />
               Create Role
             </button>
-            <button className="flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-theme-secondary bg-theme-secondary/10 px-4 py-3 font-medium text-theme-secondary shadow-sm transition-all duration-200 hover:bg-theme-secondary/10 hover:shadow-md sm:px-6">
+            <button className="bg-theme-secondary/10 text-theme-secondary border border-theme-secondary px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-theme-secondary/10 transition-all duration-200 shadow-sm hover:shadow-md whitespace-nowrap font-medium">
               <FiShield className="w-5 h-5" />
               Permissions
             </button>
@@ -323,8 +323,8 @@ const RoleHierarchy = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-6">
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Total Roles</p>
@@ -337,7 +337,7 @@ const RoleHierarchy = () => {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:p-6">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Top Level Roles</p>
@@ -350,7 +350,7 @@ const RoleHierarchy = () => {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:p-6">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Child Roles</p>
@@ -367,7 +367,7 @@ const RoleHierarchy = () => {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:p-6">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Avg Permissions</p>
@@ -387,13 +387,13 @@ const RoleHierarchy = () => {
 
         {/* Roles Section */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
+          <div className="px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
             <h2 className="text-2xl font-bold text-gray-900">Role Hierarchy</h2>
             <p className="text-gray-600 mt-1">Manage and organize your role structure</p>
           </div>
           
           {getTopLevelRoles().length === 0 ? (
-            <div className="p-8 text-center sm:p-12 lg:p-16">
+            <div className="p-16 text-center">
               <div className="flex items-center justify-center w-24 h-24 bg-gradient-to-br from-[var(--color-secondary)] to-blue-200 rounded-3xl mx-auto mb-8">
                 <FiShield className="w-12 h-12 text-theme-secondary" />
               </div>
@@ -408,7 +408,7 @@ const RoleHierarchy = () => {
               </button>
             </div>
           ) : (
-            <div className="p-4 sm:p-6 lg:p-8">
+            <div className="p-8">
               {getTopLevelRoles().map(role => renderRoleTree(role))}
             </div>
           )}
@@ -495,8 +495,8 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl sm:p-6 lg:p-8">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
           <button
@@ -674,8 +674,8 @@ const AssignRoleModal = ({
   onClose
 }) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl sm:p-6 lg:p-8">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl border border-gray-100">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-900">Assign Role</h3>
           <button

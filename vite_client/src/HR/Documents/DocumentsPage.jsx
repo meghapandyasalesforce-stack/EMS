@@ -726,7 +726,7 @@ const DocumentsPage = () => {
     }
 
     return (
-        <div className="page-shell bg-slate-50 transition-all duration-300">
+        <div className="page-shell min-h-screen bg-slate-50 transition-all duration-300">
             <div className="page-shell-inner mx-auto max-w-[1600px] space-y-5">
                 <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -1243,7 +1243,7 @@ const DocumentsPage = () => {
                         </div>
 
                         {documents.length === 0 && !loading && (
-                            <div className="py-10 text-center sm:py-12">
+                            <div className="py-16 text-center">
                                 <FaFolder className="mx-auto mb-3 text-5xl text-slate-300" />
                                 <p className="text-sm font-medium text-slate-600">No documents match your filters.</p>
                                 <p className="mt-1 text-xs text-slate-400">Try another category or clear access filters.</p>

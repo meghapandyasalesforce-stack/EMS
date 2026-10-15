@@ -192,7 +192,7 @@ const AdminEmployeePayroll = () => {
 
     if (loading && !currentMonthPayroll) {
         return (
-            <div className="flex items-center justify-center py-16">
+            <div className="flex items-center justify-center min-h-screen">
                 <div className="flex items-center space-x-2">
                     <FiLoader className="animate-spin w-6 h-6 text-theme-secondary" />
                     <span className="text-gray-600">Loading payroll data...</span>
@@ -202,7 +202,7 @@ const AdminEmployeePayroll = () => {
     }
 
     return (
-        <div className="bg-gray-50">
+        <div className="min-h-screen bg-gray-50">
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack">

@@ -223,7 +223,7 @@ const OrganizationDetail = () => {
   };
 
   if (!currentOrg && loading) {
-    return <div className="py-10 text-center text-slate-500 sm:py-12">Loading organization…</div>;
+    return <div className="py-16 text-center text-slate-500">Loading organization…</div>;
   }
 
   if (!currentOrg) {
@@ -240,12 +240,12 @@ const OrganizationDetail = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
+        <div>
           <Link to="/platform/organizations" className="inline-flex items-center gap-2 text-sm text-slate-600">
             <FiArrowLeft /> Organizations
           </Link>
-          <h1 className="mt-2 break-words text-2xl font-semibold text-slate-900">{currentOrg.name}</h1>
-          <p className="break-all text-sm text-slate-600">{currentOrg.email}</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900">{currentOrg.name}</h1>
+          <p className="text-sm text-slate-600">{currentOrg.email}</p>
           {currentOrg.deletedAt && (
             <p className="mt-1 text-sm font-medium text-rose-700">Soft-deleted</p>
           )}
@@ -429,14 +429,14 @@ const OrganizationDetail = () => {
       )}
 
       {tab === 'access' && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-5 py-4">
             <h2 className="text-lg font-semibold text-slate-900">Effective Access</h2>
             <p className="mt-1 text-sm text-slate-600">
               Plan → override → effective. Explains why a module is on or off for this tenant.
             </p>
           </div>
-          <table className="min-w-[680px] w-full divide-y divide-slate-200 text-sm">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Feature</th>

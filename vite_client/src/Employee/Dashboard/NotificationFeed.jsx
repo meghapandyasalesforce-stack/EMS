@@ -125,7 +125,7 @@ const NotificationFeed = () => {
   return (
     <div className="p-6">
       {visibleNotifications.length === 0 ? (
-        <div className="py-6 text-center">
+        <div className="text-center py-8">
           <div className="text-gray-400 mb-2">
             <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.5 19.5a3 3 0 01-3-3V6a3 3 0 013-3h9a3 3 0 013 3v10.5a3 3 0 01-3 3h-9z" />

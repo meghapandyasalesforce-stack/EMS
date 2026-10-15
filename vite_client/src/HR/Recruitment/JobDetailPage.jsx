@@ -254,7 +254,7 @@ const JobDetailPage = () => {
                 </div>
             </div>
 
-            <div className="grid items-start gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-2">
                 <section className="cm-card">
                     <h2 className="mb-3 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Description</h2>
                     <p className="whitespace-pre-wrap text-sm" style={{ color: 'rgba(15,45,38,0.75)' }}>{job.jobDescription}</p>

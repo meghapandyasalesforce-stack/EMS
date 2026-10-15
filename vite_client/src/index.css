@@ -560,12 +560,28 @@
   }
 }
 
-/* Desktop profile columns size independently to their own content. */
+/* Desktop only: use the app's flex-allocated canvas height and its single scrollbar. */
 @media (min-width: 1024px) {
+  .main-scroll-area:has(> .employee-profile-page) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .main-scroll-area > .employee-profile-page {
+    display: flex;
+    flex: 1 0 auto;
+  }
+
+  .employee-profile-page > .page-shell-inner {
+    display: flex;
+    flex-direction: column;
+  }
+
   .employee-profile-layout {
     display: grid;
     grid-template-columns: minmax(10rem, 0.9fr) minmax(11rem, 0.95fr) minmax(0, 2.3fr);
     align-items: start;
+    flex: 1 0 auto;
   }
 
   .employee-profile-main,
@@ -605,7 +621,7 @@
     display: flex;
     flex-direction: column;
     height: auto;
-    min-height: 0;
+    min-height: var(--profile-panel-height, 0px);
     align-self: start;
   }
 
@@ -633,6 +649,7 @@
   .employee-profile-summary-body {
     display: flex;
     flex-direction: column;
+    flex: 1 0 auto;
     position: relative;
     margin-top: -1rem;
     padding: 1px 1rem 20px;
@@ -652,12 +669,15 @@
   .employee-profile-meta {
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
+    flex: 1 0 auto;
     margin-top: 1.5rem;
     padding-top: 0.5rem;
     border-top: 1px solid rgb(243 244 246);
   }
 
   .employee-profile-meta .profile-meta-row {
+    flex: 1 0 auto;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -688,7 +708,8 @@
 
   .employee-profile-tabs .hrms-tabs-scroll {
     flex-direction: column;
-    gap: 0.25rem;
+    flex: 1 0 auto;
+    justify-content: space-between;
     overflow: visible;
   }
 
@@ -727,7 +748,7 @@
   /* Ordinary profile fields stack; specialized upload/form grids stay intact. */
   .employee-profile-content .profile-fields {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.875rem;
+    gap: calc(0.75rem + var(--profile-extra-space, 0px));
   }
 
   .employee-profile-content .profile-fields > * {
@@ -742,19 +763,20 @@
 
   .employee-profile-content {
     height: auto;
-    min-height: 0;
+    min-height: var(--profile-panel-height, 0px);
     align-self: start;
   }
 
   .employee-profile-content .profile-fields > :not(:has(input, select, textarea)) {
-    padding: 1rem 1.25rem;
+    padding: 1.25rem 1.5rem;
+    padding-block: calc(1.25rem + var(--profile-extra-space, 0px) / 2);
   }
 
-  /* Normalize utility spacing without distributing spare viewport height. */
+  /* Capped spare-space allocation applies to each tab's existing sections. */
   .employee-profile-content :is(.space-y-4, .space-y-5, .space-y-6, [class~='space-y-1.5']) {
     display: flex;
     flex-direction: column;
-    gap: var(--profile-base-gap, 1rem);
+    gap: calc(var(--profile-base-gap, 1rem) + var(--profile-extra-space, 0px) * var(--profile-gap-weight, 1));
   }
 
   .employee-profile-content :is(.space-y-4, .space-y-5, .space-y-6) {
@@ -772,6 +794,7 @@
 
   .employee-profile-content [class~='space-y-1.5'] {
     --profile-base-gap: 0.375rem;
+    --profile-gap-weight: 0.5;
   }
 
   .employee-profile-content :is(.space-y-4, .space-y-5, .space-y-6, [class~='space-y-1.5']) > * {
@@ -783,28 +806,40 @@
   }
 
   .employee-profile-content .divide-y > * {
-    padding-block: 0.75rem;
+    padding-block: calc(0.75rem + var(--profile-extra-space, 0px) / 2);
+  }
+
+  .employee-profile-content > .max-w-lg form > div:has(input) {
+    padding-block: calc(var(--profile-extra-space, 0px) / 2);
   }
 
   .employee-profile-content .rounded-xl.border > div:last-child:not(.grid):not(:has(> h2, > h3)) {
-    padding-block: 1rem;
+    padding-block: calc(1rem + var(--profile-extra-space, 0px) / 2);
   }
 
   .employee-profile-content > .max-w-lg {
     max-width: none;
   }
 
+  /* Only these short tabs opt out of the other tabs' spare-space distribution. */
+  .employee-profile-content:is([data-profile-tab='personalDetails'], [data-profile-tab='security']) {
+    --profile-extra-space: 0px;
+    min-height: var(--profile-panel-height, 0px);
+    height: auto;
+    align-self: start;
+  }
+
   .employee-profile-content[data-profile-tab='personalDetails'] .profile-fields {
-    gap: 14px;
+    gap: 18px;
   }
 
   .employee-profile-content[data-profile-tab='personalDetails'] .profile-fields > :not(:has(input, select, textarea)) {
-    padding: 16px;
+    padding: 20px;
   }
 
   .employee-profile-content[data-profile-tab='personalDetails'] .space-y-4,
   .employee-profile-content[data-profile-tab='security'] .space-y-4 {
-    gap: 16px;
+    gap: 20px;
   }
 
   .employee-profile-content[data-profile-tab='security'] form > div:has(input) {
@@ -902,18 +937,11 @@ body,
   overscroll-behavior-y: contain;
 }
 
-/* Route fallbacks are embedded below the header; standalone loading screens
-   retain their existing full-viewport layout. */
-.main-scroll-area .hrms-route-status {
-  min-height: 0;
-  padding-block: 3rem;
-}
-
 /* Frosted mint canvas for all page whitespace (sidebar/header unchanged). */
 .hrms-page-canvas {
   position: relative;
   isolation: isolate;
-  min-height: 0;
+  min-height: 100%;
   background-color: rgba(245, 250, 249, 0.97);
   background-image:
     radial-gradient(ellipse 88% 58% at 6% 2%, rgba(28, 202, 155, 0.05), transparent 54%),
@@ -939,12 +967,27 @@ body,
   z-index: 1;
 }
 
+/*
+ * Stretch to the viewport only when the route renders a single wrapper.
+ * Routes that render stacked sections (e.g. lifecycle header + hub) would
+ * otherwise get a full-viewport blank band between them.
+ */
+.hrms-page-canvas > :only-child {
+  min-height: 100%;
+}
+
 /* Let the canvas show through page wrappers; cards/tables stay crisp white. */
 .main-scroll-area.hrms-page-canvas .ats-ui.cm-hrms:not(.fixed),
 .main-scroll-area.hrms-page-canvas .ats-ui .ats-page,
 .main-scroll-area.hrms-page-canvas > .page-shell,
 .main-scroll-area.hrms-page-canvas .page-shell:not(.fixed):not([role='dialog']) {
   background: transparent !important;
+}
+
+.main-scroll-area.hrms-page-canvas .ats-ui.cm-hrms:not(.fixed):only-child,
+.main-scroll-area.hrms-page-canvas .ats-ui .ats-page,
+.main-scroll-area.hrms-page-canvas > .page-shell:only-child {
+  min-height: 100%;
 }
 
 /* Employee profile page should size to its content, not the canvas height. */
@@ -1576,29 +1619,29 @@ canvas {
     linear-gradient(180deg, rgba(245, 250, 249, 0.5) 0%, rgba(232, 241, 239, 0.35) 100%);
 }
 
-/* Authenticated ATS empty states use the same natural height as populated pages. */
+/* Page-level empty states fill the remaining scroll area (not a short banner). */
 .main-scroll-area:has(.ats-page-inner > .hrms-empty-shell) > .ats-ui,
 .main-scroll-area:has(.ats-page-inner > .ats-open-roles > .hrms-empty-shell) > .ats-ui {
-  min-height: 0;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
 }
 
 .main-scroll-area:has(.ats-page-inner > .hrms-empty-shell) .ats-page,
 .main-scroll-area:has(.ats-page-inner > .ats-open-roles > .hrms-empty-shell) .ats-page {
-  flex: 0 1 auto;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 100%;
 }
 
 .main-scroll-area:has(.ats-page-inner > .hrms-empty-shell) .ats-page-inner,
 .main-scroll-area:has(.ats-page-inner > .ats-open-roles > .hrms-empty-shell) .ats-page-inner {
-  flex: 0 1 auto;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 100%;
 }
 
 .ats-page-inner > .hrms-empty-shell,
 .ats-page-inner > .ats-open-roles:has(> .hrms-empty-shell) {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1606,7 +1649,7 @@ canvas {
 
 .ats-page-inner > .hrms-empty-shell,
 .ats-page-inner > .ats-open-roles > .hrms-empty-shell {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   align-self: stretch;
   border-radius: 16px;
 }

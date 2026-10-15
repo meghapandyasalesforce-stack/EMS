@@ -775,7 +775,7 @@ function DashboardEmployee() {
         }
     }, [user]);
 
-    const shellClass = 'transition-all duration-300';
+    const shellClass = 'min-h-screen transition-all duration-300';
     const shellStyle = { backgroundColor: WS.bg };
 
     if (user?.mustResetPassword) {
@@ -788,7 +788,7 @@ function DashboardEmployee() {
 
     if (loading) {
         return (
-            <div className={`${shellClass} flex min-h-[50vh] items-center justify-center p-6`} style={shellStyle}>
+            <div className={`${shellClass} flex items-center justify-center p-6`} style={shellStyle}>
                 <div className="text-center">
                     <div
                         className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]"
@@ -801,7 +801,7 @@ function DashboardEmployee() {
 
     if (error) {
         return (
-            <div className={`${shellClass} flex min-h-[50vh] items-center justify-center p-6`} style={shellStyle}>
+            <div className={`${shellClass} flex items-center justify-center p-6`} style={shellStyle}>
                 <div className="text-center">
                     <p className="mb-4 font-medium text-red-600">Error: {error}</p>
                     <button
@@ -822,7 +822,7 @@ function DashboardEmployee() {
 
     if (!user) {
         return (
-            <div className={`${shellClass} flex min-h-[50vh] items-center justify-center p-6`} style={shellStyle}>
+            <div className={`${shellClass} flex items-center justify-center p-6`} style={shellStyle}>
                 <div className="text-center">
                     <p className="mb-4 font-medium text-slate-600">Please log in to access the dashboard</p>
                     <button
@@ -1080,7 +1080,7 @@ function DashboardEmployee() {
                         </section>
 
                         {/* Projects + Tasks */}
-                        <div className="grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                             <section
                                 className="rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
@@ -1099,7 +1099,7 @@ function DashboardEmployee() {
                                 </div>
                                 <div className="p-3 sm:p-5">
                                     {statsLoading ? (
-                                        <div className="flex justify-center py-6">
+                                        <div className="flex justify-center py-10">
                                             <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
                                         </div>
                                     ) : dashboardStats.projects?.length > 0 ? (
@@ -1118,7 +1118,7 @@ function DashboardEmployee() {
                                             ))}
                                         </ul>
                                     ) : (
-                                        <div className="rounded-xl border border-dashed border-slate-200 bg-[#F8F9FB] py-6 text-center">
+                                        <div className="rounded-xl border border-dashed border-slate-200 bg-[#F8F9FB] py-10 text-center">
                                             <FaProjectDiagram className="mx-auto mb-3 h-10 w-10 text-slate-300" />
                                             <p className="text-sm text-slate-500">No projects assigned yet</p>
                                             <Link to="/employee/projects">

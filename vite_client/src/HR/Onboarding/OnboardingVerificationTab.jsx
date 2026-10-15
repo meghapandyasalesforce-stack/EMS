@@ -196,7 +196,7 @@ export default function OnboardingVerificationTab({
                             <tbody>
                                 {rows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="py-6 text-center text-sm text-[var(--cm-muted)]">
+                                        <td colSpan={5} className="py-10 text-center text-sm text-[var(--cm-muted)]">
                                             {isEmployee
                                                 ? 'Upload required files from Documents & ID; they will appear here after sync.'
                                                 : 'Verification checks appear when documents are synced from the employee profile.'}

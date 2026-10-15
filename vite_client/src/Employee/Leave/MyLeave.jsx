@@ -282,7 +282,7 @@ const MyLeavePage = () => {
   const formatRemaining = (value) => (value == null ? '—' : value);
 
   return (
-    <div className="page-shell bg-gray-100 transition-all duration-300">
+    <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
         <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">My Leave Dashboard</h1>

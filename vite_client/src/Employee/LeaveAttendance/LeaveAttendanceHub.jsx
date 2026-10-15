@@ -908,7 +908,7 @@ const LeaveAttendanceHub = () => {
   }
 
   return (
-    <div className="page-shell bg-[#f4f6fb]">
+    <div className="page-shell min-h-screen bg-[#f4f6fb]">
       <div className="page-shell-inner hrms-stack">
         <div>
           <p className="text-xs text-slate-500">

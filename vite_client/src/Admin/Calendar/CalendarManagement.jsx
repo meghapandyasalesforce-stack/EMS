@@ -321,7 +321,7 @@ const CalendarManagement = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 py-10 sm:py-12">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-6"></div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Calendar</h3>
@@ -332,7 +332,7 @@ const CalendarManagement = () => {
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-white to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
       <ToastContainer position="top-right" autoClose={3000} />
       <div className="page-shell">
       <div className="page-shell-inner">
@@ -474,7 +474,7 @@ const CalendarManagement = () => {
 
         {/* Holiday List */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-100 p-4 sm:p-6">
+          <div className="p-6 border-b border-slate-100">
             <h2 className="text-2xl font-bold text-slate-900 mb-2">
               Holidays in {getMonthName(selectedMonth)} {currentYear}
             </h2>
@@ -482,9 +482,9 @@ const CalendarManagement = () => {
               {getHolidaysForMonth(selectedMonth).length} holiday{getHolidaysForMonth(selectedMonth).length !== 1 ? 's' : ''} found this month
             </p>
           </div>
-          <div className="p-4 sm:p-6">
+          <div className="p-6">
             {getHolidaysForMonth(selectedMonth).length === 0 ? (
-              <div className="py-8 text-center sm:py-10">
+              <div className="text-center py-16">
                 <div className="relative">
                   <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full mx-auto mb-6 flex items-center justify-center">
                     <FiCalendar className="w-12 h-12 text-gray-400" />
@@ -494,7 +494,7 @@ const CalendarManagement = () => {
                   </div> 
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-3">No holidays in this month</h3>
-                <p className="mx-auto mb-6 max-w-md text-gray-500">This month doesn't have any holidays scheduled. Add some holidays to make it more exciting!</p>
+                <p className="text-gray-500 mb-8 max-w-md mx-auto">This month doesn't have any holidays scheduled. Add some holidays to make it more exciting!</p>
                  <button
                   onClick={() => setShowHolidayModal(true)}
                   className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-3 rounded-xl flex items-center space-x-2 mx-auto transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
@@ -747,13 +747,13 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
           </div>
         </div>
         
-        <form onSubmit={onSubmit} className="space-y-6 p-4 sm:p-6">
+        <form onSubmit={onSubmit} className="p-6 space-y-8">
           <div>
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <div className="w-2 h-2 bg-blue-600 rounded-full mr-3"></div>
               Working Days
             </h4>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {days.map(day => (
                 <label key={day} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
                   <input
@@ -847,10 +847,10 @@ const UploadModal = ({ onSubmit, onClose, uploading }) => {
           </div>
         </div>
         
-        <form onSubmit={onSubmit} className="space-y-6 p-4 sm:p-6">
+        <form onSubmit={onSubmit} className="p-6 space-y-6">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-3">Select Calendar File</label>
-            <div className="group rounded-2xl border-2 border-dashed border-gray-300 p-6 text-center transition-all duration-300 hover:border-green-400 hover:bg-green-50 sm:p-8">
+            <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-green-400 hover:bg-green-50 transition-all duration-300 group">
               <div className="relative">
                 <FiUpload className="w-12 h-12 text-gray-400 mx-auto mb-4 group-hover:text-green-500 transition-colors duration-300" />
                 <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">

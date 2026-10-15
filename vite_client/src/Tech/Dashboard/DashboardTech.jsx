@@ -134,7 +134,7 @@ const DashboardTech = () => {
     const attendanceRate = attendanceData?.attendanceRate || 0;
     
     return (
-        <div className="bg-gray-50 p-3 sm:p-4 md:p-6">
+        <div className="min-h-screen bg-gray-50 p-3 sm:p-4 md:p-6">
             <AnnouncementBanner />
             <div className="mb-4 flex items-start justify-between gap-3 sm:mb-6">
                 <div className="min-w-0">

@@ -757,7 +757,7 @@ const AllAttendanceStatsComponent = () => {
 
   if (team.loading && !team.records?.length) {
     return (
-      <div className="flex items-center justify-center py-16 text-slate-500">
+      <div className="min-h-[40vh] flex items-center justify-center text-slate-500">
         Loading attendance history…
       </div>
     );
@@ -767,7 +767,7 @@ const AllAttendanceStatsComponent = () => {
 
   if (showEmployeeDetails && !employeeDetails) {
     return (
-      <div className="flex items-center justify-center py-16 text-slate-500">
+      <div className="min-h-[40vh] flex items-center justify-center text-slate-500">
         Loading employee details…
       </div>
     );
@@ -776,7 +776,7 @@ const AllAttendanceStatsComponent = () => {
   if (showEmployeeDetails && employeeDetails) {
     const recordsFull = employeeStats?.recentRecords || [];
     return (
-      <div className="page-shell bg-[#f4f7f6]">
+      <div className="page-shell min-h-screen bg-[#f4f7f6]">
         <div className="page-shell-inner hrms-stack">
           <button
             type="button"
@@ -874,7 +874,7 @@ const AllAttendanceStatsComponent = () => {
   };
 
   return (
-    <div className="page-shell bg-[#f4f7f6]">
+    <div className="page-shell min-h-screen bg-[#f4f7f6]">
       <div className="page-shell-inner hrms-stack">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Attendance History</h1>

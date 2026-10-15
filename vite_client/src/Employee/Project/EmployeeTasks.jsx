@@ -174,7 +174,7 @@ const EmployeeTasks = () => {
 
   if (!projectsLoaded) {
     return (
-      <div className="flex items-center justify-center bg-gray-50 px-3 py-12 sm:px-4 lg:px-5">
+      <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary" />
       </div>
     );
@@ -182,7 +182,7 @@ const EmployeeTasks = () => {
 
   if (!currentProject) {
     return (
-      <div className="flex items-center justify-center bg-gray-50 px-3 py-12 transition-all duration-300 sm:px-4 lg:px-5">
+      <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-md p-8 text-center max-w-md w-full border border-gray-200">
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FiUser size={28} className="text-red-600" />
@@ -206,7 +206,7 @@ const EmployeeTasks = () => {
   }
 
   return (
-    <div className="bg-gray-50 p-3 transition-all duration-300 sm:p-4 lg:p-5">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
       <div className="w-full">
         {/* Header Section */}
         <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
@@ -432,7 +432,7 @@ const EmployeeTasks = () => {
         </div>
         
         {status === 'loading' ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary"></div>
           </div>
         ) : myTasks.length === 0 ? (

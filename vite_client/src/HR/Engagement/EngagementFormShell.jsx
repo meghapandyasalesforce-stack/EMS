@@ -9,7 +9,7 @@ const EngagementFormShell = ({
     backLabel = 'Back to Engagement',
     children,
 }) => (
-    <div className="bg-[#F5F7FB] p-3 sm:p-4 lg:p-6">
+    <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB] p-3 sm:p-4 lg:p-6">
         <div className="w-full space-y-6">
             <header className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

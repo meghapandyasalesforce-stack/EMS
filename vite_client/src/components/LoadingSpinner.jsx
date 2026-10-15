@@ -9,7 +9,7 @@ import React from 'react';
  */
 const LoadingSpinner = ({ message = 'Loading...', showProgress = false }) => {
   return (
-    <div className="hrms-route-status min-h-screen flex items-center justify-center bg-[var(--color-bg-soft)]">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-soft)]">
       <div className="text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-theme-primary mb-4" style={{ borderBottomColor: 'var(--color-primary)' }}></div>
         <p className="text-[var(--color-text)] mb-2 text-lg font-medium opacity-80">{message}</p>

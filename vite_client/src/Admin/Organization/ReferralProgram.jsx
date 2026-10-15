@@ -84,7 +84,7 @@ const ReferralProgram = () => {
 
     if (loading) {
         return (
-            <div className="flex min-h-64 items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
@@ -94,7 +94,7 @@ const ReferralProgram = () => {
     const referralLink = referralCode ? `${window.location.origin}/organization/register?ref=${referralCode}` : '';
 
     return (
-        <div className="page-shell bg-gray-50">
+        <div className="page-shell min-h-screen bg-gray-50">
             <div className="page-shell-inner hrms-stack">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Referral Program</h1>
@@ -104,26 +104,26 @@ const ReferralProgram = () => {
                 </div>
 
                 {/* Referral Code Section */}
-                <div className="rounded-lg bg-white p-4 shadow-lg sm:p-6">
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
                     <h2 className="text-xl font-semibold text-gray-900 mb-4">Your Referral Code</h2>
                     
                     {referralCode ? (
                         <div className="space-y-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                                <div className="w-full min-w-0 flex-1 rounded-lg border border-gray-300 bg-gray-50 p-4">
+                            <div className="flex items-center space-x-4">
+                                <div className="flex-1 bg-gray-50 border border-gray-300 rounded-lg p-4">
                                     <p className="text-sm text-gray-600 mb-1">Referral Code</p>
                                     <p className="text-2xl font-bold text-gray-900 font-mono">{referralCode}</p>
                                 </div>
                                 <button
                                     onClick={copyReferralLink}
-                                    className="flex w-full items-center justify-center space-x-2 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90 sm:w-auto"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 flex items-center space-x-2"
                                 >
                                     <FiCopy className="w-5 h-5" />
                                     <span>Copy Link</span>
                                 </button>
                                 <button
                                     onClick={shareReferralLink}
-                                    className="flex w-full items-center justify-center space-x-2 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90 sm:w-auto"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 flex items-center space-x-2"
                                 >
                                     <FiShare2 className="w-5 h-5" />
                                     <span>Share</span>
@@ -131,7 +131,7 @@ const ReferralProgram = () => {
                             </div>
                             
                             <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4">
-                                <p className="break-all text-sm text-theme-secondary">
+                                <p className="text-sm text-theme-secondary">
                                     <strong>Referral Link:</strong> {referralLink}
                                 </p>
                             </div>
@@ -152,7 +152,7 @@ const ReferralProgram = () => {
                 </div>
 
                 {/* Referral Stats */}
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div className="bg-white rounded-lg shadow-lg p-6">
                         <div className="flex items-center justify-between">
                             <div>
@@ -202,13 +202,13 @@ const ReferralProgram = () => {
                     {referrals.length > 0 ? (
                         <div className="space-y-4">
                             {referrals.map((referral, idx) => (
-                                <div key={idx} className="flex flex-col gap-3 rounded-lg bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="flex min-w-0 items-center space-x-4">
+                                <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                    <div className="flex items-center space-x-4">
                                         <div className="bg-theme-secondary/10 rounded-full p-2">
                                             <FiUsers className="w-5 h-5 text-theme-secondary" />
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="break-words font-medium text-gray-900">{referral.organizationName}</p>
+                                        <div>
+                                            <p className="font-medium text-gray-900">{referral.organizationName}</p>
                                             <p className="text-sm text-gray-500">
                                                 Referred on {new Date(referral.referredAt).toLocaleDateString()}
                                             </p>

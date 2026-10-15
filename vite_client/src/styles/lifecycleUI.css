@@ -178,23 +178,3 @@
   font-weight: 600;
   color: #1f2937;
 }
-
-/* The lifecycle switcher and workflow body are adjacent page shells. Collapse
- * their shared edge so the standard shell padding is applied only once. */
-.employee-lifecycle-switcher.page-shell {
-  padding-bottom: 0;
-}
-
-.employee-lifecycle-switcher + .page-shell {
-  padding-top: 0;
-}
-
-@media (max-width: 1023px) {
-  .main-scroll-area.hrms-page-canvas .employee-lifecycle-switcher.page-shell {
-    padding-bottom: 0 !important;
-  }
-
-  .main-scroll-area.hrms-page-canvas .employee-lifecycle-switcher + .page-shell {
-    padding-top: 0 !important;
-  }
-}

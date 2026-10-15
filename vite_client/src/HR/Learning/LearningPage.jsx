@@ -235,7 +235,7 @@ const LearningPage = () => {
     }
 
     return (
-        <div className="page-shell bg-[#F3F7F5]">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
             <div className="page-shell-inner hrms-stack">
                 <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
@@ -356,7 +356,7 @@ const LearningPage = () => {
                             <>
                             <DraftAwaitingBanner count={draftCourseCount} entityLabel="course" />
                             {filteredCourses.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-8 text-center sm:py-10">
+                                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
                                     <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-primary/10 text-theme-primary">
                                         <FaBook className="h-7 w-7" />
                                     </div>
@@ -463,7 +463,7 @@ const LearningPage = () => {
                             )}
                             </>
                         ) : filteredEnrollments.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-8 text-center sm:py-10">
+                            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
                                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-primary/10 text-theme-primary">
                                     <FaGraduationCap className="h-7 w-7" />
                                 </div>

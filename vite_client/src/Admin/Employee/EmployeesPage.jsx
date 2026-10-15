@@ -162,7 +162,7 @@ const EmployeesPage = () => {
   ];
 
   return (
-    <div className="page-shell bg-gray-100 transition-all duration-300">
+    <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-6 space-y-4">
@@ -223,7 +223,7 @@ const EmployeesPage = () => {
             <div className="text-xs text-gray-500 mb-3">Updating results...</div>
           )}
 
-          <div className="mb-5 overflow-x-auto rounded-2xl border border-slate-200 sm:mb-6">
+          <div className="mb-7 overflow-x-auto rounded-2xl border border-slate-200">
             <div className="min-w-[640px]">
             <div className="grid grid-cols-12 gap-3 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
               <div className="col-span-4">Member</div>
@@ -309,14 +309,14 @@ const EmployeesPage = () => {
           )}
 
           {!isInitialLoading && filteredEmployees.length === 0 && (
-            <div className="py-6 text-center">
+            <div className="text-center py-8">
               <p className="text-gray-500 text-lg">
                 {searchTerm ? 'No employees found matching your search.' : 'No employees found.'}
               </p>
             </div>
           )}
 
-          <div className="mt-5 flex flex-col items-center justify-between gap-3 sm:mt-6 sm:flex-row">
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-sm text-gray-600">
               Showing 1-{filteredEmployees.length} of {teamCount}
             </p>
@@ -347,7 +347,7 @@ const EmployeesPage = () => {
         <button
           type="button"
           onClick={() => navigate('/add-employee')}
-          className="fixed bottom-4 right-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 sm:bottom-8 sm:right-8"
+          className="fixed bottom-8 right-8 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-700"
           aria-label="Add employee"
         >
           <FaUserPlus className="h-4 w-4" />

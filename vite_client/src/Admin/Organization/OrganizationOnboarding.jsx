@@ -262,7 +262,7 @@ const OrganizationOnboarding = () => {
 
     if (loading && !organization) {
         return (
-            <div className="flex min-h-64 items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-primary" />
             </div>
         );
@@ -669,8 +669,8 @@ const OrganizationOnboarding = () => {
     const progress = Math.round(((currentStep + 1) / ORG_ONBOARDING_STEPS.length) * 100);
 
     return (
-        <div className="page-shell bg-gray-50">
-            <div className="page-shell-inner hrms-stack">
+        <div className="page-shell min-h-screen bg-gray-50">
+            <div className="page-shell-inner hrms-stack py-6">
                 <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                     {/* Header */}
                     <div className="bg-gradient-to-r from-theme-primary to-theme-secondary p-6 text-white">
@@ -695,7 +695,7 @@ const OrganizationOnboarding = () => {
                     </div>
 
                     {/* Content */}
-                    <div className="p-4 sm:p-6">{renderContent()}</div>
+                    <div className="p-6 min-h-[420px]">{renderContent()}</div>
 
                     {/* Navigation */}
                     {step.id !== 'complete' && (

@@ -195,7 +195,7 @@ const SuccessionDetailPage = () => {
     }
 
     return (
-        <div className="page-shell bg-gray-50 transition-all duration-300">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
             <div className="page-shell-inner hrms-stack">
                 {/* Header */}
                 <div>
@@ -314,7 +314,7 @@ const SuccessionDetailPage = () => {
                                     ))}
                                 </div>
                             ) : (
-                                <div className="py-6 text-center text-gray-500">
+                                <div className="text-center py-8 text-gray-500">
                                     <FaUsers className="mx-auto text-4xl mb-2 text-gray-400" />
                                     <p>No successors identified yet</p>
                                 </div>
@@ -382,7 +382,7 @@ const SuccessionDetailPage = () => {
                                     ))}
                                 </div>
                             ) : (
-                                <div className="py-6 text-center text-gray-500">
+                                <div className="text-center py-8 text-gray-500">
                                     <FaCheckCircle className="mx-auto text-4xl mb-2 text-gray-400" />
                                     <p>No development activities yet</p>
                                 </div>

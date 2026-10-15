@@ -177,7 +177,7 @@ export default function OnboardingTrainingTab({
                     </div>
 
                     {modules.length === 0 ? (
-                        <div className="cm-card !py-6 text-center">
+                        <div className="cm-card py-12 text-center">
                             <FaGraduationCap className="mx-auto mb-3 text-3xl text-[var(--cm-muted)]" />
                             <p className="text-sm text-[var(--cm-muted)]">
                                 No training modules assigned yet.

@@ -447,7 +447,7 @@ function DashboardAdmin() {
       {showAnnouncementModal && (
         <AnnouncementModal onClose={closeAnnouncementModal} onSent={handleAnnouncementSent} />
       )}
-    <div className="page-shell bg-[#F3F7F5]">
+    <div className="page-shell min-h-screen bg-[#F3F7F5]">
       <div className="page-shell-inner space-y-3 sm:space-y-5">
         <div className="flex flex-col gap-2 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
@@ -563,7 +563,7 @@ function DashboardAdmin() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
           <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 sm:mb-3">
               <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Attendance overview</h2>
@@ -681,7 +681,7 @@ function DashboardAdmin() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:items-stretch">
           <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-lg font-semibold text-slate-900">Pending approvals</h2>
             <div className="space-y-2.5">
@@ -747,7 +747,7 @@ function DashboardAdmin() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-lg font-semibold text-slate-900">Upcoming celebrations</h2>
             {celebrations.length > 0 ? (

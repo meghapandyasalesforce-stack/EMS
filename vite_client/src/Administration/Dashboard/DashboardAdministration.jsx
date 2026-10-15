@@ -276,7 +276,7 @@ const DashboardAdministration = () => {
   };
 
   return (
-    <div className="bg-[#F3F7F5]">
+    <div className="min-h-screen bg-[#F3F7F5]">
       <AnnouncementBanner />
       <div className="page-shell">
       <div className="page-shell-inner">

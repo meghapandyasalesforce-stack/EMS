@@ -368,7 +368,7 @@ const WorkforceDetailPage = () => {
     );
 
     return (
-        <div className="wf-ui min-w-0 overflow-x-hidden transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
+        <div className="wf-ui min-h-screen min-w-0 overflow-x-hidden transition-all duration-300" style={{ backgroundColor: '#F5F7FB' }}>
             <div className="page-shell min-w-0">
             <div className="page-shell-inner hrms-stack min-w-0">
                 <WfButton

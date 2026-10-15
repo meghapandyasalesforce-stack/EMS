@@ -445,7 +445,7 @@ const RecognitionPanel = ({ isManagerUser, onRefresh }) => {
             {section === 'wall' && (
                 <div className="space-y-3">
                     {wall.length === 0 ? (
-                        <div className="py-8 text-center sm:py-10">
+                        <div className="py-16 text-center">
                             <div
                                 className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
                                 style={{ background: `${MINT}20` }}
