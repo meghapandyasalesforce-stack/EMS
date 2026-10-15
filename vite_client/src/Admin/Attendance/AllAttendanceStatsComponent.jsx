@@ -693,14 +693,7 @@ const AllAttendanceStatsComponent = () => {
       }
       /* eslint-enable no-await-in-loop */
 
-      const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      // Existing columns preserved; new columns appended at the end only.
-      const headers = [
-        'Name', 'Email', 'Department', 'Date', 'In', 'Out', 'Hours', 'Break', 'Status', 'Location',
-        'Employee ID', 'Attendance Type', 'Verified Status',
-      ];
-      const lines = [headers.join(',')];
-      for (const r of rowsOut) {
+      const exportData = rowsOut.map((r) => {
         const name = [r.employee?.name, r.employee?.lastName].filter(Boolean).join(' ').trim();
         const isWfh = r.uiStatus === 'wfh' || r.workLocation === 'work_from_home';
         const hasPunch = !!r.clockIn;
@@ -711,38 +704,32 @@ const AllAttendanceStatsComponent = () => {
               ? '—'
               : 'Office';
         const attendanceType = !hasPunch ? '—' : isWfh ? 'Work From Home' : 'Office';
-        // Verified applies to office punches only (GPS geofence match)
         const verifiedStatus = !hasPunch || isWfh
           ? 'N/A'
           : r.locationVerified === true
             ? 'Verified'
             : 'Non-Verified';
-        lines.push(
-          [
-            escape(name),
-            escape(r.employee?.email),
-            escape(r.employee?.department),
-            escape(resolveAttendanceDateKeyFromRow(r, orgTimezone)),
-            escape(formatTime(r.clockIn)),
-            escape(formatTime(r.clockOut)),
-            escape(formatHours(r.effectiveHours)),
-            escape(formatBreakMinutes(toBreakMinutes(r))),
-            escape(r.uiStatus),
-            escape(loc),
-            escape(r.employee?.employeeId),
-            escape(attendanceType),
-            escape(verifiedStatus),
-          ].join(',')
-        );
-      }
-      // UTF-8 BOM so Excel decodes special characters (e.g. em dash) correctly
-      const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `attendance-history-${startDate}_to_${endDate}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+        return {
+          'Name': name,
+          'Email': r.employee?.email ?? '',
+          'Department': r.employee?.department ?? '',
+          'Date': resolveAttendanceDateKeyFromRow(r, orgTimezone) ?? '',
+          'In': formatTime(r.clockIn),
+          'Out': formatTime(r.clockOut),
+          'Hours': formatHours(r.effectiveHours),
+          'Break': formatBreakMinutes(toBreakMinutes(r)),
+          'Status': r.uiStatus ?? '',
+          'Location': loc,
+          'Employee ID': r.employee?.employeeId ?? '',
+          'Attendance Type': attendanceType,
+          'Verified Status': verifiedStatus,
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Attendance History');
+      XLSX.writeFile(wb, `attendance-history-${startDate}_to_${endDate}.xlsx`);
     } finally {
       setExporting(false);
     }
@@ -896,7 +883,7 @@ const AllAttendanceStatsComponent = () => {
               style={{ background: TEAL }}
             >
               <FiDownload className="h-4 w-4" />
-              {exporting ? 'Exporting…' : 'Export CSV'}
+              {exporting ? 'Exporting…' : 'Export Excel'}
             </button>
           </div>
         </header>
