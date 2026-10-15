@@ -44,6 +44,7 @@ import { handleApiError } from "../../utils/errorHandler";
 import AnnouncementBanner from '../../components/AnnouncementBanner';
 import { mergeSessionProfile } from "../../utils/profileUtils";
 import { formatStatusLabel, formatUiLabel, UI_FORM_LABEL_CLASS } from "../../utils/textFormat.js";
+import { getTimeGreeting } from "../../utils/timeGreeting";
 
 const DashboardAdministration = () => {
   const navigate = useNavigate();
@@ -153,7 +154,7 @@ const DashboardAdministration = () => {
   };
 
   const displayName = profile?.name || user?.name || user?.username || executiveTitle;
-  const greeting = `Good morning, ${displayName}`;
+  const greeting = `${getTimeGreeting()}, ${displayName}`;
 
   if (isLoading) return <LoadingSpinner message="Loading administration dashboard..." />;
 

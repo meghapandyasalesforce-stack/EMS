@@ -24,6 +24,7 @@ import useAuthPermissions from "../Hooks/useAuthPermissions";
 import { PERMISSIONS, hasAnyPermission } from "../utils/permissions";
 import PermissionGate from "../components/PermissionGate";
 import { BOTH_CELEBRATION_ENDPOINT } from "../utils/constant";
+import { getTimeGreeting } from "../utils/timeGreeting";
 
 
 const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
@@ -339,6 +340,7 @@ function DashboardAdmin() {
   ];
 
   const greetingName = user?.name || user?.email?.split("@")?.[0] || "Admin";
+  const greeting = getTimeGreeting();
   const todayLabel = new Date().toLocaleDateString([], {
     weekday: "long",
     day: "numeric",
@@ -451,7 +453,7 @@ function DashboardAdmin() {
       <div className="page-shell-inner space-y-3 sm:space-y-5">
         <div className="flex flex-col gap-2 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-slate-900 sm:text-2xl md:text-3xl">Good morning, {greetingName}</h1>
+            <h1 className="truncate text-lg font-bold text-slate-900 sm:text-2xl md:text-3xl">{greeting}, {greetingName}</h1>
             <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm">
               <span className="sm:hidden">{todayShort}</span>
               <span className="hidden sm:inline">{todayLabel}</span>
