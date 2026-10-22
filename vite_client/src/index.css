@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./styles/adminDesignTokens.css";
+@import "./styles/adminUi.css";
 @import "./styles/corporateModern.css";
 @import "./styles/recruitmentUI.css";
 @import "./styles/careerJobApply.css";
@@ -7,29 +9,8 @@
 @import "./styles/stitchModulesUI.css";
 @import "./styles/stitchHubPages.css";
 
-/* Modern Design System — Stitch Kinetic Enterprise HRMS tokens */
-:root {
-  /* Core theme tokens (overridden per-organization via JS) */
-  --color-primary: #0e9370;      /* primary interactive emerald */
-  --color-primary-deep: #00694f; /* pressed / high-contrast green */
-  --color-primary-hover: #0b7458;
-  --color-secondary: #476175;    /* slate secondary */
-  --color-accent: #f59e0b;       /* warning / accent */
-  --color-navy: #0e2b3d;         /* deep navy chrome */
-  --color-bg: #ffffff;           /* elevated surfaces */
-  --color-bg-soft: #e8faf4;      /* mint page canvas */
-  --color-text: #111c2d;         /* on-surface */
-
-  /* Gradients & shadows aligned to Kinetic mint / navy */
-  --primary-gradient: linear-gradient(135deg, #0e9370 0%, #00694f 100%);
-  --success-gradient: linear-gradient(135deg, #0e9370 0%, #1cca9b 100%);
-  --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  --info-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
-  --shadow-sm: 0 1px 2px 0 rgba(14, 43, 61, 0.05);
-  --shadow-md: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
-  --shadow-lg: 0 10px 30px -4px rgba(14, 43, 61, 0.12);
-  --shadow-xl: 0 20px 40px -8px rgba(14, 43, 61, 0.16);
-}
+/* Theme tokens live in adminDesignTokens.css (:root).
+ * Organization branding still overrides --color-* via applyBranding (theme.js). */
 
 /* Theme utility classes - use these so primary/secondary/accent apply everywhere */
 .bg-theme-primary { background-color: var(--color-primary); }

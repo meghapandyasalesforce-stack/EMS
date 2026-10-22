@@ -1,16 +1,16 @@
 // Utility to apply organization-specific branding to CSS variables.
-// Defaults follow Stitch Kinetic Enterprise HRMS (DESIGN.md).
+// Defaults align with adminDesignTokens.css; org-saved colors still override via applyBranding.
 
 export const STITCH_THEME = {
-  primary: '#0e9370',
-  secondary: '#476175',
-  accent: '#f59e0b',
+  primary: '#1cca9b',
+  secondary: '#0f2d26',
+  accent: '#ff7f50',
   bg: '#ffffff',
-  bgSoft: '#e8faf4',
-  text: '#111c2d',
-  navy: '#0e2b3d',
-  primaryDeep: '#00694f',
-  primaryHover: '#0b7458',
+  bgSoft: '#f5faf9',
+  text: '#0f2d26',
+  navy: '#0f2d26',
+  primaryDeep: '#0e9370',
+  primaryHover: '#17b389',
 };
 
 const DEFAULTS = STITCH_THEME;

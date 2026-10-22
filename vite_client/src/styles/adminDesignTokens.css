@@ -1,0 +1,98 @@
+/**
+ * Admin HRMS design foundation tokens.
+ * Organization branding (applyBranding / ThemeSettings) still overrides
+ * --color-primary, --color-secondary, --color-accent, and related :root vars.
+ */
+
+:root {
+  /* Brand palette (defaults; org branding overrides --color-* via JS) */
+  --ui-primary: #1cca9b;
+  --ui-primary-deep: #0e9370;
+  --ui-primary-hover: #17b389;
+  --ui-secondary: #0f2d26;
+  --ui-secondary-muted: #1a3d35;
+  --ui-tertiary: #ff7f50;
+  --ui-tertiary-soft: #ffe8e0;
+  --ui-neutral: #f5faf9;
+  --ui-neutral-elevated: #ffffff;
+  --ui-on-primary: #ffffff;
+  --ui-on-secondary: #e8f5f1;
+  --ui-on-surface: #0f2d26;
+  --ui-muted: #5a6f69;
+  --ui-outline: #c5d4cf;
+  --ui-outline-subtle: rgba(15, 45, 38, 0.08);
+
+  /* Semantic */
+  --ui-success: #1cca9b;
+  --ui-success-soft: #e6f9f3;
+  --ui-warning: #f59e0b;
+  --ui-warning-soft: #fff8eb;
+  --ui-danger: #e11d48;
+  --ui-danger-soft: #ffe4ea;
+  --ui-info: #0284c7;
+  --ui-info-soft: #e0f2fe;
+
+  /* Map legacy theme vars to foundation defaults (JS branding overrides these) */
+  --color-primary: #1cca9b;
+  --color-primary-deep: #0e9370;
+  --color-primary-hover: #17b389;
+  --color-secondary: #0f2d26;
+  --color-accent: #ff7f50;
+  --color-navy: #0f2d26;
+  --color-bg: #ffffff;
+  --color-bg-soft: #f5faf9;
+  --color-text: #0f2d26;
+
+  --primary-gradient: linear-gradient(135deg, #1cca9b 0%, #0e9370 100%);
+  --success-gradient: linear-gradient(135deg, #0e9370 0%, #1cca9b 100%);
+  --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --info-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+
+  /* Radius */
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-pill: 9999px;
+
+  /* Shadows */
+  --ui-shadow-sm: 0 1px 2px 0 rgba(15, 45, 38, 0.05);
+  --ui-shadow-md: 0 4px 16px -2px rgba(15, 45, 38, 0.08);
+  --ui-shadow-lg: 0 10px 28px -4px rgba(15, 45, 38, 0.12);
+  --shadow-sm: var(--ui-shadow-sm);
+  --shadow-md: var(--ui-shadow-md);
+  --shadow-lg: var(--ui-shadow-lg);
+  --shadow-xl: 0 20px 40px -8px rgba(15, 45, 38, 0.16);
+
+  /* Spacing (4px base) */
+  --ui-space-1: 0.25rem;
+  --ui-space-2: 0.5rem;
+  --ui-space-3: 0.75rem;
+  --ui-space-4: 1rem;
+  --ui-space-5: 1.25rem;
+  --ui-space-6: 1.5rem;
+  --ui-space-8: 2rem;
+
+  /* Typography — Manrope first */
+  --ui-font: 'Manrope', 'Inter', system-ui, sans-serif;
+  --ui-text-xs: 0.75rem; /* 12px */
+  --ui-text-sm: 0.8125rem; /* 13px */
+  --ui-text-base: 0.875rem; /* 14px */
+  --ui-text-md: 1rem;
+  --ui-text-lg: 1.125rem;
+  --ui-text-xl: 1.25rem;
+  --ui-text-2xl: 1.5rem;
+  --ui-leading-tight: 1.25;
+  --ui-leading-normal: 1.45;
+  --ui-weight-medium: 500;
+  --ui-weight-semibold: 600;
+  --ui-weight-bold: 700;
+
+  /* Shell */
+  --ui-sidebar-width: 16rem;
+  --ui-topbar-height: 3.5rem;
+}
+
+body,
+#root {
+  font-family: var(--ui-font);
+}
