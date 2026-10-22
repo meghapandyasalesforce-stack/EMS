@@ -1,98 +1,118 @@
 /**
- * Admin HRMS design foundation tokens.
+ * Precision Enterprise Interface — design tokens.
  * Organization branding (applyBranding / ThemeSettings) still overrides
  * --color-primary, --color-secondary, --color-accent, and related :root vars.
  */
 
 :root {
-  /* Brand palette (defaults; org branding overrides --color-* via JS) */
-  --ui-primary: #1cca9b;
-  --ui-primary-deep: #0e9370;
+  /* Brand palette */
+  --ui-primary: #1cca9b;           /* mint — highlights, active, charts */
+  --ui-primary-btn: #2a6b55;       /* deep green — primary button fill (AA) */
+  --ui-primary-btn-hover: #235a48;
+  --ui-primary-deep: #2a6b55;
   --ui-primary-hover: #17b389;
-  --ui-secondary: #0f2d26;
-  --ui-secondary-muted: #1a3d35;
-  --ui-tertiary: #ff7f50;
-  --ui-tertiary-soft: #ffe8e0;
-  --ui-neutral: #f5faf9;
+  --ui-secondary: #0e2b3d;         /* deep navy — sidebar, headings, dark btns */
+  --ui-secondary-muted: #16384d;
+  --ui-secondary-chart: #4a6a8a;   /* slate blue chart tint */
+  --ui-tertiary: #e8faf4;          /* pale mint — hover, chips, empty states */
+  --ui-tertiary-soft: #e8faf4;
+  --ui-page-bg: #f0efef;           /* soft warm gray page canvas */
+  --ui-card-surface: #f5f5f5;      /* card surface */
+  --ui-neutral: #f5f5f5;
   --ui-neutral-elevated: #ffffff;
   --ui-on-primary: #ffffff;
-  --ui-on-secondary: #e8f5f1;
-  --ui-on-surface: #0f2d26;
-  --ui-muted: #5a6f69;
-  --ui-outline: #c5d4cf;
-  --ui-outline-subtle: rgba(15, 45, 38, 0.08);
+  --ui-on-secondary: #e8f0f4;
+  --ui-on-surface: #1a1a1a;        /* headings / body */
+  --ui-heading: #0e2b3d;
+  --ui-muted: #666666;             /* secondary text */
+  --ui-outline: #dadada;
+  --ui-outline-subtle: #dadada;
 
-  /* Semantic */
+  /* Semantic (pair with icon/label — never color alone) */
   --ui-success: #1cca9b;
-  --ui-success-soft: #e6f9f3;
-  --ui-warning: #f59e0b;
-  --ui-warning-soft: #fff8eb;
-  --ui-danger: #e11d48;
-  --ui-danger-soft: #ffe4ea;
-  --ui-info: #0284c7;
-  --ui-info-soft: #e0f2fe;
+  --ui-success-soft: #e8faf4;
+  --ui-warning: #b7791f;
+  --ui-warning-soft: #fef6e8;
+  --ui-danger: #b3261e;
+  --ui-danger-soft: #fce8e6;
+  --ui-info: #4a6a8a;
+  --ui-info-soft: #e8eef4;
 
-  /* Map legacy theme vars to foundation defaults (JS branding overrides these) */
+  /* Legacy theme vars (JS branding overrides these) */
   --color-primary: #1cca9b;
-  --color-primary-deep: #0e9370;
+  --color-primary-deep: #2a6b55;
   --color-primary-hover: #17b389;
-  --color-secondary: #0f2d26;
-  --color-accent: #ff7f50;
-  --color-navy: #0f2d26;
+  --color-secondary: #0e2b3d;
+  --color-accent: #4a6a8a;
+  --color-navy: #0e2b3d;
   --color-bg: #ffffff;
-  --color-bg-soft: #f5faf9;
-  --color-text: #0f2d26;
+  --color-bg-soft: #f0efef;
+  --color-text: #1a1a1a;
 
-  --primary-gradient: linear-gradient(135deg, #1cca9b 0%, #0e9370 100%);
-  --success-gradient: linear-gradient(135deg, #0e9370 0%, #1cca9b 100%);
-  --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  --info-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+  --primary-gradient: linear-gradient(135deg, #1cca9b 0%, #2a6b55 100%);
+  --success-gradient: linear-gradient(135deg, #2a6b55 0%, #1cca9b 100%);
+  --warning-gradient: linear-gradient(135deg, #b7791f 0%, #d4a017 100%);
+  --info-gradient: linear-gradient(135deg, #4a6a8a 0%, #6b8aab 100%);
 
-  /* Radius */
+  /* Radius: 8px controls, 12–16px cards */
   --ui-radius-sm: 8px;
   --ui-radius-md: 12px;
   --ui-radius-lg: 16px;
   --ui-radius-pill: 9999px;
 
-  /* Shadows */
-  --ui-shadow-sm: 0 1px 2px 0 rgba(15, 45, 38, 0.05);
-  --ui-shadow-md: 0 4px 16px -2px rgba(15, 45, 38, 0.08);
-  --ui-shadow-lg: 0 10px 28px -4px rgba(15, 45, 38, 0.12);
+  /* Very light shadows */
+  --ui-shadow-sm: 0 1px 2px 0 rgba(14, 43, 61, 0.04);
+  --ui-shadow-md: 0 4px 12px -2px rgba(14, 43, 61, 0.06);
+  --ui-shadow-lg: 0 10px 24px -4px rgba(14, 43, 61, 0.1);
   --shadow-sm: var(--ui-shadow-sm);
   --shadow-md: var(--ui-shadow-md);
   --shadow-lg: var(--ui-shadow-lg);
-  --shadow-xl: 0 20px 40px -8px rgba(15, 45, 38, 0.16);
+  --shadow-xl: 0 16px 32px -8px rgba(14, 43, 61, 0.12);
 
-  /* Spacing (4px base) */
+  /* Spacing 4/8px scale; card padding 20–24px */
   --ui-space-1: 0.25rem;
   --ui-space-2: 0.5rem;
   --ui-space-3: 0.75rem;
   --ui-space-4: 1rem;
-  --ui-space-5: 1.25rem;
-  --ui-space-6: 1.5rem;
+  --ui-space-5: 1.25rem; /* 20px */
+  --ui-space-6: 1.5rem;  /* 24px */
   --ui-space-8: 2rem;
+  --ui-card-padding: 1.25rem;
 
-  /* Typography — Manrope first */
-  --ui-font: 'Manrope', 'Inter', system-ui, sans-serif;
-  --ui-text-xs: 0.75rem; /* 12px */
-  --ui-text-sm: 0.8125rem; /* 13px */
-  --ui-text-base: 0.875rem; /* 14px */
-  --ui-text-md: 1rem;
+  /* Typography — Inter first */
+  --ui-font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ui-text-xs: 0.75rem;    /* 12px caption */
+  --ui-text-sm: 0.8125rem;
+  --ui-text-base: 0.875rem; /* 14px body */
+  --ui-text-md: 1rem;       /* 16px section */
   --ui-text-lg: 1.125rem;
   --ui-text-xl: 1.25rem;
-  --ui-text-2xl: 1.5rem;
+  --ui-text-2xl: 1.5rem;    /* 24px page title */
   --ui-leading-tight: 1.25;
   --ui-leading-normal: 1.45;
   --ui-weight-medium: 500;
   --ui-weight-semibold: 600;
   --ui-weight-bold: 700;
 
-  /* Shell */
-  --ui-sidebar-width: 16rem;
-  --ui-topbar-height: 3.5rem;
+  /* Motion */
+  --ui-duration: 200ms;
+  --ui-ease: ease;
+
+  /* Shell — 240px sidebar; top bar clears avatar + badge */
+  --ui-sidebar-width: 15rem; /* 240px */
+  --ui-topbar-height: 4.5rem;
 }
 
 body,
 #root {
   font-family: var(--ui-font);
+  font-variant-numeric: tabular-nums;
+  background-color: var(--ui-page-bg);
+  color: var(--ui-on-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ui-duration: 0.01ms;
+  }
 }

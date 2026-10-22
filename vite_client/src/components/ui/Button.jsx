@@ -3,7 +3,8 @@ import React from 'react';
 const VARIANT_CLASS = {
   primary: 'ui-btn--primary',
   secondary: 'ui-btn--secondary',
-  dark: 'ui-btn--dark',
+  inverted: 'ui-btn--inverted',
+  dark: 'ui-btn--dark', /* alias of inverted (deep navy) */
   outlined: 'ui-btn--outlined',
   danger: 'ui-btn--danger',
   icon: 'ui-btn--icon',

@@ -438,8 +438,8 @@ const Header = () => {
                         data-hrms-sidebar
                         className={
                             useLightEmployeeNav
-                                ? 'ui-shell-sidebar ui-shell-sidebar--light fixed top-0 left-0 z-[10050] flex h-screen w-64 flex-col overflow-hidden border-r text-gray-700'
-                                : 'ui-shell-sidebar fixed top-0 left-0 z-[10050] flex h-screen w-64 flex-col overflow-hidden border-r text-white'
+                                ? 'ui-shell-sidebar ui-shell-sidebar--light fixed top-0 left-0 z-[10050] flex h-screen flex-col overflow-hidden border-r text-gray-700'
+                                : 'ui-shell-sidebar fixed top-0 left-0 z-[10050] flex h-screen flex-col overflow-hidden border-r text-white'
                         }
                     >
                         {/* Logo */}

@@ -1,24 +1,25 @@
 // Utility to apply organization-specific branding to CSS variables.
-// Defaults align with adminDesignTokens.css; org-saved colors still override via applyBranding.
+// Defaults align with adminDesignTokens.css (Precision Enterprise).
+// Org-saved colors still override via applyBranding. ThemeSettings.jsx is untouched.
 
 export const STITCH_THEME = {
   primary: '#1cca9b',
-  secondary: '#0f2d26',
-  accent: '#ff7f50',
+  secondary: '#0e2b3d',
+  accent: '#4a6a8a',
   bg: '#ffffff',
-  bgSoft: '#f5faf9',
-  text: '#0f2d26',
-  navy: '#0f2d26',
-  primaryDeep: '#0e9370',
+  bgSoft: '#f0efef',
+  text: '#1a1a1a',
+  navy: '#0e2b3d',
+  primaryDeep: '#2a6b55',
   primaryHover: '#17b389',
 };
 
 const DEFAULTS = STITCH_THEME;
 
-/** Legacy defaults remapped so existing orgs pick up Stitch without a manual reset */
-const LEGACY_PRIMARY = new Set(['#20c997', '#16a34a', '#22c55e', '#10b981']);
-const LEGACY_SECONDARY = new Set(['#2563eb', '#3b82f6', '#1d4ed8']);
-const LEGACY_ACCENT = new Set(['#f97316', '#ea580c', '#fb923c']);
+/** Legacy defaults remapped so existing orgs pick up current defaults without a manual reset */
+const LEGACY_PRIMARY = new Set(['#20c997', '#16a34a', '#22c55e', '#10b981', '#0e9370']);
+const LEGACY_SECONDARY = new Set(['#2563eb', '#3b82f6', '#1d4ed8', '#476175', '#0f2d26']);
+const LEGACY_ACCENT = new Set(['#f97316', '#ea580c', '#fb923c', '#ff7f50', '#f59e0b']);
 
 const normalizeHex = (value) => String(value || '').trim().toLowerCase();
 
@@ -51,4 +52,3 @@ export function applyBranding(branding) {
   root.style.setProperty('--color-primary-deep', DEFAULTS.primaryDeep);
   root.style.setProperty('--color-primary-hover', DEFAULTS.primaryHover);
 }
-

@@ -1029,9 +1029,9 @@ body,
 
 @media (min-width: 1024px) {
   .app-main-column {
-    margin-left: 16rem;
-    width: calc(100% - 16rem);
-    max-width: calc(100vw - 16rem);
+    margin-left: var(--ui-sidebar-width, 15rem);
+    width: calc(100% - var(--ui-sidebar-width, 15rem));
+    max-width: calc(100vw - var(--ui-sidebar-width, 15rem));
   }
 }
 
@@ -1042,16 +1042,15 @@ body,
   overscroll-behavior-y: contain;
 }
 
-/* Frosted mint canvas for all page whitespace (sidebar/header unchanged). */
+/* Soft warm-gray page canvas (Precision Enterprise). */
 .hrms-page-canvas {
   position: relative;
   isolation: isolate;
   min-height: 100%;
-  background-color: rgba(245, 250, 249, 0.97);
+  background-color: var(--ui-page-bg, #f0efef);
   background-image:
-    radial-gradient(ellipse 88% 58% at 6% 2%, rgba(28, 202, 155, 0.05), transparent 54%),
-    radial-gradient(ellipse 72% 52% at 96% 99%, rgba(0, 108, 81, 0.032), transparent 50%),
-    linear-gradient(180deg, rgba(249, 252, 251, 0.98) 0%, rgba(236, 244, 242, 0.9) 100%);
+    radial-gradient(ellipse 88% 58% at 6% 2%, rgba(28, 202, 155, 0.04), transparent 54%),
+    radial-gradient(ellipse 72% 52% at 96% 99%, rgba(14, 43, 61, 0.03), transparent 50%);
 }
 
 .hrms-page-canvas::before {

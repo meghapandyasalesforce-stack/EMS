@@ -179,7 +179,7 @@ function App() {
             <ReleaseNotesPopup />
             <HrmsPopupDismissListener />
             {useHrmsShell ? (
-                <div className="app-main-column flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:ml-64 lg:w-[calc(100%-16rem)] lg:max-w-[calc(100vw-16rem)]">
+                <div className="app-main-column flex min-h-0 w-full flex-1 flex-col overflow-hidden">
                     <div
                         className={
                             isCareerJobApply

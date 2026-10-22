@@ -370,7 +370,7 @@ const NotificationDropdown = () => {
                 <>
                     {/* Backdrop to close on click outside */}
                     <div 
-                        className="fixed inset-0 z-[9998] bg-black/20 lg:left-64"
+                        className="fixed inset-0 z-[9998] bg-black/20 lg:left-[var(--ui-sidebar-width,15rem)]"
                         onClick={() => setIsOpen(false)}
                         aria-hidden="true"
                     />
