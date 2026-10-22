@@ -14,7 +14,6 @@ import {
   FiUserPlus,
   FiUsers
 } from "react-icons/fi";
-import LoadingSpinner from "../components/LoadingSpinner";
 import { useEmployees, useLeaves, usePayrolls, useProjects } from "../Hooks/useDashboardData";
 import axios from "../utils/axios";
 import { toast } from "react-toastify";
@@ -24,6 +23,17 @@ import useAuthPermissions from "../Hooks/useAuthPermissions";
 import { PERMISSIONS, hasAnyPermission } from "../utils/permissions";
 import PermissionGate from "../components/PermissionGate";
 import { BOTH_CELEBRATION_ENDPOINT } from "../utils/constant";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  PageHeader,
+  ProgressBar,
+  Skeleton,
+  StatCard,
+  StatusPill,
+} from "../components/ui";
 
 
 const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
@@ -37,6 +47,60 @@ const sortCelebrations = (items = []) => {
         return (order[a?.type] || 99) - (order[b?.type] || 99);
     });
 };
+
+function AttendanceDonut({ present, late, absent }) {
+  const onTime = Math.max(present - late, 0);
+  const slices = [
+    { key: 'present', value: onTime, color: 'var(--color-primary)' },
+    { key: 'late', value: late, color: 'var(--ui-warning)' },
+    { key: 'absent', value: absent, color: 'var(--ui-danger)' },
+  ];
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+
+  if (total <= 0) {
+    return (
+      <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--ui-outline)" strokeWidth="14" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-label={`Attendance: ${present} present, ${late} late, ${absent} absent`}>
+      <g transform="rotate(-90 60 60)">
+        {slices.map((slice) => {
+          if (slice.value <= 0) return null;
+          const length = (slice.value / total) * circumference;
+          const dashOffset = offset;
+          offset += length;
+          return (
+            <circle
+              key={slice.key}
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="none"
+              stroke={slice.color}
+              strokeWidth="14"
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={-dashOffset}
+              strokeLinecap="butt"
+            />
+          );
+        })}
+      </g>
+      <text x="60" y="56" textAnchor="middle" className="fill-[var(--ui-on-surface)]" style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--ui-font)' }}>
+        {present}
+      </text>
+      <text x="60" y="72" textAnchor="middle" className="fill-[var(--ui-muted)]" style={{ fontSize: '0.65rem', fontFamily: 'var(--ui-font)' }}>
+        Present
+      </text>
+    </svg>
+  );
+}
 
 function CelebrationDashboardCard({ item, isSelf = false, event, reacting = false, onReact, onWishes }) {
     const isToday = item?.daysUntil === 0;
@@ -52,24 +116,29 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
         : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
 
     return (
-        <li className={`min-w-0 overflow-hidden rounded-2xl border p-3 sm:p-3.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+        <li
+          className={`ui-card min-w-0 overflow-hidden !p-3 sm:!p-3.5 ${isToday ? '' : '!bg-[var(--ui-neutral)]'}`}
+          style={isToday ? { borderColor: 'color-mix(in srgb, var(--ui-tertiary) 35%, transparent)', background: 'color-mix(in srgb, var(--ui-tertiary-soft) 70%, var(--ui-neutral))' } : undefined}
+        >
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
-                    <p className="truncate font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
-                    <p className="break-words text-xs text-slate-500">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ui-tertiary)]">{header}</p>
+                    <p className="truncate font-semibold text-[var(--ui-on-surface)]">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
+                    <p className="break-words text-xs text-[var(--ui-muted)]">
                         {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
                     </p>
                 </div>
                 {onWishes ? (
-                    <button
+                    <Button
                         type="button"
+                        variant="primary"
+                        size="sm"
                         onClick={() => onWishes(item)}
-                        className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
+                        className="!rounded-full !min-w-[4.75rem] shrink-0"
                     >
                         {isToday ? 'Wishes' : 'Upcoming'}
-                    </button>
+                    </Button>
                 ) : null}
             </div>
             {isToday && onReact ? (
@@ -82,11 +151,12 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
                                 type="button"
                                 disabled={reacting}
                                 onClick={() => onReact(item, emoji)}
-                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`}
                                 aria-label={`React ${emoji}`}
+                                aria-pressed={count > 0}
+                                className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-[var(--color-primary)] hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] disabled:opacity-50 ${count > 0 ? 'border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)]' : 'border-[var(--ui-outline)]'}`}
                             >
                                 <span>{emoji}</span>
-                                {count > 0 ? <span className="text-xs font-semibold text-slate-600">{count}</span> : null}
+                                {count > 0 ? <span className="text-xs font-semibold text-[var(--ui-muted)]">{count}</span> : null}
                             </button>
                         );
                     })}
@@ -209,7 +279,8 @@ function DashboardAdmin() {
     const total = todayStatus.length || employeeCount;
     const present = todayStatus.filter((x) => x.status !== "absent").length;
     const late = todayStatus.filter((x) => x.isLateArrival).length;
-    return { total, present, late };
+    const absent = Math.max((total || 0) - present, 0);
+    return { total, present, late, absent };
   }, [todayStatus, employeeCount]);
 
   const pendingLeaves = useMemo(
@@ -273,21 +344,25 @@ function DashboardAdmin() {
         hasAnyPermission(permissions, [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM], rbacOpts) && {
           label: "Today's Live Attendance",
           icon: <FiCheckCircle />,
+          variant: "dark",
           action: () => navigate("/today-attendance"),
         },
         hasAnyPermission(permissions, [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM], rbacOpts) && {
           label: "Today's Log",
           icon: <FiClock />,
+          variant: "secondary",
           action: () => navigate("/all-attendance-history"),
         },
         hasAnyPermission(permissions, [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM], rbacOpts) && {
           label: "Leave Report",
           icon: <FiFileText />,
+          variant: "dark",
           action: () => navigate("/leave-management"),
         },
         permissionFlags.isOrgOwner && {
           label: "Add Employee",
           icon: <FiUserPlus />,
+          variant: "primary",
           action: () => navigate("/add-employee"),
         },
       ].filter(Boolean),
@@ -298,46 +373,6 @@ function DashboardAdmin() {
     .filter((leave) => String(leave?.status || "").toLowerCase() === "pending")
     .slice(0, 4);
 
-  const statCards = [
-    {
-      label: "Total Employees",
-      value: employeeCount.toLocaleString("en-IN"),
-      sub: `${projects.length} active projects`,
-      icon: <FiUsers className="h-4 w-4" />,
-      iconWrap: "bg-slate-100 text-slate-600"
-    },
-    {
-      label: "Present Today",
-      value: todayAttendanceStats.present.toLocaleString("en-IN"),
-      sub: `${todayAttendanceStats.total || 0} tracked`,
-      icon: <FiCheckCircle className="h-4 w-4" />,
-      iconWrap: "bg-emerald-50 text-emerald-600"
-    },
-    {
-      label: "Pending Leaves",
-      value: pendingLeaves.toLocaleString("en-IN"),
-      sub: "Needs review",
-      icon: <FiCalendar className="h-4 w-4" />,
-      iconWrap: "bg-amber-50 text-amber-600"
-    },
-    {
-      label: "Overdue Approvals",
-      value: escalatedApprovalsCount.toLocaleString("en-IN"),
-      sub: escalatedApprovalsCount > 0 ? "Pending beyond review window" : "Clear",
-      icon: <FiClock className="h-4 w-4" />,
-      iconWrap: "bg-rose-50 text-rose-600",
-      onClick: () => navigate("/admin/pending-approvals?escalated=1")
-    },
-    {
-      label: "Payroll This Month",
-      value: formatCurrency(monthlyPayrollTotal),
-      sub: `${payrolls.length} payroll records`,
-      icon: <FiDollarSign className="h-4 w-4" />,
-      iconWrap: "bg-emerald-50 text-emerald-600",
-      wide: true
-    }
-  ];
-
   const greetingName = user?.name || user?.email?.split("@")?.[0] || "Admin";
   const todayLabel = new Date().toLocaleDateString([], {
     weekday: "long",
@@ -345,17 +380,6 @@ function DashboardAdmin() {
     month: "long",
     year: "numeric"
   });
-  const todayShort = new Date().toLocaleDateString([], {
-    weekday: "short",
-    day: "numeric",
-    month: "short"
-  });
-  const pillClass =
-    "inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50";
-  const pillPrimaryClass =
-    "inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white hover:opacity-90";
-  const mobileLinkClass =
-    "inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-2 text-[13px] font-medium text-slate-700 active:bg-slate-50";
 
   const getInitials = (name = "") => {
     const parts = name.trim().split(" ").filter(Boolean);
@@ -365,12 +389,6 @@ function DashboardAdmin() {
       .map((p) => p[0].toUpperCase())
       .join("");
   };
-
-  const renderBar = (pct) => (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
-      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-    </div>
-  );
 
   const getCelebrationItemKey = (item) => `${item?.type || "birthday"}_${item?.employeeId}`;
 
@@ -438,8 +456,49 @@ function DashboardAdmin() {
     }
   };
 
+  const headerActions = (
+    <>
+      <Button type="button" variant="outlined" onClick={() => navigate("/helpdesk")}>
+        <FiHeadphones className="h-4 w-4" aria-hidden />
+        Helpdesk
+      </Button>
+      <Button type="button" variant="outlined" onClick={() => navigate("/today-attendance")}>
+        <FiCheckCircle className="h-4 w-4" aria-hidden />
+        Today&apos;s Live Attendance
+      </Button>
+      <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
+        <Button type="button" variant="outlined" onClick={() => navigate("/admin-payroll")}>
+          <FiDollarSign className="h-4 w-4" aria-hidden />
+          Run Payroll
+        </Button>
+      </PermissionGate>
+      {permissionFlags.isOrgOwner ? (
+        <Button type="button" variant="primary" onClick={() => navigate("/add-employee")}>
+          <FiPlus className="h-4 w-4" aria-hidden />
+          Add Employee
+        </Button>
+      ) : null}
+    </>
+  );
+
   if (isLoading) {
-    return <LoadingSpinner message="Loading admin dashboard..." />;
+    return (
+      <div className="page-shell min-h-screen bg-[var(--ui-neutral)]" style={{ fontFamily: 'var(--ui-font)' }}>
+        <div className="page-shell-inner space-y-4 sm:space-y-5">
+          <Skeleton variant="title" className="!w-64" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Skeleton variant="card" />
+            <Skeleton variant="card" />
+            <Skeleton variant="card" />
+            <Skeleton variant="card" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <Skeleton variant="card" className="lg:col-span-2 !h-48" />
+            <Skeleton variant="card" className="!h-48" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -447,390 +506,479 @@ function DashboardAdmin() {
       {showAnnouncementModal && (
         <AnnouncementModal onClose={closeAnnouncementModal} onSent={handleAnnouncementSent} />
       )}
-    <div className="page-shell min-h-screen bg-[#F3F7F5]">
+    <div className="page-shell min-h-screen bg-[var(--ui-neutral)]" style={{ fontFamily: 'var(--ui-font)' }}>
       <div className="page-shell-inner space-y-3 sm:space-y-5">
-        <div className="flex flex-col gap-2 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-slate-900 sm:text-2xl md:text-3xl">Good morning, {greetingName}</h1>
-            <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm">
-              <span className="sm:hidden">{todayShort}</span>
-              <span className="hidden sm:inline">{todayLabel}</span>
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:hidden">
-            {permissionFlags.isOrgOwner ? (
-              <button
-                onClick={() => navigate("/add-employee")}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white"
-                style={{ backgroundColor: "var(--color-primary)" }}
-              >
-                <FiPlus className="h-4 w-4" />
-                Add employee
-              </button>
-            ) : null}
-            <div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <button type="button" onClick={() => navigate("/helpdesk")} className={mobileLinkClass}>
-                <FiHeadphones className="h-4 w-4 shrink-0 text-slate-500" />
-                Helpdesk
-              </button>
-              <button type="button" onClick={() => navigate("/today-attendance")} className={`${mobileLinkClass} border-l border-slate-200`}>
-                <FiCheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                Attendance
-              </button>
-              <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
-                <button type="button" onClick={() => navigate("/admin-payroll")} className={`${mobileLinkClass} border-l border-slate-200`}>
-                  <FiDollarSign className="h-4 w-4 shrink-0 text-slate-500" />
-                  Payroll
-                </button>
-              </PermissionGate>
-            </div>
-          </div>
-          <div className="hidden flex-wrap justify-end gap-2 sm:flex">
-            <button type="button" onClick={() => navigate("/helpdesk")} className={pillClass}>
-              <FiHeadphones className="h-4 w-4" />
+        <PageHeader
+          title={
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Admin Dashboard
+              <StatusPill tone={escalatedApprovalsCount > 0 ? 'urgent' : 'success'}>
+                {escalatedApprovalsCount > 0 ? 'Needs attention' : 'All clear'}
+              </StatusPill>
+            </span>
+          }
+          subtitle={`Good morning, ${greetingName} · ${todayLabel}`}
+          actions={<div className="hidden flex-wrap justify-end gap-2 sm:flex">{headerActions}</div>}
+        />
+
+        {/* Mobile header actions — same handlers as desktop */}
+        <div className="flex flex-col gap-2 sm:hidden">
+          {permissionFlags.isOrgOwner ? (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => navigate("/add-employee")}
+              className="!h-11 w-full !rounded-2xl"
+            >
+              <FiPlus className="h-4 w-4" aria-hidden />
+              Add employee
+            </Button>
+          ) : null}
+          <div className="flex overflow-hidden rounded-2xl border border-[var(--ui-outline-subtle)] bg-white">
+            <button
+              type="button"
+              onClick={() => navigate("/helpdesk")}
+              className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-2 text-[13px] font-medium text-[var(--ui-on-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] active:bg-[var(--ui-neutral)]"
+            >
+              <FiHeadphones className="h-4 w-4 shrink-0 text-[var(--ui-muted)]" aria-hidden />
               Helpdesk
             </button>
-            <button type="button" onClick={() => navigate("/today-attendance")} className={pillClass}>
-              <FiCheckCircle className="h-4 w-4" />
-              Today's Live Attendance
+            <button
+              type="button"
+              onClick={() => navigate("/today-attendance")}
+              className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 border-l border-[var(--ui-outline-subtle)] px-2 text-[13px] font-medium text-[var(--ui-on-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] active:bg-[var(--ui-neutral)]"
+            >
+              <FiCheckCircle className="h-4 w-4 shrink-0 text-[var(--color-primary)]" aria-hidden />
+              Attendance
             </button>
             <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
-              <button type="button" onClick={() => navigate("/admin-payroll")} className={pillClass}>
-                <FiDollarSign className="h-4 w-4" />
-                Run Payroll
-              </button>
-            </PermissionGate>
-            {permissionFlags.isOrgOwner ? (
               <button
                 type="button"
-                onClick={() => navigate("/add-employee")}
-                className={pillPrimaryClass}
-                style={{ backgroundColor: "var(--color-primary)" }}
+                onClick={() => navigate("/admin-payroll")}
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 border-l border-[var(--ui-outline-subtle)] px-2 text-[13px] font-medium text-[var(--ui-on-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] active:bg-[var(--ui-neutral)]"
               >
-                <FiPlus className="h-4 w-4" />
-                Add Employee
+                <FiDollarSign className="h-4 w-4 shrink-0 text-[var(--ui-muted)]" aria-hidden />
+                Payroll
               </button>
-            ) : null}
+            </PermissionGate>
           </div>
         </div>
 
         {employeesError && employeesError.response?.status !== 401 && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {employeesError.response?.data?.message || "Failed to load employees"}
-          </div>
+          <ErrorBanner message={employeesError.response?.data?.message || "Failed to load employees"} />
         )}
 
-        <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-5">
-          {statCards.map((card) => (
-            <div
-              key={card.label}
-              role={card.onClick ? "button" : undefined}
-              tabIndex={card.onClick ? 0 : undefined}
-              onClick={card.onClick}
-              onKeyDown={
-                card.onClick
-                  ? (e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        card.onClick(e);
-                      }
-                    }
-                  : undefined
+        {escalatedApprovalsCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => navigate("/admin/pending-approvals?escalated=1")}
+            className="flex w-full items-center justify-between gap-3 rounded-[var(--ui-radius-md)] border bg-[var(--ui-tertiary-soft)] px-4 py-2.5 text-left transition hover:opacity-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ui-tertiary)]"
+            style={{ borderColor: 'color-mix(in srgb, var(--ui-tertiary) 35%, transparent)' }}
+          >
+            <span className="text-sm font-semibold text-[#c2410c]">
+              Needs attention · {escalatedApprovalsCount.toLocaleString("en-IN")} overdue approval{escalatedApprovalsCount === 1 ? "" : "s"}
+            </span>
+            <FiArrowUpRight className="h-4 w-4 shrink-0 text-[#c2410c]" aria-hidden />
+          </button>
+        ) : null}
+
+        {/* Stat row — only Overdue Approvals is clickable */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Total Employees"
+            value={employeeCount.toLocaleString("en-IN")}
+            meta={`${projects.length} active projects`}
+            icon={
+              <span className="flex h-9 w-9 items-center justify-center rounded-[var(--ui-radius-sm)] bg-[color-mix(in_srgb,var(--ui-secondary)_10%,transparent)] text-[var(--ui-secondary)]">
+                <FiUsers className="h-4 w-4" aria-hidden />
+              </span>
+            }
+          />
+          <StatCard
+            label="Present Today"
+            value={todayAttendanceStats.present.toLocaleString("en-IN")}
+            meta={`${todayAttendanceStats.total || 0} tracked`}
+            icon={
+              <span className="flex h-9 w-9 items-center justify-center rounded-[var(--ui-radius-sm)] bg-[color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-[var(--ui-primary-deep)]">
+                <FiCheckCircle className="h-4 w-4" aria-hidden />
+              </span>
+            }
+          />
+          <StatCard
+            label="Pending Leave"
+            value={pendingLeaves.toLocaleString("en-IN")}
+            meta="Needs review"
+            icon={
+              <span className="flex h-9 w-9 items-center justify-center rounded-[var(--ui-radius-sm)] bg-[var(--ui-warning-soft)] text-[#b45309]">
+                <FiCalendar className="h-4 w-4" aria-hidden />
+              </span>
+            }
+          />
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("/admin/pending-approvals?escalated=1")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate("/admin/pending-approvals?escalated=1");
               }
-              className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${
-                card.wide
-                  ? "col-span-2 flex items-center justify-between gap-3 px-3.5 py-3 xl:col-span-1 xl:block xl:p-4"
-                  : "p-3 sm:p-4"
-              } ${card.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
-            >
-              <div className={card.wide ? "flex min-w-0 flex-1 items-center gap-2.5 xl:mb-2 xl:w-full xl:flex-none xl:justify-between" : "flex items-center justify-between gap-2"}>
-                {card.wide ? (
-                  <span className={`shrink-0 rounded-lg p-1.5 xl:order-2 xl:p-2 ${card.iconWrap}`}>{card.icon}</span>
-                ) : null}
-                <div className="min-w-0">
-                  <p className="truncate text-xs leading-tight text-slate-500 sm:text-sm">{card.label}</p>
-                  {card.wide ? (
-                    <p className="mt-0.5 truncate text-[11px] text-slate-400 xl:hidden">{card.sub}</p>
+            }}
+            className="cursor-pointer rounded-[var(--ui-radius-md)] transition-shadow hover:shadow-[var(--ui-shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+            aria-label="View overdue approvals"
+          >
+            <StatCard
+              label="Overdue Approvals"
+              value={escalatedApprovalsCount.toLocaleString("en-IN")}
+              meta={escalatedApprovalsCount > 0 ? "Pending beyond review window" : "Clear"}
+              metaUrgent={escalatedApprovalsCount > 0}
+              icon={
+                <span className="relative flex h-9 w-9 items-center justify-center rounded-[var(--ui-radius-sm)] bg-[var(--ui-tertiary-soft)] text-[#c2410c]">
+                  <FiClock className="h-4 w-4" aria-hidden />
+                  {escalatedApprovalsCount > 0 ? (
+                    <StatusPill tone="urgent" className="absolute -right-2 -top-2 !px-1.5 !py-0 !text-[10px]">
+                      {escalatedApprovalsCount}
+                    </StatusPill>
                   ) : null}
-                </div>
-                {card.wide ? null : (
-                  <span className={`shrink-0 rounded-lg p-1.5 sm:p-2 ${card.iconWrap}`}>{card.icon}</span>
-                )}
-              </div>
-              <p className={`break-words font-bold leading-none text-slate-900 ${card.wide ? "shrink-0 text-xl xl:mt-3 xl:text-2xl" : "mt-2 text-xl sm:mt-3 sm:text-2xl"}`}>{card.value}</p>
-              <p className={`truncate text-[11px] text-slate-400 sm:text-xs ${card.wide ? "hidden xl:mt-1 xl:block" : "mt-1.5"}`}>{card.sub}</p>
-            </div>
-          ))}
+                </span>
+              }
+            />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-          <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 sm:mb-3">
-              <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Attendance overview</h2>
-              <div className="hidden flex-wrap items-center gap-3 text-xs text-slate-500 sm:flex">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Present
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  Late
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-rose-500" />
-                  Absent
-                </span>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <div className="rounded-xl bg-emerald-50 px-3 py-3 sm:p-4">
-                <p className="text-xs text-emerald-700">Present</p>
-                <p className="mt-1 text-xl font-bold text-emerald-800 sm:text-2xl">{todayAttendanceStats.present}</p>
-              </div>
-              <div className="rounded-xl bg-amber-50 px-3 py-3 sm:p-4">
-                <p className="text-xs text-amber-700">Late</p>
-                <p className="mt-1 text-xl font-bold text-amber-800 sm:text-2xl">{todayAttendanceStats.late}</p>
-              </div>
-              <div className="rounded-xl bg-rose-50 px-3 py-3 sm:p-4">
-                <p className="text-xs text-rose-700">Absent</p>
-                <p className="mt-1 text-xl font-bold text-rose-800 sm:text-2xl">
-                  {Math.max((todayAttendanceStats.total || employeeCount) - todayAttendanceStats.present, 0)}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-600">
-                <span>Attendance rate</span>
-                <span className="font-semibold text-slate-800">
-                  {(todayAttendanceStats.total || employeeCount) > 0
-                    ? Math.round(
-                        (todayAttendanceStats.present /
-                          (todayAttendanceStats.total || employeeCount)) *
-                          100
-                      )
-                    : 0}
-                  %
-                </span>
-              </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all"
-                  style={{
-                    width: `${
-                      (todayAttendanceStats.total || employeeCount) > 0
-                        ? Math.min(
-                            100,
-                            Math.round(
-                              (todayAttendanceStats.present /
-                                (todayAttendanceStats.total || employeeCount)) *
-                                100
-                            )
-                          )
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-slate-500">
-                  {todayAttendanceStats.present} of {todayAttendanceStats.total || employeeCount} present today
-                </p>
-                <button
+        {/* Shortcuts row */}
+        <div className="flex flex-wrap gap-2">
+          {permissionFlags.isOrgOwner ? (
+            <Button type="button" variant="primary" onClick={() => navigate("/add-employee")}>
+              <FiUserPlus className="h-4 w-4" aria-hidden />
+              Add Employee
+            </Button>
+          ) : null}
+          {hasAnyPermission(permissions, [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM], rbacOpts) ? (
+            <Button type="button" variant="dark" onClick={() => navigate("/today-attendance")}>
+              <FiCheckCircle className="h-4 w-4" aria-hidden />
+              Today&apos;s Attendance
+            </Button>
+          ) : null}
+          <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
+            <Button type="button" variant="dark" onClick={() => navigate("/admin-payroll")}>
+              <FiDollarSign className="h-4 w-4" aria-hidden />
+              Payroll
+            </Button>
+          </PermissionGate>
+          {hasAnyPermission(permissions, [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM], rbacOpts) ? (
+            <Button type="button" variant="secondary" onClick={() => navigate("/leave-management")}>
+              <FiFileText className="h-4 w-4" aria-hidden />
+              Leave Report
+            </Button>
+          ) : null}
+          {quickShortcuts
+            .filter((s) => s.label === "Today's Log")
+            .map((shortcut) => (
+              <Button key={shortcut.label} type="button" variant="secondary" onClick={shortcut.action}>
+                {shortcut.icon}
+                {shortcut.label}
+              </Button>
+            ))}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+          {/* Attendance Today + Payroll */}
+          <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+            <Card className="flex min-w-0 flex-col">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-[var(--ui-on-surface)] sm:text-lg">Attendance Today</h2>
+                <Button
                   type="button"
+                  variant="outlined"
+                  size="sm"
                   onClick={() => navigate("/today-attendance")}
-                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:opacity-80"
                 >
                   View today
-                  <FiArrowUpRight className="h-3 w-3" />
-                </button>
+                  <FiArrowUpRight className="h-3 w-3" aria-hidden />
+                </Button>
               </div>
-            </div>
-          </div>
-
-          <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-slate-900">Announcements</h2>
-              <button
-                onClick={() => setShowAnnouncementModal(true)}
-                className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary)] hover:opacity-80"
-              >
-                <FiPlus className="h-4 w-4" />
-                New
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 space-y-2.5">
-              {announcements.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                  No announcements yet.
+              <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
+                <AttendanceDonut
+                  present={todayAttendanceStats.present}
+                  late={todayAttendanceStats.late}
+                  absent={todayAttendanceStats.absent}
+                />
+                <ul className="grid w-full grid-cols-1 gap-2 sm:flex-1">
+                  <li className="flex items-center justify-between rounded-[var(--ui-radius-sm)] bg-[color-mix(in_srgb,var(--color-primary)_10%,transparent)] px-3 py-2 text-sm">
+                    <span className="inline-flex items-center gap-2 font-medium text-[var(--ui-primary-deep)]">
+                      <span className="h-2 w-2 rounded-full bg-[var(--color-primary)]" aria-hidden />
+                      Present
+                    </span>
+                    <span className="font-bold text-[var(--ui-on-surface)]">{todayAttendanceStats.present}</span>
+                  </li>
+                  <li className="flex items-center justify-between rounded-[var(--ui-radius-sm)] bg-[var(--ui-danger-soft)] px-3 py-2 text-sm">
+                    <span className="inline-flex items-center gap-2 font-medium text-[var(--ui-danger)]">
+                      <span className="h-2 w-2 rounded-full bg-[var(--ui-danger)]" aria-hidden />
+                      Absent
+                    </span>
+                    <span className="font-bold text-[var(--ui-on-surface)]">{todayAttendanceStats.absent}</span>
+                  </li>
+                  <li className="flex items-center justify-between rounded-[var(--ui-radius-sm)] bg-[var(--ui-warning-soft)] px-3 py-2 text-sm">
+                    <span className="inline-flex items-center gap-2 font-medium text-[#b45309]">
+                      <span className="h-2 w-2 rounded-full bg-[var(--ui-warning)]" aria-hidden />
+                      Late
+                    </span>
+                    <span className="font-bold text-[var(--ui-on-surface)]">{todayAttendanceStats.late}</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between text-xs text-[var(--ui-muted)]">
+                  <span>Attendance rate</span>
+                  <span className="font-semibold text-[var(--ui-on-surface)]">
+                    {(todayAttendanceStats.total || employeeCount) > 0
+                      ? Math.round(
+                          (todayAttendanceStats.present /
+                            (todayAttendanceStats.total || employeeCount)) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </span>
                 </div>
-              ) : (
-                announcements.map((item) => {
-                  const important =
-                    item.priority === 'high' ||
-                    item.metadata?.important === true ||
-                    item.metadata?.priority === 'high';
-                  const title =
-                    String(item.metadata?.title || '').trim() ||
-                    String(item.message || '')
-                      .replace(/<[^>]+>/g, ' ')
-                      .replace(/\s+/g, ' ')
-                      .trim();
-                  return (
-                    <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-xs text-slate-500">{formatDate(item.createdAt)}</p>
-                        {important ? (
-                          <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 border border-red-200">
-                            Important
-                          </span>
-                        ) : null}
+                <ProgressBar
+                  value={
+                    (todayAttendanceStats.total || employeeCount) > 0
+                      ? Math.min(
+                          100,
+                          Math.round(
+                            (todayAttendanceStats.present /
+                              (todayAttendanceStats.total || employeeCount)) *
+                              100
+                          )
+                        )
+                      : 0
+                  }
+                />
+                <p className="text-xs text-[var(--ui-muted)]">
+                  {todayAttendanceStats.present} of {todayAttendanceStats.total || employeeCount} present today
+                </p>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-semibold text-[var(--ui-on-surface)] sm:text-lg">Payroll by Department</h2>
+                  <p className="text-xs text-[var(--ui-muted)]">
+                    This month · {formatCurrency(monthlyPayrollTotal)} · {payrolls.length} records
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {payrollByDepartment.length === 0 ? (
+                  <EmptyState title="No payroll data yet" />
+                ) : (
+                  payrollByDepartment.map((row) => (
+                    <div key={row.department}>
+                      <div className="mb-1 flex items-center justify-between text-sm">
+                        <span className="font-medium text-[var(--ui-on-surface)]">{row.department}</span>
+                        <span className="text-[var(--ui-muted)]">{formatCurrency(row.amount)}</span>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-800">{title}</p>
+                      <ProgressBar value={row.progress} />
                     </div>
-                  );
-                })
-              )}
-            </div>
-            <button
-              onClick={() => navigate("/sent-announcements")}
-              className="mt-3 w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              View All Announcements
-            </button>
-          </div>
-        </div>
+                  ))
+                )}
+              </div>
+            </Card>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:items-stretch">
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Pending approvals</h2>
-            <div className="space-y-2.5">
-              {approvalsPreview.length === 0 ? (
-                <p className="text-sm text-slate-500">No pending requests.</p>
-              ) : (
-                approvalsPreview.map((leave) => (
-                  <div key={leave._id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-800">
-                        {leave.employeeName || leave.employee?.name || "Employee"}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {leave.leaveType || "Leave"} - {leave.totalDays || 1} day(s)
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => navigate("/leave-management")}
-                      className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--color-primary)]"
-                    >
-                      Review
-                      <FiArrowUpRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Payroll snapshot</h2>
-            <div className="space-y-3">
-              {payrollByDepartment.length === 0 ? (
-                <p className="text-sm text-slate-500">No payroll data yet.</p>
-              ) : (
-                payrollByDepartment.map((row) => (
-                  <div key={row.department}>
-                    <div className="mb-1 flex items-center justify-between text-sm">
-                      <span className="font-medium text-slate-700">{row.department}</span>
-                      <span className="text-slate-500">{formatCurrency(row.amount)}</span>
-                    </div>
-                    {renderBar(row.progress)}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="hidden min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 md:block xl:col-span-1">
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Quick shortcuts</h2>
-            <div className="grid grid-cols-2 gap-2.5">
-              {quickShortcuts.map((shortcut) => (
-                <button
-                  key={shortcut.label}
-                  onClick={shortcut.action}
-                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+            {/* Pending Leave row → leave-management */}
+            <Card>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-[var(--ui-on-surface)] sm:text-lg">Pending Leave</h2>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => navigate("/leave-management")}
                 >
-                  <span className="text-lg text-slate-600">{shortcut.icon}</span>
-                  <span>{shortcut.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+                  Review all
+                  <FiArrowUpRight className="h-3 w-3" aria-hidden />
+                </Button>
+              </div>
+              <div className="space-y-2.5">
+                {approvalsPreview.length === 0 ? (
+                  <EmptyState title="No pending requests" />
+                ) : (
+                  approvalsPreview.map((leave) => (
+                    <button
+                      key={leave._id}
+                      type="button"
+                      onClick={() => navigate("/leave-management")}
+                      className="flex w-full items-center justify-between gap-2 rounded-[var(--ui-radius-sm)] border border-[var(--ui-outline-subtle)] p-3 text-left transition hover:bg-[var(--ui-neutral)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[var(--ui-on-surface)]">
+                          {leave.employeeName || leave.employee?.name || "Employee"}
+                        </p>
+                        <p className="text-xs text-[var(--ui-muted)]">
+                          {leave.leaveType || "Leave"} - {leave.totalDays || 1} day(s)
+                        </p>
+                      </div>
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--color-primary)]">
+                        Review
+                        <FiArrowUpRight className="h-3 w-3" aria-hidden />
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </Card>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Upcoming celebrations</h2>
-            {celebrations.length > 0 ? (
-              <ul className="space-y-3">
-                {celebrations.slice(0, 3).map((item, idx) => {
-                  const itemKey = `${item.type || "birthday"}_${item.employeeId}`;
-                  return (
-                    <CelebrationDashboardCard
-                      key={`${item.type || "birthday"}_${item.employeeId || idx}`}
-                      item={item}
-                      isSelf={false}
-                      event={celebrationEvents[itemKey]}
-                      reacting={celebrationReacting}
-                      onReact={handleCelebrationReact}
-                      onWishes={handleOpenCelebrationWishes}
-                    />
-                  );
-                })}
-              </ul>
-            ) : (
+            {/* Celebrations */}
+            <Card>
+              <h2 className="mb-3 text-base font-semibold text-[var(--ui-on-surface)] sm:text-lg">Upcoming celebrations</h2>
+              {celebrations.length > 0 ? (
+                <ul className="space-y-3">
+                  {celebrations.slice(0, 3).map((item, idx) => {
+                    const itemKey = `${item.type || "birthday"}_${item.employeeId}`;
+                    return (
+                      <CelebrationDashboardCard
+                        key={`${item.type || "birthday"}_${item.employeeId || idx}`}
+                        item={item}
+                        isSelf={false}
+                        event={celebrationEvents[itemKey]}
+                        reacting={celebrationReacting}
+                        onReact={handleCelebrationReact}
+                        onWishes={handleOpenCelebrationWishes}
+                      />
+                    );
+                  })}
+                </ul>
+              ) : (
+                <EmptyState title="No upcoming celebrations" />
+              )}
+            </Card>
+          </div>
+
+          {/* Right column */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <Card>
+              <h2 className="mb-3 text-base font-semibold text-[var(--ui-on-surface)] sm:text-lg">Upcoming events</h2>
               <div className="grid grid-cols-3 gap-2.5">
                 {upcomingEvents.map((event) => (
-                  <div key={event.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs text-slate-500">{event.tag}</p>
-                    <p className="mt-1 text-lg font-bold text-slate-900">{event.date.getDate()}</p>
-                    <p className="text-xs text-slate-600">{event.date.toLocaleDateString([], { month: "short", weekday: "short" })}</p>
+                  <div key={event.label} className="rounded-[var(--ui-radius-sm)] border border-[var(--ui-outline-subtle)] bg-[var(--ui-neutral)] p-3">
+                    <p className="text-xs text-[var(--ui-muted)]">{event.tag}</p>
+                    <p className="mt-1 text-lg font-bold text-[var(--ui-on-surface)]">{event.date.getDate()}</p>
+                    <p className="text-xs text-[var(--ui-muted)]">{event.date.toLocaleDateString([], { month: "short", weekday: "short" })}</p>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </Card>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">New hires this month</h2>
-            <div className="space-y-2.5">
-              {newHires.length === 0 ? (
-                <p className="text-sm text-slate-500">No recent hires found.</p>
-              ) : (
-                newHires.map((employee) => (
-                  <div key={employee._id || employee.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
-                        {getInitials(`${employee.name || ""} ${employee.lastName || ""}`)}
+            <Card className="flex min-w-0 flex-col">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-[var(--ui-on-surface)] sm:text-lg">Announcements</h2>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => setShowAnnouncementModal(true)}
+                >
+                  <FiPlus className="h-4 w-4" aria-hidden />
+                  New announcement
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1 space-y-2.5">
+                {announcements.length === 0 ? (
+                  <EmptyState title="No announcements yet" />
+                ) : (
+                  announcements.map((item) => {
+                    const important =
+                      item.priority === 'high' ||
+                      item.metadata?.important === true ||
+                      item.metadata?.priority === 'high';
+                    const title =
+                      String(item.metadata?.title || '').trim() ||
+                      String(item.message || '')
+                        .replace(/<[^>]+>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    return (
+                      <div key={item._id} className="rounded-[var(--ui-radius-sm)] border border-[var(--ui-outline-subtle)] bg-[var(--ui-neutral)] p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-[var(--ui-muted)]">{formatDate(item.createdAt)}</p>
+                          {important ? (
+                            <StatusPill tone="urgent">Important</StatusPill>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm font-medium text-[var(--ui-on-surface)]">{title}</p>
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-800">
-                          {employee.name || ""} {employee.lastName || ""}
-                        </p>
-                        <p className="truncate text-xs text-slate-500">
-                          {employee.position || "Team Member"} - Joined {formatDate(employee.createdAt || employee.joiningDate)}
-                        </p>
+                    );
+                  })
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={() => navigate("/sent-announcements")}
+                className="mt-3 w-full"
+              >
+                Sent announcements
+              </Button>
+            </Card>
+
+            <Card>
+              <h2 className="mb-3 text-base font-semibold text-[var(--ui-on-surface)] sm:text-lg">New hires</h2>
+              <div className="space-y-2.5">
+                {newHires.length === 0 ? (
+                  <EmptyState title="No recent hires found" />
+                ) : (
+                  newHires.map((employee) => {
+                    const empId = employee._id || employee.id;
+                    return (
+                      <div
+                        key={empId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(`/employees/${empId}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/employees/${empId}`);
+                          }
+                        }}
+                        className="flex flex-col gap-2 rounded-[var(--ui-radius-sm)] border border-[var(--ui-outline-subtle)] p-3 transition hover:bg-[var(--ui-neutral)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] sm:flex-row sm:items-center sm:justify-between sm:gap-3 cursor-pointer"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-primary)_12%,transparent)] text-xs font-semibold text-[var(--ui-primary-deep)]">
+                            {getInitials(`${employee.name || ""} ${employee.lastName || ""}`)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[var(--ui-on-surface)]">
+                              {employee.name || ""} {employee.lastName || ""}
+                            </p>
+                            <p className="truncate text-xs text-[var(--ui-muted)]">
+                              {employee.position || "Team Member"} · Joined {formatDate(employee.createdAt || employee.joiningDate)}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outlined"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/employees/${empId}`);
+                          }}
+                          className="!rounded-full w-full sm:w-auto"
+                          aria-label={`View ${employee.name || "employee"}`}
+                        >
+                          <FiEye className="h-3 w-3" aria-hidden />
+                          View
+                        </Button>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => navigate(`/employees/${employee._id || employee.id}`)}
-                      className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-                    >
-                      <FiEye className="h-3 w-3" />
-                      View
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
           </div>
         </div>
       </div>
