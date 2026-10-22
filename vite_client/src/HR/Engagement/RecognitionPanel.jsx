@@ -9,9 +9,9 @@ import {
     formatRecognitionRecipientLabel,
 } from './engagementUtils';
 
-const MINT = '#20C997';
+const MINT = '#0E9370';
 const inputClass =
-    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20';
+    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E9370] focus:ring-2 focus:ring-[#0E9370]/20';
 
 const personName = (p) => `${p?.name || ''} ${p?.lastName || ''}`.trim() || 'Someone';
 
@@ -297,7 +297,7 @@ const RecognitionPanel = ({ isManagerUser, onRefresh }) => {
                     <p className="mt-1 text-sm text-slate-600">&ldquo;{r.description}&rdquo;</p>
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-[#0d9488] ring-1 ring-[#20C997]/20">
+                    <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-[#0d9488] ring-1 ring-[#0E9370]/20">
                         {r.type}
                     </span>
                     {r.badge && (
@@ -384,7 +384,7 @@ const RecognitionPanel = ({ isManagerUser, onRefresh }) => {
                             onClick={() => setSection(tab.id)}
                             className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
                                 section === tab.id
-                                    ? 'bg-[#20C997]/10 text-[#0d9488] ring-1 ring-[#20C997]/30'
+                                    ? 'bg-[#0E9370]/10 text-[#0d9488] ring-1 ring-[#0E9370]/30'
                                     : 'text-slate-600 hover:bg-slate-50'
                             }`}
                         >
@@ -576,7 +576,7 @@ const RecognitionPanel = ({ isManagerUser, onRefresh }) => {
                                         }
                                         className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
                                             form.recipientType === rt
-                                                ? 'bg-[#20C997]/10 text-[#0d9488] ring-1 ring-[#20C997]/30'
+                                                ? 'bg-[#0E9370]/10 text-[#0d9488] ring-1 ring-[#0E9370]/30'
                                                 : 'bg-slate-100 text-slate-600'
                                         }`}
                                     >

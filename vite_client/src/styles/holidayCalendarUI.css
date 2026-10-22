@@ -1,0 +1,638 @@
+/* Holiday Calendar — Stitch Kinetic month-card grid */
+.hol-cal {
+  --hol-ink: #111c2d;
+  --hol-muted: #666666;
+  --hol-navy: #0e2b3d;
+  --hol-primary: #0e9370;
+  --hol-primary-deep: #00694f;
+  --hol-primary-soft: #d1f5ea;
+  --hol-mint: #e8faf4;
+  --hol-lavender: #eef1ff;
+  --hol-row: #f0f3ff;
+  --hol-line: rgba(14, 43, 61, 0.08);
+  --hol-surface: #ffffff;
+  --hol-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+  --hol-radius: 1rem;
+  min-height: 100%;
+  width: 100%;
+  background: var(--hol-mint);
+  color: var(--hol-ink);
+  box-sizing: border-box;
+  padding: 1.25rem 0 2.5rem;
+}
+
+.hol-cal *,
+.hol-cal *::before,
+.hol-cal *::after {
+  box-sizing: border-box;
+}
+
+.hol-cal__inner {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .hol-cal__inner {
+    padding: 0 1rem;
+  }
+}
+
+.hol-cal__header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.35rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: var(--hol-radius);
+  background: var(--hol-surface);
+  border: 1px solid var(--hol-line);
+  box-shadow: var(--hol-shadow);
+}
+
+@media (min-width: 900px) {
+  .hol-cal__header {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+.hol-cal__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hol-muted);
+}
+
+.hol-cal__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--hol-navy);
+  line-height: 1.2;
+}
+
+.hol-cal__sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  color: var(--hol-muted);
+  line-height: 1.45;
+}
+
+.hol-cal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+@media (max-width: 640px) {
+  .hol-cal__actions {
+    width: 100%;
+  }
+
+  .hol-cal__actions .hol-cal__select,
+  .hol-cal__actions .hol-cal__btn {
+    flex: 1 1 calc(50% - 0.3rem);
+    min-width: 0;
+  }
+}
+
+.hol-cal__select,
+.hol-cal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.55rem;
+  padding: 0.55rem 1rem;
+  border-radius: 0.65rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.hol-cal__select {
+  border: 1.5px solid #dbe3ee;
+  background: #fff;
+  color: var(--hol-ink);
+  min-width: 6.5rem;
+}
+
+.hol-cal__select:focus {
+  outline: none;
+  border-color: var(--hol-primary);
+  box-shadow: 0 0 0 3px rgba(14, 147, 112, 0.15);
+}
+
+.hol-cal__btn--primary {
+  border: none;
+  background: var(--hol-primary);
+  color: #fff;
+}
+
+.hol-cal__btn--primary:hover {
+  background: #0b7458;
+}
+
+.hol-cal__btn--ghost {
+  border: 1.5px solid #dbe3ee;
+  background: #fff;
+  color: var(--hol-ink);
+}
+
+.hol-cal__btn--ghost:hover {
+  background: #f0faf6;
+}
+
+.hol-cal__btn--navy {
+  border: none;
+  background: var(--hol-navy);
+  color: #fff;
+}
+
+.hol-cal__btn--navy:hover {
+  background: #16384c;
+}
+
+.hol-cal__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 720px) {
+  .hol-cal__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .hol-cal__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.hol-cal__month {
+  display: flex;
+  flex-direction: column;
+  min-height: 16.5rem;
+  padding: 1.1rem 1.15rem 1.15rem;
+  border-radius: var(--hol-radius);
+  background: var(--hol-surface);
+  border: 1px solid var(--hol-line);
+  box-shadow: var(--hol-shadow);
+}
+
+.hol-cal__month-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+}
+
+.hol-cal__month-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--hol-ink);
+  letter-spacing: -0.015em;
+}
+
+.hol-cal__count {
+  flex-shrink: 0;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #e8f0fe;
+  color: #1e40af;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hol-cal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex: 1 1 auto;
+}
+
+.hol-cal__item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 0.75rem;
+  background: var(--hol-row);
+  overflow: hidden;
+  border: 1px solid rgba(99, 102, 241, 0.06);
+}
+
+.hol-cal__accent {
+  width: 4px;
+  flex-shrink: 0;
+  background: var(--hol-primary-deep);
+}
+
+.hol-cal__item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.7rem 0.75rem 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.hol-cal__item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hol-cal__item-name {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--hol-ink);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.hol-cal__type {
+  flex-shrink: 0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+}
+
+.hol-cal__type--national {
+  background: #d1f5ea;
+  color: #00694f;
+}
+
+.hol-cal__type--regional {
+  background: #e8efe6;
+  color: #3d4944;
+}
+
+.hol-cal__type--optional,
+.hol-cal__type--company {
+  background: #e0edff;
+  color: #1d4ed8;
+}
+
+.hol-cal__type--religious {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.hol-cal__item-date {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--hol-muted);
+  line-height: 1.35;
+}
+
+.hol-cal__item-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.1rem 0 0;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.hol-cal__item-loc svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.hol-cal__item-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.45rem 0.4rem 0 0;
+  flex-shrink: 0;
+}
+
+.hol-cal__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.hol-cal__icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--hol-primary);
+}
+
+.hol-cal__icon-btn--danger:hover:not(:disabled) {
+  color: #e11d48;
+  background: #fff1f2;
+}
+
+.hol-cal__icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hol-cal__empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 9.5rem;
+  padding: 1rem 0.75rem;
+  text-align: center;
+}
+
+.hol-cal__empty-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: 0.15rem;
+  color: #94a3b8;
+  font-size: 1.65rem;
+}
+
+.hol-cal__empty-icon::after {
+  content: '';
+  position: absolute;
+  width: 1.15rem;
+  height: 2px;
+  background: #94a3b8;
+  transform: rotate(-45deg);
+  border-radius: 2px;
+}
+
+.hol-cal__empty-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--hol-muted);
+  line-height: 1.4;
+}
+
+.hol-cal__empty-add {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--hol-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hol-cal__empty-add:hover {
+  color: var(--hol-primary-deep);
+  text-decoration: underline;
+}
+
+.hol-cal__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 0.75rem;
+  background: var(--hol-mint);
+  color: var(--hol-ink);
+}
+
+.hol-cal__spinner {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 3px solid #d1f5ea;
+  border-top-color: var(--hol-primary);
+  animation: hol-spin 0.7s linear infinite;
+}
+
+@keyframes hol-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Month calendar grid (restored) */
+.hol-cal__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: var(--hol-radius);
+  background: var(--hol-surface);
+  border: 1px solid var(--hol-line);
+  box-shadow: var(--hol-shadow);
+}
+
+.hol-cal__toolbar-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--hol-ink);
+}
+
+.hol-cal__toolbar-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--hol-muted);
+}
+
+.hol-cal__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.hol-cal__month-panel {
+  margin-bottom: 1rem;
+  padding: 1.15rem 1.2rem 1.25rem;
+  border-radius: var(--hol-radius);
+  background: var(--hol-surface);
+  border: 1px solid var(--hol-line);
+  box-shadow: var(--hol-shadow);
+}
+
+.hol-cal__month-panel-title {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--hol-ink);
+}
+
+.hol-cal__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.hol-cal__weekday {
+  padding: 0.45rem 0.25rem;
+  border-radius: 0.5rem;
+  background: var(--hol-navy);
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.hol-cal__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.hol-cal__day {
+  min-height: 5.25rem;
+  padding: 0.45rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--hol-line);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: box-shadow 0.15s ease;
+}
+
+.hol-cal__day:hover:not(.hol-cal__day--empty) {
+  box-shadow: var(--hol-shadow);
+}
+
+.hol-cal__day--empty {
+  background: #f8fafc;
+  border-color: transparent;
+  min-height: 5.25rem;
+}
+
+.hol-cal__day--today {
+  outline: 2px solid var(--hol-primary);
+  outline-offset: 1px;
+}
+
+.hol-cal__day--off {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.hol-cal__day--national {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.hol-cal__day--regional {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.hol-cal__day--company {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.hol-cal__day--religious {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.hol-cal__day-num {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--hol-ink);
+}
+
+.hol-cal__day--today .hol-cal__day-num {
+  color: var(--hol-primary-deep);
+}
+
+.hol-cal__day-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hol-cal__day-tag--off {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.hol-cal__day-tag.hol-cal__type--national {
+  background: #d1f5ea;
+  color: #00694f;
+}
+
+.hol-cal__day-tag.hol-cal__type--regional {
+  background: #e8efe6;
+  color: #3d4944;
+}
+
+.hol-cal__day-tag.hol-cal__type--optional,
+.hol-cal__day-tag.hol-cal__type--company {
+  background: #e0edff;
+  color: #1d4ed8;
+}
+
+.hol-cal__day-tag.hol-cal__type--religious {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+@media (max-width: 640px) {
+  .hol-cal__day {
+    min-height: 3.35rem;
+    padding: 0.25rem;
+  }
+
+  .hol-cal__weekday {
+    font-size: 0.55rem;
+    padding: 0.35rem 0.1rem;
+  }
+
+  .hol-cal__day-tag {
+    font-size: 0.5rem;
+    padding: 0.1rem 0.2rem;
+  }
+}

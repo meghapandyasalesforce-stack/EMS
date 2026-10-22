@@ -14,7 +14,7 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
-const MINT = '#20C997';
+const MINT = '#0E9370';
 
 const statusStyle = (status) => {
     if (status === 'Active') return 'bg-emerald-100 text-emerald-700';

@@ -5,7 +5,7 @@ import { MINT_GRADIENT } from '../Reports/constants';
 
 const statusStyle = (s) => {
     if (s === 'Completed') return 'bg-emerald-100 text-emerald-700';
-    if (s === 'In Progress') return 'bg-[#20C997]/10 text-[#0d9488]';
+    if (s === 'In Progress') return 'bg-[#0E9370]/10 text-[#0d9488]';
     if (s === 'Cancelled') return 'bg-slate-100 text-slate-500';
     return 'bg-amber-100 text-amber-700';
 };

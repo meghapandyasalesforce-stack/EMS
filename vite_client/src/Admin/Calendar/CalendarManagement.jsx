@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FiCalendar, FiPlus, FiEdit, FiTrash2, FiClock, FiMapPin, FiUpload } from 'react-icons/fi';
+import { FiCalendar, FiPlus, FiEdit, FiTrash2, FiClock, FiMapPin, FiUpload, FiArrowLeft, FiList } from 'react-icons/fi';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import axios from '../../utils/axios';
 import { isNonWorkingDay } from '../../utils/calendarUtils';
+import '../../styles/holidayCalendarUI.css';
 
 // ======================== Axios Configuration ========================
 const API_BASE_URL = '/api/v1';
@@ -30,6 +31,7 @@ const CalendarManagement = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedHoliday, setSelectedHoliday] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'holidays'
   const [uploading, setUploading] = useState(false);
   const todayDateString = new Date().toISOString().split('T')[0];
 
@@ -267,14 +269,73 @@ const CalendarManagement = () => {
         return (
           holidayDate.getMonth() === month - 1 &&
           holidayDate.getFullYear() === currentYear &&
-          holiday.isActive
+          holiday.isActive !== false
         );
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date));
   };
 
+  const formatHolidayDate = (dateValue) => {
+    const d = new Date(dateValue);
+    const day = d.getDate();
+    const mon = d.toLocaleDateString('en-GB', { month: 'short' });
+    const year = d.getFullYear();
+    const weekday = d.toLocaleDateString('en-GB', { weekday: 'short' });
+    return `${day} ${mon} ${year} • ${weekday}`;
+  };
+
+  const getTypeLabel = (type) => {
+    if (type === 'company') return 'Optional';
+    if (!type) return 'National';
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
+  const getTypeClass = (type) => {
+    if (type === 'company') return 'hol-cal__type--optional';
+    if (type === 'national') return 'hol-cal__type--national';
+    if (type === 'regional') return 'hol-cal__type--regional';
+    if (type === 'religious') return 'hol-cal__type--religious';
+    return 'hol-cal__type--national';
+  };
+
+  const getHolidayLocation = (holiday) => {
+    if (holiday?.location) return holiday.location;
+    const desc = String(holiday?.description || '').trim();
+    if (desc && !isUploadedHoliday(holiday) && desc.length <= 48) return desc;
+    return 'All locations';
+  };
+
+  const openAddForMonth = (month) => {
+    setSelectedHoliday(null);
+    setSelectedMonth(month);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const firstOfMonth = new Date(currentYear, month - 1, 1);
+    let dateStr;
+    if (firstOfMonth >= today) {
+      dateStr = `${currentYear}-${String(month).padStart(2, '0')}-01`;
+    } else if (
+      currentYear === today.getFullYear() &&
+      month === today.getMonth() + 1
+    ) {
+      dateStr = todayDateString;
+    } else {
+      dateStr = todayDateString;
+    }
+    setHolidayForm({
+      name: '',
+      date: dateStr,
+      type: 'national',
+      description: '',
+      isRecurring: false,
+      recurringPattern: 'yearly',
+    });
+    setShowHolidayModal(true);
+  };
+
   const getHolidaysForDay = (day) => {
-    return getHolidaysForMonth(selectedMonth).filter(h => {
+    if (!day) return [];
+    return getHolidaysForMonth(selectedMonth).filter((h) => {
       const d = new Date(h.date);
       return d.getDate() === day;
     });
@@ -282,12 +343,12 @@ const CalendarManagement = () => {
 
   const getHolidayBgColor = (type) => {
     const bgColors = {
-      national: 'bg-red-50',
-      religious: 'bg-purple-50',
-      company: 'bg-blue-50',
-      regional: 'bg-emerald-50'
+      national: 'hol-cal__day--national',
+      religious: 'hol-cal__day--religious',
+      company: 'hol-cal__day--company',
+      regional: 'hol-cal__day--regional',
     };
-    return bgColors[type] || 'bg-red-50';
+    return bgColors[type] || 'hol-cal__day--national';
   };
 
   const generateCalendarDays = () => {
@@ -309,287 +370,231 @@ const CalendarManagement = () => {
     );
   };
 
-  const getHolidayTypeColor = (type) => {
-    const colors = {
-      national: 'bg-red-100 text-red-800 ',
-      religious: 'bg-purple-100 text-purple-800',
-      company: 'bg-blue-100 text-blue-800',
-      regional: 'bg-green-100 text-green-800'
-    };
-    return colors[type] || 'bg-gray-100 text-gray-800';
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-6"></div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Calendar</h3>
-          <p className="text-gray-600">Please wait...</p>
-        </div>
+      <div className="hol-cal__loading">
+        <div className="hol-cal__spinner" aria-hidden />
+        <h3 className="text-lg font-semibold">Loading calendar</h3>
+        <p className="text-sm text-slate-500">Please wait…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+    <div className="hol-cal">
       <ToastContainer position="top-right" autoClose={3000} />
-      <div className="page-shell">
-      <div className="page-shell-inner">
-      <div className="hrms-stack">
-        {/* Header */}
-        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 lg:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">Calendar Management</h1>
-              <p className="text-lg text-slate-600">Manage holidays and working days for {currentYear}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-4 flex-shrink-0">
-              <select
-                value={currentYear}
-                onChange={(e) => setCurrentYear(parseInt(e.target.value))}
-                className="px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-[120px] shadow-sm transition-all duration-200 hover:shadow-md font-medium"
-              >
-                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i - 5).map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center space-x-2 whitespace-nowrap transition-all duration-200 shadow-sm hover:shadow-md font-medium"
-              >
-                <FiUpload className="w-4 h-4" />
-                <span>Upload Calendar</span>
-              </button>
-              <button
-                onClick={() => setShowHolidayModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center space-x-2 whitespace-nowrap transition-all duration-200 shadow-sm hover:shadow-md font-medium"
-              >
-                <FiPlus className="w-4 h-4" />
-                <span>Add Holiday</span>
-              </button>
-              <button
-                onClick={() => setShowSettingsModal(true)}
-                className="bg-slate-600 hover:bg-slate-700 text-white px-6 py-3 rounded-xl flex items-center space-x-2 whitespace-nowrap transition-all duration-200 shadow-sm hover:shadow-md font-medium"
-              >
-                <FiClock className="w-4 h-4" />
-                <span>Settings</span>
-              </button>
-            </div>
+      <div className="hol-cal__inner">
+        <header className="hol-cal__header">
+          <div>
+            <p className="hol-cal__eyebrow">Time &amp; attendance</p>
+            <h1 className="hol-cal__title">
+              {viewMode === 'holidays' ? 'Holiday Calendar' : 'Calendar Management'}
+            </h1>
+            <p className="hol-cal__sub">
+              {viewMode === 'holidays'
+                ? `National, regional, and optional holidays for ${currentYear}`
+                : `Manage holidays and working days for ${currentYear}`}
+            </p>
           </div>
-        </div>
-
-        {/* Month Selector */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <h3 className="text-xl font-semibold text-slate-900 mb-1">View Month</h3>
-              <p className="text-slate-600">Select a month to view calendar</p>
-            </div>
+          <div className="hol-cal__actions">
             <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              className="px-6 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-[180px] shadow-sm transition-all duration-200 hover:shadow-md font-medium"
+              value={currentYear}
+              onChange={(e) => setCurrentYear(parseInt(e.target.value, 10))}
+              className="hol-cal__select"
+              aria-label="Select year"
             >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                <option key={month} value={month}>{getMonthName(month)}</option>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i - 5).map((year) => (
+                <option key={year} value={year}>{year}</option>
               ))}
             </select>
+            {viewMode === 'holidays' ? (
+              <button
+                type="button"
+                className="hol-cal__btn hol-cal__btn--ghost"
+                onClick={() => setViewMode('calendar')}
+              >
+                <FiArrowLeft /> Back to Calendar
+              </button>
+            ) : null}
+            <button type="button" className="hol-cal__btn hol-cal__btn--ghost" onClick={() => setShowUploadModal(true)}>
+              <FiUpload /> Upload
+            </button>
+            <button type="button" className="hol-cal__btn hol-cal__btn--navy" onClick={() => setShowSettingsModal(true)}>
+              <FiClock /> Settings
+            </button>
+            <button type="button" className="hol-cal__btn hol-cal__btn--primary" onClick={() => openAddForMonth(selectedMonth)}>
+              <FiPlus /> Add Holiday
+            </button>
           </div>
-        </div>
+        </header>
 
-        {/* Calendar Grid */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">
-            {getMonthName(selectedMonth)} {currentYear}
-          </h3>
-
-          {/* Weekdays */}
-          <div className="grid grid-cols-7 gap-2 mb-2 text-[11px] text-center text-white font-semibold tracking-wide">
-            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
-              <div key={d} className="py-2 bg-slate-700 rounded-lg">{d}</div>
-            ))}
-          </div>
-
-          {/* Days */}
-          <div className="grid grid-cols-7 gap-2">
-            {generateCalendarDays().map((day, idx) => {
-              const holidays = day ? getHolidaysForDay(day) : [];
-              const hasHoliday = holidays.length > 0;
-              const firstHoliday = hasHoliday ? holidays[0] : null;
-              const isNonWorking = day
-                ? isNonWorkingDay(calendar?.workingDays, currentYear, selectedMonth, day)
-                : false;
-              let bgClass = 'bg-white';
-              
-              if (hasHoliday) {
-                bgClass = getHolidayBgColor(firstHoliday.type);
-              } else if (isNonWorking && day) {
-                bgClass = 'bg-yellow-50';
-              } else if (!day) {
-                bgClass = 'bg-gray-50';
-              }
-              
-              const holidayNames = holidays.map(h => h.name).join(', ');
-
-              return (
-                <div
-                  key={idx}
-                  className={`h-24 p-2 rounded-xl border flex flex-col justify-between transition-all hover:shadow-md
-                    ${bgClass}
-                    ${isNonWorking && day ? 'border-amber-300' : hasHoliday ? 'border-red-300' : 'border-slate-200'}
-                    ${isToday(day) ? 'ring-2 ring-blue-300' : ''}
-                    relative group
-                  `}
-                  title={hasHoliday ? holidayNames : isNonWorking && day ? 'Non-working day' : ''}
+        {viewMode === 'calendar' ? (
+          <>
+            <div className="hol-cal__toolbar">
+              <div>
+                <h3 className="hol-cal__toolbar-title">View Month</h3>
+                <p className="hol-cal__toolbar-sub">Select a month to view the calendar</p>
+              </div>
+              <div className="hol-cal__toolbar-actions">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
+                  className="hol-cal__select"
+                  aria-label="Select month"
                 >
-                  <span className={`font-semibold text-sm ${isToday(day) ? 'text-blue-700' : isNonWorking && day ? 'text-amber-700' : 'text-slate-700'}`}>
-                    {day || ''}
-                  </span>
-                  {isNonWorking && day && !hasHoliday && (
-                    <span className="text-xs font-medium text-amber-600">Non-working day</span>
-                  )}
-                  {hasHoliday && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getHolidayTypeColor(firstHoliday.type)} truncate font-medium w-fit`}>
-                      {firstHoliday.name}
-                      {holidays.length > 1 && ` +${holidays.length - 1}`}
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                    <option key={month} value={month}>{getMonthName(month)}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="hol-cal__btn hol-cal__btn--primary"
+                  onClick={() => setViewMode('holidays')}
+                >
+                  <FiList /> Holiday Calendar
+                </button>
+              </div>
+            </div>
+
+            <section className="hol-cal__month-panel">
+              <h3 className="hol-cal__month-panel-title">
+                {getMonthName(selectedMonth)} {currentYear}
+              </h3>
+
+              <div className="hol-cal__weekdays">
+                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => (
+                  <div key={d} className="hol-cal__weekday">{d}</div>
+                ))}
+              </div>
+
+              <div className="hol-cal__days">
+                {generateCalendarDays().map((day, idx) => {
+                  const holidays = day ? getHolidaysForDay(day) : [];
+                  const hasHoliday = holidays.length > 0;
+                  const firstHoliday = hasHoliday ? holidays[0] : null;
+                  const isNonWorking = day
+                    ? isNonWorkingDay(calendar?.workingDays, currentYear, selectedMonth, day)
+                    : false;
+                  const holidayNames = holidays.map((h) => h.name).join(', ');
+
+                  return (
+                    <div
+                      key={idx}
+                      className={[
+                        'hol-cal__day',
+                        !day && 'hol-cal__day--empty',
+                        hasHoliday && getHolidayBgColor(firstHoliday.type),
+                        isNonWorking && day && !hasHoliday && 'hol-cal__day--off',
+                        isToday(day) && 'hol-cal__day--today',
+                      ].filter(Boolean).join(' ')}
+                      title={
+                        hasHoliday
+                          ? holidayNames
+                          : isNonWorking && day
+                            ? 'Non-working day'
+                            : undefined
+                      }
+                    >
+                      {day ? (
+                        <>
+                          <span className="hol-cal__day-num">{day}</span>
+                          {isNonWorking && !hasHoliday ? (
+                            <span className="hol-cal__day-tag hol-cal__day-tag--off">Non-working</span>
+                          ) : null}
+                          {hasHoliday ? (
+                            <span className={`hol-cal__day-tag ${getTypeClass(firstHoliday.type)}`}>
+                              {firstHoliday.name}
+                              {holidays.length > 1 ? ` +${holidays.length - 1}` : ''}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </>
+        ) : (
+          <div className="hol-cal__grid">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
+              const holidays = getHolidaysForMonth(month);
+              const count = holidays.length;
+              const monthLabel = getMonthName(month);
+              return (
+                <article key={month} className="hol-cal__month">
+                  <div className="hol-cal__month-head">
+                    <h2 className="hol-cal__month-title">
+                      {monthLabel} {currentYear}
+                    </h2>
+                    <span className="hol-cal__count">
+                      {count} Holiday{count === 1 ? '' : 's'}
                     </span>
+                  </div>
+
+                  {count === 0 ? (
+                    <div className="hol-cal__empty">
+                      <span className="hol-cal__empty-icon" aria-hidden>
+                        <FiCalendar />
+                      </span>
+                      <p className="hol-cal__empty-text">
+                        No holidays scheduled in {monthLabel}
+                      </p>
+                      <button
+                        type="button"
+                        className="hol-cal__empty-add"
+                        onClick={() => openAddForMonth(month)}
+                      >
+                        + Add holiday to {monthLabel}
+                      </button>
+                    </div>
+                  ) : (
+                    <ul className="hol-cal__list">
+                      {holidays.map((holiday) => (
+                        <li key={holiday._id} className="hol-cal__item">
+                          <span className="hol-cal__accent" aria-hidden />
+                          <div className="hol-cal__item-body">
+                            <div className="hol-cal__item-top">
+                              <h3 className="hol-cal__item-name">{holiday.name}</h3>
+                              <span className={`hol-cal__type ${getTypeClass(holiday.type)}`}>
+                                {getTypeLabel(holiday.type)}
+                              </span>
+                            </div>
+                            <p className="hol-cal__item-date">{formatHolidayDate(holiday.date)}</p>
+                            <p className="hol-cal__item-loc">
+                              <FiMapPin size={12} />
+                              {getHolidayLocation(holiday)}
+                            </p>
+                          </div>
+                          <div className="hol-cal__item-actions">
+                            <button
+                              type="button"
+                              className="hol-cal__icon-btn"
+                              onClick={() => openEditHoliday(holiday)}
+                              title={isPastHoliday(holiday.date) ? 'Past holidays cannot be edited' : 'Edit'}
+                              disabled={isPastHoliday(holiday.date)}
+                            >
+                              <FiEdit size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="hol-cal__icon-btn hol-cal__icon-btn--danger"
+                              onClick={() => handleDeleteHoliday(holiday._id)}
+                              title={isPastHoliday(holiday.date) ? 'Past holidays cannot be deleted' : 'Delete'}
+                              disabled={isPastHoliday(holiday.date)}
+                            >
+                              <FiTrash2 size={14} />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </div>
+                </article>
               );
             })}
           </div>
-
-          {/* Add Holiday Button below calendar */}
-          {/* <div className="mt-6 flex justify-center">
-            <button
-              onClick={() => setShowHolidayModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center space-x-2 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
-            >
-              <FiPlus className="w-5 h-5" />
-              <span>Add Holiday for this Month</span>
-            </button>
-          </div> */}
-        </div>
-
-        {/* Holiday List */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-100">
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">
-              Holidays in {getMonthName(selectedMonth)} {currentYear}
-            </h2>
-            <p className="text-slate-600">
-              {getHolidaysForMonth(selectedMonth).length} holiday{getHolidaysForMonth(selectedMonth).length !== 1 ? 's' : ''} found this month
-            </p>
-          </div>
-          <div className="p-6">
-            {getHolidaysForMonth(selectedMonth).length === 0 ? (
-              <div className="text-center py-16">
-                <div className="relative">
-                  <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full mx-auto mb-6 flex items-center justify-center">
-                    <FiCalendar className="w-12 h-12 text-gray-400" />
-                  </div>
-                   <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <span className="text-yellow-600 text-lg">📅</span>
-                  </div> 
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">No holidays in this month</h3>
-                <p className="text-gray-500 mb-8 max-w-md mx-auto">This month doesn't have any holidays scheduled. Add some holidays to make it more exciting!</p>
-                 <button
-                  onClick={() => setShowHolidayModal(true)}
-                  className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-3 rounded-xl flex items-center space-x-2 mx-auto transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                >
-                  <FiPlus className="w-5 h-5" />
-                  <span>Add Holiday</span>
-                </button> 
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {getHolidaysForMonth(selectedMonth).map(holiday => (
-                  <div key={holiday._id} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-all duration-200">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getHolidayTypeColor(holiday.type)}`}>
-                            {holiday.type.charAt(0).toUpperCase() + holiday.type.slice(1)}
-                          </span>
-                          {isUploadedHoliday(holiday) ? (
-                            <span
-                              className="px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-900"
-                              title={holiday.sourceFileName ? `From file: ${holiday.sourceFileName}` : 'Imported from uploaded calendar file'}
-                            >
-                              Uploaded
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-700">
-                              Manual
-                            </span>
-                          )}
-                          {holiday.isRecurring && (
-                            <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600">
-                              Recurring ({holiday.recurringPattern})
-                            </span>
-                          )}
-                        </div>
-                        <h4 className="font-bold text-gray-800 text-xl mb-2 break-words">
-                          {holiday.name}
-                        </h4>
-                        <div className="flex items-center text-gray-600 mb-2">
-                          <FiMapPin className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
-                          <span className="font-medium text-sm sm:text-base">
-                            {new Date(holiday.date).toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })}
-                          </span>
-                        </div>
-                        {holiday.sourceFileName && isUploadedHoliday(holiday) && (
-                          <p className="text-gray-500 text-xs break-words mb-1">
-                            Source file: <span className="font-medium text-gray-600">{holiday.sourceFileName}</span>
-                          </p>
-                        )}
-                        {holiday.description && (
-                          <p className="text-gray-500 text-sm break-words leading-relaxed">{holiday.description}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2 sm:ml-6 flex-shrink-0">
-                        <button
-                          onClick={() => openEditHoliday(holiday)}
-                          className={`p-2 rounded-lg transition-all duration-200 ${
-                            isPastHoliday(holiday.date)
-                              ? 'text-gray-300 cursor-not-allowed'
-                              : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
-                          }`}
-                          title={isPastHoliday(holiday.date) ? 'Past holidays cannot be edited' : 'Edit holiday'}
-                          disabled={isPastHoliday(holiday.date)}
-                        >
-                          <FiEdit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteHoliday(holiday._id)}
-                          className={`p-2 rounded-lg transition-all duration-200 ${
-                            isPastHoliday(holiday.date)
-                              ? 'text-gray-300 cursor-not-allowed'
-                              : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
-                          }`}
-                          title={isPastHoliday(holiday.date) ? 'Past holidays cannot be deleted' : 'Delete holiday'}
-                          disabled={isPastHoliday(holiday.date)}
-                        >
-                          <FiTrash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-      </div>
+        )}
       </div>
 
       {/* Modals */}
@@ -632,7 +637,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform animate-slideUp">
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 rounded-t-2xl">
+        <div className="p-6 rounded-t-2xl" style={{ background: 'linear-gradient(165deg, #0e2b3d 0%, #134056 100%)' }}>
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-white bg-opacity-20 rounded-lg">
               <FiCalendar className="w-6 h-6 text-white" />
@@ -722,7 +727,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
             <button type="button" onClick={onClose} className="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium transition-colors duration-200">
               Cancel
             </button>
-            <button type="submit" className="px-8 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+            <button type="submit" className="px-8 py-3 bg-[#0e9370] hover:bg-[#0b7458] text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
               {title.includes('Add') ? 'Add Holiday' : 'Update Holiday'}
             </button>
           </div>
@@ -750,10 +755,10 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
         <form onSubmit={onSubmit} className="p-6 space-y-8">
           <div>
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <div className="w-2 h-2 bg-blue-600 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-[#0e9370] rounded-full mr-3"></div>
               Working Days
             </h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 sm:gap-4">
               {days.map(day => (
                 <label key={day} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
                   <input
@@ -773,7 +778,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
 
           <div>
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <div className="w-2 h-2 bg-blue-600 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-[#0e9370] rounded-full mr-3"></div>
               Working Hours
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -883,14 +888,14 @@ const UploadModal = ({ onSubmit, onClose, uploading }) => {
 
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4">
             <h4 className="text-sm font-semibold text-blue-800 mb-3 flex items-center">
-              <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+              <div className="w-2 h-2 bg-[#0e9370] rounded-full mr-2"></div>
               Supported Features
             </h4>
             <ul className="text-sm text-blue-700 space-y-2">
-              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-3"></span>Automatic holiday detection from PDF text</li>
-              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-3"></span>Common holidays (New Year, Christmas, etc.)</li>
-              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-3"></span>Date pattern recognition</li>
-              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-3"></span>Duplicate prevention</li>
+              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-[#0e9370] rounded-full mr-3"></span>Automatic holiday detection from PDF text</li>
+              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-[#0e9370] rounded-full mr-3"></span>Common holidays (New Year, Christmas, etc.)</li>
+              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-[#0e9370] rounded-full mr-3"></span>Date pattern recognition</li>
+              <li className="flex items-center"><span className="w-1.5 h-1.5 bg-[#0e9370] rounded-full mr-3"></span>Duplicate prevention</li>
             </ul>
           </div>
 

@@ -1,19 +1,73 @@
-import React from 'react';
-import { FiActivity, FiClock, FiTrash2 } from 'react-icons/fi';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import {
+  FiActivity,
+  FiBriefcase,
+  FiCalendar,
+  FiCheckCircle,
+  FiClock,
+  FiMail,
+  FiMapPin,
+  FiMoreVertical,
+  FiPhone,
+  FiTrash2,
+  FiUserCheck,
+  FiDollarSign,
+} from 'react-icons/fi';
 import ProfilePicture from '../../../Shared/ProfilePicture';
-import { formatDate, getFullName, getStatusLabel } from './utils';
+import {
+  formatDate,
+  formatSalary,
+  getAttendanceRate,
+  getFullName,
+  getStatusLabel,
+} from './utils';
+
+const formatTenureShort = (joiningDate) => {
+  if (!joiningDate) return null;
+  const join = new Date(joiningDate);
+  if (Number.isNaN(join.getTime())) return null;
+  const now = new Date();
+  let months =
+    (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth());
+  if (now.getDate() < join.getDate()) months -= 1;
+  if (months < 0) months = 0;
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  if (years > 0 && rem > 0) return `${years}y ${rem}m`;
+  if (years > 0) return `${years}y`;
+  return `${rem}m`;
+};
 
 const EmployeeDetailsHeader = ({
   employee,
   canManageEmployeeActions = false,
+  hidePayrollFields = false,
   updatingStatus,
   terminatingEmployee,
   onStatusClick,
   onTerminateClick,
   onDeleteClick,
 }) => {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onDoc = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [moreOpen]);
+
   const status = getStatusLabel(employee);
   const isTerminated = employee.status === 'terminated';
+  const isActive = Boolean(employee.active) && !isTerminated;
+  const employmentType =
+    employee.employmentType || employee.employeeType || employee.workType || null;
+  const tenure = formatTenureShort(employee.joiningDate);
+  const tenureYears = tenure ? Number(String(tenure).split('y')[0]) || 0 : 0;
+
   const reportsToLabel = employee.managerId
     ? employee.manager
     : employee.isOrgOwnerRoot ||
@@ -22,132 +76,246 @@ const EmployeeDetailsHeader = ({
       ? 'Organization root'
       : employee.manager || '';
 
-  const statusChip = (
+  const phone = employee.phone1 || employee.phone || employee.mobile || null;
+  const location = employee.workLocation || employee.location || employee.city || null;
+  const attendance = getAttendanceRate(employee);
+  const leaveAvailable =
+    employee.leaveAvailable ??
+    employee.leaveBalance?.totalAvailable ??
+    employee.totalLeaveBalance ??
+    null;
+
+  const complianceLabel = useMemo(() => {
+    const docs = employee.documents || employee.employeeDocuments || [];
+    if (!Array.isArray(docs) || docs.length === 0) return null;
+    const verified = docs.filter(
+      (d) => d.verified === true || d.status === 'verified' || d.verificationStatus === 'verified'
+    ).length;
+    if (verified === docs.length) return '100% Verified';
+    return `${verified}/${docs.length} Verified`;
+  }, [employee]);
+
+  const statusDotClass = isTerminated
+    ? 'emp-dossier__status-dot emp-dossier__status-dot--term'
+    : isActive
+      ? 'emp-dossier__status-dot'
+      : 'emp-dossier__status-dot emp-dossier__status-dot--off';
+
+  const statusEmploymentChip = (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+      className={
         isTerminated
-          ? 'bg-red-50 text-red-700'
-          : employee.active
-            ? 'bg-[#20C997]/15 text-[#0d9488]'
-            : 'bg-slate-100 text-slate-600'
-      }`}
+          ? 'emp-dossier__chip emp-dossier__chip--term'
+          : isActive
+            ? 'emp-dossier__chip emp-dossier__chip--active'
+            : 'emp-dossier__chip emp-dossier__chip--inactive'
+      }
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${
-          isTerminated ? 'bg-red-500' : employee.active ? 'bg-[#20C997]' : 'bg-slate-400'
+          isTerminated ? 'bg-red-600' : isActive ? 'bg-[#0e9370]' : 'bg-slate-400'
         }`}
       />
       {status}
+      {employmentType ? ` · ${employmentType}` : ''}
     </span>
   );
 
   return (
-    <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-3">
-            <ProfilePicture user={employee} size="lg" className="shrink-0 sm:hidden" />
-            <ProfilePicture user={employee} size="2xl" className="hidden shrink-0 sm:block" />
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-bold text-slate-900 sm:text-2xl md:text-3xl">{getFullName(employee)}</h1>
-              <p className="mt-0.5 truncate text-sm text-slate-600">
-                {employee.jobTitle || '—'} · {employee.department || '—'}
-              </p>
-              <div className="mt-2 hidden flex-wrap gap-2 sm:flex">
-                {statusChip}
-                {employee.position ? (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    {employee.position}
-                  </span>
-                ) : null}
-                {employee.employeeId ? (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    ID: {employee.employeeId}
-                  </span>
-                ) : null}
-                {employee.joiningDate ? (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    Joined {formatDate(employee.joiningDate)}
-                  </span>
-                ) : null}
-              </div>
-              {reportsToLabel ? (
-                <p className="mt-2 hidden text-sm text-slate-500 sm:block">
-                  <span className="font-medium text-slate-700">Reports to:</span> {reportsToLabel}
-                </p>
-              ) : null}
-            </div>
+    <header className="emp-dossier__hero">
+      <div className="emp-dossier__hero-glow" aria-hidden="true" />
+
+      <div className="emp-dossier__hero-main">
+        <div className="emp-dossier__identity">
+          <div className="emp-dossier__avatar-wrap">
+            <ProfilePicture user={employee} size="xl" className="emp-dossier__avatar" />
+            <span className={statusDotClass} title={status} />
           </div>
 
-          <div className="mt-3 space-y-2.5 sm:hidden">
-            <div className="flex flex-wrap gap-1.5">
-              {statusChip}
-              {employee.position ? (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                  {employee.position}
+          <div className="emp-dossier__identity-text min-w-0 flex-1">
+            <div className="emp-dossier__name-row emp-dossier__name-row--top">
+              <h1 className="emp-dossier__name">{getFullName(employee)}</h1>
+              {employee.employeeId ? (
+                <span className="emp-dossier__chip emp-dossier__chip--id">{employee.employeeId}</span>
+              ) : null}
+              {statusEmploymentChip}
+              {tenureYears >= 1 ? (
+                <span className="emp-dossier__chip emp-dossier__chip--milestone">
+                  <FiCheckCircle className="h-3 w-3" />
+                  {tenureYears} Year{tenureYears === 1 ? '' : 's'} Milestone
                 </span>
               ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-2 text-left text-xs">
-              {employee.employeeId ? (
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Employee ID</p>
-                  <p className="mt-0.5 truncate font-medium text-slate-800">{employee.employeeId}</p>
-                </div>
+
+            <div className="emp-dossier__role-line">
+              {(employee.jobTitle || employee.position) && (
+                <span className="emp-dossier__role-item emp-dossier__role-item--strong">
+                  <FiBriefcase className="emp-dossier__role-icon" />
+                  {employee.jobTitle || employee.position}
+                </span>
+              )}
+              {employee.department ? (
+                <>
+                  <span className="emp-dossier__meta-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="emp-dossier__role-item">
+                    <FiUserCheck className="emp-dossier__role-icon emp-dossier__role-icon--muted" />
+                    {employee.department}
+                    {employee.position && employee.jobTitle ? ` (${employee.position})` : ''}
+                  </span>
+                </>
               ) : null}
-              {employee.joiningDate ? (
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Joined</p>
-                  <p className="mt-0.5 truncate font-medium text-slate-800">{formatDate(employee.joiningDate)}</p>
-                </div>
+              {location ? (
+                <>
+                  <span className="emp-dossier__meta-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="emp-dossier__role-item">
+                    <FiMapPin className="emp-dossier__role-icon emp-dossier__role-icon--muted" />
+                    {location}
+                  </span>
+                </>
               ) : null}
             </div>
-            {reportsToLabel ? (
-              <p className="text-left text-sm text-slate-500">
-                <span className="font-medium text-slate-700">Reports to</span> {reportsToLabel}
-              </p>
-            ) : null}
+
+            <div className="emp-dossier__contact-line">
+              {employee.email ? (
+                <span className="emp-dossier__contact-item">
+                  <FiMail className="h-3.5 w-3.5 shrink-0" />
+                  {employee.email}
+                </span>
+              ) : null}
+              {phone ? (
+                <span className="emp-dossier__contact-item">
+                  <FiPhone className="h-3.5 w-3.5 shrink-0" />
+                  {phone}
+                </span>
+              ) : null}
+              {employee.joiningDate ? (
+                <span className="emp-dossier__contact-item">
+                  <FiCalendar className="h-3.5 w-3.5 shrink-0" />
+                  Joined: {formatDate(employee.joiningDate)}
+                  {tenure ? ` (${tenure})` : ''}
+                </span>
+              ) : null}
+              {reportsToLabel ? (
+                <span className="emp-dossier__contact-item">
+                  <FiUserCheck className="h-3.5 w-3.5 shrink-0" />
+                  Reports to: <strong>{reportsToLabel}</strong>
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
         {canManageEmployeeActions ? (
-          <div className="flex flex-col gap-2 sm:max-w-md sm:flex-row sm:flex-wrap sm:justify-end">
+          <div className="emp-dossier__actions">
             <button
               type="button"
               onClick={onStatusClick}
               disabled={updatingStatus || isTerminated}
-              className={`inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 sm:h-auto sm:w-auto sm:py-2.5 ${
-                employee.active ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-600 hover:bg-slate-700'
-              }`}
+              className="emp-dossier__btn emp-dossier__btn--primary"
             >
               <FiActivity className="h-4 w-4 shrink-0" />
               {isTerminated ? 'Terminated' : employee.active ? 'Deactivate' : 'Activate'}
             </button>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              {!isTerminated && (
-                <button
-                  type="button"
-                  onClick={onTerminateClick}
-                  disabled={terminatingEmployee}
-                  className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50 sm:h-auto sm:px-4 sm:py-2.5"
-                >
-                  <FiClock className="h-4 w-4 shrink-0" />
-                  Terminate
-                </button>
-              )}
+            {!isTerminated && (
               <button
                 type="button"
-                onClick={onDeleteClick}
-                className={`inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 sm:h-auto sm:px-4 sm:py-2.5 ${
-                  isTerminated ? 'col-span-2' : ''
-                }`}
+                onClick={onTerminateClick}
+                disabled={terminatingEmployee}
+                className="emp-dossier__btn emp-dossier__btn--soft"
               >
-                <FiTrash2 className="h-4 w-4 shrink-0" />
-                Delete
+                <FiClock className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Terminate</span>
               </button>
+            )}
+            <div className="relative" ref={moreRef}>
+              <button
+                type="button"
+                className="emp-dossier__btn emp-dossier__btn--icon"
+                aria-label="More actions"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen((v) => !v)}
+              >
+                <FiMoreVertical className="h-5 w-5" />
+              </button>
+              {moreOpen ? (
+                <div className="emp-dossier__more-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="emp-dossier__more-item emp-dossier__more-item--danger"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      onDeleteClick?.();
+                    }}
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                    Delete Employee
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div className="emp-dossier__metrics" aria-label="Employee highlights">
+        {!hidePayrollFields ? (
+          <div className="emp-dossier__metric">
+            <div className="emp-dossier__metric-icon emp-dossier__metric-icon--pay">
+              <FiDollarSign className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="emp-dossier__metric-label">Annual CTC</p>
+              <p className="emp-dossier__metric-value">{formatSalary(employee.salary)}</p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="emp-dossier__metric">
+          <div className="emp-dossier__metric-icon emp-dossier__metric-icon--leave">
+            <FiClock className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="emp-dossier__metric-label">Leave Available</p>
+            <p className="emp-dossier__metric-value">
+              {leaveAvailable != null && leaveAvailable !== ''
+                ? `${leaveAvailable} Days`
+                : '—'}
+            </p>
+          </div>
+        </div>
+
+        <div className="emp-dossier__metric">
+          <div className="emp-dossier__metric-icon emp-dossier__metric-icon--att">
+            <FiCalendar className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="emp-dossier__metric-label">Avg Attendance</p>
+            <p className="emp-dossier__metric-value">
+              {typeof attendance === 'number' ? `${attendance}%` : attendance || '—'}
+            </p>
+          </div>
+        </div>
+
+        <div className="emp-dossier__metric">
+          <div className="emp-dossier__metric-icon emp-dossier__metric-icon--comp">
+            <FiCheckCircle className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="emp-dossier__metric-label">Compliance</p>
+            <p
+              className={`emp-dossier__metric-value ${
+                complianceLabel?.includes('100%') ? 'emp-dossier__metric-value--ok' : ''
+              }`}
+            >
+              {complianceLabel || '—'}
+            </p>
+          </div>
+        </div>
       </div>
     </header>
   );

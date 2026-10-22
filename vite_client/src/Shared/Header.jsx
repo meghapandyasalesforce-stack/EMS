@@ -16,6 +16,7 @@ import { getNavigationItems } from '../utils/navigationConfig';
 import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portalConfig';
 import PortalSwitcher from '../components/PortalSwitcher';
 import ProfileDropdown from '../components/ProfileDropdown';
+import SidebarNavList from '../components/SidebarNavList';
 import ProfilePicture from './ProfilePicture';
 import useDocumentModeSettings from '../Hooks/useDocumentModeSettings';
 import { mergeSessionProfile } from '../utils/profileUtils';
@@ -158,19 +159,15 @@ const Header = () => {
         });
     }, [user, employee, permissions, permissionFlags, effectivePortal, saasFeatures, documentModes]);
 
-    // Own-profile navigation is available to every HRMS role on desktop only.
+    // Own-profile nav on desktop only: omit on Admin portal; last item on HR / Me / other workspaces.
     const desktopNavItems = useMemo(() => {
         if (!user && !employee) return navItems;
+        const otherItems = navItems.filter((item) => item.path !== '/profile-details');
+        if (effectivePortal === 'admin') return otherItems;
         const existingProfile = navItems.find((item) => item.path === '/profile-details');
         const profileItem = existingProfile || { path: '/profile-details', name: 'Profile', icon: <FaUserCircle /> };
-        const otherItems = navItems.filter((item) => item.path !== '/profile-details');
-        const payrollIndex = otherItems.findIndex((item) => item.path === '/admin-payroll');
-        const ownPayrollIndex = otherItems.findIndex((item) => item.path === '/employee-payroll');
-        const homeIndex = otherItems.findIndex((item) => item.name === 'Dashboard');
-        const anchorIndex = payrollIndex >= 0 ? payrollIndex : ownPayrollIndex >= 0 ? ownPayrollIndex : homeIndex;
-        const insertAt = anchorIndex >= 0 ? anchorIndex + 1 : 0;
-        return [...otherItems.slice(0, insertAt), profileItem, ...otherItems.slice(insertAt)];
-    }, [navItems, user, employee]);
+        return [...otherItems, profileItem];
+    }, [navItems, user, employee, effectivePortal]);
 
     const handleLogout = async () => {
         try {
@@ -365,6 +362,7 @@ const Header = () => {
                     {/* Mobile Menu — full viewport drawer (mobile only) */}
                     {mobileMenuOpen && (
                         <div
+                            data-hrms-sidebar={useLightEmployeeNav ? undefined : true}
                             className={
                                 useLightEmployeeNav
                                     ? 'fixed inset-0 z-50 flex flex-col overflow-hidden bg-white text-gray-800 lg:hidden'
@@ -423,35 +421,16 @@ const Header = () => {
                             <div className="shrink-0">
                                 <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
                             </div>
-                            <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-2 pb-4" data-hrms-sidebar-nav>
-                                {navItems.map((item, index) => (
-                                    <button
-                                        key={item.path}
-                                        type="button"
-                                        onClick={() => goTo(item.path)}
-                                        className={`mx-2 flex w-[calc(100%-1rem)] items-center rounded-xl px-3 py-3 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
-                                            isActive(item.path)
-                                                ? 'text-white shadow-md'
-                                                : useLightEmployeeNav
-                                                    ? 'text-gray-600 hover:bg-gray-100'
-                                                    : 'text-gray-300 hover:bg-gray-700/50'
-                                        }`}
-                                        style={{
-                                            animationDelay: `${index * 50}ms`,
-                                            ...(isActive(item.path)
-                                                ? { backgroundColor: 'var(--color-primary)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12)' }
-                                                : {}),
-                                        }}
-                                    >
-                                        <span className="mr-3 text-lg">
-                                            {item.icon}
-                                        </span>
-                                        <span className="font-medium">{item.name}</span>
-                                        {isActive(item.path) && (
-                                            <div className="ml-auto h-1.5 w-1.5 rounded-full bg-white" />
-                                        )}
-                                    </button>
-                                ))}
+                            <nav
+                                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2 pb-4"
+                                data-hrms-sidebar-nav
+                            >
+                                <SidebarNavList
+                                    items={navItems}
+                                    isActive={isActive}
+                                    onNavigate={goTo}
+                                    lightTheme={useLightEmployeeNav}
+                                />
                             </nav>
                         </div>
                     )}
@@ -502,43 +481,21 @@ const Header = () => {
                     {useLightEmployeeNav && <PortalSwitcher lightTheme={true} />}
                     {!useLightEmployeeNav && <PortalSwitcher lightTheme={false} />}
 
-                    {/* Nav links */}
+                    {/* Nav links — compact VS Code–style tree */}
                     <nav
                         data-hrms-sidebar-nav
                         className={
                             useLightEmployeeNav
-                                ? 'scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-3 py-4'
-                                : 'scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-2 py-3'
+                                ? 'scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-2'
+                                : 'scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-2'
                         }
                     >
-                        {desktopNavItems.map((item, index) => (
-                            <button
-                                key={item.path}
-                                type="button"
-                                onClick={() => goTo(item.path)}
-                                className={`group mb-1 flex w-[calc(100%-1rem)] items-center rounded-xl p-3.5 mx-2 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-1 ${
-                                    isActive(item.path)
-                                        ? 'text-white shadow-md'
-                                        : useLightEmployeeNav
-                                            ? 'text-gray-600 hover:bg-gray-100/90 hover:text-gray-900'
-                                            : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                                }`}
-                                style={{
-                                    animationDelay: `${index * 50}ms`,
-                                    ...(isActive(item.path)
-                                        ? { backgroundColor: 'var(--color-primary)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12)' }
-                                        : {}),
-                                }}
-                            >
-                                <span className={`text-lg flex-shrink-0 transition-transform duration-200 ${isActive(item.path) ? '' : 'group-hover:scale-105'}`}>
-                                    {item.icon}
-                                </span>
-                                <span className="ml-3 truncate font-medium">{item.name}</span>
-                                {isActive(item.path) && (
-                                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-white"></div>
-                                )}
-                            </button>
-                        ))}
+                        <SidebarNavList
+                            items={desktopNavItems}
+                            isActive={isActive}
+                            onNavigate={goTo}
+                            lightTheme={useLightEmployeeNav}
+                        />
                     </nav>
 
                     {/* Notifications */}

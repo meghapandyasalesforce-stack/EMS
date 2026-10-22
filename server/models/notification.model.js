@@ -88,6 +88,19 @@ const notificationSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  /** draft / scheduled = not delivered yet; sent = live broadcast */
+  broadcastStatus: {
+    type: String,
+    enum: ['draft', 'scheduled', 'sent'],
+    default: 'sent',
+    index: true,
+  },
+  /** When broadcastStatus is scheduled, deliver at this time (UTC). */
+  scheduledFor: {
+    type: Date,
+    default: null,
+    index: true,
+  },
   isRead: {
     type: Boolean,
     default: false

@@ -664,12 +664,31 @@ function DashboardAdmin() {
                   No announcements yet.
                 </div>
               ) : (
-                announcements.map((item) => (
-                  <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs text-slate-500">{formatDate(item.createdAt)}</p>
-                    <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-800">{item.message}</p>
-                  </div>
-                ))
+                announcements.map((item) => {
+                  const important =
+                    item.priority === 'high' ||
+                    item.metadata?.important === true ||
+                    item.metadata?.priority === 'high';
+                  const title =
+                    String(item.metadata?.title || '').trim() ||
+                    String(item.message || '')
+                      .replace(/<[^>]+>/g, ' ')
+                      .replace(/\s+/g, ' ')
+                      .trim();
+                  return (
+                    <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-slate-500">{formatDate(item.createdAt)}</p>
+                        {important ? (
+                          <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 border border-red-200">
+                            Important
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-800">{title}</p>
+                    </div>
+                  );
+                })
               )}
             </div>
             <button

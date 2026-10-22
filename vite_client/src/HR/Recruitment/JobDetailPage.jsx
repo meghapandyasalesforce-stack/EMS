@@ -201,15 +201,23 @@ const JobDetailPage = () => {
     const careerUrl = orgId ? `${window.location.origin}/careers/${orgId}/jobs/${job._id}` : '';
 
     return (
-        <AtsPage>
+        <AtsPage className="rec-hub ats-job-detail-page">
+            <div className="rec-hub__crumb">
+                <span>Recruitment</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span>Jobs</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span className="rec-hub__crumb-current">{job.jobTitle}</span>
+            </div>
+
             <button type="button" onClick={() => navigate('/recruitment')} className="ats-back">
                 <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
             </button>
 
-            <div className="cm-card flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="ats-job-detail-hero flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">{job.jobTitle}</h1>
-                    <p className="mt-2 text-sm text-gray-500">{job.department} · {job.location} · {job.employmentType}</p>
+                    <h1 className="ats-job-detail-hero__title">{job.jobTitle}</h1>
+                    <p className="ats-job-detail-hero__meta">{job.department} · {job.location} · {job.employmentType}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                         <AtsBadge status={job.status}>{job.status}</AtsBadge>
                         <span className="ats-chip ats-chip--neutral" style={{ textTransform: 'none', letterSpacing: 0 }}>{job.priority} priority</span>
@@ -218,13 +226,13 @@ const JobDetailPage = () => {
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <CmButton
+                    <button
                         type="button"
-                        size="sm"
+                        className="rec-hub__btn rec-hub__btn--primary"
                         onClick={() => navigate(`/recruitment/jobs/${id}/edit`)}
                     >
                         <FaEdit className="h-3.5 w-3.5" /> Edit Job
-                    </CmButton>
+                    </button>
                     {['Draft', 'Open', 'On Hold', 'Closed'].map((s) => (
                         <CmButton
                             key={s}

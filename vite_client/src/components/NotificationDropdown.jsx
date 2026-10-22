@@ -41,6 +41,18 @@ function isVisibleAnnouncementForHire(notification, cutoff) {
     return created >= cutoff.getTime();
 }
 
+const isImportantNotification = (n) =>
+    n?.priority === 'high' || n?.metadata?.important === true || n?.metadata?.priority === 'high';
+
+const notificationDisplayText = (n) => {
+    const titled = String(n?.metadata?.title || '').replace(/\s+/g, ' ').trim();
+    if (titled) return titled;
+    return String(n?.message || 'Notification')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim() || 'Notification';
+};
+
 const NotificationDropdown = () => {
     const dispatch = useDispatch();
     const [isOpen, setIsOpen] = useState(false);
@@ -82,9 +94,14 @@ const NotificationDropdown = () => {
 
     const visibleNotifications = useMemo(
         () =>
-            (Array.isArray(notifications) ? notifications : []).filter((n) =>
-                isVisibleAnnouncementForHire(n, announcementCutoff)
-            ),
+            (Array.isArray(notifications) ? notifications : [])
+                .filter((n) => isVisibleAnnouncementForHire(n, announcementCutoff))
+                .slice()
+                .sort((a, b) => {
+                    const imp = Number(isImportantNotification(b)) - Number(isImportantNotification(a));
+                    if (imp !== 0) return imp;
+                    return new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0);
+                }),
         [notifications, announcementCutoff]
     );
 
@@ -461,6 +478,10 @@ const NotificationDropdown = () => {
                                     className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
                                         !notification?.isRead ? 'bg-theme-secondary/10' : ''
                                     } ${
+                                        isImportantNotification(notification)
+                                            ? 'border-l-4 border-l-red-500'
+                                            : ''
+                                    } ${
                                         notification?.metadata?.type === 'one_on_one' ||
                                         notification?.metadata?.oneOnOneId
                                             ? 'cursor-pointer'
@@ -472,8 +493,15 @@ const NotificationDropdown = () => {
                                             {getNotificationIcon(notification?.type)}
                                         </span>
                                         <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                                                {isImportantNotification(notification) ? (
+                                                    <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 border border-red-200">
+                                                        Important
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                             <p className={`text-sm font-medium ${getNotificationColor(notification?.type)}`}>
-                                                {notification?.message || 'Notification'}
+                                                {notificationDisplayText(notification)}
                                             </p>
                                             <p className="text-xs text-gray-500 mt-1">
                                                 {formatTime(notification?.createdAt)}

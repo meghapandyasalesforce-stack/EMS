@@ -235,7 +235,13 @@ const ResumeInboxPage = () => {
     }
 
     return (
-        <AtsPage>
+        <AtsPage className="rec-hub ats-inbox-page">
+            <div className="rec-hub__crumb">
+                <span>Recruitment</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span className="rec-hub__crumb-current">Resume Inbox</span>
+            </div>
+
             <button
                 type="button"
                 onClick={() => navigate('/recruitment')}
@@ -245,7 +251,7 @@ const ResumeInboxPage = () => {
             </button>
 
             <AtsPageHeader
-                eyebrow="Recruitment"
+                eyebrow="Talent acquisition"
                 title={(
                     <span className="inline-flex items-center gap-2">
                         <FaEnvelopeOpenText style={{ color: 'var(--ats-primary)' }} />
@@ -267,7 +273,7 @@ const ResumeInboxPage = () => {
             />
 
             {showConfig && (
-                <form onSubmit={handleSaveConfig} className="cm-card">
+                <form onSubmit={handleSaveConfig} className="cm-card ats-hire-form">
                     <h2 className="mb-3 font-semibold" style={{ color: 'var(--ats-secondary)' }}>Recruitment Mailbox (IMAP)</h2>
                     <p className="mb-4 text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>
                         Use <strong>Gmail</strong> with a Google App Password for best results.
@@ -428,8 +434,7 @@ const ResumeInboxPage = () => {
                             return (
                                 <div
                                     key={item._id}
-                                    className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-                                    style={item.isUnread ? { background: 'rgba(56,161,255,0.05)' } : undefined}
+                                    className={`ats-inbox-row${item.isUnread ? ' is-unread' : ''}`}
                                 >
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
@@ -530,7 +535,7 @@ const ResumeInboxPage = () => {
 
             {assignFor && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+                    <div className="ats-inbox-modal">
                         <h3 className="text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Assign to Job</h3>
                         <p className="mt-1 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>Select an open job posting for this candidate.</p>
                         <select

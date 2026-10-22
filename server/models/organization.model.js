@@ -612,13 +612,13 @@ const organizationSchema = new mongoose.Schema({
         filename: { type: String },
         uploadedAt: { type: Date }
     },
-    // Branding
+    // Branding — Stitch Kinetic Enterprise HRMS defaults
     branding: {
-        primaryColor: { type: String, default: '#16a34a' },
-        secondaryColor: { type: String, default: '#2563eb' },
-        accentColor: { type: String, default: '#f97316' },
-        backgroundColor: { type: String },
-        textColor: { type: String },
+        primaryColor: { type: String, default: '#0e9370' },
+        secondaryColor: { type: String, default: '#476175' },
+        accentColor: { type: String, default: '#f59e0b' },
+        backgroundColor: { type: String, default: '#ffffff' },
+        textColor: { type: String, default: '#111c2d' },
         theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'light' },
         customDomain: { type: String }
     },

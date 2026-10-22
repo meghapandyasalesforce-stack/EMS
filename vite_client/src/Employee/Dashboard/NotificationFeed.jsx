@@ -14,6 +14,18 @@ const isUnread = (n) => n && n.isRead !== true && n.read !== true;
 
 const getId = (n) => String(n?._id || n?.id || '');
 
+const isImportant = (n) =>
+  n?.priority === 'high' || n?.metadata?.important === true || n?.metadata?.priority === 'high';
+
+const displayText = (n) => {
+  const titled = String(n?.metadata?.title || '').replace(/\s+/g, ' ').trim();
+  if (titled) return titled;
+  return String(n?.message || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 const NotificationFeed = () => {
   const dispatch = useDispatch();
   const allNotifications = useSelector((state) => state.notifications.notifications || []);
@@ -118,7 +130,11 @@ const NotificationFeed = () => {
   useEffect(() => {
     const freshVisible = allNotifications
       .filter((n) => isAnnouncementCard(n) && isUnread(n))
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      .sort((a, b) => {
+        const imp = Number(isImportant(b)) - Number(isImportant(a));
+        if (imp !== 0) return imp;
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
     setVisibleNotifications(freshVisible);
   }, [allNotifications]);
 
@@ -145,11 +161,18 @@ const NotificationFeed = () => {
                 className={`border rounded-lg p-4 flex justify-between items-start transition-all duration-300 hover:shadow-md ${
                   recentIds.has(id)
                     ? 'bg-gradient-to-r from-red-50 to-pink-50 border-red-300 shadow-lg'
-                    : 'bg-white border-gray-200 hover:border-theme-secondary'
+                    : isImportant(note)
+                      ? 'bg-red-50/60 border-red-200 hover:border-red-300'
+                      : 'bg-white border-gray-200 hover:border-theme-secondary'
                 }`}
               >
-                <div className="flex-1">
-                  <p className="text-gray-800 font-medium mb-2">{note.message}</p>
+                <div className="flex-1 min-w-0">
+                  {isImportant(note) ? (
+                    <span className="mb-1.5 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                      Important
+                    </span>
+                  ) : null}
+                  <p className="text-gray-800 font-medium mb-2">{displayText(note) || note.message}</p>
                   <span className="text-sm text-gray-500">
                     {note.createdAt ? new Date(note.createdAt).toLocaleString() : ''}
                   </span>

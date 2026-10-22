@@ -79,7 +79,7 @@ const LifecycleEngagementPanel = () => {
                             key={key}
                             className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${
                                 lifecycle[key] !== false && lifecycle.enabled
-                                    ? 'bg-[#20C997]/10 text-[#0d9488] ring-[#20C997]/30'
+                                    ? 'bg-[#0E9370]/10 text-[#0d9488] ring-[#0E9370]/30'
                                     : 'bg-white text-slate-500 ring-slate-200'
                             }`}
                         >
@@ -92,7 +92,7 @@ const LifecycleEngagementPanel = () => {
             <div className="grid gap-4 sm:grid-cols-3">
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#20C997]/10 text-[#0d9488]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0E9370]/10 text-[#0d9488]">
                             <FaPoll className="h-4 w-4" />
                         </div>
                         <div>

@@ -247,7 +247,84 @@ const TeamWfhRequestsPanel = () => {
             <p className="text-sm font-medium">No Work From Home applications match your filters</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="divide-y divide-slate-100 md:hidden">
+            {filteredRequests.map((request) => {
+              const employee = request.employeeId || {};
+              const name = [employee.name, employee.lastName].filter(Boolean).join(' ') || 'Unknown employee';
+              const linkedManagerName = employee.managerId && typeof employee.managerId === 'object'
+                ? [employee.managerId.name, employee.managerId.lastName].filter(Boolean).join(' ').trim()
+                : '';
+              const managerName = linkedManagerName || employee.manager || '—';
+              const status = normalizeStatus(request.status);
+              const isPending = status === 'pending';
+              const busy = actionBusy === request._id;
+              return (
+                <article key={`m-${request._id}`} className="space-y-2.5 p-3.5">
+                  <div className="flex items-start gap-3">
+                    <EmployeeAvatar employee={employee} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900">{name}</p>
+                      <p className="text-xs text-slate-500">{employee.department || employee.email || '—'}</p>
+                      <p className="mt-1 text-xs font-medium text-slate-700">
+                        {formatWfhDateRange(request.wfhDate, request.wfhDateTo)}
+                        {' · '}
+                        {formatWfhType(request.wfhType, request.halfDayType)}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-600">{request.reason || '—'}</p>
+                      <div className="mt-1.5">
+                        <WfhStatusPill status={status} />
+                        {isPending ? (
+                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                            Waiting for manager
+                          </p>
+                        ) : request.reviewerName ? (
+                          <p className="mt-1 text-[11px] text-slate-500">by {request.reviewerName}</p>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Manager: {managerName}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-2">
+                    {isPending ? (
+                      <>
+                        <button
+                          type="button"
+                          title="Approve"
+                          disabled={!!actionBusy}
+                          onClick={() => handleReview(request._id, 'approve')}
+                          className="rounded-lg bg-[#0a8f6c] p-2 text-white disabled:opacity-40"
+                        >
+                          {busy ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiCheck className="h-4 w-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          title="Reject"
+                          disabled={!!actionBusy}
+                          onClick={() => {
+                            setRejectTarget(request);
+                            setRejectReason('');
+                          }}
+                          className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-600 disabled:opacity-40"
+                        >
+                          <FiX className="h-4 w-4" />
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      title="View"
+                      onClick={() => setViewTarget(request)}
+                      className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                    >
+                      <FiEye className="h-4 w-4" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">

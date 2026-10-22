@@ -37,7 +37,7 @@ const OrganizationOnboarding = () => {
         businessRegistrationNumber: '', taxId: '',
         address: { street: '', city: '', state: '', country: '', zipCode: '' },
         logo: null,
-        branding: { primaryColor: '#16a34a', secondaryColor: '#2563eb', accentColor: '#f97316' },
+        branding: { primaryColor: '#0e9370', secondaryColor: '#476175', accentColor: '#f59e0b' },
         emailBranding: { headerColor: '#16a34a', footerText: '' },
         officeLocations: [{ name: 'Head Office', type: 'head', isPrimary: true, address: {}, phone: '' }],
         workingDays: [1, 2, 3, 4, 5],

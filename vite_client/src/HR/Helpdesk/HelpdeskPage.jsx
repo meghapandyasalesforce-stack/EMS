@@ -407,7 +407,7 @@ const HelpdeskPage = () => {
     const showRequester = canManageTickets || managerView;
 
     return (
-        <div className="min-h-screen bg-slate-50 p-3 sm:p-5">
+        <div className="min-h-screen bg-transparent p-3 sm:p-5">
             <div className="mx-auto w-full max-w-7xl space-y-5">
                 {/* Header */}
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

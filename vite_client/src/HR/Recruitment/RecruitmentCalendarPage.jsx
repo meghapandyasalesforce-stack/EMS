@@ -171,15 +171,22 @@ const RecruitmentCalendarPage = () => {
     if (loading) return <LoadingSpinner message="Loading calendar…" />;
 
     return (
-        <AtsPage fullWidth className="ats-calendar-page">
+        <AtsPage fullWidth className="rec-hub ats-calendar-page">
+            <div className="rec-hub__crumb">
+                <span>Recruitment</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span className="rec-hub__crumb-current">Interview Calendar</span>
+            </div>
+
             <button type="button" onClick={() => navigate('/recruitment')} className="ats-back">
-                <FaArrowLeft className="h-3 w-3" /> Back
+                <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
             </button>
 
             <div className="ats-calendar-top">
                 <AtsPageHeader
-                    eyebrow="Recruitment"
+                    eyebrow="Talent acquisition"
                     title="Recruitment Calendar"
+                    subtitle="Interviews, joining dates, and offer expiries"
                 />
                 <div className="ats-calendar-toolbar-row">
                     {calendarToolbar}

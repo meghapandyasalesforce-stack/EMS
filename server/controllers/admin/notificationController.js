@@ -1,5 +1,6 @@
 import {
   sendBroadcastNotification,
+  deliverBroadcastChannels,
   markNotificationAsRead,
   buildUserNotificationFilter,
   withEffectiveReadState,
@@ -116,31 +117,219 @@ const resolveAnnouncementJoinedAtForReq = async (req) => {
   }
 };
 
+const resolveAnnouncementSender = async (req) => {
+  let sender = null;
+  if (req.user?._id) {
+    sender = await User.findById(req.user._id);
+  }
+  if (!sender && req.employee?._id) {
+    sender = await Employee.findById(req.employee._id);
+  }
+  return sender;
+};
+
+const parseScheduleAt = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
 export const createNotification = async (req, res) => {
   try {
-    const { message, type = 'announcement', priority = 'medium' } = req.body;
+    const {
+      message,
+      title = '',
+      type = 'announcement',
+      priority = 'medium',
+      draft = false,
+      draftId = null,
+      scheduleAt = null,
+      audience = 'all',
+      important = false,
+      attachments = [],
+    } = req.body;
 
-    if (!message) {
+    if (!message || !String(message).trim()) {
       return sendValidationError(res, { message: "Message is required" });
     }
 
-    let sender = null;
-    if (req.user?._id) {
-      sender = await User.findById(req.user._id);
-    }
-    if (!sender && req.employee?._id) {
-      sender = await Employee.findById(req.employee._id);
-    }
+    const sender = await resolveAnnouncementSender(req);
     if (!sender) {
       return sendNotFound(res, "Sender");
     }
 
-    await sendBroadcastNotification(sender, message, 'announcement', { priority });
-    
+    const organizationId = await resolveOrganizationId(req);
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const trimmed = String(message).trim();
+    const trimmedTitle = String(title || '').trim().slice(0, 120);
+    const safeAttachments = Array.isArray(attachments)
+      ? attachments
+          .slice(0, 20)
+          .map((a) => ({
+            name: String(a?.name || 'Attachment').slice(0, 255),
+            size: Number(a?.size) || 0,
+            type: String(a?.type || '').slice(0, 120),
+          }))
+          .filter((a) => a.name)
+      : [];
+    const resolvedPriority =
+      important === true || important === 'true' || priority === 'high' ? 'high' : (priority || 'medium');
+    const metaBase = {
+      priority: resolvedPriority,
+      audience: String(audience || 'all').slice(0, 64),
+      important: resolvedPriority === 'high',
+      attachments: safeAttachments,
+      ...(trimmedTitle ? { title: trimmedTitle } : {}),
+    };
+    const senderType = sender.constructor?.modelName === 'Employee' ? 'Employee' : 'User';
+    const scheduledFor = parseScheduleAt(scheduleAt);
+    const wantsSchedule = Boolean(scheduleAt) && !draft;
+
+    if (wantsSchedule) {
+      if (!scheduledFor) {
+        return sendValidationError(res, { scheduleAt: 'Invalid schedule date/time' });
+      }
+      if (scheduledFor.getTime() <= Date.now() + 30_000) {
+        return sendValidationError(res, { scheduleAt: 'Schedule time must be at least 1 minute in the future' });
+      }
+    }
+
+    // Update an existing draft or scheduled item
+    if (draftId) {
+      const existing = await Notification.findOne({
+        _id: draftId,
+        organizationId,
+        isBroadcast: true,
+        type: 'announcement',
+        broadcastStatus: { $in: ['draft', 'scheduled'] },
+      });
+      if (!existing) {
+        return sendNotFound(res, 'Draft announcement');
+      }
+      existing.message = trimmed;
+      existing.priority = resolvedPriority;
+      existing.metadata = { ...(existing.metadata || {}), ...metaBase };
+      if (!trimmedTitle && existing.metadata?.title) {
+        delete existing.metadata.title;
+      }
+      if (draft) {
+        existing.broadcastStatus = 'draft';
+        existing.scheduledFor = null;
+        await existing.save();
+        return sendSuccess(res, { announcement: existing }, 'Draft updated', 200);
+      }
+      if (wantsSchedule) {
+        existing.broadcastStatus = 'scheduled';
+        existing.scheduledFor = scheduledFor;
+        await existing.save();
+        return sendSuccess(res, { announcement: existing }, 'Announcement scheduled', 200);
+      }
+      existing.broadcastStatus = 'sent';
+      existing.scheduledFor = null;
+      await existing.save();
+      await deliverBroadcastChannels(existing, organizationId, 'announcement', metaBase);
+      return sendSuccess(res, { announcement: existing }, 'Announcement sent successfully to all employees', 200);
+    }
+
+    if (draft) {
+      const draftDoc = await Notification.create({
+        organizationId,
+        message: trimmed,
+        type: 'announcement',
+        isBroadcast: true,
+        broadcastStatus: 'draft',
+        scheduledFor: null,
+        priority: resolvedPriority,
+        sender: sender._id,
+        senderType,
+        metadata: metaBase,
+      });
+      return sendSuccess(res, { announcement: draftDoc }, 'Draft saved', 201);
+    }
+
+    if (wantsSchedule) {
+      const scheduledDoc = await Notification.create({
+        organizationId,
+        message: trimmed,
+        type: 'announcement',
+        isBroadcast: true,
+        broadcastStatus: 'scheduled',
+        scheduledFor,
+        priority: resolvedPriority,
+        sender: sender._id,
+        senderType,
+        metadata: metaBase,
+      });
+      return sendSuccess(res, { announcement: scheduledDoc }, 'Announcement scheduled', 201);
+    }
+
+    await sendBroadcastNotification(sender, trimmed, 'announcement', metaBase);
     return sendSuccess(res, null, "Announcement sent successfully to all employees", 201);
   } catch (err) {
     logger.error('Error creating notification', { error: err.message, stack: err.stack });
     return sendInternalError(res, 'Failed to create notification', err);
+  }
+};
+
+/** Publish a saved draft announcement to all employees. */
+export const publishAnnouncementDraft = async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const organizationId = await resolveOrganizationId(req);
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const draft = await Notification.findOne({
+      _id: notificationId,
+      organizationId,
+      isBroadcast: true,
+      type: 'announcement',
+      broadcastStatus: { $in: ['draft', 'scheduled'] },
+    });
+    if (!draft) {
+      return sendNotFound(res, 'Draft announcement');
+    }
+
+    draft.broadcastStatus = 'sent';
+    draft.scheduledFor = null;
+    await draft.save();
+    await deliverBroadcastChannels(draft, organizationId, 'announcement', {
+      priority: draft.priority,
+    });
+    return sendSuccess(res, { announcement: draft }, 'Announcement sent successfully to all employees');
+  } catch (err) {
+    logger.error('Error publishing announcement draft', { error: err.message, stack: err.stack });
+    return sendInternalError(res, 'Failed to publish announcement', err);
+  }
+};
+
+/** Hard-delete an org announcement (draft or sent) for HR/admin history. */
+export const deleteSentAnnouncement = async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const organizationId = await resolveOrganizationId(req);
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const deleted = await Notification.findOneAndDelete({
+      _id: notificationId,
+      organizationId,
+      isBroadcast: true,
+      type: 'announcement',
+    });
+    if (!deleted) {
+      return sendNotFound(res, 'Announcement');
+    }
+    return sendSuccess(res, null, 'Announcement deleted');
+  } catch (err) {
+    logger.error('Error deleting announcement', { error: err.message, stack: err.stack });
+    return sendInternalError(res, 'Failed to delete announcement', err);
   }
 };
 
@@ -157,7 +346,7 @@ export const getSentAnnouncements = async (req, res) => {
       return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
     }
 
-    const { page = 1, limit = 20, scope } = req.query;
+    const { page = 1, limit = 20, scope, status, q } = req.query;
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     if (isNaN(pageNum) || pageNum < 1) {
@@ -176,6 +365,16 @@ export const getSentAnnouncements = async (req, res) => {
     if (scope === 'mine') {
       filter.sender = actorId;
     }
+    if (status === 'draft') {
+      filter.broadcastStatus = 'draft';
+    } else if (status === 'scheduled') {
+      filter.broadcastStatus = 'scheduled';
+    } else if (status === 'sent') {
+      filter.broadcastStatus = { $nin: ['draft', 'scheduled'] };
+    }
+    if (q && String(q).trim()) {
+      filter.message = { $regex: String(q).trim(), $options: 'i' };
+    }
 
     const announcements = await Notification.find(filter)
       .populate('sender', 'name email')
@@ -184,11 +383,24 @@ export const getSentAnnouncements = async (req, res) => {
       .skip((pageNum - 1) * limitNum);
 
     const total = await Notification.countDocuments(filter);
+    const scopeFilter = scope === 'mine' ? { sender: actorId } : {};
+    const base = { organizationId, isBroadcast: true, type: 'announcement', ...scopeFilter };
+    const [sentCount, draftCount, scheduledCount] = await Promise.all([
+      Notification.countDocuments({ ...base, broadcastStatus: { $nin: ['draft', 'scheduled'] } }),
+      Notification.countDocuments({ ...base, broadcastStatus: 'draft' }),
+      Notification.countDocuments({ ...base, broadcastStatus: 'scheduled' }),
+    ]);
 
     return sendSuccess(
       res,
       {
         announcements,
+        counts: {
+          sent: sentCount,
+          drafts: draftCount,
+          scheduled: scheduledCount,
+          total: sentCount + draftCount + scheduledCount,
+        },
         pagination: {
           current: pageNum,
           pages: Math.ceil(total / limitNum) || 1,
@@ -222,6 +434,7 @@ export const getAnnouncementReceipts = async (req, res) => {
       organizationId,
       isBroadcast: true,
       type: 'announcement',
+      broadcastStatus: { $nin: ['draft', 'scheduled'] },
     }).lean();
 
     if (!announcement) {
@@ -631,10 +844,11 @@ export const markAllAsRead = async (req, res) => {
       { isRead: true }
     );
 
-    // Broadcasts: add per-user read receipts (never flip shared isRead)
+    // Broadcasts: add per-user read receipts (never flip shared isRead). Skip drafts/scheduled.
     const unreadBroadcasts = await Notification.find({
       organizationId,
       isBroadcast: true,
+      broadcastStatus: { $nin: ['draft', 'scheduled'] },
       'readReceipts.userId': { $nin: recipientIds },
       'hiddenBy.userId': { $nin: recipientIds },
     }).select('_id');

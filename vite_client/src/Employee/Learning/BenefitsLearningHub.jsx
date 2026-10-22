@@ -29,6 +29,7 @@ import {
 } from '../../HR/Learning/learningUtils';
 import { formatStatusLabel, UI_BADGE_TEXT_CLASS, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
 import { format } from 'date-fns';
+import '../../styles/benefitsLearningHub.css';
 
 const LEARNING_STATUS_RANK = { 'In Progress': 0, Enrolled: 1, Completed: 2, Available: 3 };
 
@@ -400,126 +401,107 @@ const BenefitsLearningHub = () => {
     const isLearningTab = activeTab === 'learning';
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
-            <div className="page-shell-inner hrms-stack">
-                <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-6">
-                        <div className="flex min-w-0 items-start gap-3">
-                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-theme-primary/10 text-theme-primary lg:h-12 lg:w-12 lg:rounded-2xl lg:text-xl">
-                                {isLearningTab ? <FaBook /> : <FaHeart />}
-                            </div>
-                            <div className="min-w-0">
-                                <h1 className="text-xl font-bold text-slate-900 lg:text-3xl">
-                                    {isLearningTab ? 'Learning & Development' : 'Benefits & Learning'}
-                                </h1>
-                                <p className="mt-1 text-xs text-slate-500 lg:text-sm">
-                                    {isLearningTab
-                                        ? 'Track assigned courses, continue learning, and view your progress'
-                                        : 'Access your employee benefits and growth resources in one place'}
-                                </p>
-                            </div>
+        <div className="bl-hub">
+            <div className="bl-hub__inner">
+                <header className="bl-hub__card bl-hub__hero">
+                    <div className="bl-hub__hero-left">
+                        <div className="bl-hub__icon" aria-hidden="true">
+                            {isLearningTab ? <FaBook /> : <FaHeart />}
                         </div>
-                        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center">
-                            <label className="relative hidden min-w-[240px] lg:block lg:w-64">
-                                <FaSearch className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    type="search"
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Search benefits or courses..."
-                                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-theme-primary focus:bg-white focus:ring-2 focus:ring-theme-primary/20"
-                                />
-                            </label>
-                            {isLearningTab && (
-                                <LearningFilterDropdown
-                                    value={learningFilter}
-                                    onChange={setLearningFilter}
-                                    className="hidden w-32 lg:block"
-                                />
-                            )}
-                            <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 lg:w-auto">
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab('benefits')}
-                                    className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition lg:flex-none ${
-                                        activeTab === 'benefits' ? 'bg-white text-theme-primary shadow-sm' : 'text-slate-600'
-                                    }`}
-                                >
-                                    Benefits
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab('learning')}
-                                    className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition lg:flex-none ${
-                                        activeTab === 'learning' ? 'bg-white text-theme-primary shadow-sm' : 'text-slate-600'
-                                    }`}
-                                >
-                                    Learning
-                                </button>
-                            </div>
+                        <div className="min-w-0">
+                            <h1 className="bl-hub__title">
+                                {isLearningTab ? 'Learning & Development' : 'Benefits & Learning'}
+                            </h1>
+                            <p className="bl-hub__subtitle">
+                                {isLearningTab
+                                    ? 'Track assigned courses, continue learning, and view your progress'
+                                    : 'Access your employee benefits and growth resources in one place'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="bl-hub__hero-right">
+                        <label className="bl-hub__search">
+                            <FaSearch className="bl-hub__search-ico" aria-hidden="true" />
+                            <input
+                                type="search"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search benefits or courses..."
+                                aria-label="Search benefits or courses"
+                            />
+                        </label>
+                        {isLearningTab ? (
+                            <LearningFilterDropdown
+                                value={learningFilter}
+                                onChange={setLearningFilter}
+                                className="w-full sm:w-36"
+                            />
+                        ) : null}
+                        <div className="bl-hub__toggle" role="tablist" aria-label="Benefits or Learning">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={activeTab === 'benefits'}
+                                className={activeTab === 'benefits' ? 'is-active' : ''}
+                                onClick={() => setActiveTab('benefits')}
+                            >
+                                Benefits
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={activeTab === 'learning'}
+                                className={activeTab === 'learning' ? 'is-active' : ''}
+                                onClick={() => setActiveTab('learning')}
+                            >
+                                Learning
+                            </button>
                         </div>
                     </div>
                 </header>
 
-                <section className="flex items-center gap-2 lg:hidden">
-                    <label className="relative min-w-0 flex-1">
-                        <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                        <input
-                            type="search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search..."
-                            className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-theme-primary focus:ring-2 focus:ring-theme-primary/20"
-                        />
-                    </label>
-                    {isLearningTab && (
-                        <LearningFilterDropdown
-                            value={learningFilter}
-                            onChange={setLearningFilter}
-                            className="w-[7.25rem] shrink-0"
-                        />
-                    )}
-                </section>
-
                 {activeTab === 'benefits' ? (
                     <>
-                    <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                        <div>
-                            <h3 className="text-2xl font-semibold text-slate-900">My Benefits</h3>
-                            <p className="text-sm text-slate-500">Your enrollments, pending requests, and dependents.</p>
+                    <section className="bl-hub__card bl-hub__section">
+                        <div className="bl-hub__section-head">
+                            <div>
+                                <h2 className="bl-hub__section-title">My Benefits</h2>
+                                <p className="bl-hub__section-sub">Your enrollments, pending requests, and dependents.</p>
+                            </div>
                         </div>
                         {myActiveOrPendingBenefits.length === 0 ? (
-                            <p className="py-6 text-center text-sm text-slate-500">
+                            <div className="bl-hub__empty">
+                                <span className="bl-hub__empty-ico" aria-hidden="true"><FaHeart /></span>
                                 You have no active or pending benefit enrollments yet.
-                            </p>
+                            </div>
                         ) : (
-                            <div className="space-y-3">
+                            <div className="bl-hub__mine">
                                 {myActiveOrPendingBenefits.map((enrollment) => {
                                     const plan = enrollment.benefitPlanId || {};
                                     const supportsDependents = plan.planType === 'Family' || plan.planType === 'Both';
                                     return (
-                                        <div key={enrollment._id} className="rounded-xl border border-slate-100 p-4">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                        <div key={enrollment._id} className="bl-hub__mine-item">
+                                            <div className="bl-hub__mine-top">
                                                 <div>
-                                                    <h4 className="font-semibold text-slate-900">{plan.name || 'Benefit'}</h4>
-                                                    <p className="text-xs text-slate-500">{plan.category || 'Benefit Plan'}</p>
-                                                    <p className="mt-1 text-sm text-slate-600">
+                                                    <h3 className="bl-hub__plan-name">{plan.name || 'Benefit'}</h3>
+                                                    <p className="bl-hub__plan-cat">{plan.category || 'Benefit Plan'}</p>
+                                                    <p className="bl-hub__mine-meta">
                                                         Coverage: {enrollment.coverageType || '—'} · Employer ₹{Number(enrollment.companyContribution || 0).toLocaleString('en-IN')} · Employee ₹{Number(enrollment.employeeContribution || 0).toLocaleString('en-IN')}
                                                     </p>
                                                 </div>
-                                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                <span className={`bl-hub__badge ${
                                                     enrollment.status === 'Pending'
-                                                        ? 'bg-amber-100 text-amber-700'
-                                                        : 'bg-[#20C997]/15 text-[#0a8f6c]'
+                                                        ? 'bl-hub__badge--pending'
+                                                        : 'bl-hub__badge--ok'
                                                 }`}>
                                                     {enrollment.status}
                                                 </span>
                                             </div>
-                                            <div className="mt-3 flex flex-wrap gap-2">
+                                            <div className="bl-hub__plan-actions">
                                                 <button
                                                     type="button"
                                                     onClick={() => navigate(`/benefits/${plan._id || enrollment.benefitPlanId}`)}
-                                                    className="text-sm font-semibold text-[#0a8f6c]"
+                                                    className="bl-hub__btn bl-hub__btn--ghost"
                                                 >
                                                     View plan
                                                 </button>
@@ -597,51 +579,54 @@ const BenefitsLearningHub = () => {
                         )}
                     </section>
 
-                    <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
+                    <section className="bl-hub__card bl-hub__section">
+                        <div className="bl-hub__section-head">
                             <div>
-                                <h3 className="text-2xl font-semibold text-slate-900">Core Benefits</h3>
-                                <p className="text-sm text-slate-500">Active plans and wellness subsidies for this quarter.</p>
+                                <h2 className="bl-hub__section-title">Core Benefits</h2>
+                                <p className="bl-hub__section-sub">Active plans and wellness subsidies for this quarter.</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => navigate('/benefits')}
-                                className="text-sm font-semibold text-[#0a8f6c] hover:text-[#086d56]"
+                                className="bl-hub__link"
                             >
                                 View All Programs
                             </button>
                         </div>
 
                         {filteredBenefits.length === 0 ? (
-                            <p className="py-8 text-center text-sm text-slate-500">No benefits matched your search.</p>
+                            <div className="bl-hub__empty">
+                                <span className="bl-hub__empty-ico" aria-hidden="true"><FaHeart /></span>
+                                No benefits matched your search.
+                            </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            <div className="bl-hub__grid">
                                 {filteredBenefits.slice(0, 6).map((plan) => {
                                     const myEnrollment = enrollmentByPlanId[String(plan._id)];
                                     const statusLabel = myEnrollment?.status || (plan.enrollmentType === 'Automatic' ? 'HR Assigned' : 'Available');
-                                    const statusClass = myEnrollment?.status === 'Pending'
-                                        ? 'bg-amber-100 text-amber-700'
+                                    const badgeClass = myEnrollment?.status === 'Pending'
+                                        ? 'bl-hub__badge--pending'
                                         : myEnrollment
-                                            ? 'bg-[#20C997]/15 text-[#0a8f6c]'
-                                            : 'bg-slate-100 text-slate-600';
+                                            ? 'bl-hub__badge--ok'
+                                            : 'bl-hub__badge--muted';
                                     return (
-                                    <article key={plan._id} className="rounded-xl border border-slate-100 bg-white p-4 transition hover:shadow-md">
-                                        <div className="mb-3 flex items-center justify-between">
-                                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#20C997]/15 text-[#0a8f6c]">
+                                    <article key={plan._id} className="bl-hub__plan">
+                                        <div className="bl-hub__plan-top">
+                                            <span className="bl-hub__plan-ico" aria-hidden="true">
                                                 <FaHeart />
                                             </span>
-                                            <span className={`rounded-full ${statusClass} ${UI_BADGE_TEXT_CLASS}`}>
+                                            <span className={`bl-hub__badge ${badgeClass}`}>
                                                 {statusLabel}
                                             </span>
                                         </div>
-                                        <h4 className="text-lg font-semibold text-slate-900">{plan.name}</h4>
-                                        <p className="text-xs text-slate-500">{plan.category || 'Benefit Plan'}</p>
-                                        <p className="mt-2 line-clamp-2 text-sm text-slate-600">{plan.description || 'Benefit details available.'}</p>
-                                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <h3 className="bl-hub__plan-name">{plan.name}</h3>
+                                        <p className="bl-hub__plan-cat">{plan.category || 'Benefit Plan'}</p>
+                                        <p className="bl-hub__plan-desc">{plan.description || 'Benefit details available.'}</p>
+                                        <div className="bl-hub__plan-actions">
                                             <button
                                                 type="button"
                                                 onClick={() => navigate(`/benefits/${plan._id}`)}
-                                                className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#20C997] to-[#0a8f6c] px-3 py-1.5 text-sm font-semibold text-white"
+                                                className="bl-hub__btn bl-hub__btn--primary"
                                             >
                                                 {myEnrollment
                                                     ? 'View Status'
@@ -654,7 +639,7 @@ const BenefitsLearningHub = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => navigate(`/benefits/${plan._id}`)}
-                                                    className="text-sm font-semibold text-[#0a8f6c]"
+                                                    className="bl-hub__btn bl-hub__btn--ghost"
                                                 >
                                                     Details
                                                 </button>
@@ -668,33 +653,33 @@ const BenefitsLearningHub = () => {
                     </section>
                     </>
                 ) : (
-                    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between gap-3">
+                    <section className="bl-hub__card bl-hub__section">
+                        <div className="bl-hub__section-head">
                             <div>
-                                <h3 className="text-xl font-bold text-slate-900">My Learning</h3>
-                                <p className="text-sm text-slate-500">Assigned courses, catalog, and completion progress.</p>
+                                <h2 className="bl-hub__section-title">My Learning</h2>
+                                <p className="bl-hub__section-sub">Assigned courses, catalog, and completion progress.</p>
                             </div>
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600 whitespace-nowrap">
+                            <span className="bl-hub__badge bl-hub__badge--muted">
                                 {learningStats.total} assigned
                             </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <div className="bl-hub__stats">
                             {[
-                                { label: 'Total Assigned', value: learningStats.total, tone: 'text-slate-900' },
-                                { label: 'Not Started', value: learningStats.assigned, tone: 'text-amber-700' },
-                                { label: 'In Progress', value: learningStats.inProgress, tone: 'text-[#0a8f6c]' },
-                                { label: 'Completed', value: learningStats.completed, tone: 'text-emerald-600' }
+                                { label: 'Total Assigned', value: learningStats.total },
+                                { label: 'Not Started', value: learningStats.assigned },
+                                { label: 'In Progress', value: learningStats.inProgress },
+                                { label: 'Completed', value: learningStats.completed }
                             ].map((stat) => (
-                                <div key={stat.label} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                                    <p className={UI_FORM_LABEL_CLASS}>{stat.label}</p>
-                                    <p className={`mt-1 text-2xl font-bold ${stat.tone}`}>{stat.value}</p>
+                                <div key={stat.label} className="bl-hub__stat">
+                                    <p className="bl-hub__stat-label">{stat.label}</p>
+                                    <p className="bl-hub__stat-value">{stat.value}</p>
                                 </div>
                             ))}
                         </div>
 
                         {learningStats.total > 0 && (
-                            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                            <div className="bl-hub__progress-card">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <p className="text-sm font-semibold text-slate-900">
                                         {learningStats.completed} of {learningStats.total} assigned courses completed
@@ -728,34 +713,32 @@ const BenefitsLearningHub = () => {
                         )}
 
                         {learningCards.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-xl text-slate-400">
-                                    <FaBook />
-                                </div>
-                                <h4 className="mt-3 font-semibold text-slate-800">No courses match your filters</h4>
-                                <p className="mt-1 text-sm text-slate-500">Try a different search or status filter.</p>
+                            <div className="bl-hub__empty">
+                                <span className="bl-hub__empty-ico" aria-hidden="true"><FaBook /></span>
+                                <strong className="text-slate-800">No courses match your filters</strong>
+                                Try a different search or status filter.
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            <div className="bl-hub__grid">
                                 {learningCards.map((course) => (
                                     <article
                                         key={course._id}
-                                        className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-theme-primary/30 hover:shadow-md"
+                                        className="bl-hub__plan"
                                     >
-                                        <div className="mb-3 flex items-center justify-between gap-2">
-                                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#20C997]/15 text-[#0a8f6c]">
+                                        <div className="bl-hub__plan-top">
+                                            <span className="bl-hub__plan-ico" aria-hidden="true">
                                                 <FaBook />
                                             </span>
                                             <span
-                                                className={`rounded-full ${UI_BADGE_TEXT_CLASS} ${learningStatusStyle(
+                                                className={`bl-hub__badge ${UI_BADGE_TEXT_CLASS} ${learningStatusStyle(
                                                     course.status
                                                 )}`}
                                             >
                                                 {formatLearningStatusDisplay(course.status)}
                                             </span>
                                         </div>
-                                        <h4 className="line-clamp-2 text-lg font-semibold text-slate-900">{course.title}</h4>
-                                        <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-sm text-slate-600">
+                                        <h3 className="bl-hub__plan-name line-clamp-2">{course.title}</h3>
+                                        <p className="bl-hub__plan-desc min-h-[2.5rem]">
                                             {course.description || 'Learning content available.'}
                                         </p>
                                         {isExternalCourse(course) && (
@@ -788,7 +771,7 @@ const BenefitsLearningHub = () => {
                                         <button
                                             type="button"
                                             onClick={() => navigate(`/learning/courses/${course._id}`)}
-                                            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-theme-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                                            className="bl-hub__btn bl-hub__btn--primary mt-4 w-full"
                                         >
                                             {course.status === 'Completed' && course.certificate?.enabled ? (
                                                 <>
@@ -812,16 +795,18 @@ const BenefitsLearningHub = () => {
                             </div>
                         )}
 
-                        <div className="mt-2 border-t border-slate-100 pt-5">
-                            <div className="mb-3">
-                                <h4 className="text-xl font-semibold text-slate-900">Team Learning Resources</h4>
-                                <p className="text-sm text-slate-500">Assigned resources, materials, and practical learning tasks.</p>
+                        <div className="mt-4 border-t border-slate-100 pt-5">
+                            <div className="bl-hub__section-head">
+                                <div>
+                                    <h3 className="bl-hub__section-title" style={{ fontSize: '1.1rem' }}>Team Learning Resources</h3>
+                                    <p className="bl-hub__section-sub">Assigned resources, materials, and practical learning tasks.</p>
+                                </div>
                             </div>
 
                             {filteredTeamLearning.length === 0 ? (
-                                <p className="py-6 text-center text-sm text-slate-500">No team learning resources matched your filters.</p>
+                                <div className="bl-hub__empty">No team learning resources matched your filters.</div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="bl-hub__grid">
                                     {filteredTeamLearning.map((learning) => (
                                         (() => {
                                             const progressValue =
@@ -838,7 +823,7 @@ const BenefitsLearningHub = () => {
                                             return (
                                         <article
                                             key={learning._id}
-                                            className="rounded-xl border border-slate-100 bg-white p-4 transition hover:shadow-md"
+                                            className="bl-hub__plan"
                                         >
                                             <div className="mb-2 flex items-start justify-between gap-2">
                                                 <h5 className="line-clamp-2 text-base font-semibold text-slate-900">{learning.title}</h5>

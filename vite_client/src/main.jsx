@@ -9,10 +9,18 @@ import 'react-toastify/dist/ReactToastify.css';
 import { PersistGate } from 'redux-persist/integration/react';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { initCapacitor } from './utils/capacitor.js';
+import { setupToastSeverity } from './utils/toastSeverity.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { applyBranding } from './utils/theme.js';
+
+// Stitch Kinetic defaults before org branding loads
+applyBranding({});
 
 // Initialize Capacitor for mobile app
 initCapacitor();
+
+// Soft warning toasts by default; only backend/system failures stay red
+setupToastSeverity();
 
 // Create a QueryClient instance with default options
 const queryClient = new QueryClient({
@@ -34,7 +42,15 @@ createRoot(document.getElementById('root')).render(
       <QueryClientProvider client={queryClient}>
         <Provider store={store}>
           <PersistGate loading={<div>Loading...</div>} persistor={persistor}> 
-            <ToastContainer/>
+            <ToastContainer
+              position="top-right"
+              autoClose={4000}
+              newestOnTop
+              closeOnClick
+              pauseOnHover
+              draggable
+              limit={4}
+            />
             <App />
           </PersistGate>
         </Provider>

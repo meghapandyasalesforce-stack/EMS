@@ -4,24 +4,20 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     FiActivity,
     FiArrowUpRight,
-    FiBook,
     FiBriefcase,
     FiCalendar,
     FiCheckCircle,
     FiClock,
     FiFileText,
     FiGift,
-    FiGrid,
     FiPlus,
-    FiSettings,
-    FiMoreHorizontal,
+    FiEye,
     FiSearch,
     FiTrendingDown,
-    FiTrendingUp,
     FiUserPlus,
     FiUsers,
 } from 'react-icons/fi';
-import { HiOutlineBell, HiOutlineQuestionMarkCircle } from 'react-icons/hi2';
+import { HiOutlineBell } from 'react-icons/hi2';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS, hasAnyPermission } from '../../utils/permissions';
 import {
@@ -38,7 +34,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
-import { addDays, format, startOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, subMonths } from 'date-fns';
 import PasswordResetPopup from '../../Employee/PasswordResetPopup';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
@@ -50,9 +46,20 @@ import { handleApiError } from '../../utils/errorHandler';
 import { BOTH_ATTENDANCE_ENDPOINT, BOTH_CELEBRATION_ENDPOINT } from '../../utils/constant';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 import AnnouncementBanner from '../../components/AnnouncementBanner';
-import PersonalDashboardKpiRow from '../../components/PersonalDashboardKpiRow';
-import LeaveBalanceCard from '../../components/LeaveBalanceCard';
 import NotificationSender from '../../Admin/NotificationSender';
+import {
+    AddEmployeeModal,
+    AnnouncementsListModal,
+    ApprovalsDrawer,
+    EmployeeQuickViewModal,
+    JobsDrawer,
+    LeaveDrawer,
+    ModalShell,
+    ProfilePeekModal,
+    WishModal,
+} from './DashboardOverlays';
+import '../../styles/dashboardHR.css';
+import { useQueryClient } from '@tanstack/react-query';
 
 
 const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
@@ -81,18 +88,18 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
         : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
 
     return (
-        <li className={`min-w-0 overflow-hidden rounded-xl border p-2.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+        <li className={`hr-dash__celeb-card min-w-0 overflow-hidden ${isToday ? 'hr-dash__celeb-card--today' : ''}`}>
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
-                    <p className="truncate text-sm font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
-                    <p className="break-words text-[11px] leading-snug text-slate-500">
+                    <p className="truncate text-sm font-semibold text-[#111C2D]">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
+                    <p className="break-words text-[11px] leading-snug text-[#666666]">
                         {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
                         {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
                     </p>
                 </div>
                 {onWishes ? (
-                    <button type="button" onClick={() => onWishes(item)} className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]">
+                    <button type="button" onClick={() => onWishes(item)} className="hr-dash__btn-primary inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap px-3 text-xs">
                         {isToday ? 'Wishes' : 'Upcoming'}
                     </button>
                 ) : null}
@@ -102,9 +109,9 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
                     {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
-                            <button key={emoji} type="button" disabled={reacting} onClick={() => onReact(item, emoji)} className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`} aria-label={`React ${emoji}`}>
+                            <button key={emoji} type="button" disabled={reacting} onClick={() => onReact(item, emoji)} className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-lg border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-[#0E9370]/40 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-[#0E9370]/35' : 'border-slate-200'}`} aria-label={`React ${emoji}`}>
                                 <span>{emoji}</span>
-                                {count > 0 ? <span className="text-[10px] font-semibold text-slate-600">{count}</span> : null}
+                                {count > 0 ? <span className="text-[10px] font-semibold text-[#666666]">{count}</span> : null}
                             </button>
                         );
                     })}
@@ -115,36 +122,36 @@ function CelebrationDashboardCard({ item, isSelf = false, event, reacting = fals
 }
 
 const WS = {
-    bg: '#F5F7FB',
+    bg: '#E8FAF4',
     card: '#FFFFFF',
-    border: 'rgba(148, 163, 184, 0.24)',
-    mint: '#20C997',
-    mintDark: '#0F9F7A',
-    forest: '#0B6B53',
+    border: 'rgba(14, 43, 61, 0.08)',
+    mint: '#0E9370',
+    mintDark: '#0B7458',
+    forest: '#00694F',
     peach: '#FF9B71',
     teal: '#5BC0BE',
-    amber: '#F6C453',
-    text: '#0F172A',
-    muted: '#64748B',
+    amber: '#F59E0B',
+    text: '#111C2D',
+    muted: '#666666',
 };
 
 const DEPARTMENT_COLOR_MAP = {
-    Engineering: '#26C991',
-    Sales: '#149E77',
+    Engineering: '#0E9370',
+    Sales: '#00694F',
     Design: '#FF9F71',
-    Others: '#66C2C2',
+    Others: '#476175',
 };
 
-const DEPARTMENT_COLOR_FALLBACKS = ['#26C991', '#149E77', '#FF9F71', '#66C2C2'];
+const DEPARTMENT_COLOR_FALLBACKS = ['#0E9370', '#00694F', '#FF9F71', '#476175'];
 
 const DEPARTMENT_LEGEND_ORDER = ['Engineering', 'Sales', 'Design', 'Others'];
 
 const HEADCOUNT_CHART = {
-    title: '#111827',
-    total: '#111827',
+    title: '#111C2D',
+    total: '#111C2D',
     totalLabel: '#94A3B8',
-    legendLabel: '#334155',
-    legendValue: '#111827',
+    legendLabel: '#666666',
+    legendValue: '#111C2D',
 };
 
 const sortDepartmentsForLegend = (rows) =>
@@ -322,62 +329,6 @@ const buildApprovalSummary = (approvals) => {
     ];
 };
 
-const buildUpcomingEvents = (birthdays, approvals) => {
-    const birthdayEvents = [...(birthdays || [])]
-        .sort((a, b) => {
-            const aDays = Number.isFinite(Number(a?.daysUntil)) ? Number(a.daysUntil) : 9999;
-            const bDays = Number.isFinite(Number(b?.daysUntil)) ? Number(b.daysUntil) : 9999;
-            if (aDays !== bDays) return aDays - bDays;
-            const order = { birthday: 1, marriage_anniversary: 2, anniversary: 3 };
-            return (order[a?.type] || 99) - (order[b?.type] || 99);
-        })
-        .slice(0, 2)
-        .map((item, index) => {
-        const isMarriage = item?.type === 'marriage_anniversary';
-        return {
-            id: `celebration-${item?.employeeId || index}-${item?.type || 'bday'}`,
-            title: isMarriage ? `💍 ${item?.name || 'Team member'}` : `🎂 ${item?.name || 'Team member'}`,
-            subtitle: isMarriage ? 'Marriage Anniversary' : 'Birthday',
-            dateLabel: item?.anniversaryDate || item?.birthday || item?.date || 'Upcoming',
-            tone: 'birthday',
-        };
-    });
-
-    const approvalEvents = (approvals || [])
-        .filter((approval) => approval?.currentPendingStep?.dueDate)
-        .sort((a, b) => new Date(a.currentPendingStep.dueDate) - new Date(b.currentPendingStep.dueDate))
-        .slice(0, 1)
-        .map((approval) => ({
-            id: approval?._id || `approval-${approval?.entityType}`,
-            title: `${approval?.entityType || 'Approval'} Request`,
-            subtitle: approval?.requestedBy?.name ? `Requested by ${approval.requestedBy.name}` : 'Pending approval',
-            dateLabel: formatShortDate(approval?.currentPendingStep?.dueDate),
-            tone: 'approval',
-        }));
-
-    const fallbackEvents = [
-        {
-            id: 'review-cycle',
-            title: 'Monthly review sync',
-            subtitle: 'Leadership calendar',
-            dateLabel: format(addDays(new Date(), 4), 'dd MMM'),
-            tone: 'calendar',
-        },
-    ];
-
-    return [...birthdayEvents, ...approvalEvents, ...fallbackEvents].slice(0, 3);
-};
-
-const getEventToneClasses = (tone) => {
-    if (tone === 'birthday') {
-        return 'bg-orange-100 text-orange-600';
-    }
-    if (tone === 'approval') {
-        return 'bg-cyan-100 text-cyan-700';
-    }
-    return 'bg-emerald-100 text-emerald-700';
-};
-
 const StatCard = ({ label, value, subtext, badge, badgeClassName, icon, iconClassName, onClick }) => (
     <div
         role={onClick ? 'button' : undefined}
@@ -393,33 +344,29 @@ const StatCard = ({ label, value, subtext, badge, badgeClassName, icon, iconClas
                   }
                 : undefined
         }
-        className={`rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md ${onClick ? 'cursor-pointer' : ''}`}
-        style={{ borderColor: WS.border }}
+        className={`hr-dash__stat ${onClick ? 'hr-dash__stat--clickable cursor-pointer' : ''}`}
     >
         <div className="mb-3 flex items-start justify-between gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconClassName}`}>{icon}</div>
+            <div className={`hr-dash__icon-well ${iconClassName || ''}`}>{icon}</div>
             {badge ? (
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${badgeClassName}`}>{badge}</span>
+                <span className={`hr-dash__badge ${badgeClassName}`}>{badge}</span>
             ) : null}
         </div>
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
-        <p className="mt-1 text-xs text-slate-500">{subtext}</p>
+        <p className="hr-dash__stat-label">{label}</p>
+        <p className="hr-dash__stat-value">{value}</p>
+        <p className="hr-dash__stat-sub">{subtext}</p>
     </div>
 );
 
 const Panel = ({ title, actionLabel, onAction, children, className = '' }) => (
-    <section
-        className={`rounded-2xl border bg-white p-4 shadow-sm ${className}`}
-        style={{ borderColor: WS.border }}
-    >
+    <section className={`hr-dash__panel ${className}`}>
         <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            <h2 className="hr-dash__panel-title">{title}</h2>
             {actionLabel ? (
                 <button
                     type="button"
                     onClick={onAction}
-                    className="text-xs font-medium text-emerald-600 transition hover:text-emerald-700"
+                    className="hr-dash__panel-action"
                 >
                     {actionLabel}
                 </button>
@@ -432,6 +379,7 @@ const Panel = ({ title, actionLabel, onAction, children, className = '' }) => (
 const DashboardHR = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const queryClient = useQueryClient();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const { permissions, permissionFlags } = useAuthPermissions();
@@ -462,8 +410,22 @@ const DashboardHR = () => {
     const [celebrationReacting, setCelebrationReacting] = useState(false);
     const [announcements, setAnnouncements] = useState([]);
     const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+    const [approvalsDrawer, setApprovalsDrawer] = useState({ open: false, escalatedOnly: false });
+    const [leaveDrawerOpen, setLeaveDrawerOpen] = useState(false);
+    const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
+    const [wishModal, setWishModal] = useState({ open: false, item: null, eventId: null });
+    const [employeeQuickView, setEmployeeQuickView] = useState({ open: false, employee: null });
+    const [escalatedBannerDismissed, setEscalatedBannerDismissed] = useState(false);
+    const [announcementsListOpen, setAnnouncementsListOpen] = useState(false);
+    const [jobsDrawerOpen, setJobsDrawerOpen] = useState(false);
+    const [profilePeekOpen, setProfilePeekOpen] = useState(false);
 
     const canManageAnnouncements = permissionFlags.isHrManager || permissionFlags.isHrExecutive;
+    const canAddEmployee =
+        permissionFlags.isOrgOwner ||
+        permissionFlags.isHrManager ||
+        permissionFlags.isHrExecutive ||
+        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts);
 
     const {
         data: employeeData = { employees: [], total: 0 },
@@ -558,91 +520,91 @@ const DashboardHR = () => {
         fetchAllEmployees();
     }, []);
 
-    useEffect(() => {
-        const fetchDashboardExtras = async () => {
-            try {
-                setExtrasLoading(true);
+    const fetchDashboardExtras = useCallback(async () => {
+        try {
+            setExtrasLoading(true);
 
-                const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-                const today = format(new Date(), 'yyyy-MM-dd');
+            const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+            const today = format(new Date(), 'yyyy-MM-dd');
 
-                const [attendanceTrendRes, birthdaysRes, jobsRes, approvalsRes, taxRegimeRes, todayStatusRes, escalatedRes] = await Promise.allSettled([
-                    axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, {
-                        params: { startDate: monthStart, endDate: today },
-                        withCredentials: true,
-                    }),
-                    axios.get('/v1/both/profile-details/upcoming-birthdays', {
-                        withCredentials: true,
-                    }),
-                    axios.get('/v1/admin/recruitment/jobs', {
-                        withCredentials: true,
-                    }),
-                    axios.get('/v1/admin/approvals/my-pending', {
-                        withCredentials: true,
-                    }),
-                    axios.get('/v1/both/tax-regime-change/admin/pending', {
-                        withCredentials: true,
-                    }),
-                    axios.get('/v1/both/attendance/today-status', {
-                        withCredentials: true,
-                    }),
-                    axios.get('/v1/admin/approvals/escalated-count', {
-                        withCredentials: true,
-                    }),
-                ]);
+            const [attendanceTrendRes, birthdaysRes, jobsRes, approvalsRes, taxRegimeRes, todayStatusRes, escalatedRes] = await Promise.allSettled([
+                axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, {
+                    params: { startDate: monthStart, endDate: today },
+                    withCredentials: true,
+                }),
+                axios.get('/v1/both/profile-details/upcoming-birthdays', {
+                    withCredentials: true,
+                }),
+                axios.get('/v1/admin/recruitment/jobs', {
+                    withCredentials: true,
+                }),
+                axios.get('/v1/admin/approvals/my-pending', {
+                    withCredentials: true,
+                }),
+                axios.get('/v1/both/tax-regime-change/admin/pending', {
+                    withCredentials: true,
+                }),
+                axios.get('/v1/both/attendance/today-status', {
+                    withCredentials: true,
+                }),
+                axios.get('/v1/admin/approvals/escalated-count', {
+                    withCredentials: true,
+                }),
+            ]);
 
-                const workflowApprovals =
-                    approvalsRes.status === 'fulfilled' ? approvalsRes.value?.data?.data || [] : [];
-                const taxRegimeApprovals =
-                    taxRegimeRes.status === 'fulfilled' ? taxRegimeRes.value?.data?.data || [] : [];
-                const workflowTaxIds = new Set(
-                    workflowApprovals
-                        .filter((a) => a.entityType === 'TaxRegimeChange')
-                        .map((a) => String(a.entityId))
-                );
-                const mergedApprovals = [
-                    ...taxRegimeApprovals.filter(
-                        (item) => !workflowTaxIds.has(String(item.taxRegimeRequestId))
-                    ),
-                    ...workflowApprovals,
-                ];
+            const workflowApprovals =
+                approvalsRes.status === 'fulfilled' ? approvalsRes.value?.data?.data || [] : [];
+            const taxRegimeApprovals =
+                taxRegimeRes.status === 'fulfilled' ? taxRegimeRes.value?.data?.data || [] : [];
+            const workflowTaxIds = new Set(
+                workflowApprovals
+                    .filter((a) => a.entityType === 'TaxRegimeChange')
+                    .map((a) => String(a.entityId))
+            );
+            const mergedApprovals = [
+                ...taxRegimeApprovals.filter(
+                    (item) => !workflowTaxIds.has(String(item.taxRegimeRequestId))
+                ),
+                ...workflowApprovals,
+            ];
 
-                const escalatedFromApi =
-                    escalatedRes.status === 'fulfilled'
-                        ? Number(escalatedRes.value?.data?.data?.count ?? 0)
-                        : 0;
-                const escalatedFromList = workflowApprovals.filter((a) => a.slaEscalated).length;
+            const escalatedFromApi =
+                escalatedRes.status === 'fulfilled'
+                    ? Number(escalatedRes.value?.data?.data?.count ?? 0)
+                    : 0;
+            const escalatedFromList = workflowApprovals.filter((a) => a.slaEscalated).length;
 
-                setDashboardExtras({
-                    birthdays:
-                        birthdaysRes.status === 'fulfilled' ? (birthdaysRes.value?.data?.celebrations || [ ...(birthdaysRes.value?.data?.birthdays || []), ...(birthdaysRes.value?.data?.marriageAnniversaries || []) ]) : [],
-                    openJobs:
-                        jobsRes.status === 'fulfilled' ? jobsRes.value?.data?.data || [] : [],
-                    pendingApprovals: mergedApprovals,
-                    escalatedApprovalsCount: Math.max(escalatedFromApi, escalatedFromList),
-                    attendanceDailyTrend:
-                        attendanceTrendRes.status === 'fulfilled' ? attendanceTrendRes.value?.data?.dailyTrend || [] : [],
-                    todayStatus:
-                        todayStatusRes.status === 'fulfilled' ? todayStatusRes.value?.data?.data || [] : [],
-                });
-            } catch {
-                setDashboardExtras({
-                    birthdays: [],
-                    openJobs: [],
-                    pendingApprovals: [],
-                    escalatedApprovalsCount: 0,
-                    attendanceDailyTrend: [],
-                    todayStatus: [],
-                });
-            } finally {
-                setExtrasLoading(false);
-            }
-        };
-
-        fetchDashboardExtras();
+            setDashboardExtras({
+                birthdays:
+                    birthdaysRes.status === 'fulfilled' ? (birthdaysRes.value?.data?.celebrations || [ ...(birthdaysRes.value?.data?.birthdays || []), ...(birthdaysRes.value?.data?.marriageAnniversaries || []) ]) : [],
+                openJobs:
+                    jobsRes.status === 'fulfilled' ? jobsRes.value?.data?.data || [] : [],
+                pendingApprovals: mergedApprovals,
+                escalatedApprovalsCount: Math.max(escalatedFromApi, escalatedFromList),
+                attendanceDailyTrend:
+                    attendanceTrendRes.status === 'fulfilled' ? attendanceTrendRes.value?.data?.dailyTrend || [] : [],
+                todayStatus:
+                    todayStatusRes.status === 'fulfilled' ? todayStatusRes.value?.data?.data || [] : [],
+            });
+        } catch {
+            setDashboardExtras({
+                birthdays: [],
+                openJobs: [],
+                pendingApprovals: [],
+                escalatedApprovalsCount: 0,
+                attendanceDailyTrend: [],
+                todayStatus: [],
+            });
+        } finally {
+            setExtrasLoading(false);
+        }
     }, []);
 
-    const loadAnnouncements = useCallback(async () => {
+    useEffect(() => {
+        fetchDashboardExtras();
+    }, [fetchDashboardExtras]);
+
+    const loadAnnouncements = useCallback(async (limit = 3) => {
         if (!canManageAnnouncements) {
             setAnnouncements([]);
             return;
@@ -650,7 +612,7 @@ const DashboardHR = () => {
 
         try {
             const announcementsRes = await axios.get('/v1/both/notification/sent-announcements', {
-                params: { scope: 'organization', page: 1, limit: 3 },
+                params: { scope: 'organization', page: 1, limit },
                 withCredentials: true,
             });
             const recentAnnouncements = announcementsRes?.data?.announcements || [];
@@ -773,11 +735,6 @@ const DashboardHR = () => {
         [dashboardExtras.pendingApprovals]
     );
 
-    const upcomingEvents = useMemo(
-        () => buildUpcomingEvents(dashboardExtras.birthdays, dashboardExtras.pendingApprovals),
-        [dashboardExtras.birthdays, dashboardExtras.pendingApprovals]
-    );
-
     const getCelebrationItemKey = (item) => `${item?.type || 'birthday'}_${item?.employeeId}`;
 
     const openTodayCelebrationEvent = async (item) => {
@@ -808,10 +765,9 @@ const DashboardHR = () => {
             }
             const itemKey = getCelebrationItemKey(item);
             const event = celebrationEvents[itemKey] || await openTodayCelebrationEvent(item);
-            const eventId = event?._id;
-            navigate(eventId ? `/celebrations/${eventId}` : '/celebrations');
+            setWishModal({ open: true, item, eventId: event?._id || null });
         } catch {
-            navigate('/celebrations');
+            setWishModal({ open: true, item, eventId: null });
         }
     };
 
@@ -867,66 +823,86 @@ const DashboardHR = () => {
             .slice(0, 5);
     }, [orgEmployees, searchQuery]);
 
+    const queueCards = useMemo(() => {
+        const byLabel = Object.fromEntries(approvalSummary.map((item) => [item.label, item.value]));
+        return [
+            {
+                label: 'Leave Approvals',
+                value: pendingLeaves,
+                badge: pendingLeaves > 0 ? `${pendingLeaves} Queued` : 'Clear',
+                hint: 'Leave Review',
+                icon: <FiCalendar className="h-4 w-4" />,
+                onClick: () => setLeaveDrawerOpen(true),
+            },
+            {
+                label: 'Regularization',
+                value: byLabel['Regular.'] || 0,
+                badge: (byLabel['Regular.'] || 0) > 0 ? `${byLabel['Regular.']} Queued` : 'Clear',
+                hint: 'Pending Approvals',
+                icon: <FiClock className="h-4 w-4" />,
+                onClick: () => setApprovalsDrawer({ open: true, escalatedOnly: false }),
+            },
+            {
+                label: 'Expenses',
+                value: byLabel.Expenses || 0,
+                badge: (byLabel.Expenses || 0) > 0 ? `${byLabel.Expenses} Queued` : 'Clear',
+                hint: 'Pending Approvals',
+                icon: <FiFileText className="h-4 w-4" />,
+                onClick: () => setApprovalsDrawer({ open: true, escalatedOnly: false }),
+            },
+            {
+                label: 'Onboarding',
+                value: byLabel.Onboarding || 0,
+                badge: (byLabel.Onboarding || 0) > 0 ? `${byLabel.Onboarding} Queued` : 'Clear',
+                hint: 'Pending Approvals',
+                icon: <FiUserPlus className="h-4 w-4" />,
+                onClick: () => setApprovalsDrawer({ open: true, escalatedOnly: false }),
+            },
+        ];
+    }, [approvalSummary, pendingLeaves]);
+
     const quickActions = [
-        (permissionFlags.isOrgOwner ||
-            permissionFlags.isHrManager ||
-            permissionFlags.isHrExecutive ||
-            hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts)) && {
+        canAddEmployee && {
             label: 'Add Employee',
-            subtitle: 'Create a profile',
-            icon: <FiUserPlus className="h-5 w-5" />,
-            onClick: () => navigate('/add-employee'),
-        },
-        hasAnyPermission(permissions, [PERMISSIONS.PAYROLL_VIEW_ALL], rbacOpts) && {
-            label: 'Run Payroll',
-            subtitle: 'Process salaries',
-            icon: <FiFileText className="h-5 w-5" />,
-            onClick: () => navigate('/admin-payroll'),
+            primary: true,
+            icon: <FiUserPlus className="h-4 w-4" />,
+            onClick: () => setAddEmployeeOpen(true),
         },
         hasAnyPermission(permissions, [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM], rbacOpts) && {
-            label: 'Leave Review',
-            subtitle: `${pendingLeaves} pending`,
-            icon: <FiCalendar className="h-5 w-5" />,
-            onClick: () => navigate('/leave-management'),
-        },
-        (permissionFlags.isHrManager || permissionFlags.isHrExecutive) && {
-            label: 'Attendance Rules',
-            subtitle: 'Punch & office rules',
-            icon: <FiSettings className="h-5 w-5" />,
-            onClick: () => navigate('/attendance-rules'),
-        },
-        (permissionFlags.isHrManager || permissionFlags.isHrExecutive) && {
-            label: 'Leave Policy',
-            subtitle: 'Configure leave types',
-            icon: <FiBook className="h-5 w-5" />,
-            onClick: () => navigate('/admin/leave-policy'),
+            label: `Leave Review${pendingLeaves ? ` (${pendingLeaves})` : ''}`,
+            icon: <FiCalendar className="h-4 w-4" />,
+            onClick: () => setLeaveDrawerOpen(true),
         },
         hasAnyPermission(permissions, [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM], rbacOpts) && {
-            label: 'Approvals',
-            subtitle: `${dashboardExtras.pendingApprovals.length} queued`,
-            icon: <FiClock className="h-5 w-5" />,
-            onClick: () => navigate('/admin/pending-approvals'),
+            label: `Approvals${dashboardExtras.pendingApprovals.length ? ` (${dashboardExtras.pendingApprovals.length})` : ''}`,
+            icon: <FiClock className="h-4 w-4" />,
+            onClick: () => setApprovalsDrawer({ open: true, escalatedOnly: false }),
         },
         hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_VIEW_ALL], rbacOpts) && {
             label: 'Recruitment',
-            subtitle: `${openPositions} open roles`,
-            icon: <FiBriefcase className="h-5 w-5" />,
-            onClick: () => navigate('/recruitment'),
+            icon: <FiBriefcase className="h-4 w-4" />,
+            onClick: () => setJobsDrawerOpen(true),
         },
-        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_VIEW_ALL], rbacOpts) && {
-            label: 'Reports',
-            subtitle: 'HR analytics',
-            icon: <FiTrendingUp className="h-5 w-5" />,
-            onClick: () => navigate('/admin/reports'),
+        canManageAnnouncements && {
+            label: 'Announcements',
+            icon: <FiPlus className="h-4 w-4" />,
+            onClick: () => {
+                loadAnnouncements(20);
+                setAnnouncementsListOpen(true);
+            },
         },
     ].filter(Boolean);
+
+    const firstName = (user?.name || 'HR').split(/\s+/)[0];
+    const showEscalatedBanner =
+        !escalatedBannerDismissed && Number(dashboardExtras.escalatedApprovalsCount || 0) > 0;
 
     const pageLoading = loading || employeesLoading || leavesLoading || allEmployeesLoading;
     const todayLabel = format(new Date(), 'EEEE, do MMMM yyyy');
 
     if (user?.mustResetPassword) {
         return (
-            <div className="min-h-screen bg-[#F5F7FB] p-3 sm:p-4">
+            <div className="hr-dash min-h-screen p-3 sm:p-4">
                 <PasswordResetPopup onClose={() => navigate('/login')} />
             </div>
         );
@@ -934,10 +910,10 @@ const DashboardHR = () => {
 
     if (pageLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-[#F5F7FB] p-6">
+            <div className="hr-dash flex min-h-screen items-center justify-center p-6">
                 <div className="text-center">
-                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
-                    <p className="text-sm text-slate-600">Loading dashboard...</p>
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]" />
+                    <p className="text-sm text-[#666666]">Loading dashboard...</p>
                 </div>
             </div>
         );
@@ -945,13 +921,13 @@ const DashboardHR = () => {
 
     if (error) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-[#F5F7FB] p-6">
+            <div className="hr-dash flex min-h-screen items-center justify-center p-6">
                 <div className="text-center">
                     <p className="mb-4 font-medium text-red-600">Error: {error}</p>
                     <button
                         type="button"
                         onClick={() => window.location.reload()}
-                        className="rounded-full bg-[#20C997] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ab589]"
+                        className="hr-dash__btn-primary px-6 py-2.5"
                     >
                         Retry
                     </button>
@@ -962,13 +938,13 @@ const DashboardHR = () => {
 
     if (!user) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-[#F5F7FB] p-6">
+            <div className="hr-dash flex min-h-screen items-center justify-center p-6">
                 <div className="text-center">
-                    <p className="mb-4 font-medium text-slate-600">Please log in to access the dashboard</p>
+                    <p className="mb-4 font-medium text-[#666666]">Please log in to access the dashboard</p>
                     <button
                         type="button"
                         onClick={() => navigate('/login')}
-                        className="rounded-full bg-[#20C997] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ab589]"
+                        className="hr-dash__btn-primary px-6 py-2.5"
                     >
                         Go to Login
                     </button>
@@ -978,226 +954,204 @@ const DashboardHR = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#F5F7FB]">
+        <div className="hr-dash min-h-screen">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
             {showAnnouncementModal && canManageAnnouncements ? (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-                    onClick={() => setShowAnnouncementModal(false)}
+                <ModalShell
+                    eyebrow="Communications"
+                    title="New Announcement"
+                    wide
+                    onClose={() => setShowAnnouncementModal(false)}
+                    footer={
+                        <button
+                            type="button"
+                            className="hr-ov-btn hr-ov-btn--ghost"
+                            onClick={() => setShowAnnouncementModal(false)}
+                        >
+                            Cancel
+                        </button>
+                    }
                 >
-                    <div className="w-full max-w-lg" onClick={(event) => event.stopPropagation()}>
-                        <NotificationSender
-                            onSent={() => {
-                                setShowAnnouncementModal(false);
-                                loadAnnouncements();
-                            }}
-                        />
-                    </div>
-                </div>
+                    <NotificationSender
+                        open
+                        asDrawer={false}
+                        onClose={() => setShowAnnouncementModal(false)}
+                        onSent={() => {
+                            setShowAnnouncementModal(false);
+                            loadAnnouncements();
+                        }}
+                        onDraftSaved={() => {
+                            setShowAnnouncementModal(false);
+                            loadAnnouncements();
+                        }}
+                    />
+                </ModalShell>
             ) : null}
 
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack gap-4">
                 <AnnouncementBanner />
-                <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
-                    <header
-                        className="order-1 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur lg:col-start-1 lg:row-start-1"
-                        style={{ borderColor: WS.border }}
-                    >
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                        <div className="flex min-w-0 items-center gap-3">
-                            <div className="hidden h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 sm:flex">
-                                <FiGrid className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                                    HR Workspace
-                                </p>
-                                <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
-                                    People dashboard
-                                </h1>
-                                <p className="mt-0.5 text-xs text-slate-500">
-                                    {departmentLabel} · {todayLabel}
-                                </p>
-                            </div>
-                        </div>
 
-                        <div className="w-full xl:max-w-md">
-                            <label className="relative block">
-                                <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <header className="hr-dash__header">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="min-w-0">
+                            <p className="hr-dash__eyebrow">HR Workspace</p>
+                            <h1 className="hr-dash__title">People dashboard</h1>
+                            <p className="hr-dash__subtitle">
+                                {firstName} · {departmentLabel} · {todayLabel}
+                            </p>
+                        </div>
+                        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center xl:w-auto xl:max-w-2xl">
+                            <label className="relative block min-w-0 flex-1">
+                                <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={(event) => setSearchQuery(event.target.value)}
                                     placeholder="Search employee or role..."
-                                    className="h-10 w-full rounded-full border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white"
+                                    className="hr-dash__search"
                                 />
                             </label>
-                        </div>
-
-                        <div className="flex items-center gap-2 self-end sm:gap-3 xl:self-auto">
-                            <button
-                                type="button"
-                                onClick={() => navigate('/notifications')}
-                                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-600 sm:h-11 sm:w-11"
-                                aria-label="Notifications"
-                            >
-                                <HiOutlineBell className="h-5 w-5" />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => navigate('/helpdesk')}
-                                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-600 sm:h-11 sm:w-11"
-                                aria-label="Help"
-                            >
-                                <HiOutlineQuestionMarkCircle className="h-5 w-5" />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => navigate('/profile-details')}
-                                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 text-left transition hover:border-emerald-200 sm:gap-3 sm:px-3 sm:py-2"
-                            >
-                                <ProfilePicture user={user} size="sm" />
-                                <div className="hidden min-w-0 sm:block">
-                                    <p className="truncate text-sm font-semibold text-slate-900">
-                                        {user?.name || 'HR Manager'}
-                                    </p>
-                                    <p className="truncate text-xs text-slate-500">
-                                        {user?.jobTitle || user?.position || 'HR Manager'}
-                                    </p>
-                                </div>
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2">
+                                {canAddEmployee ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setAddEmployeeOpen(true)}
+                                        className="hr-dash__btn-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm"
+                                    >
+                                        <FiPlus className="h-4 w-4" />
+                                        Add Employee
+                                    </button>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        loadAnnouncements(20);
+                                        setAnnouncementsListOpen(true);
+                                    }}
+                                    className="hr-dash__icon-btn"
+                                    aria-label="Announcements"
+                                >
+                                    <HiOutlineBell className="h-5 w-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setProfilePeekOpen(true)}
+                                    className="hr-dash__profile-btn"
+                                >
+                                    <ProfilePicture user={user} size="sm" />
+                                    <div className="hidden min-w-0 sm:block">
+                                        <p className="truncate text-sm font-semibold text-[#111C2D]">
+                                            {user?.name || 'HR Manager'}
+                                        </p>
+                                        <p className="truncate text-xs text-[#666666]">
+                                            {user?.jobTitle || user?.position || 'HR Manager'}
+                                        </p>
+                                    </div>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </header>
 
-                <section className="order-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 lg:col-start-1 lg:row-start-2">
-                    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Punch in / punch out
-                    </h3>
+                <section className="hr-dash__punch">
+                    <h3>Punch in / punch out</h3>
                     <AttendanceBox variant="dashboard" />
                 </section>
 
-                    <aside className="order-3 flex w-full min-w-0 self-stretch lg:col-start-2 lg:row-span-2 lg:row-start-1">
-                        <div
-                            className="flex h-full min-h-0 w-full flex-col rounded-xl border bg-white shadow-sm sm:min-h-[280px]"
-                            style={{ borderColor: WS.border }}
-                        >
-                            <div
-                                className="shrink-0 rounded-t-xl px-3 py-2"
-                                style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
-                            >
-                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                                    <FiGift className="h-3 w-3" />
-                                    Upcoming celebrations
-                                </h3>
+                {showEscalatedBanner ? (
+                    <div className="hr-dash__banner">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="hr-dash__banner-icon">
+                                <FiClock className="h-5 w-5" />
                             </div>
-                            <div className="flex flex-1 flex-col p-3">
-                                <ul className="space-y-2">
-                                    {sortCelebrations(dashboardExtras.birthdays || []).slice(0, 3).map((item, idx) => {
-                                        const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
-                                        return (
-                                            <CelebrationDashboardCard
-                                                key={`${item.type || 'birthday'}_${item.employeeId || idx}`}
-                                                item={item}
-                                                isSelf={false}
-                                                event={celebrationEvents[itemKey]}
-                                                reacting={celebrationReacting}
-                                                onReact={handleCelebrationReact}
-                                                onWishes={handleOpenCelebrationWishes}
-                                            />
-                                        );
-                                    })}
-                                </ul>
-                                {(!dashboardExtras.birthdays || dashboardExtras.birthdays.length === 0) ? (
-                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
-                                ) : null}
-                                <div className="mt-4 flex flex-1 flex-col justify-evenly gap-3">
-                                    {upcomingEvents.filter((eventItem) => eventItem.tone !== 'birthday').slice(0, 2).map((eventItem) => (
-                                        <div key={eventItem.id} className="flex min-w-0 items-start gap-2">
-                                            <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${getEventToneClasses(eventItem.tone)}`}>
-                                                <FiCalendar className="h-3 w-3" />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-                                                    <p className="min-w-0 truncate text-sm font-semibold text-slate-900">{eventItem.title}</p>
-                                                    <p className="shrink-0 text-[10px] font-medium text-slate-400">{eventItem.dateLabel}</p>
-                                                </div>
-                                                <p className="truncate text-[11px] text-slate-500">{eventItem.subtitle}</p>
-                                            </div>
-                                        </div>
-                                    ))}
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-bold text-[#111C2D]">
+                                        Overdue Approvals ({dashboardExtras.escalatedApprovalsCount})
+                                    </p>
+                                    <span className="rounded-full bg-[#E11D48] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                                        Urgent
+                                    </span>
                                 </div>
+                                <p className="mt-0.5 text-xs text-[#666666]">
+                                    Pending beyond review window
+                                </p>
                             </div>
                         </div>
-                    </aside>
-                </div>
-
-                <div
-                    className={`grid grid-cols-1 gap-4 ${
-                        canManageAnnouncements ? 'lg:grid-cols-2 lg:items-stretch' : 'max-w-md'
-                    }`}
-                >
-                    <PersonalDashboardKpiRow compact layout="stack" />
-                    {canManageAnnouncements ? (
-                        <section
-                            className="flex min-w-0 flex-col rounded-2xl border bg-white p-4 shadow-sm"
-                            style={{ borderColor: WS.border }}
-                        >
-                            <div className="mb-3 flex items-center justify-between gap-2">
-                                <h2 className="text-lg font-semibold text-slate-900">Announcements</h2>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAnnouncementModal(true)}
-                                    className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600 hover:text-emerald-700"
-                                >
-                                    <FiPlus className="h-4 w-4" />
-                                    New
-                                </button>
-                            </div>
-                            <div className="min-h-0 flex-1 space-y-2.5">
-                                {announcements.length === 0 ? (
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                                        No announcements yet.
-                                    </div>
-                                ) : (
-                                    announcements.map((item) => (
-                                        <div
-                                            key={item._id}
-                                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
-                                        >
-                                            <p className="text-xs text-slate-500">
-                                                {formatShortDate(item.createdAt)}
-                                            </p>
-                                            <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-800">
-                                                {item.message}
-                                            </p>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                        <div className="flex shrink-0 items-center gap-2">
                             <button
                                 type="button"
-                                onClick={() => navigate('/sent-announcements')}
-                                className="mt-3 w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                className="hr-dash__banner-btn"
+                                onClick={() => setApprovalsDrawer({ open: true, escalatedOnly: true })}
                             >
-                                View All Announcements
+                                Review Escalated ({dashboardExtras.escalatedApprovalsCount})
                             </button>
-                        </section>
-                    ) : null}
+                            <button
+                                type="button"
+                                className="hr-dash__icon-btn !h-9 !w-9"
+                                aria-label="Dismiss"
+                                onClick={() => setEscalatedBannerDismissed(true)}
+                            >
+                                ×
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
+                <div className="hr-dash__queue">
+                    {queueCards.map((card) => (
+                        <button
+                            key={card.label}
+                            type="button"
+                            className="hr-dash__queue-card"
+                            onClick={card.onClick}
+                        >
+                            <div className="hr-dash__queue-top">
+                                <span className="hr-dash__icon-well !h-9 !w-9">{card.icon}</span>
+                                <span className="hr-dash__badge bg-[#D1F5EA] text-[#07523E]">{card.badge}</span>
+                            </div>
+                            <p className="hr-dash__queue-value">{formatNumber(card.value)}</p>
+                            <p className="hr-dash__queue-label">{card.label}</p>
+                            <p className="hr-dash__queue-hint">
+                                {card.hint} <FiArrowUpRight className="h-3 w-3" />
+                            </p>
+                        </button>
+                    ))}
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div className="hr-dash__pulse">
                     <StatCard
                         label="Total Employees"
                         value={formatNumber(orgEmployeeTotal)}
                         subtext={`${activeEmployees} active across departments`}
                         badge={`+${newHires} new`}
-                        badgeClassName="bg-emerald-50 text-emerald-700"
+                        badgeClassName="bg-[#D1F5EA] text-[#07523E]"
                         icon={<FiUsers className="h-5 w-5" />}
-                        iconClassName="bg-emerald-100 text-emerald-600"
+                        iconClassName="text-[#0E9370]"
+                    />
+                    <StatCard
+                        label="Today's Attendance"
+                        value={`${todayAttendanceStats.rate.toFixed(1)}%`}
+                        subtext={`${todayAttendanceStats.present} of ${todayAttendanceStats.total} marked present`}
+                        badge={todayAttendanceStats.rate >= 90 ? 'Optimal' : 'In focus'}
+                        badgeClassName={
+                            todayAttendanceStats.rate >= 90 ? 'bg-[#D1F5EA] text-[#07523E]' : 'bg-cyan-100 text-cyan-700'
+                        }
+                        icon={<FiCheckCircle className="h-5 w-5" />}
+                        iconClassName="text-[#0E9370]"
+                    />
+                    <StatCard
+                        label="Leave Approvals"
+                        value={formatNumber(pendingLeaves)}
+                        subtext="Pending leave requests"
+                        badge={pendingLeaves > 0 ? 'Queued' : 'Clear'}
+                        badgeClassName={pendingLeaves > 0 ? 'bg-amber-100 text-amber-700' : 'bg-[#D1F5EA] text-[#07523E]'}
+                        icon={<FiCalendar className="h-5 w-5" />}
+                        iconClassName="text-[#0E9370]"
+                        onClick={() => setLeaveDrawerOpen(true)}
                     />
                     <StatCard
                         label="Open Positions"
@@ -1206,29 +1160,8 @@ const DashboardHR = () => {
                         badge={openPositions > 0 ? 'Hiring' : 'Stable'}
                         badgeClassName="bg-slate-100 text-slate-600"
                         icon={<FiBriefcase className="h-5 w-5" />}
-                        iconClassName="bg-emerald-900/10 text-emerald-900"
-                    />
-                    <StatCard
-                        label="Attrition Rate"
-                        value={`${attritionRate}%`}
-                        subtext={`${terminatedEmployees} recorded exits`}
-                        badge={Number(attritionRate) <= 10 ? 'Healthy' : 'Watch'}
-                        badgeClassName={
-                            Number(attritionRate) <= 10 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                        }
-                        icon={<FiTrendingDown className="h-5 w-5" />}
-                        iconClassName="bg-orange-100 text-orange-500"
-                    />
-                    <StatCard
-                        label="Today's Attendance"
-                        value={`${todayAttendanceStats.rate.toFixed(1)}%`}
-                        subtext={`${todayAttendanceStats.present} of ${todayAttendanceStats.total} marked present`}
-                        badge={todayAttendanceStats.rate >= 90 ? 'Optimal' : 'In focus'}
-                        badgeClassName={
-                            todayAttendanceStats.rate >= 90 ? 'bg-emerald-50 text-emerald-700' : 'bg-cyan-100 text-cyan-700'
-                        }
-                        icon={<FiCheckCircle className="h-5 w-5" />}
-                        iconClassName="bg-teal-100 text-teal-700"
+                        iconClassName="text-[#00694F]"
+                        onClick={() => setJobsDrawerOpen(true)}
                     />
                     <StatCard
                         label="Overdue Approvals"
@@ -1240,23 +1173,85 @@ const DashboardHR = () => {
                         badgeClassName={
                             (dashboardExtras.escalatedApprovalsCount || 0) > 0
                                 ? 'bg-orange-100 text-orange-800'
-                                : 'bg-emerald-50 text-emerald-700'
+                                : 'bg-[#D1F5EA] text-[#07523E]'
                         }
                         icon={<FiClock className="h-5 w-5" />}
-                        iconClassName="bg-orange-100 text-orange-600"
-                        onClick={() => navigate('/admin/pending-approvals?escalated=1')}
+                        iconClassName="text-[#F59E0B]"
+                        onClick={() => setApprovalsDrawer({ open: true, escalatedOnly: true })}
                     />
                 </div>
 
+                {canManageAnnouncements ? (
+                    <section className="hr-dash__panel">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h2 className="hr-dash__panel-title text-lg">Announcements</h2>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAnnouncementModal(true)}
+                                    className="hr-dash__btn-primary inline-flex h-9 items-center gap-1 px-3 text-xs"
+                                >
+                                    <FiPlus className="h-3.5 w-3.5" />
+                                    New
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/sent-announcements')}
+                                    className="hr-dash__btn-ghost !w-auto px-3"
+                                >
+                                    View All
+                                </button>
+                            </div>
+                        </div>
+                        <div className="space-y-2.5">
+                            {announcements.length === 0 ? (
+                                <div className="hr-dash__announce-item text-sm text-[#666666]">
+                                    No announcements yet.
+                                </div>
+                            ) : (
+                                announcements.slice(0, 3).map((item) => {
+                                    const important =
+                                        item.priority === 'high' ||
+                                        item.metadata?.important === true ||
+                                        item.metadata?.priority === 'high';
+                                    const title =
+                                        String(item.metadata?.title || '').trim() ||
+                                        String(item.message || '')
+                                            .replace(/<[^>]+>/g, ' ')
+                                            .replace(/\s+/g, ' ')
+                                            .trim();
+                                    return (
+                                        <div key={item._id} className="hr-dash__announce-item">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <p className="text-xs text-[#666666]">{formatShortDate(item.createdAt)}</p>
+                                                {important ? (
+                                                    <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 border border-red-200">
+                                                        Important
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <p className="mt-1 line-clamp-2 text-sm font-medium text-[#111C2D]">
+                                                {title}
+                                            </p>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </section>
+                ) : null}
+
                 <div className="hrms-main-rail gap-4">
                     <Panel title="Monthly Hiring vs Attrition">
-                        <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                        <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-[#666666]">
                             <span className="inline-flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: WS.mint }} />
                                 Hiring
                             </span>
                             <span className="inline-flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-orange-400" />
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: WS.peach }} />
                                 Attrition
                             </span>
                         </div>
@@ -1282,9 +1277,9 @@ const DashboardHR = () => {
                     </Panel>
 
                     <Panel title="Attendance Trend">
-                        <div className="mb-4 flex items-center justify-between text-sm text-slate-500">
+                        <div className="mb-4 flex items-center justify-between text-sm text-[#666666]">
                             <span>Average team attendance this month</span>
-                            <span className="font-medium text-emerald-600">Live view</span>
+                            <span className="font-medium text-[#0E9370]">Live view</span>
                         </div>
                         <div className="h-[220px]">
                             <ResponsiveContainer width="100%" height="100%">
@@ -1322,11 +1317,8 @@ const DashboardHR = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <section
-                        className="rounded-2xl border bg-white p-4 shadow-sm"
-                        style={{ borderColor: WS.border }}
-                    >
-                        <h2 className="mb-4 text-base font-bold leading-tight" style={{ color: HEADCOUNT_CHART.title }}>
+                    <section className="hr-dash__panel">
+                        <h2 className="hr-dash__panel-title mb-4 font-bold" style={{ color: HEADCOUNT_CHART.title }}>
                             Headcount by Department
                         </h2>
                         <div className="flex items-center gap-4">
@@ -1411,13 +1403,18 @@ const DashboardHR = () => {
                         </div>
                     </section>
 
-                    <Panel title="Pending Approvals" actionLabel="View All" onAction={() => navigate('/admin/pending-approvals')}>
+                    <Panel title="Pending Approvals" actionLabel="View All" onAction={() => setApprovalsDrawer({ open: true, escalatedOnly: false })}>
                         <div className="grid grid-cols-2 gap-2.5">
                             {approvalSummary.map((item) => (
-                                <div key={item.label} className="rounded-xl bg-slate-50 p-3">
-                                    <p className={`text-2xl font-semibold ${item.accent}`}>{String(item.value).padStart(2, '0')}</p>
-                                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
-                                </div>
+                                <button
+                                    key={item.label}
+                                    type="button"
+                                    className="hr-dash__metric-tile text-left transition hover:bg-[#E8FAF4]"
+                                    onClick={() => setApprovalsDrawer({ open: true, escalatedOnly: false })}
+                                >
+                                    <p className={`text-2xl font-semibold tabular-nums ${item.accent}`}>{String(item.value).padStart(2, '0')}</p>
+                                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-[#666666]">{item.label}</p>
+                                </button>
                             ))}
                         </div>
 
@@ -1425,24 +1422,24 @@ const DashboardHR = () => {
                             {pendingApprovalsPreview.length > 0 ? (
                                 pendingApprovalsPreview.map((approval) => (
                                     <button
-                                        key={approval._id}
+                                        key={approval._id || approval.taxRegimeRequestId}
                                         type="button"
-                                        onClick={() => navigate('/admin/pending-approvals')}
-                                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5 text-left transition hover:border-emerald-200 hover:bg-slate-50"
+                                        onClick={() => setApprovalsDrawer({ open: true, escalatedOnly: false })}
+                                        className="hr-dash__row-btn"
                                     >
                                         <div className="min-w-0">
-                                            <p className="truncate text-sm font-semibold text-slate-900">
+                                            <p className="truncate text-sm font-semibold text-[#111C2D]">
                                                 {approval.entityType || 'Approval'} request
                                             </p>
-                                            <p className="truncate text-xs text-slate-500">
+                                            <p className="truncate text-xs text-[#666666]">
                                                 {approval.requestedBy?.name || 'Pending review'}
                                             </p>
                                         </div>
-                                        <FiArrowUpRight className="h-4 w-4 shrink-0 text-slate-400" />
+                                        <FiArrowUpRight className="h-4 w-4 shrink-0 text-[#94A3B8]" />
                                     </button>
                                 ))
                             ) : (
-                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                                <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] px-3 py-4 text-center text-xs text-[#666666]">
                                     No pending approvals right now.
                                 </div>
                             )}
@@ -1450,29 +1447,21 @@ const DashboardHR = () => {
                     </Panel>
                 </div>
 
-                <div className="hrms-main-rail gap-4">
-                    <Panel title="Recent Hires" className="lg:self-stretch">
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                            <p className="text-sm text-slate-500">
-                                {searchQuery ? `Filtered by "${searchQuery}"` : 'Newest additions to your workforce'}
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => navigate('/employees')}
-                                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                                aria-label="More options"
-                            >
-                                <FiMoreHorizontal className="h-5 w-5" />
-                            </button>
-                        </div>
+                <Panel title="Recent Hires">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm text-[#666666]">
+                            {searchQuery ? `Filtered by "${searchQuery}"` : 'Newest additions to your workforce'}
+                        </p>
+                    </div>
 
-                        <div className="overflow-x-auto overscroll-x-contain rounded-3xl border border-slate-100">
-                            <div className="min-w-[640px]">
-                            <div className="grid grid-cols-[1.4fr_1fr_1fr_0.8fr] gap-3 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <div className="hr-dash__table overscroll-x-contain">
+                        <div className="min-w-[640px]">
+                            <div className="hr-dash__table-head grid-cols-[1.4fr_1fr_1fr_0.8fr_auto]">
                                 <span>Employee</span>
                                 <span>Role</span>
                                 <span>Date Joined</span>
                                 <span>Status</span>
+                                <span className="sr-only">Action</span>
                             </div>
 
                             {recentHires.length > 0 ? (
@@ -1480,99 +1469,137 @@ const DashboardHR = () => {
                                     <button
                                         key={employeeItem._id}
                                         type="button"
-                                        onClick={() => navigate(`/employees/${employeeItem._id}`)}
-                                        className="grid w-full grid-cols-[1.4fr_1fr_1fr_0.8fr] gap-3 border-t border-slate-100 px-5 py-4 text-left transition hover:bg-slate-50"
+                                        onClick={() => setEmployeeQuickView({ open: true, employee: employeeItem })}
+                                        className="hr-dash__table-row grid-cols-[1.4fr_1fr_1fr_0.8fr_auto]"
                                     >
                                         <span className="flex min-w-0 items-center gap-3">
-                                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700">
+                                            <span className="hr-dash__avatar">
                                                 {getEmployeeName(employeeItem).slice(0, 2).toUpperCase()}
                                             </span>
                                             <span className="min-w-0">
-                                                <span className="block truncate font-semibold text-slate-900">
+                                                <span className="block truncate font-semibold text-[#111C2D]">
                                                     {getEmployeeName(employeeItem)}
                                                 </span>
-                                                <span className="block truncate text-xs text-slate-500">
-                                                    {employeeItem?.department || 'Department pending'}
+                                                <span className="block truncate text-xs text-[#666666]">
+                                                    {employeeItem?.employeeId || employeeItem?.department || 'Department pending'}
                                                 </span>
                                             </span>
                                         </span>
-                                        <span className="truncate text-sm text-slate-600">
-                                            {employeeItem?.jobTitle || employeeItem?.position || '--'}
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-sm text-[#111C2D]">
+                                                {employeeItem?.jobTitle || employeeItem?.position || '--'}
+                                            </span>
+                                            <span className="block truncate text-xs text-[#666666]">
+                                                {employeeItem?.department || ''}
+                                            </span>
                                         </span>
-                                        <span className="text-sm text-slate-600">
+                                        <span className="text-sm text-[#475569]">
                                             {formatShortDate(employeeItem?.joiningDate || employeeItem?.createdAt)}
                                         </span>
                                         <span>
                                             <span
-                                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                                className={`hr-dash__status ${
                                                     normalizeText(employeeItem?.status) === 'active'
-                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                        : 'bg-amber-100 text-amber-700'
+                                                        ? 'hr-dash__status--active'
+                                                        : 'hr-dash__status--other'
                                                 }`}
                                             >
                                                 {employeeItem?.status || 'Onboarding'}
                                             </span>
                                         </span>
+                                        <span className="flex items-center text-[#94A3B8]" aria-hidden="true">
+                                            <FiEye className="h-4 w-4" />
+                                        </span>
                                     </button>
                                 ))
                             ) : (
-                                <div className="px-5 py-10 text-center text-sm text-slate-500">
+                                <div className="px-5 py-10 text-center text-sm text-[#666666]">
                                     No hires matched your current search.
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </Panel>
+
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
+                    <div className="space-y-4">
+                        <div className="hr-dash__life-grid">
+                            <div className="hr-dash__life-card">
+                                <div className="hr-dash__icon-well mb-3 text-[#0E9370]">
+                                    <FiUserPlus className="h-4 w-4" />
+                                </div>
+                                <p className="text-xl font-bold text-[#111C2D]">{formatNumber(openPositions)} Open</p>
+                                <p className="text-xs text-[#666666]">Open Positions</p>
+                                <button
+                                    type="button"
+                                    className="hr-dash__queue-hint mt-3"
+                                    onClick={() => setJobsDrawerOpen(true)}
+                                >
+                                    Recruitment <FiArrowUpRight className="h-3 w-3" />
+                                </button>
+                            </div>
+                            <div className="hr-dash__life-card">
+                                <div className="hr-dash__icon-well mb-3 text-[#476175]">
+                                    <FiUsers className="h-4 w-4" />
+                                </div>
+                                <p className="text-xl font-bold text-[#111C2D]">{formatNumber(newHires)} New</p>
+                                <p className="text-xs text-[#666666]">Recent Hires</p>
+                            </div>
+                            <div className="hr-dash__life-card">
+                                <div className="hr-dash__icon-well mb-3 text-[#F59E0B]">
+                                    <FiTrendingDown className="h-4 w-4" />
+                                </div>
+                                <p className="text-xl font-bold text-[#111C2D]">{attritionRate}%</p>
+                                <p className="text-xs text-[#666666]">Attrition Rate</p>
+                                <p className="mt-1 text-[11px] text-[#94A3B8]">{terminatedEmployees} recorded exits</p>
                             </div>
                         </div>
-                    </Panel>
-
-                    <div className="grid content-start gap-4 lg:content-stretch lg:self-stretch lg:[&>div]:flex lg:[&>div]:flex-col lg:[&>div]:justify-between">
-                        <LeaveBalanceCard />
                     </div>
+
+                    <aside className="hr-dash__celeb">
+                        <div className="hr-dash__celeb-head">
+                            <h3>
+                                <FiGift className="h-3.5 w-3.5" />
+                                Upcoming celebrations
+                            </h3>
+                        </div>
+                        <div className="flex flex-1 flex-col p-3">
+                            <ul className="space-y-2">
+                                {sortCelebrations(dashboardExtras.birthdays || []).slice(0, 4).map((item, idx) => {
+                                    const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                    return (
+                                        <CelebrationDashboardCard
+                                            key={`${item.type || 'birthday'}_${item.employeeId || idx}`}
+                                            item={item}
+                                            isSelf={false}
+                                            event={celebrationEvents[itemKey]}
+                                            reacting={celebrationReacting}
+                                            onReact={handleCelebrationReact}
+                                            onWishes={handleOpenCelebrationWishes}
+                                        />
+                                    );
+                                })}
+                            </ul>
+                            {(!dashboardExtras.birthdays || dashboardExtras.birthdays.length === 0) ? (
+                                <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
+                            ) : null}
+                        </div>
+                    </aside>
                 </div>
 
                 <Panel title="Quick Actions">
-                    <div
-                        className="w-full overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                        onWheel={(event) => {
-                            if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-                                event.currentTarget.scrollLeft += event.deltaY;
-                            }
-                        }}
-                    >
-                        <div className="flex flex-nowrap gap-3">
-                            {quickActions.map((action) => (
-                                <button
-                                    key={action.label}
-                                    type="button"
-                                    onClick={action.onClick}
-                                    className="min-w-[180px] max-w-[180px] flex-[0_0_180px] rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left transition hover:border-emerald-200 hover:bg-white hover:shadow-sm"
-                                >
-                                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
-                                        {action.icon}
-                                    </div>
-                                    <p className="text-sm font-semibold text-slate-900">{action.label}</p>
-                                    <p className="mt-1 text-xs text-slate-500">{action.subtitle}</p>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="mt-4 flex min-h-[80px] max-h-[90px] items-center justify-between gap-4 rounded-[18px] border border-emerald-600/20 bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2.5 shadow-sm">
-                        <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold leading-tight text-white">
-                                Need a deeper review?
-                            </p>
-                            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-emerald-50/95">
-                                Open analytics to drill into workforce, leave, and hiring patterns.
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => navigate('/hr/analytics')}
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30"
-                            aria-label="Open analytics"
-                        >
-                            <FiArrowUpRight className="h-4 w-4" />
-                        </button>
+                    <div className="hr-dash__launcher">
+                        {quickActions.map((action) => (
+                            <button
+                                key={action.label}
+                                type="button"
+                                onClick={action.onClick}
+                                className={`hr-dash__launcher-btn ${action.primary ? 'hr-dash__launcher-btn--primary' : ''}`}
+                            >
+                                {action.icon}
+                                {action.label}
+                            </button>
+                        ))}
                     </div>
                 </Panel>
 
@@ -1585,6 +1612,66 @@ const DashboardHR = () => {
             </div>
             </div>
             </div>
+
+            <ApprovalsDrawer
+                open={approvalsDrawer.open}
+                escalatedOnly={approvalsDrawer.escalatedOnly}
+                approvals={dashboardExtras.pendingApprovals}
+                onClose={() => setApprovalsDrawer({ open: false, escalatedOnly: false })}
+                onChanged={fetchDashboardExtras}
+            />
+            <LeaveDrawer
+                open={leaveDrawerOpen}
+                leaves={leaves}
+                onClose={() => setLeaveDrawerOpen(false)}
+                onChanged={() => queryClient.invalidateQueries({ queryKey: ['leaves'] })}
+            />
+            <WishModal
+                open={wishModal.open}
+                item={wishModal.item}
+                eventId={wishModal.eventId}
+                onClose={() => setWishModal({ open: false, item: null, eventId: null })}
+            />
+            <EmployeeQuickViewModal
+                open={employeeQuickView.open}
+                employee={employeeQuickView.employee}
+                onClose={() => setEmployeeQuickView({ open: false, employee: null })}
+                onEditFull={(emp) => {
+                    setEmployeeQuickView({ open: false, employee: null });
+                    if (emp?._id) navigate(`/employees/${emp._id}`);
+                }}
+            />
+            <AddEmployeeModal
+                open={addEmployeeOpen}
+                onClose={() => setAddEmployeeOpen(false)}
+                onContinueFull={(prefill) => {
+                    setAddEmployeeOpen(false);
+                    navigate('/add-employee', { state: { quickPrefill: prefill } });
+                }}
+            />
+            <JobsDrawer
+                open={jobsDrawerOpen}
+                jobs={dashboardExtras.openJobs}
+                onClose={() => setJobsDrawerOpen(false)}
+            />
+            <AnnouncementsListModal
+                open={announcementsListOpen}
+                items={announcements}
+                onClose={() => setAnnouncementsListOpen(false)}
+                onNew={
+                    canManageAnnouncements
+                        ? () => {
+                              setAnnouncementsListOpen(false);
+                              setShowAnnouncementModal(true);
+                          }
+                        : undefined
+                }
+            />
+            <ProfilePeekModal
+                open={profilePeekOpen}
+                user={user}
+                onClose={() => setProfilePeekOpen(false)}
+            />
         </div>
     );
 };

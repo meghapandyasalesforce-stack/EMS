@@ -675,7 +675,7 @@ const OnboardingHub = () => {
     /* ── Employee with no workflow, or unpublished draft only ── */
     if (!isHRView && !isManagerView && !loading && (!wf || wf?.status === 'Draft')) {
         return (
-            <div className="page-shell hrms-lifecycle bg-gray-50">
+            <div className="page-shell hrms-lifecycle bg-transparent">
                 <div className="page-shell-inner space-y-4">
                     {showRoleToggles && (
                         <div className="flex justify-end">
@@ -712,7 +712,7 @@ const OnboardingHub = () => {
     }
 
     return (
-        <div className="page-shell hrms-lifecycle cm-hrms bg-gray-50">
+        <div className="page-shell hrms-lifecycle cm-hrms bg-transparent">
             <div className="page-shell-inner hrms-stack pb-10">
 
                 {/* ── Header ── */}

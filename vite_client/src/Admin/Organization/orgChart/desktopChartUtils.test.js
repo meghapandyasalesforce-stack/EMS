@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildConnectorEdges, buildChartLayout, getAllowedIds, mergeDepartmentsWithCounts } from './chartUtils';
-import { buildDesktopLayout, hiddenDescendantCounts, indexHierarchy, initialDesktopExpansion, REPORT_BATCH, safeExportScale } from './desktopChartUtils';
+import { buildDesktopLayout, chooseSiblingColumns, hiddenDescendantCounts, indexHierarchy, initialDesktopExpansion, REPORT_BATCH, safeExportScale } from './desktopChartUtils';
 
 function fixture(count, flat = false) {
   return Array.from({ length: count }, (_, i) => ({ id: String(i), name: i < 2 ? 'Duplicate' : `Employee ${i}`, employeeId: `EMP${i}`, reportsTo: i ? String(flat ? 0 : Math.floor((i - 1) / 6)) : null, department: `Department ${i % 8}`, position: i ? 'Employee' : 'CEO' }));
@@ -14,6 +14,27 @@ function assertNoOverlap(positions) {
 }
 
 describe('scalable desktop hierarchy', () => {
+  it('keeps siblings on one row through a double batch (mock-style)', () => {
+    expect(chooseSiblingColumns(3, false, 40)).toBe(3);
+    expect(chooseSiblingColumns(6, true, 40)).toBe(6);
+    expect(chooseSiblingColumns(6, false, 40)).toBe(6);
+    expect(chooseSiblingColumns(12, true, 40)).toBe(12);
+    expect(chooseSiblingColumns(12, false, 200)).toBe(12);
+    expect(chooseSiblingColumns(20, true, 200)).toBeLessThanOrEqual(8);
+    expect(chooseSiblingColumns(20, false, 200)).toBeLessThanOrEqual(8);
+    expect(chooseSiblingColumns(100, true, 500)).toBeLessThanOrEqual(8);
+  });
+
+  it('places a batch of leaf peers on a single Y row', () => {
+    const employees = fixture(7, true);
+    const index = indexHierarchy(employees);
+    const layout = buildDesktopLayout(index, new Set(['0']), new Map([['0', REPORT_BATCH]]));
+    const childYs = [...layout.positions.entries()]
+      .filter(([id]) => id !== '0')
+      .map(([, pos]) => pos.y);
+    expect(childYs).toHaveLength(REPORT_BATCH);
+    expect(new Set(childYs).size).toBe(1);
+  });
   it.each([20, 50, 200, 500])('represents every one of %i employees exactly once with accurate edges', count => {
     const employees = fixture(count); const before = JSON.stringify(employees); const index = indexHierarchy(employees);
     const layout = buildDesktopLayout(index, new Set(index.byId.keys()));

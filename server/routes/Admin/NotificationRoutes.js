@@ -5,6 +5,8 @@ import {
   getUserNotifications,
   getSentAnnouncements,
   getAnnouncementReceipts,
+  publishAnnouncementDraft,
+  deleteSentAnnouncement,
   markAsRead,
   markAllAsRead,
   getUnreadCount,
@@ -32,6 +34,16 @@ router.route("/create-notification").post(isAdminOrManagerOrHRAuthenticated, cre
 
 // Sent announcement history (admin / manager / HR / executive)
 router.route("/sent-announcements").get(isAdminOrManagerOrHRAuthenticated, getSentAnnouncements);
+
+// Publish draft / hard-delete announcement (before receipts)
+router.route("/sent-announcements/:notificationId/publish").post(
+  isAdminOrManagerOrHRAuthenticated,
+  publishAnnouncementDraft
+);
+router.route("/sent-announcements/:notificationId").delete(
+  isAdminOrManagerOrHRAuthenticated,
+  deleteSentAnnouncement
+);
 
 // Announcement seen/unseen receipts
 router.route("/sent-announcements/:notificationId/receipts").get(

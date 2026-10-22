@@ -326,12 +326,20 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
       throw new Error('OrganizationId is required to send notifications');
     }
     
+    const resolvedPriority =
+      metadata?.priority === 'high' || metadata?.important === true ? 'high' : (metadata?.priority || 'medium');
     const notificationData = {
       organizationId,
       message,
       type,
       isBroadcast: true,
-      metadata
+      broadcastStatus: 'sent',
+      priority: resolvedPriority,
+      metadata: {
+        ...metadata,
+        priority: resolvedPriority,
+        important: resolvedPriority === 'high',
+      },
     };
 
     if (sender?._id) {
@@ -340,53 +348,61 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
     }
 
     const notification = await Notification.create(notificationData);
-    
-    // Send broadcast notification via WebSocket
-    try {
-      const wsService = await getWebSocketService();
-      if (wsService) {
-        wsService.sendBroadcastNotification(organizationId.toString(), notification.toObject ? notification.toObject() : notification);
-      }
-    } catch (wsError) {
-      logger.warn('Error sending broadcast notification via WebSocket', {
-        error: wsError.message
-      });
-    }
-
-    logger.info('Broadcast notification sent', {
-      notificationId: notification._id,
-      message,
-      organizationId: organizationId.toString?.() || organizationId,
-    });
-
-    // Send push notification to all subscribers (same delivery path family as test push)
-    try {
-      const pushPayload = createPushPayload(message, type, {
-        notificationId: notification._id.toString(),
-        priority: metadata.priority,
-        title: metadata.title,
-      });
-      
-      const pushResult = await sendBroadcastPushNotification(pushPayload, organizationId);
-      logger.info('Broadcast push result', {
-        notificationId: notification._id,
-        sent: pushResult.sent,
-        failed: pushResult.failed,
-        reason: pushResult.reason,
-      });
-    } catch (pushError) {
-      logger.error('Error sending broadcast push notification', {
-        error: pushError.message,
-        stack: pushError.stack,
-        notificationId: notification._id
-      });
-      // Don't fail the main notification if push fails
-    }
+    await deliverBroadcastChannels(notification, organizationId, type, metadata);
+    return notification;
   } catch (error) {
     logger.error('Error sending broadcast notification', {
       error: error.message,
       stack: error.stack,
       type,
+    });
+    throw error;
+  }
+};
+
+/** WebSocket + push delivery for an already-persisted broadcast announcement. */
+export const deliverBroadcastChannels = async (notification, organizationId, type = 'announcement', metadata = {}) => {
+  const orgId = organizationId?.toString?.() || String(organizationId || '');
+  if (!notification || !orgId) return;
+
+  try {
+    const wsService = await getWebSocketService();
+    if (wsService) {
+      wsService.sendBroadcastNotification(
+        orgId,
+        notification.toObject ? notification.toObject() : notification
+      );
+    }
+  } catch (wsError) {
+    logger.warn('Error sending broadcast notification via WebSocket', {
+      error: wsError.message,
+    });
+  }
+
+  logger.info('Broadcast notification sent', {
+    notificationId: notification._id,
+    message: notification.message,
+    organizationId: orgId,
+  });
+
+  try {
+    const pushPayload = createPushPayload(notification.message, type, {
+      notificationId: notification._id.toString(),
+      priority: metadata.priority || notification.priority,
+      title: metadata.title,
+    });
+    const pushResult = await sendBroadcastPushNotification(pushPayload, organizationId);
+    logger.info('Broadcast push result', {
+      notificationId: notification._id,
+      sent: pushResult.sent,
+      failed: pushResult.failed,
+      reason: pushResult.reason,
+    });
+  } catch (pushError) {
+    logger.error('Error sending broadcast push notification', {
+      error: pushError.message,
+      stack: pushError.stack,
+      notificationId: notification._id,
     });
   }
 };
@@ -437,10 +453,11 @@ export const buildUserNotificationFilter = (organizationId, recipientIds, option
     type: { $ne: 'announcement' },
   };
 
-  /** Announcement broadcasts — optional join-date audience cutoff. */
+  /** Announcement broadcasts — optional join-date audience cutoff. Never surface drafts/scheduled. */
   const announcementBroadcastBase = {
     isBroadcast: true,
     type: 'announcement',
+    broadcastStatus: { $nin: ['draft', 'scheduled'] },
     ...announcementAudience,
   };
 

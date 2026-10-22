@@ -5,10 +5,10 @@ import axios from '../../utils/axios';
 import { MINT_GRADIENT } from '../Reports/constants';
 import { feedbackStatusStyle } from './engagementUtils';
 
-const MINT = '#20C997';
+const MINT = '#0E9370';
 
 const inputClass =
-    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20';
+    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E9370] focus:ring-2 focus:ring-[#0E9370]/20';
 
 const FeedbackPanel = ({
     feedback,
@@ -174,7 +174,7 @@ const FeedbackPanel = ({
                                         {item.subject}
                                     </td>
                                     <td className="px-5 py-4">
-                                        <span className="rounded-full bg-[#20C997]/10 px-2.5 py-0.5 text-xs font-semibold text-[#0d9488]">
+                                        <span className="rounded-full bg-[#0E9370]/10 px-2.5 py-0.5 text-xs font-semibold text-[#0d9488]">
                                             {item.type}
                                         </span>
                                     </td>

@@ -1,13 +1,60 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { fetchEmployees } from '../../context/employeeSlice';
-import { FaSearch, FaTimes, FaEdit, FaTrash, FaEye, FaUserPlus, FaEllipsisV, FaChevronLeft, FaChevronRight, FaPlus, FaUserCheck } from 'react-icons/fa';
+import { logoutUser } from '../../context/Auth/authSlice';
+import {
+  FaSearch,
+  FaTimes,
+  FaUserPlus,
+  FaChevronLeft,
+  FaChevronRight,
+  FaChevronDown,
+  FaFileExport,
+  FaFileCsv,
+  FaFileExcel,
+  FaFilePdf,
+} from 'react-icons/fa';
 import axios from '../../utils/axios';
-import RoleBadge from '../../components/RoleBadge';
+import ProfileDropdown from '../../components/ProfileDropdown';
+import ProfilePicture from '../../Shared/ProfilePicture';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS } from '../../utils/permissions';
+import { getProfileDisplayName, mergeSessionProfile } from '../../utils/profileUtils';
 import EmployeeMemberAvatar from './EmployeeMemberAvatar';
+import '../../styles/directoryUI.css';
+
+function downloadRosterCsv(rows, filename) {
+  const headers = ['Employee ID', 'Name', 'Job Title', 'Department', 'Email', 'Status'];
+  const escape = (value) => {
+    const text = String(value ?? '');
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines = [
+    headers.join(','),
+    ...rows.map((row) =>
+      [
+        row.employeeId || '',
+        `${row.name || ''} ${row.lastName || ''}`.trim(),
+        row.jobTitle || '',
+        row.department || '',
+        row.email || '',
+        row.status || (row.active === false ? 'Inactive' : 'Active'),
+      ]
+        .map(escape)
+        .join(',')
+    ),
+  ];
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 const EmployeesPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -20,6 +67,10 @@ const EmployeesPage = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [todayStatusMap, setTodayStatusMap] = useState({});
   const [onLeaveTodayMap, setOnLeaveTodayMap] = useState({});
+  const [exportOpen, setExportOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const exportRef = useRef(null);
+  const profileRef = useRef(null);
   const pageSize = 20;
 
   const { hasPermission, isOrgOwner, isHrManager, isHrExecutive } = useAuthPermissions();
@@ -33,7 +84,6 @@ const EmployeesPage = () => {
     dispatch(fetchEmployees({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }));
   }, [dispatch, currentPage, debouncedSearchTerm]);
 
-  // Debounce the search term
   useEffect(() => {
     const timerId = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
@@ -105,23 +155,29 @@ const EmployeesPage = () => {
     navigate(`/employees/${employeeId}`);
   };
 
-  // Check if user is HR
-  const isHR = useMemo(() => {
-    const department = (user?.department || employee?.department || '').toLowerCase().trim();
-    const jobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
-    const position = (user?.position || employee?.position || '').toLowerCase().trim();
-    
-    return department === 'hr' || 
-           department.includes('hr') || 
-           department.includes('human resource') ||
-           jobTitle.includes('hr manager') ||
-           jobTitle.includes('human resource') ||
-           jobTitle.includes('hr') ||
-           position.includes('hr manager') ||
-           (position.includes('hr') && position.includes('manager'));
-  }, [user, employee]);
+  const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
+  const profileName = getProfileDisplayName(profile, user, employee);
+  const profileRole =
+    profile?.jobTitle || profile?.position || user?.jobTitle || employee?.jobTitle || 'HR';
 
-  const displayUser = user || employee;
+  useEffect(() => {
+    const onPointer = (event) => {
+      if (exportRef.current && !exportRef.current.contains(event.target)) setExportOpen(false);
+      if (profileRef.current && !profileRef.current.contains(event.target)) setProfileOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    return () => document.removeEventListener('pointerdown', onPointer);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await dispatch(logoutUser(user?.email || employee?.email)).unwrap();
+      toast.success('Logged out successfully');
+      navigate('/login');
+    } catch (err) {
+      toast.error(err?.message || 'Logout failed. Please try again.');
+    }
+  }, [dispatch, navigate, user?.email, employee?.email]);
 
   const isInitialLoading = status === 'loading' && (!employees || employees.length === 0);
   const teamCount = pagination?.total || (employees || []).length;
@@ -153,6 +209,62 @@ const EmployeesPage = () => {
     });
   }, [employees, activeFilter, todayStatusMap, onLeaveTodayMap]);
 
+  const liveCounts = useMemo(() => {
+    const list = employees || [];
+    let onLeave = 0;
+    let present = 0;
+    list.forEach((emp) => {
+      const empId = String(emp?._id || '');
+      if (onLeaveTodayMap[empId]) {
+        onLeave += 1;
+        return;
+      }
+      const attendance = todayStatusMap[empId];
+      const statusText = String(attendance?.status || emp?.status || '').toLowerCase();
+      if (statusText !== 'absent' && statusText !== 'inactive') present += 1;
+    });
+    return { onLeave, present };
+  }, [employees, todayStatusMap, onLeaveTodayMap]);
+
+  const exportRoster = useCallback(
+    (format) => {
+      const rows = filteredEmployees;
+      if (!rows.length) {
+        toast.info('No employees to export for the current filters.');
+        setExportOpen(false);
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      if (format === 'pdf') {
+        const win = window.open('', '_blank');
+        if (!win) {
+          toast.error('Pop-up blocked. Allow pop-ups to export PDF.');
+          setExportOpen(false);
+          return;
+        }
+        const body = rows
+          .map(
+            (row) =>
+              `<tr><td>${row.employeeId || ''}</td><td>${`${row.name || ''} ${row.lastName || ''}`.trim()}</td><td>${row.jobTitle || ''}</td><td>${row.department || ''}</td></tr>`
+          )
+          .join('');
+        win.document.write(
+          `<!doctype html><html><head><title>EMS Directory</title><style>body{font-family:system-ui,sans-serif;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left;font-size:12px}th{background:#f0f3ff}</style></head><body><h1>Employee Directory</h1><table><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Department</th></tr></thead><tbody>${body}</tbody></table></body></html>`
+        );
+        win.document.close();
+        win.focus();
+        win.print();
+        toast.success('Print dialog opened for PDF export');
+      } else {
+        const ext = format === 'xlsx' ? 'csv' : 'csv';
+        downloadRosterCsv(rows, `EMS_Directory_${stamp}.${ext}`);
+        toast.success(`Exported ${rows.length} employee record${rows.length === 1 ? '' : 's'}`);
+      }
+      setExportOpen(false);
+    },
+    [filteredEmployees]
+  );
+
   const quickFilters = [
     { id: 'all', label: 'All' },
     { id: 'present', label: 'Present Today' },
@@ -161,180 +273,317 @@ const EmployeesPage = () => {
     { id: 'probation', label: 'Probation' },
   ];
 
+  const rowMeta = (row) => {
+    const empId = String(row?._id || '');
+    const attendance = todayStatusMap[empId];
+    const statusText = String(attendance?.status || row?.status || 'active').toLowerCase();
+    const employmentStatus = String(row?.status || '').toLowerCase();
+    const onLeave = !!onLeaveTodayMap[empId];
+    const isTerminated = employmentStatus === 'terminated';
+    const isInactive = row?.active === false || employmentStatus === 'inactive' || employmentStatus === 'suspended';
+    const statusPill = isTerminated
+      ? 'TERMINATED'
+      : isInactive
+        ? 'INACTIVE'
+        : onLeave
+          ? 'ON LEAVE'
+          : statusText === 'absent'
+            ? 'ABSENT'
+            : 'ACTIVE';
+    const statusClass = isTerminated
+      ? 'text-slate-700 bg-slate-200'
+      : isInactive
+        ? 'text-rose-700 bg-rose-100'
+        : onLeave
+          ? 'text-amber-700 bg-amber-100'
+          : statusText === 'absent'
+            ? 'text-slate-700 bg-slate-100'
+            : 'text-emerald-700 bg-emerald-100';
+    const todayValue = isTerminated
+      ? 'Terminated'
+      : isInactive
+        ? 'Inactive'
+        : onLeave
+          ? 'Out of Office'
+          : attendance?.clockIn
+            ? new Date(attendance.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : statusText === 'absent'
+              ? '--:--'
+              : 'Present';
+    return { statusPill, statusClass, todayValue };
+  };
+
+  const exportMenu = (
+    <div className="emp-directory__export-wrap" ref={exportRef}>
+      <button
+        type="button"
+        className="emp-directory__export-btn"
+        aria-haspopup="menu"
+        aria-expanded={exportOpen}
+        onClick={() => setExportOpen((open) => !open)}
+      >
+        <FaFileExport aria-hidden="true" />
+        <span>Export Roster</span>
+        <FaChevronDown aria-hidden="true" />
+      </button>
+      {exportOpen ? (
+        <div className="emp-directory__export-menu" role="menu">
+          <p className="emp-directory__export-menu-label">Select Format</p>
+          <button type="button" role="menuitem" className="emp-directory__export-item" onClick={() => exportRoster('csv')}>
+            <span><FaFileCsv aria-hidden="true" /> Comma Separated (.csv)</span>
+            <small>CSV</small>
+          </button>
+          <button type="button" role="menuitem" className="emp-directory__export-item" onClick={() => exportRoster('xlsx')}>
+            <span><FaFileExcel aria-hidden="true" /> Microsoft Excel (.csv)</span>
+            <small>Excel</small>
+          </button>
+          <button type="button" role="menuitem" className="emp-directory__export-item" onClick={() => exportRoster('pdf')}>
+            <span><FaFilePdf aria-hidden="true" /> Audit Dossier (.pdf)</span>
+            <small>PDF</small>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
+    <div className="emp-directory page-shell min-h-screen transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <div className="mb-6 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex min-w-0 items-center gap-3">
-                <h1 className="text-3xl font-semibold text-slate-900">My Team</h1>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{teamCount} MEMBERS</span>
-              </div>
-
-              <div className="flex min-w-0 flex-1 items-center gap-3 sm:justify-end">
-                <div className="relative w-full min-w-0 sm:w-[18.5rem] sm:flex-none">
-                  <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search team..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-9 text-sm text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <FaTimes className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-                {displayUser && <RoleBadge user={displayUser} className="shrink-0" />}
-              </div>
+        <div className="emp-directory__context">
+          <div className="emp-directory__stats">
+            <div className="emp-directory__stat">
+              <span className="emp-directory__stat-dot" aria-hidden="true" />
+              Total Headcount: <strong>{teamCount.toLocaleString()}</strong>
+            </div>
+            <div className="emp-directory__stat">
+              Active Today: <strong className="is-primary">{liveCounts.present.toLocaleString()}</strong>
+            </div>
+            <div className="emp-directory__stat">
+              On Leave: <strong className="is-secondary">{liveCounts.onLeave.toLocaleString()}</strong>
             </div>
           </div>
 
-          <div className="mb-6 flex flex-wrap gap-2">
-            {quickFilters.map((pill) => (
+          <div className="emp-directory__top-right">
+            <div className="emp-directory__profile" ref={profileRef}>
               <button
-                key={pill.id}
                 type="button"
-                onClick={() => setActiveFilter(pill.id)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  activeFilter === pill.id
-                    ? 'bg-emerald-700 text-white'
-                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
+                className="emp-directory__profile-btn"
+                aria-haspopup="menu"
+                aria-expanded={profileOpen}
+                aria-label="Profile menu"
+                onClick={() => setProfileOpen((open) => !open)}
               >
-                {pill.label}
+                <div className="emp-directory__profile-text">
+                  <p className="emp-directory__profile-name">{profileName}</p>
+                  <p className="emp-directory__profile-role">{profileRole}</p>
+                </div>
+                <ProfilePicture user={profile} size="header" />
+                <FaChevronDown className="emp-directory__profile-chevron" aria-hidden="true" />
               </button>
-            ))}
+              {profileOpen ? (
+                <ProfileDropdown
+                  isOpen
+                  onClose={() => setProfileOpen(false)}
+                  onLogout={handleLogout}
+                  onViewProfile={() => navigate('/profile-details')}
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="emp-directory__header">
+          <div>
+            <p className="emp-directory__eyebrow">People · Directory</p>
+            <h1 className="emp-directory__title">Employee Directory &amp; Talent Roster</h1>
+            <p className="emp-directory__subtitle">
+              Central registry of verified permanent, contracted, and international personnel across your organization.
+            </p>
+          </div>
+          <div className="emp-directory__actions">
+            {exportMenu}
+            {canAddEmployee ? (
+              <button
+                type="button"
+                className="emp-directory__btn emp-directory__btn-primary"
+                onClick={() => navigate('/add-employee')}
+              >
+                <FaUserPlus aria-hidden="true" />
+                + Add Employee
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {status === 'failed' && (
+          <div className="emp-add__error" style={{ marginBottom: '1rem' }}>
+            Error loading employees: {error || 'Unknown error occurred'}
+          </div>
+        )}
+
+        {status === 'loading' && !isInitialLoading && (
+          <div className="text-xs text-[var(--dir-outline)] mb-3">Updating results...</div>
+        )}
+
+        <div className="emp-directory__roster">
+          <div className="emp-directory__filters emp-directory__filters--inboard">
+            <div className="emp-directory__filters-row">
+              <div className="emp-directory__search">
+                <FaSearch aria-hidden="true" />
+                <input
+                  type="text"
+                  placeholder="Search by name, ID, role, or department..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  aria-label="Search team"
+                />
+                {searchTerm ? (
+                  <button
+                    type="button"
+                    className="emp-directory__search-clear"
+                    onClick={() => setSearchTerm('')}
+                    aria-label="Clear search"
+                  >
+                    <FaTimes />
+                  </button>
+                ) : null}
+              </div>
+              <div className="emp-directory__pills" role="toolbar" aria-label="Quick filters">
+                {quickFilters.map((pill) => (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setActiveFilter(pill.id)}
+                    className={`emp-directory__pill${activeFilter === pill.id ? ' is-active' : ''}`}
+                  >
+                    {pill.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {status === 'failed' && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              Error loading employees: {error || 'Unknown error occurred'}
+          <div className="emp-directory__table-scroll">
+            <div className="emp-directory__table-head">
+              <div>Employee Details</div>
+              <div>Role &amp; Team</div>
+              <div>Department</div>
+              <div>Status</div>
+              <div className="text-right">Today</div>
             </div>
-          )}
-
-          {status === 'loading' && !isInitialLoading && (
-            <div className="text-xs text-gray-500 mb-3">Updating results...</div>
-          )}
-
-          <div className="mb-7 overflow-x-auto rounded-2xl border border-slate-200">
-            <div className="min-w-[640px]">
-            <div className="grid grid-cols-12 gap-3 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              <div className="col-span-4">Member</div>
-              <div className="col-span-3">Designation</div>
-              <div className="col-span-2">Department</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-1 text-right">Today</div>
-            </div>
-            <div className="divide-y divide-slate-200 bg-white">
+            <div>
               {filteredEmployees.map((row) => {
-                const empId = String(row?._id || '');
-                const attendance = todayStatusMap[empId];
-                const statusText = String(attendance?.status || row?.status || 'active').toLowerCase();
-                const employmentStatus = String(row?.status || '').toLowerCase();
-                const onLeave = !!onLeaveTodayMap[empId];
-                const isTerminated = employmentStatus === 'terminated';
-                const isInactive = row?.active === false || employmentStatus === 'inactive' || employmentStatus === 'suspended';
-                const statusPill = isTerminated
-                  ? 'TERMINATED'
-                  : isInactive
-                    ? 'INACTIVE'
-                    : onLeave
-                      ? 'ON LEAVE'
-                      : statusText === 'absent'
-                        ? 'ABSENT'
-                        : 'ACTIVE';
-                const statusClass = isTerminated
-                  ? 'text-slate-700 bg-slate-200'
-                  : isInactive
-                    ? 'text-rose-700 bg-rose-100'
-                    : onLeave
-                      ? 'text-amber-700 bg-amber-100'
-                      : statusText === 'absent'
-                        ? 'text-slate-700 bg-slate-100'
-                        : 'text-emerald-700 bg-emerald-100';
-                const todayValue = isTerminated
-                  ? 'Terminated'
-                  : isInactive
-                    ? 'Inactive'
-                    : onLeave
-                      ? 'Out of Office'
-                      : attendance?.clockIn
-                        ? new Date(attendance.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : statusText === 'absent'
-                          ? '--:--'
-                          : 'Present';
-
+                const { statusPill, statusClass, todayValue } = rowMeta(row);
                 return (
                   <button
                     key={row._id}
                     type="button"
                     onClick={() => handleRowClick(row._id)}
-                    className="grid w-full grid-cols-12 gap-3 px-5 py-4 text-left hover:bg-slate-50"
+                    className="emp-directory__table-row"
                   >
-                    <div className="col-span-4 flex items-center gap-3">
-                      <EmployeeMemberAvatar user={row} sizeClassName="h-10 w-10" />
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{row.name} {row.lastName}</p>
-                        <p className="text-xs text-slate-500">{row.employeeId || 'EMP-0000'}</p>
+                    <div className="emp-directory__member">
+                      <EmployeeMemberAvatar user={row} sizeClassName="h-11 w-11" />
+                      <div className="emp-directory__member-text">
+                        <p className="emp-directory__member-name">{row.name} {row.lastName}</p>
+                        <div className="emp-directory__member-meta">
+                          <span className="emp-directory__id-pill">{row.employeeId || 'EMP-0000'}</span>
+                          {row.email ? <span className="emp-directory__member-email">{row.email}</span> : null}
+                        </div>
                       </div>
                     </div>
-                    <div className="col-span-3 text-sm text-slate-700">{row.jobTitle || 'Team Member'}</div>
-                    <div className="col-span-2 text-sm text-slate-700">{row.department || 'General'}</div>
-                    <div className="col-span-2">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClass}`}>
-                        {statusPill}
-                      </span>
+                    <div className="emp-directory__cell">
+                      <span className="emp-directory__cell-strong">{row.jobTitle || 'Team Member'}</span>
                     </div>
-                    <div className="col-span-1 flex items-center justify-end text-sm text-slate-600">
-                      {todayValue}
+                    <div className="emp-directory__cell">{row.department || 'General'}</div>
+                    <div>
+                      <span className={`emp-directory__status ${statusClass}`}>{statusPill}</span>
                     </div>
+                    <div className="emp-directory__cell text-right emp-directory__cell-strong">{todayValue}</div>
                   </button>
                 );
               })}
             </div>
-            </div>
+          </div>
+
+          <div className="emp-directory__cards">
+            {filteredEmployees.map((row) => {
+              const { statusPill, statusClass, todayValue } = rowMeta(row);
+              return (
+                <button
+                  key={`card-${row._id}`}
+                  type="button"
+                  className="emp-directory__card"
+                  onClick={() => handleRowClick(row._id)}
+                >
+                  <div className="emp-directory__card-top">
+                    <div className="emp-directory__member">
+                      <EmployeeMemberAvatar user={row} sizeClassName="h-10 w-10" />
+                      <div className="emp-directory__member-text">
+                        <p className="emp-directory__member-name">{row.name} {row.lastName}</p>
+                        <p className="emp-directory__member-id">{row.employeeId || 'EMP-0000'}</p>
+                      </div>
+                    </div>
+                    <span className={`emp-directory__status ${statusClass}`}>{statusPill}</span>
+                  </div>
+                  <div className="emp-directory__card-meta">
+                    <div>
+                      Role
+                      <strong>{row.jobTitle || 'Team Member'}</strong>
+                    </div>
+                    <div>
+                      Department
+                      <strong>{row.department || 'General'}</strong>
+                    </div>
+                    <div>
+                      Today
+                      <strong>{todayValue}</strong>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           {isInitialLoading && (
             <div className="flex justify-center items-center h-40">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary"></div>
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--dir-primary)]" />
             </div>
           )}
 
           {!isInitialLoading && filteredEmployees.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-gray-500 text-lg">
-                {searchTerm ? 'No employees found matching your search.' : 'No employees found.'}
+            <div className="emp-directory__empty">
+              <h3>No employees matched your criteria</h3>
+              <p>
+                {searchTerm
+                  ? 'We couldn’t locate any employee records matching your search.'
+                  : 'No employees found.'}
               </p>
             </div>
           )}
 
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-sm text-gray-600">
+          <div className="emp-directory__footer">
+            <p className="text-sm text-[var(--dir-on-variant)] m-0">
               Showing 1-{filteredEmployees.length} of {teamCount}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="emp-directory__pager">
               <button
+                type="button"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={!pagination?.hasPrev || status === 'loading'}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+                className="emp-directory__pager-btn"
+                aria-label="Previous page"
               >
                 <FaChevronLeft />
               </button>
-              <span className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-emerald-700 px-3 text-sm font-semibold text-white">
+              <span className="emp-directory__pager-btn is-current">
                 {pagination?.page || currentPage}
               </span>
               <button
+                type="button"
                 onClick={() => setCurrentPage((p) => p + 1)}
                 disabled={!pagination?.hasNext || status === 'loading'}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+                className="emp-directory__pager-btn"
+                aria-label="Next page"
               >
                 <FaChevronRight />
               </button>
@@ -343,16 +592,16 @@ const EmployeesPage = () => {
         </div>
       </div>
 
-      {canAddEmployee && (
+      {canAddEmployee ? (
         <button
           type="button"
           onClick={() => navigate('/add-employee')}
-          className="fixed bottom-8 right-8 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-700"
+          className="emp-directory__fab"
           aria-label="Add employee"
         >
           <FaUserPlus className="h-4 w-4" />
         </button>
-      )}
+      ) : null}
     </div>
   );
 };

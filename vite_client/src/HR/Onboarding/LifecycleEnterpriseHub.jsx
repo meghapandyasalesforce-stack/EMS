@@ -90,7 +90,7 @@ const LifecycleEnterpriseHub = () => {
 
     if (!loaded) {
         return (
-            <div className="page-shell bg-gray-50 pb-8">
+            <div className="page-shell bg-transparent pb-8">
                 <div className="page-shell-inner">
                     <LoadingSpinner message="Loading enterprise command center..." />
                 </div>
@@ -99,7 +99,7 @@ const LifecycleEnterpriseHub = () => {
     }
 
     return (
-        <div className="page-shell bg-gray-50 pb-8">
+        <div className="page-shell bg-transparent pb-8">
             <div className="page-shell-inner space-y-4">
                 {searchEnabled && (
                     <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">

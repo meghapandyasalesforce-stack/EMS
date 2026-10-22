@@ -29,8 +29,8 @@ import {
 import { formatStatusLabel, formatUiLabel, UI_BADGE_TEXT_CLASS } from '../utils/textFormat.js';
 import 'react-toastify/dist/ReactToastify.css';
 
-const TEAL = '#20C997';
-const TEAL_DARK = '#0a8f6c';
+const TEAL = '#0E9370';
+const TEAL_DARK = '#0B7458';
 
 function leaveStatusPillStyle(status) {
   const st = (status || '').toLowerCase();
@@ -162,7 +162,7 @@ function RowAvatar({ leave, sizeClass = 'h-10 w-10 text-xs', roundedClass = 'rou
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-[#20C997]/90 to-[#0a8f6c] font-bold text-white ${roundedClass} ${sizeClass}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-[#0E9370]/90 to-[#0a8f6c] font-bold text-white ${roundedClass} ${sizeClass}`}
     >
       {url && !broken ? (
         <img src={url} alt="" className="h-full w-full object-cover" onError={() => setBroken(true)} />
@@ -174,10 +174,11 @@ function RowAvatar({ leave, sizeClass = 'h-10 w-10 text-xs', roundedClass = 'rou
 }
 
 function computeStatusCounts(list, year) {
-  const base = { pending: 0, approved: 0, rejected: 0 };
+  const base = { pending: 0, approved: 0, rejected: 0, all: 0 };
   (list || []).forEach((l) => {
     const y = Number(l.year) || new Date(l.startDate).getFullYear();
     if (y !== year) return;
+    base.all += 1;
     const s = (l.status || '').toLowerCase();
     if (s === 'pending') base.pending += 1;
     else if (s === 'approved') base.approved += 1;
@@ -397,85 +398,75 @@ const LeaveManagement = () => {
   }
 
   return (
-    <div className="page-shell min-h-screen bg-[#F4F6FB] pb-10 transition-all duration-300 lg:mt-0">
-      <div className="page-shell-inner hrms-stack">
-        <div className="min-w-0 space-y-6">
-          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Leave Management</h1>
-              <p className="mt-1 text-sm text-slate-600">
+    <div className="page-shell !py-3 sm:!py-4 min-h-screen bg-[#F4F6FB] pb-8 transition-all duration-300 lg:mt-0">
+      <div className="page-shell-inner hrms-stack !gap-3 sm:!gap-4">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
+          <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                Leave Management
+              </h1>
+              <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">
                 Review and manage team absence requests.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-amber-100 bg-white px-3 py-1.5 text-xs font-semibold tracking-wide text-slate-700 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                {statusCounts.pending} {formatStatusLabel('pending')}
-              </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-white px-3 py-1.5 text-xs font-semibold tracking-wide text-slate-700 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-[#20C997]" />
-                {statusCounts.approved} {formatStatusLabel('approved')}
-              </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold tracking-wide text-slate-600 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-slate-400" />
-                {statusCounts.rejected} {formatStatusLabel('rejected')}
-              </span>
-              <p className="w-full text-[11px] text-slate-400 sm:w-auto sm:pl-1">
-                Counts: first 100 in {filterYear}
-              </p>
-            </div>
+            {isOrgOwner ? (
+              <div className="flex w-full max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm sm:inline-flex sm:w-fit">
+                {[
+                  { key: 'leave', label: 'Leave Requests', icon: FiCalendar },
+                  { key: 'regularization', label: 'Regularization', icon: FiClock },
+                ].map(({ key, label, icon: Icon }) => {
+                  const active = activeView === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setActiveView(key)}
+                      className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold transition sm:flex-none sm:px-3 sm:text-sm ${
+                        active
+                          ? 'bg-[#0a8f6c] shadow-sm'
+                          : 'bg-transparent text-slate-700 hover:bg-slate-50'
+                      }`}
+                      style={active ? { color: '#ffffff' } : undefined}
+                    >
+                      <Icon
+                        className="h-3.5 w-3.5 shrink-0"
+                        style={{ color: active ? '#ffffff' : 'currentColor' }}
+                      />
+                      <span style={{ color: active ? '#ffffff' : undefined }}>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </header>
-
-          {isOrgOwner && (
-            <div className="flex w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex sm:w-fit">
-              {[
-                { key: 'leave', label: 'Leave Requests', icon: FiCalendar },
-                { key: 'regularization', label: 'Regularization', icon: FiClock },
-              ].map(({ key, label, icon: Icon }) => {
-                const active = activeView === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setActiveView(key)}
-                    className={`inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-4 ${
-                      active ? 'bg-[#0a8f6c] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
 
           {activeView === 'regularization' ? (
             <RegularizationRequests embedded />
           ) : (
           <>
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800">
               {typeof error === 'string' ? error : error?.message || 'An error occurred'}
             </div>
           )}
 
-          <div className="flex min-w-0 max-w-full flex-col gap-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:gap-6 sm:p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-              <div className="relative min-w-0 w-full sm:min-w-[200px] flex-1 lg:max-w-md">
+          <div className="flex min-w-0 max-w-full flex-col gap-2.5 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:gap-3 sm:p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="relative min-w-0 w-full flex-1 sm:min-w-[180px] lg:max-w-sm">
                 <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search employees..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none ring-[#20C997]/25 transition focus:border-[#20C997]/40 focus:ring-2"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none ring-[#0E9370]/25 transition focus:border-[#0E9370]/40 focus:ring-2"
                 />
               </div>
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-[#20C997]/40"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-[#0E9370]/40"
               >
                 <option value="all">All Types</option>
                 {Object.keys(LEAVE_TYPE_META).map((key) => (
@@ -490,7 +481,7 @@ const LeaveManagement = () => {
                   setFilterYear(Number(e.target.value));
                   setPage(1);
                 }}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
               >
                 {[...Array(5)].map((_, i) => {
                   const y = new Date().getFullYear() - 2 + i;
@@ -503,7 +494,47 @@ const LeaveManagement = () => {
               </select>
             </div>
 
-            <div className="flex flex-wrap gap-2.5">
+            <div
+              className="flex items-center gap-1 overflow-x-auto border-b border-slate-200/80 pb-2 sm:gap-1.5"
+              role="tablist"
+              aria-label="Leave status"
+            >
+              {[
+                { key: 'pending', label: 'Pending', count: statusCounts.pending },
+                { key: 'approved', label: 'Approved', count: statusCounts.approved },
+                { key: 'rejected', label: 'Rejected', count: statusCounts.rejected },
+                { key: 'all', label: 'All', count: statusCounts.all },
+              ].map((t) => {
+                const active = filterStatus === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => handleTab(t.key)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold transition sm:gap-2 sm:px-2.5 sm:py-1.5 sm:text-sm ${
+                      active
+                        ? 'bg-[#e8faf4] text-[#00694f]'
+                        : 'bg-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                    }`}
+                  >
+                    {t.label}
+                    <span
+                      className={`inline-flex min-w-[1.35rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums sm:min-w-[1.5rem] sm:px-2 sm:text-xs ${
+                        active
+                          ? 'bg-[#00694f] text-white'
+                          : 'bg-[#e8ebfb] text-slate-800'
+                      }`}
+                    >
+                      {t.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
               {monthNames.map((label, idx) => {
                 const active = monthFilter === idx;
                 return (
@@ -511,9 +542,9 @@ const LeaveManagement = () => {
                     key={label}
                     type="button"
                     onClick={() => setMonthFilter(active ? null : idx)}
-                    className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition sm:text-xs ${
                       active
-                        ? 'bg-[#20C997]/15 text-[#0a8f6c] ring-2 ring-[#20C997]/35'
+                        ? 'bg-[#0E9370]/15 text-[#0a8f6c] ring-1 ring-[#0E9370]/35'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -528,32 +559,6 @@ const LeaveManagement = () => {
               })}
             </div>
 
-            <div className="flex gap-6 border-b border-slate-100 pb-0 overflow-x-auto sm:gap-8">
-              {[
-                { key: 'all', label: formatUiLabel('all') },
-                { key: 'pending', label: formatUiLabel('pending review') },
-                { key: 'approved', label: formatStatusLabel('approved') },
-                { key: 'rejected', label: formatStatusLabel('rejected') },
-              ].map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => handleTab(t.key)}
-                  className={`relative shrink-0 px-1 pb-3 whitespace-nowrap text-xs font-bold tracking-wide transition sm:px-1.5 sm:text-sm ${
-                    filterStatus === t.key ? 'text-[#0a8f6c]' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {t.label}
-                  {filterStatus === t.key && (
-                    <span
-                      className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
-                      style={{ backgroundColor: TEAL }}
-                    />
-                  )}
-                </button>
-              ))}
-            </div>
-
             <div className="min-w-0 max-w-full rounded-xl border border-slate-100 lg:overflow-hidden">
               {clientFiltered.length === 0 ? (
                 <div className="bg-white px-6 py-8 sm:py-10 text-center">
@@ -564,155 +569,261 @@ const LeaveManagement = () => {
                   </p>
                 </div>
               ) : (
-                <div
-                  className="table-scroll-container leave-requests-table-scroll bg-white"
-                  role="region"
-                  aria-label="Leave requests table"
-                >
-                  <table className="leave-requests-table text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                        <th className="w-10 px-3 py-3" aria-hidden />
-                        <th className="px-3 py-3">Employee</th>
-                        <th className="px-3 py-3">Leave Type</th>
-                        <th className="px-3 py-3">From – To</th>
-                        <th className="px-3 py-3">Days</th>
-                        <th className="px-3 py-3">Status</th>
-                        {showManagerColumn && <th className="px-3 py-3">Manager</th>}
-                        <th className="px-3 py-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {clientFiltered.map((leave) => {
-                        const id = leave._id;
-                        const selected = selectedId === id;
-                        const meta =
-                          LEAVE_TYPE_META[leave.leaveType] || {
-                            label: (leave.leaveType || '').replace(/_/g, ' ').toUpperCase(),
-                            className: 'bg-slate-100 text-slate-700 border border-slate-200',
-                          };
-                        const st = (leave.status || '').toLowerCase();
-                        let statusDot = 'bg-amber-500';
-                        let statusBg = 'text-amber-800';
-                        if (st === 'approved') {
-                          statusDot = 'bg-[#20C997]';
-                          statusBg = 'text-teal-800';
-                        } else if (st === 'rejected') {
-                          statusDot = 'bg-slate-400';
-                          statusBg = 'text-slate-700';
-                        }
-
-                        return (
-                          <tr
-                            key={String(id)}
-                            role="button"
-                            tabIndex={0}
+                <>
+                  <div className="divide-y divide-slate-100 bg-white md:hidden">
+                    {clientFiltered.map((leave) => {
+                      const id = leave._id;
+                      const selected = selectedId === id;
+                      const meta =
+                        LEAVE_TYPE_META[leave.leaveType] || {
+                          label: (leave.leaveType || '').replace(/_/g, ' ').toUpperCase(),
+                          className: 'bg-slate-100 text-slate-700 border border-slate-200',
+                        };
+                      const st = (leave.status || '').toLowerCase();
+                      let statusDot = 'bg-amber-500';
+                      let statusBg = 'text-amber-800';
+                      if (st === 'approved') {
+                        statusDot = 'bg-[#0E9370]';
+                        statusBg = 'text-teal-800';
+                      } else if (st === 'rejected') {
+                        statusDot = 'bg-slate-400';
+                        statusBg = 'text-slate-700';
+                      }
+                      return (
+                        <article
+                          key={`m-${String(id)}`}
+                          className={`space-y-2.5 p-3.5 ${selected ? 'bg-[#0E9370]/08' : ''}`}
+                        >
+                          <button
+                            type="button"
+                            className="flex w-full items-start gap-3 text-left"
                             onClick={() => {
                               setSelectedId(id);
                               setRejectReason('');
                             }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                setSelectedId(id);
-                                setRejectReason('');
-                              }
-                            }}
-                            className={`cursor-pointer transition ${
-                              selected ? 'bg-[#20C997]/08' : 'hover:bg-slate-50/90'
-                            }`}
                           >
-                            <td className="px-3 py-3" />
-                            <td className="px-3 py-3">
-                              <div className="flex items-center gap-3">
-                                <RowAvatar leave={leave} />
-                                <div className="min-w-0">
-                                  <p className="truncate font-semibold text-slate-900">
-                                    {employeeDisplayName(leave)}
-                                  </p>
-                                  <p className="truncate text-xs text-slate-500">
-                                    {jobTitleLabel(leave)}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                              <span
-                                className={`inline-block rounded-md px-2 py-1 text-[10px] font-bold ${meta.className}`}
-                              >
-                                {meta.label}
-                              </span>
-                            </td>
-                            <td className="px-3 py-3 text-slate-700">
-                              {formatShortRange(leave.startDate, leave.endDate)}
-                            </td>
-                            <td className="px-3 py-3 font-medium text-slate-800">
-                              {leave.duration ?? '—'}
-                            </td>
-                            <td className="px-3 py-3">
-                              <div className="flex flex-wrap items-center gap-2">
+                            <RowAvatar leave={leave} />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-semibold text-slate-900">
+                                {employeeDisplayName(leave)}
+                              </p>
+                              <p className="truncate text-xs text-slate-500">
+                                {jobTitleLabel(leave)}
+                              </p>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                 <span
-                                  className={`inline-flex items-center gap-1.5 font-semibold ${statusBg}`}
+                                  className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${meta.className}`}
                                 >
-                                  <span className={`h-2 w-2 rounded-full ${statusDot}`} />
-                                  {formatLeaveApprovalStageDisplay(leave)}
+                                  {meta.label}
+                                </span>
+                                <span className="text-xs text-slate-600">
+                                  {formatShortRange(leave.startDate, leave.endDate)}
+                                </span>
+                                <span className="text-xs font-medium text-slate-800">
+                                  {leave.duration ?? '—'}d
                                 </span>
                               </div>
-                            </td>
-                            {showManagerColumn && (
-                              <td className="px-3 py-3 text-slate-700">
-                                <span className="font-medium text-slate-800">
-                                  {managerDisplayName(leave)}
-                                </span>
-                              </td>
-                            )}
-                            <td className="px-3 py-3 text-right">
-                              <div
-                                className="inline-flex items-center justify-end gap-1"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {st === 'pending' && canDecide(leave) && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      title="Approve"
-                                      onClick={() => handleApprove(id)}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#20C997]/15 text-[#0a8f6c] hover:bg-[#20C997]/25"
-                                    >
-                                      <FiCheck className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title="Reject"
-                                      onClick={() => {
-                                        setSelectedId(id);
-                                        setRejectReason('');
-                                      }}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
-                                    >
-                                      <FiX className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                )}
+                              <p className={`mt-1 inline-flex items-center gap-1.5 text-xs font-semibold ${statusBg}`}>
+                                <span className={`h-2 w-2 rounded-full ${statusDot}`} />
+                                {formatLeaveApprovalStageDisplay(leave)}
+                              </p>
+                              {showManagerColumn ? (
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                  Manager: {managerDisplayName(leave)}
+                                </p>
+                              ) : null}
+                            </div>
+                          </button>
+                          <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
+                            {st === 'pending' && canDecide(leave) && (
+                              <>
                                 <button
                                   type="button"
-                                  title="View"
+                                  title="Approve"
+                                  onClick={() => handleApprove(id)}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#0E9370]/15 text-[#0a8f6c] hover:bg-[#0E9370]/25"
+                                >
+                                  <FiCheck className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Reject"
                                   onClick={() => {
                                     setSelectedId(id);
                                     setRejectReason('');
                                   }}
-                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
                                 >
-                                  <FiEye className="h-4 w-4" />
+                                  <FiX className="h-4 w-4" />
                                 </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              title="View"
+                              onClick={() => {
+                                setSelectedId(id);
+                                setRejectReason('');
+                              }}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            >
+                              <FiEye className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  <div
+                    className="table-scroll-container leave-requests-table-scroll hidden bg-white md:block"
+                    role="region"
+                    aria-label="Leave requests table"
+                  >
+                    <table className="leave-requests-table text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          <th className="w-10 px-3 py-3" aria-hidden />
+                          <th className="px-3 py-3">Employee</th>
+                          <th className="px-3 py-3">Leave Type</th>
+                          <th className="px-3 py-3">From – To</th>
+                          <th className="px-3 py-3">Days</th>
+                          <th className="px-3 py-3">Status</th>
+                          {showManagerColumn && <th className="px-3 py-3">Manager</th>}
+                          <th className="px-3 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {clientFiltered.map((leave) => {
+                          const id = leave._id;
+                          const selected = selectedId === id;
+                          const meta =
+                            LEAVE_TYPE_META[leave.leaveType] || {
+                              label: (leave.leaveType || '').replace(/_/g, ' ').toUpperCase(),
+                              className: 'bg-slate-100 text-slate-700 border border-slate-200',
+                            };
+                          const st = (leave.status || '').toLowerCase();
+                          let statusDot = 'bg-amber-500';
+                          let statusBg = 'text-amber-800';
+                          if (st === 'approved') {
+                            statusDot = 'bg-[#0E9370]';
+                            statusBg = 'text-teal-800';
+                          } else if (st === 'rejected') {
+                            statusDot = 'bg-slate-400';
+                            statusBg = 'text-slate-700';
+                          }
+
+                          return (
+                            <tr
+                              key={String(id)}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                setSelectedId(id);
+                                setRejectReason('');
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setSelectedId(id);
+                                  setRejectReason('');
+                                }
+                              }}
+                              className={`cursor-pointer transition ${
+                                selected ? 'bg-[#0E9370]/08' : 'hover:bg-slate-50/90'
+                              }`}
+                            >
+                              <td className="px-3 py-3" />
+                              <td className="px-3 py-3">
+                                <div className="flex items-center gap-3">
+                                  <RowAvatar leave={leave} />
+                                  <div className="min-w-0">
+                                    <p className="truncate font-semibold text-slate-900">
+                                      {employeeDisplayName(leave)}
+                                    </p>
+                                    <p className="truncate text-xs text-slate-500">
+                                      {jobTitleLabel(leave)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 py-3">
+                                <span
+                                  className={`inline-block rounded-md px-2 py-1 text-[10px] font-bold ${meta.className}`}
+                                >
+                                  {meta.label}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 text-slate-700">
+                                {formatShortRange(leave.startDate, leave.endDate)}
+                              </td>
+                              <td className="px-3 py-3 font-medium text-slate-800">
+                                {leave.duration ?? '—'}
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 font-semibold ${statusBg}`}
+                                  >
+                                    <span className={`h-2 w-2 rounded-full ${statusDot}`} />
+                                    {formatLeaveApprovalStageDisplay(leave)}
+                                  </span>
+                                </div>
+                              </td>
+                              {showManagerColumn && (
+                                <td className="px-3 py-3 text-slate-700">
+                                  <span className="font-medium text-slate-800">
+                                    {managerDisplayName(leave)}
+                                  </span>
+                                </td>
+                              )}
+                              <td className="px-3 py-3 text-right">
+                                <div
+                                  className="inline-flex items-center justify-end gap-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {st === 'pending' && canDecide(leave) && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        title="Approve"
+                                        onClick={() => handleApprove(id)}
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#0E9370]/15 text-[#0a8f6c] hover:bg-[#0E9370]/25"
+                                      >
+                                        <FiCheck className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        title="Reject"
+                                        onClick={() => {
+                                          setSelectedId(id);
+                                          setRejectReason('');
+                                        }}
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+                                      >
+                                        <FiX className="h-4 w-4" />
+                                      </button>
+                                    </>
+                                  )}
+                                  <button
+                                    type="button"
+                                    title="View"
+                                    onClick={() => {
+                                      setSelectedId(id);
+                                      setRejectReason('');
+                                    }}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                  >
+                                    <FiEye className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
 
@@ -829,7 +940,7 @@ const LeaveManagement = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-teal-100 bg-gradient-to-br from-[#20C997]/08 to-transparent p-4">
+                <div className="mt-4 rounded-2xl border border-teal-100 bg-gradient-to-br from-[#0E9370]/08 to-transparent p-4">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600">
                     Requested days
                   </p>
@@ -838,7 +949,7 @@ const LeaveManagement = () => {
                   </p>
                   <div className="mt-4 flex items-center gap-4">
                     <div
-                      className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full bg-white shadow-inner ring-2 ring-[#20C997]/25"
+                      className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full bg-white shadow-inner ring-2 ring-[#0E9370]/25"
                       style={{
                         background: `conic-gradient(${TEAL} 0deg 230deg, #e2e8f0 230deg 360deg)`,
                       }}
@@ -877,7 +988,7 @@ const LeaveManagement = () => {
                     {selectedLeave.duration} Days Total
                   </p>
                   <div className="flex items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
-                    <FiCalendar className="mt-0.5 h-4 w-4 shrink-0 text-[#20C997]" />
+                    <FiCalendar className="mt-0.5 h-4 w-4 shrink-0 text-[#0E9370]" />
                     {formatLeaveRange(selectedLeave.startDate, selectedLeave.endDate)}
                   </div>
                 </div>
@@ -937,7 +1048,7 @@ const LeaveManagement = () => {
                           return (
                             <li key={`${event.action}-${idx}`} className="relative">
                               <span
-                                className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-[#20C997]"
+                                className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-[#0E9370]"
                                 aria-hidden
                               />
                               <p className="text-xs font-bold text-slate-800">{label}</p>
@@ -950,7 +1061,7 @@ const LeaveManagement = () => {
                       : [
                           <li key="submitted" className="relative">
                             <span
-                              className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-[#20C997]"
+                              className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-[#0E9370]"
                               aria-hidden
                             />
                             <p className="text-xs font-bold text-slate-800">Request submitted</p>
@@ -1006,7 +1117,7 @@ const LeaveManagement = () => {
                       onChange={(e) => setRejectReason(e.target.value)}
                       rows={3}
                       placeholder="Explain briefly for the employee…"
-                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-[#20C997]/20 focus:border-[#20C997]/35 focus:ring-2"
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-[#0E9370]/20 focus:border-[#0E9370]/35 focus:ring-2"
                     />
                   </div>
                 )}

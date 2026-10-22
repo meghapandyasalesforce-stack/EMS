@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
-    FaEdit, FaEye, FaFilePdf, FaHistory, FaPlus, FaStar, FaTrash,
+    FaEdit, FaEye, FaFilePdf, FaHistory, FaPlus, FaSearch, FaStar, FaTrash,
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
@@ -21,16 +21,31 @@ const EMPTY_TEMPLATE = {
 };
 
 const templateTypeLabel = (template) => {
-    if (template.templateType === 'pdf') {
-        return template.pdfTemplate?.mappingsConfigured ? 'PDF' : 'PDF';
-    }
+    if (template.templateType === 'pdf') return 'PDF';
     return 'HTML';
 };
 
-const OfferTemplateManager = () => {
+const templateEyebrow = (template) => {
+    const kind = template.isDefault ? 'Default template' : 'Standard template';
+    const type = templateTypeLabel(template);
+    const band = template.band || template.levelBand || template.gradeBand;
+    if (band) return `${kind} • Band ${band}`;
+    if (template.templateType === 'pdf') return `${kind} • PDF upload`;
+    return `${kind} • HTML letter`;
+};
+
+const formatTagLabel = (template) => (
+    template.templateType === 'pdf'
+        ? 'Format: PDF / DocuSign E-sign'
+        : 'Format: HTML / Rich text'
+);
+
+const OfferTemplateManager = ({ onCountChange } = {}) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [templates, setTemplates] = useState([]);
+    const [search, setSearch] = useState('');
+    const [createMenuOpen, setCreateMenuOpen] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewHtml, setPreviewHtml] = useState('');
@@ -45,23 +60,42 @@ const OfferTemplateManager = () => {
         try {
             setLoading(true);
             const { data } = await axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/templates`, { withCredentials: true });
-            if (data.success) setTemplates(data.data || []);
+            if (data.success) {
+                const list = data.data || [];
+                setTemplates(list);
+                onCountChange?.(list.length);
+            }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to load offer templates');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [onCountChange]);
 
     useEffect(() => { loadTemplates(); }, [loadTemplates]);
 
+    const filteredTemplates = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return templates;
+        return templates.filter((t) => {
+            const hay = `${t.name || ''} ${t.description || ''} ${templateTypeLabel(t)}`.toLowerCase();
+            return hay.includes(q);
+        });
+    }, [templates, search]);
+
     const openCreate = () => {
+        setCreateMenuOpen(false);
         setSelected(null);
         setForm({ ...EMPTY_TEMPLATE, bodyHtml: defaultBody() });
         setEditorOpen(true);
     };
 
     const openEdit = (template) => {
+        if (template.templateType === 'pdf') {
+            setSelected(template);
+            setMappingOpen(true);
+            return;
+        }
         setSelected(template);
         setForm({
             id: template._id,
@@ -93,20 +127,26 @@ const OfferTemplateManager = () => {
         }
     };
 
-    const deactivateTemplate = async (template) => {
-        if (!window.confirm(`Deactivate template "${template.name}"?`)) return;
+    const setTemplateActive = async (template, isActive) => {
         try {
             await axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/templates`, {
                 id: template._id,
                 name: template.name,
-                bodyHtml: template.bodyHtml,
-                isActive: false,
+                bodyHtml: template.bodyHtml || '',
+                templateType: template.templateType || 'html',
+                description: template.description || '',
+                isActive,
             }, { withCredentials: true });
-            toast.success('Template deactivated');
+            toast.success(isActive ? 'Template activated' : 'Template deactivated');
             await loadTemplates();
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to deactivate template');
+            toast.error(error.response?.data?.message || 'Failed to update template status');
         }
+    };
+
+    const deactivateTemplate = async (template) => {
+        if (!window.confirm(`Deactivate template "${template.name}"?`)) return;
+        await setTemplateActive(template, false);
     };
 
     const openTemplatePreview = async (template) => {
@@ -145,107 +185,169 @@ const OfferTemplateManager = () => {
         }
     };
 
-    const activeTemplates = templates.filter((t) => t.isActive !== false);
-
     if (loading) return <LoadingSpinner message="Loading offer templates..." />;
 
     return (
-        <div className="ats-offer-panel">
-            <h2 className="ats-offer-panel__title">Offer Letter Templates</h2>
-
-            <div className="ats-offer-create-grid">
-                <button type="button" onClick={openCreate} className="ats-offer-create-card">
-                    <span className="ats-offer-create-card__icon ats-offer-create-card__icon--html">
-                        <FaPlus />
-                    </span>
-                    <span className="ats-offer-create-card__body">
-                        <span className="ats-offer-create-card__title">New HTML Template</span>
-                        <span className="ats-offer-create-card__desc">
-                            Build with the rich text editor and {'{{placeholders}}'}.
-                        </span>
-                    </span>
-                </button>
-
-                <button type="button" onClick={() => setUploadPdfOpen(true)} className="ats-offer-create-card">
-                    <span className="ats-offer-create-card__icon ats-offer-create-card__icon--pdf">
-                        <FaFilePdf />
-                    </span>
-                    <span className="ats-offer-create-card__body">
-                        <span className="ats-offer-create-card__title">Upload PDF Template</span>
-                        <span className="ats-offer-create-card__desc">
-                            Upload your company offer letter PDF — fields are detected automatically.
-                        </span>
-                    </span>
-                </button>
-            </div>
-
-            <div className="ats-offer-template-list">
-                {activeTemplates.map((template) => (
-                    <article key={template._id} className="ats-offer-template-row">
-                        <div className="ats-offer-template-row__info">
-                            <div className="ats-offer-template-row__title-line">
-                                <h3 className="ats-offer-template-row__name">{template.name}</h3>
-                                {template.isDefault && (
-                                    <span className="ats-offer-tag">Default</span>
-                                )}
-                                <span className="ats-offer-tag">{templateTypeLabel(template)}</span>
-                                <span className="ats-offer-tag">v{template.version || 1}</span>
-                                {template.templateType === 'pdf' && !template.pdfTemplate?.mappingsConfigured && (
-                                    <span className="ats-offer-tag ats-offer-tag--warn">Needs verification</span>
-                                )}
-                            </div>
-                            <p className="ats-offer-template-row__date">
-                                Updated {template.updatedAt ? format(new Date(template.updatedAt), 'dd MMM yyyy') : '—'}
-                            </p>
-                        </div>
-
-                        <div className="ats-offer-template-row__actions">
-                            <CmButton variant="outline" size="sm" onClick={() => openTemplatePreview(template)}>
-                                <FaEye className="text-xs" /> Preview
-                            </CmButton>
-                            {template.templateType === 'pdf' ? (
-                                <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setMappingOpen(true); }}>
-                                    {template.pdfTemplate?.mappingsConfigured ? 'View Fields' : 'Verify Fields'}
-                                </CmButton>
-                            ) : (
-                                <>
-                                    <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setHistoryOpen(true); }}>
-                                        <FaHistory className="text-xs" /> History
-                                    </CmButton>
-                                    <CmButton variant="outline" size="sm" onClick={() => openEdit(template)}>
-                                        <FaEdit className="text-xs" /> Edit
-                                    </CmButton>
-                                </>
-                            )}
-                            {!template.isDefault && (
-                                <CmButton variant="outline" size="sm" onClick={() => setAsDefault(template)}>
-                                    <FaStar className="text-xs" /> Set default
-                                </CmButton>
-                            )}
-                            <CmButton
-                                variant="outline"
-                                size="sm"
-                                className="ats-offer-action-btn--danger"
-                                onClick={() => deactivateTemplate(template)}
+        <div className="otmpl">
+            <div className="otmpl__toolbar">
+                <div className="otmpl__search">
+                    <FaSearch className="otmpl__search-icon" aria-hidden="true" />
+                    <input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search templates, designations, band..."
+                        aria-label="Search offer templates"
+                    />
+                </div>
+                <div className="otmpl__create-wrap">
+                    <button
+                        type="button"
+                        className="otmpl__new-btn"
+                        onClick={() => setCreateMenuOpen((v) => !v)}
+                        aria-expanded={createMenuOpen}
+                    >
+                        <FaPlus className="h-3.5 w-3.5" /> New Template
+                    </button>
+                    {createMenuOpen ? (
+                        <div className="otmpl__create-menu" role="menu">
+                            <button type="button" role="menuitem" onClick={openCreate}>
+                                <FaPlus /> New HTML Template
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setCreateMenuOpen(false);
+                                    setUploadPdfOpen(true);
+                                }}
                             >
-                                <FaTrash className="text-xs" /> Deactivate
+                                <FaFilePdf /> Upload PDF Template
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
+            </div>
+
+            {filteredTemplates.length === 0 ? (
+                <div className="otmpl__empty">
+                    <p>{search.trim() ? 'No templates match your search.' : 'No offer templates yet.'}</p>
+                    {!search.trim() ? (
+                        <div className="otmpl__empty-actions">
+                            <CmButton onClick={openCreate}><FaPlus /> New HTML Template</CmButton>
+                            <CmButton variant="outline" onClick={() => setUploadPdfOpen(true)}>
+                                <FaFilePdf /> Upload PDF Template
                             </CmButton>
                         </div>
-                    </article>
-                ))}
+                    ) : null}
+                </div>
+            ) : (
+                <div className="otmpl__grid">
+                    {filteredTemplates.map((template) => {
+                        const active = template.isActive !== false;
+                        const modifiedBy = template.updatedByName
+                            || template.updatedBy?.name
+                            || template.createdByName
+                            || null;
+                        const deptLabel = template.department || template.dept || null;
+                        return (
+                            <article
+                                key={template._id}
+                                className={`otmpl__card${active ? '' : ' is-inactive'}`}
+                            >
+                                <div className="otmpl__card-top">
+                                    <p className="otmpl__eyebrow">{templateEyebrow(template)}</p>
+                                    <label className="otmpl__toggle" title={active ? 'Active' : 'Inactive'}>
+                                        <input
+                                            type="checkbox"
+                                            checked={active}
+                                            onChange={(e) => setTemplateActive(template, e.target.checked)}
+                                            aria-label={`${active ? 'Deactivate' : 'Activate'} ${template.name}`}
+                                        />
+                                        <span className="otmpl__toggle-ui" />
+                                    </label>
+                                </div>
 
-                {activeTemplates.length === 0 && (
-                    <div className="hrms-empty-shell">
-                    <div className="ats-offer-empty">
-                        <p>No offer templates yet.</p>
-                        <div className="ats-offer-empty__actions">
-                            <CmButton onClick={openCreate}><FaPlus /> New HTML Template</CmButton>
-                            <CmButton variant="outline" onClick={() => setUploadPdfOpen(true)}><FaFilePdf /> Upload PDF Template</CmButton>
-                        </div>
-                    </div>
-                    </div>
-                )}
-            </div>
+                                <h3 className="otmpl__card-title">{template.name}</h3>
+                                <p className="otmpl__card-desc">
+                                    {template.description?.trim()
+                                        || (template.templateType === 'pdf'
+                                            ? 'Company PDF offer letter template with mapped fillable fields.'
+                                            : 'HTML offer letter with placeholders for candidate and compensation details.')}
+                                </p>
+
+                                <div className="otmpl__tags">
+                                    {deptLabel ? <span>Dept: {deptLabel}</span> : null}
+                                    <span>{formatTagLabel(template)}</span>
+                                    {template.isDefault ? <span>Default</span> : null}
+                                    {template.templateType === 'pdf' && !template.pdfTemplate?.mappingsConfigured ? (
+                                        <span className="is-warn">Needs verification</span>
+                                    ) : null}
+                                    <span className={active ? 'is-active' : 'is-inactive-tag'}>
+                                        Status: {active ? 'Active' : 'Inactive'}
+                                    </span>
+                                </div>
+
+                                <div className="otmpl__card-footer">
+                                    <p className="otmpl__modified">
+                                        Last modified:{' '}
+                                        {template.updatedAt
+                                            ? format(new Date(template.updatedAt), 'dd MMM yyyy')
+                                            : '—'}
+                                        {modifiedBy ? ` by ${modifiedBy}` : ''}
+                                    </p>
+                                    <div className="otmpl__actions">
+                                        <button
+                                            type="button"
+                                            className="otmpl__action"
+                                            onClick={() => openTemplatePreview(template)}
+                                        >
+                                            <FaEye /> Preview
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="otmpl__action"
+                                            onClick={() => openEdit(template)}
+                                        >
+                                            <FaEdit /> Edit
+                                        </button>
+                                        {template.templateType !== 'pdf' ? (
+                                            <button
+                                                type="button"
+                                                className="otmpl__action otmpl__action--ghost"
+                                                title="Version history"
+                                                onClick={() => {
+                                                    setSelected(template);
+                                                    setHistoryOpen(true);
+                                                }}
+                                            >
+                                                <FaHistory />
+                                            </button>
+                                        ) : null}
+                                        {!template.isDefault ? (
+                                            <button
+                                                type="button"
+                                                className="otmpl__action otmpl__action--ghost"
+                                                title="Set as default"
+                                                onClick={() => setAsDefault(template)}
+                                            >
+                                                <FaStar />
+                                            </button>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            className="otmpl__action otmpl__action--danger"
+                                            title="Deactivate"
+                                            onClick={() => deactivateTemplate(template)}
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </div>
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+            )}
 
             {editorOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

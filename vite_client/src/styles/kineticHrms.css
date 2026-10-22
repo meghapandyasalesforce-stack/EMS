@@ -1,0 +1,393 @@
+/**
+ * Kinetic Enterprise HRMS — Stitch design tokens + HR portal chrome.
+ * Scope: .kinetic-hrms (HR Manager portal shell). Does not restyle Org Chart
+ * (.org-chart-page / orgChart module). UI-only; no behavior changes.
+ */
+
+.kinetic-hrms {
+  --kh-surface: #f9f9ff;
+  --kh-surface-low: #f0f3ff;
+  --kh-surface-mid: #e7eeff;
+  --kh-canvas: #e8faf4;
+  --kh-on: #111c2d;
+  --kh-on-variant: #3d4944;
+  --kh-muted: #666666;
+  --kh-outline: #e2e8f0;
+  --kh-outline-strong: #cbd5e1;
+  --kh-primary: #00694f;
+  --kh-primary-interactive: #0e9370;
+  --kh-primary-hover: #0b7458;
+  --kh-primary-pressed: #07523e;
+  --kh-primary-accent: #1cca9b;
+  --kh-primary-soft: #d1f5ea;
+  --kh-primary-softer: #e8faf4;
+  --kh-navy: #0e2b3d;
+  --kh-navy-elevated: #16384c;
+  --kh-secondary: #476175;
+  --kh-error: #e11d48;
+  --kh-warning: #f59e0b;
+  --kh-info: #0284c7;
+  --kh-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+  --kh-shadow-md: 0 10px 30px -4px rgba(14, 43, 61, 0.12);
+  --kh-radius-control: 0.5rem;
+  --kh-radius-card: 1rem;
+  --kh-font: 'Inter', 'Manrope', system-ui, sans-serif;
+
+  /* App theme bridges */
+  --color-primary: var(--kh-primary-interactive);
+  --color-primary-deep: var(--kh-primary);
+  --color-primary-hover: var(--kh-primary-hover);
+  --color-secondary: var(--kh-secondary);
+  --color-navy: var(--kh-navy);
+  --color-bg-soft: var(--kh-canvas);
+  --color-text: var(--kh-on);
+  --color-bg: #ffffff;
+
+  font-family: var(--kh-font);
+  color: var(--kh-on);
+}
+
+/* ——— Page canvas (mint) — skip when Org Chart is the route root ——— */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) {
+  background-color: var(--kh-canvas);
+  background-image:
+    radial-gradient(ellipse 88% 58% at 6% 2%, rgba(28, 202, 155, 0.07), transparent 54%),
+    radial-gradient(ellipse 72% 52% at 96% 99%, rgba(0, 105, 79, 0.04), transparent 50%),
+    linear-gradient(180deg, rgba(249, 252, 251, 0.98) 0%, rgba(232, 250, 244, 0.95) 100%);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page))::before {
+  background:
+    radial-gradient(circle at 18% 14%, rgba(28, 202, 155, 0.08), transparent 44%),
+    radial-gradient(circle at 84% 92%, rgba(14, 147, 112, 0.05), transparent 42%);
+}
+
+/* Org Chart route: leave canvas alone so organizationChart.css owns the look */
+.kinetic-hrms .hrms-page-canvas:has(> .org-chart-page),
+.kinetic-hrms .hrms-page-canvas:has(> .org-chart-page)::before {
+  background: transparent !important;
+  background-image: none !important;
+  filter: none !important;
+}
+
+/* Isolate chart subtree from Kinetic theme bridges (Studio chrome stays) */
+.kinetic-hrms .org-chart-page {
+  --color-primary: #00694f;
+  --color-bg-soft: #fafbf8;
+  background: #f9f9ff;
+  color: #111c2d;
+  font-family: inherit;
+}
+
+/* ——— Deep navy sidebar / mobile chrome ——— */
+.kinetic-hrms [data-hrms-sidebar] {
+  background: var(--kh-navy) !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+.kinetic-hrms [data-hrms-sidebar] > div:first-child,
+.kinetic-hrms [data-hrms-sidebar] > div:last-child {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: none !important;
+}
+
+.kinetic-hrms [data-hrms-sidebar] h3 span.text-white,
+.kinetic-hrms [data-hrms-sidebar] h3 span.text-gray-800 {
+  color: #ffffff !important;
+}
+
+.kinetic-hrms [data-hrms-sidebar-nav] button {
+  border-left: 3px solid transparent;
+  border-radius: var(--kh-radius-control) !important;
+}
+
+.kinetic-hrms [data-hrms-sidebar-nav] button:hover:not(.text-white) {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+}
+
+/* Active nav: navy elevated + mint indicator (overrides inline primary fill) */
+.kinetic-hrms [data-hrms-sidebar-nav] button.text-white.shadow-md {
+  background-color: var(--kh-navy-elevated) !important;
+  box-shadow: none !important;
+  border-left-color: var(--kh-primary-accent) !important;
+  color: #ffffff !important;
+}
+
+.kinetic-hrms [data-hrms-sidebar-nav] button.text-white.shadow-md .ml-auto {
+  background-color: var(--kh-primary-accent) !important;
+}
+
+/* Mobile top bar when HR portal (non-employee light nav) */
+.kinetic-hrms header.safe-area-top:not(.bg-white) {
+  background: var(--kh-navy) !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Mobile drawer panel */
+.kinetic-hrms [data-hrms-sidebar-nav] {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+/* ——— Corporate-Modern + ATS token remap under Kinetic ——— */
+.kinetic-hrms .cm-hrms {
+  --cm-surface: var(--kh-canvas);
+  --cm-surface-dim: #cfdaf2;
+  --cm-surface-low: var(--kh-surface-low);
+  --cm-surface-container: var(--kh-surface-mid);
+  --cm-surface-high: #dee8ff;
+  --cm-white: #ffffff;
+  --cm-on-surface: var(--kh-on);
+  --cm-on-variant: var(--kh-on-variant);
+  --cm-muted: var(--kh-muted);
+  --cm-outline: #6d7a73;
+  --cm-outline-variant: #bccac2;
+  --cm-primary: var(--kh-primary-interactive);
+  --cm-primary-deep: var(--kh-primary);
+  --cm-on-primary: #ffffff;
+  --cm-primary-container: var(--kh-primary-accent);
+  --cm-on-primary-container: var(--kh-primary-pressed);
+  --cm-secondary: var(--kh-secondary);
+  --cm-secondary-container: #cae6fe;
+  --cm-tertiary: #ff7f50;
+  --cm-inverted: var(--kh-navy);
+  --cm-error: var(--kh-error);
+  --cm-shadow: var(--kh-shadow);
+  --cm-shadow-md: var(--kh-shadow-md);
+  --cm-radius-card: var(--kh-radius-card);
+  --cm-font: var(--kh-font);
+  background: transparent;
+}
+
+.kinetic-hrms .ats-ui {
+  --ats-primary: var(--kh-primary-interactive);
+  --ats-secondary: var(--kh-navy);
+  --ats-tertiary: #ff7f50;
+  --ats-neutral: var(--kh-canvas);
+  --ats-search-bg: #e8f1ef;
+  --ats-shadow: var(--kh-shadow);
+  --ats-shadow-md: var(--kh-shadow-md);
+  --cm-primary: var(--kh-primary-interactive);
+  --cm-primary-deep: var(--kh-primary);
+  --cm-inverted: var(--kh-navy);
+  --cm-surface: var(--kh-canvas);
+}
+
+/* Primary buttons / interactive chrome */
+.kinetic-hrms .cm-hrms .cm-btn--primary,
+.kinetic-hrms .ats-ui .cm-btn--primary {
+  background: var(--kh-primary-interactive) !important;
+  color: #ffffff !important;
+}
+
+.kinetic-hrms .cm-hrms .cm-btn--primary:hover,
+.kinetic-hrms .ats-ui .cm-btn--primary:hover {
+  background: var(--kh-primary-hover) !important;
+}
+
+.kinetic-hrms .cm-hrms .cm-card,
+.kinetic-hrms .ats-ui .cm-card {
+  border-radius: var(--kh-radius-card);
+  box-shadow: var(--kh-shadow);
+  border: 1px solid rgba(14, 43, 61, 0.08);
+}
+
+/* Directory / dossier already use Stitch greens; align canvas under shell */
+.kinetic-hrms .emp-directory,
+.kinetic-hrms .emp-add {
+  --dir-bg: var(--kh-surface);
+  --dir-primary: var(--kh-primary);
+  --dir-primary-hover: #00513c;
+}
+
+.kinetic-hrms .emp-dossier {
+  --ed-bg: var(--kh-surface);
+  --ed-primary: var(--kh-primary);
+  --ed-mint: var(--kh-primary-accent);
+}
+
+/* Soft focus rings on main HR content (not Org Chart page) */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) button:focus-visible,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) a:focus-visible,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) input:focus-visible,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) select:focus-visible,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) textarea:focus-visible {
+  outline: 2px solid var(--kh-primary-interactive);
+  outline-offset: 2px;
+}
+
+.kinetic-hrms [data-hrms-sidebar] button:focus-visible,
+.kinetic-hrms [data-hrms-sidebar] a:focus-visible {
+  outline: 2px solid var(--kh-primary-accent);
+  outline-offset: 2px;
+}
+
+/* ===== Modules 2–8: shared Stitch chrome (People → Plan & Analyze) ===== */
+/* Hard skip: never restyle .org-chart-page (nested .page-shell included). */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell,
+.kinetic-hrms .engagement-page,
+.kinetic-hrms .hrms-lifecycle {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.kinetic-hrms .hrms-lifecycle {
+  --cm-surface: transparent;
+  --cm-primary: var(--kh-primary-interactive);
+  --cm-primary-deep: var(--kh-primary);
+  --cm-inverted: var(--kh-navy);
+  --cm-on-surface: var(--kh-on);
+  --cm-muted: var(--kh-muted);
+  --cm-shadow: var(--kh-shadow);
+  --cm-radius-card: var(--kh-radius-card);
+  --cm-font: var(--kh-font);
+  font-family: var(--kh-font);
+  color: var(--kh-on);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell-inner {
+  max-width: 100%;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* White work surfaces */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .bg-white,
+.kinetic-hrms .hrms-lifecycle .bg-white,
+.kinetic-hrms .engagement-page .bg-white {
+  background-color: #ffffff;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .rounded-2xl.border,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .rounded-xl.border,
+.kinetic-hrms .hrms-lifecycle .rounded-2xl.border,
+.kinetic-hrms .hrms-lifecycle .rounded-xl.border {
+  border-color: rgba(14, 43, 61, 0.08);
+  box-shadow: var(--kh-shadow);
+}
+
+/* Table headers — Stitch caps style */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell thead,
+.kinetic-hrms .hrms-lifecycle thead,
+.kinetic-hrms .ats-ui thead {
+  background: #f8fafc;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell thead th,
+.kinetic-hrms .hrms-lifecycle thead th,
+.kinetic-hrms .ats-ui thead th {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kh-muted);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell tbody tr:hover,
+.kinetic-hrms .hrms-lifecycle tbody tr:hover {
+  background: #f0faf6;
+}
+
+/* Primary CTAs that still use theme / emerald utilities (never Org Chart) */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-theme-primary,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-emerald-600,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-emerald-500 {
+  background-color: var(--kh-primary-interactive) !important;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .hover\:bg-theme-primary:hover,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .hover\:bg-emerald-600:hover,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .hover\:bg-emerald-700:hover {
+  background-color: var(--kh-primary-hover) !important;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-theme-primary,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-emerald-600,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-emerald-700 {
+  color: var(--kh-primary-interactive) !important;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .border-theme-primary,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .border-emerald-500,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .border-emerald-600 {
+  border-color: var(--kh-primary-interactive) !important;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .ring-theme-primary,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .focus\:ring-emerald-100:focus,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .focus\:ring-\[\#0E9370\]\/20:focus {
+  --tw-ring-color: rgba(14, 147, 112, 0.2);
+}
+
+/* Directory / Add / Dossier — tighten Stitch surfaces */
+.kinetic-hrms .emp-directory,
+.kinetic-hrms .emp-add {
+  --dir-bg: var(--kh-canvas);
+  --dir-surface: #ffffff;
+  --dir-primary: var(--kh-primary);
+  --dir-primary-hover: #00513c;
+  --dir-shadow: var(--kh-shadow);
+  font-family: var(--kh-font);
+}
+
+.kinetic-hrms .emp-dossier {
+  --ed-bg: var(--kh-canvas);
+  --ed-surface: #ffffff;
+  --ed-primary: var(--kh-primary);
+  --ed-mint: var(--kh-primary-accent);
+  --ed-shadow: var(--kh-shadow);
+  font-family: var(--kh-font);
+}
+
+.kinetic-hrms .emp-directory__btn-primary,
+.kinetic-hrms .emp-add .emp-add-btn-primary,
+.kinetic-hrms .emp-directory__export-btn {
+  background: var(--kh-primary-interactive);
+}
+
+.kinetic-hrms .emp-directory__btn-primary:hover,
+.kinetic-hrms .emp-directory__export-btn:hover {
+  background: var(--kh-primary-hover);
+}
+
+/* Recruitment ATS pages already remapped via .ats-ui — ensure studio shells breathe */
+.kinetic-hrms .ats-ui.cm-hrms,
+.kinetic-hrms .ats-ui {
+  background: transparent !important;
+}
+
+/* Reports / analytics / docs / workforce / succession / learning / helpdesk / benefits */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell h1,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .cm-title,
+.kinetic-hrms .hrms-lifecycle .cm-title {
+  color: var(--kh-on);
+  letter-spacing: -0.02em;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-slate-900,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-gray-900 {
+  color: var(--kh-on);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-slate-500,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-gray-500 {
+  color: var(--kh-muted);
+}
+
+/* Status pills */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .rounded-full.bg-emerald-50,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .rounded-full.bg-green-50 {
+  background: var(--kh-primary-soft) !important;
+  color: var(--kh-primary-pressed) !important;
+}
+
+/* Leave / attendance admin surfaces when opened from HR portal — never Org Chart */
+.kinetic-hrms .main-scroll-area > .min-h-screen:not(.org-chart-page) {
+  background: transparent;
+}

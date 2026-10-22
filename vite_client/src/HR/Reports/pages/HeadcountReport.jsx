@@ -71,7 +71,7 @@ const HeadcountReport = () => {
                 {
                     label: 'Full-time',
                     data: departments.slice(0, 6).map((d) => Math.round((d.count || 0) * 0.85)),
-                    backgroundColor: '#20C997',
+                    backgroundColor: '#0E9370',
                     borderRadius: 6,
                 },
                 {
@@ -151,7 +151,7 @@ const HeadcountReport = () => {
                         label: 'Name',
                         render: (row) => (
                             <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#20C997]/15 text-xs font-bold text-[#0d9488]">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0E9370]/15 text-xs font-bold text-[#0d9488]">
                                     {(row.name?.[0] || 'E').toUpperCase()}
                                     {(row.lastName?.[0] || '').toUpperCase()}
                                 </div>

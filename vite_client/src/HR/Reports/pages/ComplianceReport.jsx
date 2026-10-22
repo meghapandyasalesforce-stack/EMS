@@ -27,7 +27,7 @@ const Gauge = ({ label, value, detail, warning }) => (
                     cy="50"
                     r="42"
                     fill="none"
-                    stroke={warning ? '#fb923c' : '#20C997'}
+                    stroke={warning ? '#fb923c' : '#0E9370'}
                     strokeWidth="8"
                     strokeDasharray={`${value * 2.64} 264`}
                     strokeLinecap="round"
@@ -107,7 +107,7 @@ const ComplianceReport = () => (
                         <div className="flex items-center gap-2">
                             <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-100">
                                 <div
-                                    className="h-full rounded-full bg-[#20C997]"
+                                    className="h-full rounded-full bg-[#0E9370]"
                                     style={{ width: `${r.score}%` }}
                                 />
                             </div>

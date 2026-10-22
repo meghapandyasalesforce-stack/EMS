@@ -9,8 +9,9 @@ import {
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'react-toastify';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import { isHR, isManager } from '../../utils/managerHelper';
+import '../../styles/benefitsUI.css';
 
 const formatINR = (amount, frequency) => {
     const value = Number(amount || 0);
@@ -211,39 +212,60 @@ const BenefitDetailPage = () => {
     const frequency = plan.employeeContribution?.frequency || 'Monthly';
 
     return (
-        <div className="page-shell min-h-screen bg-gradient-to-b from-slate-50 to-white transition-all duration-300">
-            <div className="page-shell-inner hrms-stack">
+        <div className="ben-ui ben-detail-page">
+            <div className="ben-ui__inner hrms-stack">
                 <div>
                     <button
                         onClick={() => navigate('/benefits')}
-                        className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                        className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"
                     >
                         <FaArrowLeft /> Back to Benefits
                     </button>
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-                            <div className="flex items-start gap-4">
-                                <div className="bg-theme-primary/10 text-theme-primary p-4 rounded-xl">
-                                    {getIcon(plan.category)}
+                    <div className="ben-drawer overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                        <header className="ben-drawer__head">
+                            <div className="ben-drawer__badge-row">
+                                <span className="ben-drawer__badge">{plan.category || 'Benefit'}</span>
+                                <span className="ben-drawer__tier">
+                                    {plan.isActive ? 'Active Tier' : 'Inactive'}
+                                    {plan.enrollmentType ? ` · ${plan.enrollmentType}` : ''}
+                                </span>
+                            </div>
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <h1 className="ben-drawer__title">{plan.name}</h1>
+                                    <p className="ben-drawer__policy">
+                                        Master Policy: <strong>{plan.benefitCode || '—'}</strong>
+                                        {plan.provider ? ` · ${plan.provider}` : ''}
+                                    </p>
+                                </div>
+                                <div className="hidden sm:block text-emerald-200/90">{getIcon(plan.category)}</div>
+                            </div>
+                        </header>
+                        <div className="ben-drawer__body !bg-[#f8fafc]">
+                        <div className="ben-drawer__card">
+                            <div className="ben-drawer__card-grid">
+                                <div>
+                                    <p className="ben-drawer__mini-label">Underwriter</p>
+                                    <p className="ben-drawer__mini-value">{plan.provider || '—'}</p>
+                                    <p className="ben-drawer__mini-sub">{plan.category}</p>
                                 </div>
                                 <div>
-                                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{plan.name}</h1>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(plan.isActive ? 'Active' : 'Inactive')}`}>
-                                            {plan.isActive ? 'Active' : 'Inactive'}
-                                        </span>
-                                        {plan.enrollmentType && (
-                                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-                                                {plan.enrollmentType}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-gray-600">{plan.category}</p>
-                                    {plan.provider && (
-                                        <p className="text-sm text-gray-500 mt-1">Provider: {plan.provider}</p>
-                                    )}
+                                    <p className="ben-drawer__mini-label">Annual renewal date</p>
+                                    <p className="ben-drawer__mini-value">
+                                        {plan.expiryDate ? format(new Date(plan.expiryDate), 'dd MMM yyyy') : '—'}
+                                    </p>
+                                    <p className="ben-drawer__mini-sub is-muted">
+                                        {plan.expiryDate
+                                            ? `${Math.max(0, differenceInCalendarDays(new Date(plan.expiryDate), new Date()))} days remaining`
+                                            : 'No expiry set'}
+                                    </p>
                                 </div>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm text-slate-600">{plan.description || 'Company benefit plan details and enrollment options.'}</p>
                             </div>
 
                             {!isPrivilegedView && (
@@ -319,13 +341,14 @@ const BenefitDetailPage = () => {
                                 </div>
                             )}
                         </div>
+                        </div>
                     </div>
                 </div>
 
                 <div className="hrms-main-rail">
                     <div className="min-w-0 space-y-6">
                         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-                            <h2 className="text-xl font-semibold mb-4 text-gray-800">Plan Details</h2>
+                            <h2 className="text-xl font-semibold mb-4 text-gray-800">Coverage Terms &amp; Entitlements</h2>
                             <div className="space-y-4">
                                 {plan.description && (
                                     <div>

@@ -60,7 +60,7 @@ const HRAnalyticsPage = () => {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-50 p-6">
+            <div className="min-h-screen bg-transparent p-6">
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <p className="text-red-800">Failed to load analytics data. Please try again later.</p>
                 </div>
@@ -202,7 +202,7 @@ const HRAnalyticsPage = () => {
         : 0;
 
     return (
-        <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+        <div className="page-shell min-h-screen bg-transparent">
             <div className="page-shell-inner hrms-stack">
                 {/* Header */}
                 <div>

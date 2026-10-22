@@ -27,7 +27,7 @@ export const feedbackStatusStyle = (status) => {
     }
     if (status === 'Open' || status === 'Submitted') return 'bg-amber-100 text-amber-700';
     if (status === 'In Review' || status === 'Under Review' || status === 'In Progress') {
-        return 'bg-[#20C997]/10 text-[#0d9488]';
+        return 'bg-[#0E9370]/10 text-[#07523E]';
     }
     if (status === 'Closed' || status === 'Rejected') return 'bg-slate-100 text-slate-600';
     return 'bg-slate-100 text-slate-600';

@@ -519,7 +519,7 @@ const OffboardingHub = () => {
 
     if (!isHRView && isPersonalView && !workflow) {
         return (
-            <div className="page-shell hrms-lifecycle bg-gray-50">
+            <div className="page-shell hrms-lifecycle bg-transparent">
                 <div className="page-shell-inner space-y-4">
                     {showRoleToggles && (
                         <div className="flex justify-end">
@@ -546,7 +546,7 @@ const OffboardingHub = () => {
     const breakdown = workflow?.progressBreakdown || {};
 
     return (
-        <div className="page-shell hrms-lifecycle cm-hrms bg-gray-50">
+        <div className="page-shell hrms-lifecycle cm-hrms bg-transparent">
             <div className="page-shell-inner hrms-stack pb-10">
                 {!workflow && (
                 <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">

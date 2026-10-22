@@ -7,7 +7,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { AtsPage, AtsPageHeader, AtsAvatar } from '../../components/recruitment/atsUi';
 
 const Widget = ({ title, icon: Icon, items, empty, onOpen }) => (
-    <section className="cm-card flex flex-col" style={{ minHeight: 0 }}>
+    <section className="ats-workspace-widget flex flex-col">
         <div className="mb-3 flex items-center gap-2">
             <div className="cm-stat__icon" style={{ width: '2.25rem', height: '2.25rem' }}>
                 <Icon className="h-3.5 w-3.5" />
@@ -27,7 +27,7 @@ const Widget = ({ title, icon: Icon, items, empty, onOpen }) => (
                             key={id}
                             type="button"
                             onClick={() => onOpen(id)}
-                            className="flex w-full items-center gap-3 rounded-xl border border-[rgba(15,45,38,0.08)] px-3 py-2 text-left text-sm transition hover:border-[var(--ats-primary)] hover:bg-[rgba(28,202,155,0.04)]"
+                            className="ats-workspace-widget__item"
                         >
                             <AtsAvatar name={name} />
                             <span className="min-w-0 flex-1">
@@ -67,13 +67,19 @@ const WorkspacePage = () => {
     const widgets = data?.widgets || {};
 
     return (
-        <AtsPage>
+        <AtsPage className="rec-hub ats-workspace-page">
+            <div className="rec-hub__crumb">
+                <span>Recruitment</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span className="rec-hub__crumb-current">My Workspace</span>
+            </div>
+
             <button type="button" onClick={() => navigate('/recruitment')} className="ats-back">
                 <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
             </button>
 
             <AtsPageHeader
-                eyebrow="Recruitment"
+                eyebrow="Talent acquisition"
                 title="My Workspace"
                 subtitle="Recruiter home — screening, interviews, joining"
             />

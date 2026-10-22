@@ -226,8 +226,10 @@ function OrganizationChartPage() {
     if (!el || !dimensions.width) return;
     const w = el.clientWidth;
     const h = el.clientHeight;
+    // Large orgs: allow zooming out further so overview still fits; keep readable floor for small trees.
+    const floor = scopedHierarchy.byId.size > 100 ? MIN_DESKTOP_ZOOM : READABLE_FIT_ZOOM;
     const nextZoom = Math.max(
-      READABLE_FIT_ZOOM,
+      floor,
       Math.min(1, (w - 36) / dimensions.width, (h - 125) / dimensions.height)
     );
     setZoom(nextZoom);
@@ -238,7 +240,48 @@ function OrganizationChartPage() {
       },
       nextZoom
     );
-  }, [dimensions, applyPan]);
+  }, [dimensions, applyPan, scopedHierarchy.byId.size]);
+
+  /** Fit viewport to a manager’s currently visible subtree (mock-friendly for 200+). */
+  const fitBranch = useCallback(
+    (rootId) => {
+      const el = canvasRef.current;
+      const key = rootId != null ? String(rootId) : null;
+      if (!el || !key) return;
+      const rootPos = positions.get(key);
+      if (!rootPos) return;
+      const inBranch = new Set(getDescendants(employees, key).map((e) => String(e.id)));
+      inBranch.add(key);
+      const nodes = [...positions.entries()].filter(([id]) => inBranch.has(id));
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const [, p] of nodes) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x + (p.width || 244));
+        maxY = Math.max(maxY, p.y + (p.height || 144));
+      }
+      if (!Number.isFinite(minX)) return;
+      const pad = 56;
+      const bw = Math.max(1, maxX - minX + pad * 2);
+      const bh = Math.max(1, maxY - minY + pad * 2);
+      const nextZoom = Math.max(
+        MIN_DESKTOP_ZOOM,
+        Math.min(1.15, (el.clientWidth - 40) / bw, (el.clientHeight - 90) / bh)
+      );
+      setZoom(nextZoom);
+      applyPan(
+        {
+          x: el.clientWidth / 2 - ((minX + maxX) / 2) * nextZoom,
+          y: Math.max(20, el.clientHeight / 2 - ((minY + maxY) / 2) * nextZoom),
+        },
+        nextZoom
+      );
+    },
+    [positions, employees, applyPan]
+  );
 
   const transformView = activeView;
   useEffect(() => {
@@ -293,6 +336,18 @@ function OrganizationChartPage() {
     setExpanded(new Set([...scopedHierarchy.byId.keys()]));
     setReportLimits(new Map());
   }, [scopedHierarchy]);
+
+  const requestExpandAll = useCallback(() => {
+    const size = scopedHierarchy.byId.size;
+    if (size > 100) {
+      const ok = window.confirm(
+        `Expand all ${size} people?\n\nThe chart may become slow and hard to read. Prefer Search or a department filter for large organizations.`
+      );
+      if (!ok) return;
+    }
+    expandAllDesktop();
+    fitPendingRef.current = false;
+  }, [scopedHierarchy.byId.size, expandAllDesktop]);
 
   const toggleDesktopBranch = useCallback((id) => {
     branchFocusRef.current = id;
@@ -464,16 +519,17 @@ function OrganizationChartPage() {
   );
 
   const selectEmployee = useCallback(
-    (id, { reveal = false } = {}) => {
+    (id, { reveal = false, openPanel, center = reveal } = {}) => {
       const emp = getById(employees, id);
       if (!emp) return;
+      const key = String(id);
       setSelectedId(id);
-      setMobilePanelOpen(!reveal);
+      setMobilePanelOpen(openPanel != null ? openPanel : !reveal);
       if (reveal) {
-        const key = String(id);
-        pendingFocusRef.current = key;
+        if (center) pendingFocusRef.current = key;
         if (!allowedIds.has(key)) setDepartmentFilter('all');
         const chain = getAncestors(employees, key).map(employee => String(employee.id));
+        // Open every ancestor so the reporting path is visible; keep batch limits.
         setExpanded(previous => new Set([...previous, ...chain.slice(0, -1)]));
         setRevealedIds(previous => new Set([...previous, ...chain]));
       }
@@ -512,9 +568,13 @@ function OrganizationChartPage() {
   }, [positions, pan, zoom, viewport]);
   const departmentCounts = useMemo(() => new Map(departmentList.map(department => [String(department.name).trim().toLowerCase(), department.employeeCount])), [departmentList]);
   const selected = getById(employees, selectedId);
-  const pathIds = useMemo(
-    () => new Set(getAncestors(employees, selectedId).map((e) => String(e.id))),
+  const selectedPath = useMemo(
+    () => (selectedId != null ? getAncestors(employees, selectedId) : []),
     [employees, selectedId]
+  );
+  const pathIds = useMemo(
+    () => new Set(selectedPath.map((e) => String(e.id))),
+    [selectedPath]
   );
 
   const visibleCount = positions.size;
@@ -719,7 +779,7 @@ function OrganizationChartPage() {
   };
 
   return (
-    <div className="org-chart-page min-h-screen bg-[#F5F7FB]">
+    <div className="org-chart-page min-h-screen">
       <div className="page-shell">
         <div className="page-shell-inner org-page-inner">
           <header className="org-page-header">
@@ -728,36 +788,32 @@ function OrganizationChartPage() {
               <div className="org-page-title-row">
                 <h1>Organization</h1>
                 {!loading && employees.length > 0 ? (
-                  <div className="org-meta-inline" aria-label="Organization summary">
-                    <span>
-                      <strong>{employees.length}</strong> people
-                    </span>
-                    <span className="org-meta-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span>
-                      <strong>{departments.length}</strong> depts
-                    </span>
-                    <span className="org-meta-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span>
-                      <strong>{POSITION_LEVELS.filter((l) => levelCounts[l] > 0).length}</strong>{' '}
-                      levels
-                    </span>
-                    {meta?.scope ? (
-                      <>
-                        <span className="org-meta-sep hide-mobile" aria-hidden="true">
-                          ·
-                        </span>
-                        <span className="hide-mobile">
-                          Scope: <strong>{meta.scope}</strong>
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
+                  <span className="org-live-badge" aria-hidden="true">
+                    <span className="org-live-dot" />
+                    Live
+                  </span>
                 ) : null}
               </div>
+              {!loading && employees.length > 0 ? (
+                <div className="org-metric-row" aria-label="Organization summary">
+                  <span className="org-metric-pill">
+                    <FiUsers className="org-metric-icon" aria-hidden="true" />
+                    <strong>{employees.length}</strong> people
+                  </span>
+                  <span className="org-metric-pill">
+                    <FiLayers className="org-metric-icon" aria-hidden="true" />
+                    <strong>{departments.length}</strong> depts
+                  </span>
+                  <span className="org-metric-pill">
+                    <strong>{POSITION_LEVELS.filter((l) => levelCounts[l] > 0).length}</strong> levels
+                  </span>
+                  {meta?.scope ? (
+                    <span className="org-metric-pill hide-mobile">
+                      Scope: <strong>{meta.scope}</strong>
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <div className="org-page-actions">
               <button
@@ -806,6 +862,7 @@ function OrganizationChartPage() {
             </div>
           ) : (
             <>
+              <div className="org-chrome-panel">
               <div className="view-tabs">
                 <div className="view-tab-list" role="tablist" aria-label="Organization views">
                   <button
@@ -842,19 +899,7 @@ function OrganizationChartPage() {
                 </div>
               </div>
 
-              {activeView === 'records' ? (
-                <OrgChartRecordsView employees={employees} onViewInChart={handleViewInChart} />
-              ) : null}
-
-              {activeView === 'levels' ? (
-                <OrgChartLevelsView
-                  employees={employees}
-                  positionLevelsFromApi={positionLevels}
-                />
-              ) : null}
-
               {activeView === 'chart' ? (
-              <div className="chart-workspace">
               <div className="chart-controls">
                 <div className="mobile-filter-card show-mobile-only">
                   <label className="dept-select-wrap">
@@ -1026,12 +1071,8 @@ function OrganizationChartPage() {
                     <button
                       type="button"
                       className="org-tool-btn org-tool-btn-primary"
-                      onClick={() => {
-                        setExpanded(new Set(employees.map((e) => String(e.id))));
-                        setReportLimits(new Map());
-                        fitPendingRef.current = false;
-                      }}
-                      title="Expand all branches"
+                      onClick={requestExpandAll}
+                      title={allowedIds.size > 100 ? 'Expand all (confirm for large orgs)' : 'Expand all branches'}
                     >
                       <FiChevronDown />
                       <span>Expand All</span>
@@ -1040,20 +1081,30 @@ function OrganizationChartPage() {
                       type="button"
                       className="org-tool-btn"
                       onClick={fitChart}
-                      title="Reset pan and zoom to fit the chart"
+                      title="Fit entire chart in view"
                     >
                       <FiMaximize2 />
                       <span>Fit</span>
                     </button>
                     {selectedId ? (
-                      <button
-                        type="button"
-                        className="org-tool-btn"
-                        onClick={() => centerOn(selectedId)}
-                        title="Center on selected"
-                      >
-                        Center
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="org-tool-btn"
+                          onClick={() => fitBranch(selectedId)}
+                          title="Fit selected person’s visible branch"
+                        >
+                          Fit branch
+                        </button>
+                        <button
+                          type="button"
+                          className="org-tool-btn"
+                          onClick={() => centerOn(selectedId)}
+                          title="Center on selected"
+                        >
+                          Center
+                        </button>
+                      </>
                     ) : null}
                     <button
                       type="button"
@@ -1090,15 +1141,32 @@ function OrganizationChartPage() {
                   </div>
                 </div>
               </div>
+              ) : null}
+              </div>
 
+              {activeView === 'records' ? (
+                <OrgChartRecordsView employees={employees} onViewInChart={handleViewInChart} />
+              ) : null}
+
+              {activeView === 'levels' ? (
+                <OrgChartLevelsView
+                  employees={employees}
+                  positionLevelsFromApi={positionLevels}
+                />
+              ) : null}
+
+              {activeView === 'chart' ? (
+              <div className="chart-workspace">
               <div className={`chart-layout${desktopScreen ? '' : ' mobile-vertical-chart'}`}>
                 <div ref={fullscreenRef} className="canvas-column">
                   {!desktopScreen ? <MobileOrgHierarchy
                     index={scopedHierarchy} expanded={expanded} limits={reportLimits} revealed={revealedIds}
-                    selectedId={selectedId} departments={departmentList} departmentFilter={departmentFilter} total={employees.length}
+                    selectedId={selectedId} pathEmployees={selectedPath}
+                    departments={departmentList} departmentFilter={departmentFilter} total={employees.length}
                     onDepartment={key => { pendingFocusRef.current = null; setDepartmentFilter(key); }}
-                    onSelect={selectEmployee} onToggle={toggleDesktopBranch} onMore={showMoreReports}
-                    onExpandAll={expandAllDesktop} onCollapseAll={() => setExpanded(new Set())}
+                    onSelect={(id) => selectEmployee(id, { reveal: true, openPanel: true, center: false })}
+                    onToggle={toggleDesktopBranch} onMore={showMoreReports}
+                    onExpandAll={requestExpandAll} onCollapseAll={() => setExpanded(new Set())}
                     onExport={exportChart} exporting={exporting} onFullscreen={toggleFullscreen} fullscreen={fullscreen}
                   /> : <>
                   <div className="canvas-breadcrumb">
@@ -1112,12 +1180,24 @@ function OrganizationChartPage() {
                     <span className="shrink-0">
                       {visibleCount}/{allowedIds.size} in view
                     </span>
-                    {departmentFilter !== 'all' ? (
+                    {selectedPath.length ? (
+                      <>
+                        <span className="text-slate-300">·</span>
+                        <span className="truncate org-path-crumb" title={selectedPath.map(getFullName).join(' › ')}>
+                          {selectedPath.map(getFullName).join(' › ')}
+                        </span>
+                      </>
+                    ) : departmentFilter !== 'all' ? (
                       <>
                         <span className="text-slate-300 hide-sm">·</span>
                         <span className="hide-sm truncate">
                           Root + reporting chain ({executiveCount} leadership)
                         </span>
+                      </>
+                    ) : allowedIds.size > 100 ? (
+                      <>
+                        <span className="text-slate-300 hide-sm">·</span>
+                        <span className="hide-sm truncate">Search or filter to navigate</span>
                       </>
                     ) : null}
                   </div>
@@ -1131,7 +1211,11 @@ function OrganizationChartPage() {
                     onPointerMove={handlePointerMove}
                     onPointerUp={endPointer}
                     onPointerCancel={endPointer}
-                    onDoubleClick={fitChart}
+                    onDoubleClick={(event) => {
+                      const node = event.target.closest?.('[data-employee-id]');
+                      if (node?.dataset?.employeeId) fitBranch(node.dataset.employeeId);
+                      else fitChart();
+                    }}
 
                   >
                     <div
@@ -1147,6 +1231,7 @@ function OrganizationChartPage() {
                         positions={positions}
                         employees={employees}
                         pathIds={pathIds}
+                        selectedId={selectedId}
                         width={dimensions.width}
                         height={dimensions.height}
                       />
@@ -1155,15 +1240,49 @@ function OrganizationChartPage() {
                           const employee = hierarchy.byId.get(id);
                           const children = scopedHierarchy.children.get(id) || [];
                           const limit = reportLimits.get(id) ?? Infinity;
-                          return <DesktopEmployeeNode key={id} employee={employee} position={position} selected={String(selectedId) === id} expanded={expanded.has(id)} childCount={children.length} hiddenCount={hiddenCounts.get(id) || 0} canShowMore={children.some((child, offset) => offset >= limit && !revealedIds.has(String(child.id)))} departmentCount={departmentCounts.get(String(employee.department || '').trim().toLowerCase()) || 0} onSelect={selectEmployee} onToggle={toggleDesktopBranch} onMore={showMoreReports} />;
+                          const moreCount = children.filter((child, offset) => offset >= limit && !revealedIds.has(String(child.id))).length;
+                          return (
+                            <DesktopEmployeeNode
+                              key={id}
+                              employee={employee}
+                              position={position}
+                              selected={String(selectedId) === id}
+                              expanded={expanded.has(id)}
+                              childCount={children.length}
+                              hiddenCount={hiddenCounts.get(id) || 0}
+                              moreCount={moreCount}
+                              compact={zoom < 0.72}
+                              departmentCount={departmentCounts.get(String(employee.department || '').trim().toLowerCase()) || 0}
+                              onSelect={selectEmployee}
+                              onToggle={toggleDesktopBranch}
+                              onMore={showMoreReports}
+                              onFitBranch={fitBranch}
+                            />
+                          );
                         })}
                       </div>
                     </div>
-                    {employees.length > 50 ? <OrgChartMinimap initiallyOpen={desktopScreen} positions={positions} dimensions={dimensions} viewport={viewport} zoom={zoom} pan={pan} total={allowedIds.size} onExpandAll={expandAllDesktop} onNavigate={point => applyPan({ x: viewport.width / 2 - point.x * zoom, y: viewport.height / 2 - point.y * zoom })} /> : null}
+                    {employees.length > 50 ? (
+                      <OrgChartMinimap
+                        initiallyOpen={desktopScreen || allowedIds.size > 100}
+                        positions={positions}
+                        dimensions={dimensions}
+                        viewport={viewport}
+                        zoom={zoom}
+                        pan={pan}
+                        total={allowedIds.size}
+                        selectedId={selectedId}
+                        onExpandAll={requestExpandAll}
+                        onFitSelected={selectedId ? () => fitBranch(selectedId) : null}
+                        onNavigate={point => applyPan({ x: viewport.width / 2 - point.x * zoom, y: viewport.height / 2 - point.y * zoom })}
+                      />
+                    ) : null}
                   </div>
                   <div className="canvas-bottom">
                     <span className="canvas-bottom-hint hide-mobile">
-                      Reports to · Selected path highlighted
+                      {allowedIds.size > 100
+                        ? 'Large org · Search / filter · Fit branch · +N collapse'
+                        : 'Reports to · Bus + junction · Double-click card to fit branch'}
                     </span>
 
                     <div className="canvas-bottom-bar" role="toolbar" aria-label="Chart tools">
@@ -1192,10 +1311,8 @@ function OrganizationChartPage() {
                                 type="button"
                                 role="menuitem"
                                 onClick={() => {
-                                  setExpanded(new Set(employees.map((e) => String(e.id))));
-                                  setReportLimits(new Map());
-                                  fitPendingRef.current = false;
                                   setMobileMoreOpen(false);
+                                  requestExpandAll();
                                 }}
                               >
                                 <FiChevronDown /> Expand all
