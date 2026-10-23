@@ -671,7 +671,7 @@
     align-items: center;
     justify-content: flex-end;
     gap: var(--ui-space-3);
-    padding: 0.625rem var(--ui-space-5);
+    padding: 0.5rem var(--ui-space-5);
     overflow: visible;
     background: var(--ui-neutral-elevated);
     border-bottom: 1px solid var(--ui-outline);

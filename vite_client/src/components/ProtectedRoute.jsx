@@ -50,7 +50,7 @@ const ProtectedRoute = ({
   const userObj = user || employee;
   const userIsManager = isManager(userObj);
   const userIsProjectManager = isProjectManager(userObj);
-  const userIsHR = isHR(userObj);
+  const userIsHR = isHR(userObj) || !!permissionFlags.isHrManager || !!permissionFlags.isHrExecutive;
   const position = (userObj?.position || '').toLowerCase().trim();
   const userIsExecutive = isExecutive(position);
 
@@ -75,6 +75,8 @@ const ProtectedRoute = ({
   if (isFinanceDept) effectiveRoles.push('finance');
   if (isTechDept) effectiveRoles.push('tech');
   effectiveRoles.push('employee');
+
+  const featureKey = requiredFeature || featureKeyForPath(location.pathname);
 
   const hasAccess = canAccess(permissions, requiredPermissions, {
     isOrgOwner: !!permissionFlags.isOrgOwner,
@@ -104,7 +106,7 @@ const ProtectedRoute = ({
     return <Navigate to={targetRedirect} replace />;
   }
 
-  const featureKey = requiredFeature || featureKeyForPath(location.pathname);
+  // Gate by purchased plan features (same matrix as navbar).
   if (!isSaasFeatureEnabled(saasFeatures, featureKey)) {
     return (
       <Navigate

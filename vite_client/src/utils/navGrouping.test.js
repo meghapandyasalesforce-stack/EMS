@@ -15,24 +15,37 @@ describe('buildSidebarNavTree', () => {
     expect(tree.every((n) => n.type === 'link')).toBe(true);
   });
 
-  it('groups leave & attendance related items when 2+ are present', () => {
+  it('groups leave & WFH separately from attendance & calendar', () => {
     const tree = buildSidebarNavTree([
       item('/dashboard-hr', 'Dashboard'),
       item('/leave-management', 'Leave management'),
-      item('/all-attendance-history', 'Attendance'),
+      item('/attendance-regularization', 'Regularization/WFH'),
       item('/admin/pending-approvals', 'Pending approvals'),
+      item('/all-attendance-history', 'Attendance'),
+      item('/calendar-management', 'Calendar'),
       item('/recruitment', 'Recruitment'),
     ]);
 
     expect(tree[0]).toMatchObject({ type: 'link', item: { path: '/dashboard-hr' } });
-    expect(tree[1].type).toBe('group');
-    expect(tree[1].id).toBe('leave-attendance');
-    expect(tree[1].children.map((c) => c.path)).toEqual([
+
+    const leaveGroup = tree.find((n) => n.type === 'group' && n.id === 'leave-wfh');
+    expect(leaveGroup).toBeTruthy();
+    expect(leaveGroup.name).toBe('Leave & WFH');
+    expect(leaveGroup.children.map((c) => c.path)).toEqual([
       '/leave-management',
-      '/all-attendance-history',
+      '/attendance-regularization',
       '/admin/pending-approvals',
     ]);
-    expect(tree[2]).toMatchObject({ type: 'link', item: { path: '/recruitment' } });
+
+    const attendanceGroup = tree.find((n) => n.type === 'group' && n.id === 'attendance-calendar');
+    expect(attendanceGroup).toBeTruthy();
+    expect(attendanceGroup.name).toBe('Attendance & Calendar');
+    expect(attendanceGroup.children.map((c) => c.path)).toEqual([
+      '/all-attendance-history',
+      '/calendar-management',
+    ]);
+
+    expect(tree.some((n) => n.type === 'link' && n.item.path === '/recruitment')).toBe(true);
   });
 
   it('groups payroll parent with admin + my payroll', () => {
@@ -85,12 +98,21 @@ describe('buildSidebarNavTree', () => {
 });
 
 describe('findActiveNavGroupId', () => {
-  it('returns the group containing the active child', () => {
+  it('returns the leave & WFH group containing the active child', () => {
     const tree = buildSidebarNavTree([
       item('/leave-management', 'Leave management'),
-      item('/all-attendance-history', 'Attendance'),
+      item('/attendance-regularization', 'Regularization/WFH'),
     ]);
-    const id = findActiveNavGroupId(tree, (path) => path === '/all-attendance-history');
-    expect(id).toBe('leave-attendance');
+    const id = findActiveNavGroupId(tree, (path) => path === '/attendance-regularization');
+    expect(id).toBe('leave-wfh');
+  });
+
+  it('returns the attendance & calendar group for calendar routes', () => {
+    const tree = buildSidebarNavTree([
+      item('/all-attendance-history', 'Attendance'),
+      item('/calendar-management', 'Calendar'),
+    ]);
+    const id = findActiveNavGroupId(tree, (path) => path === '/calendar-management');
+    expect(id).toBe('attendance-calendar');
   });
 });

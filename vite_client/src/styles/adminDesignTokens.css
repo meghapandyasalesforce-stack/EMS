@@ -100,7 +100,7 @@
 
   /* Shell — 240px sidebar; top bar clears avatar + badge */
   --ui-sidebar-width: 15rem; /* 240px */
-  --ui-topbar-height: 4.5rem;
+  --ui-topbar-height: 3.5rem;
 }
 
 body,

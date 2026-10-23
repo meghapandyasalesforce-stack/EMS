@@ -206,6 +206,25 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
   }, [pagination]);
 
   const modalReceipts = readModal?.row ? receiptsById[readModal.row._id] : null;
+  const showEmpty = !loading && items.length === 0;
+
+  const emptyState = (
+    <div className="ann-ui__empty-state" role="status">
+      <div className="ann-ui__empty-state-icon" aria-hidden="true">
+        <FiSpeaker />
+      </div>
+      <h3 className="ann-ui__empty-state-title">No Announcements Found</h3>
+      <p className="ann-ui__empty-state-desc">
+        You haven&apos;t published any broadcasts matching your current filter criteria or search
+        query. Get started by creating your first corporate announcement.
+      </p>
+      {onNew ? (
+        <button type="button" className="ann-ui__btn ann-ui__btn--primary" onClick={onNew}>
+          + Create Announcement
+        </button>
+      ) : null}
+    </div>
+  );
 
   return (
     <section className="ann-ui__card ann-ui__board !mb-0">
@@ -250,25 +269,19 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
         <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       ) : null}
 
+      {loading && items.length === 0 ? (
+        <div className="ann-ui__table-empty">
+          <FiRefreshCw className="mx-auto mb-2 h-5 w-5 animate-spin" />
+          Loading announcements…
+        </div>
+      ) : null}
+
+      {showEmpty ? emptyState : null}
+
       {/* Mobile cards */}
+      {!showEmpty && !(loading && items.length === 0) ? (
       <div className="ann-ui__mobile-list">
-        {loading && items.length === 0 ? (
-          <div className="ann-ui__table-empty">
-            <FiRefreshCw className="mx-auto mb-2 h-5 w-5 animate-spin" />
-            Loading announcements…
-          </div>
-        ) : items.length === 0 ? (
-          <div className="ann-ui__table-empty">
-            <FiSpeaker className="mx-auto mb-2 h-6 w-6 opacity-35" />
-            <p className="font-semibold text-slate-800">No announcements found</p>
-            {onNew ? (
-              <button type="button" className="ann-ui__btn ann-ui__btn--primary mt-3" onClick={onNew}>
-                New announcement
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          items.map((row) => {
+          {items.map((row) => {
             const badge = statusMeta(row);
             const author = row.sender?.name || row.sender?.email || '—';
             const isPending = row.broadcastStatus === 'draft' || row.broadcastStatus === 'scheduled';
@@ -341,10 +354,11 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
                 </div>
               </article>
             );
-          })
-        )}
+          })}
       </div>
+      ) : null}
 
+      {!showEmpty && !(loading && items.length === 0) ? (
       <div className="ann-ui__table-wrap ann-ui__table-wrap--desktop">
         <table className="ann-ui__table">
           <thead>
@@ -359,28 +373,7 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
             </tr>
           </thead>
           <tbody>
-            {loading && items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="ann-ui__table-empty">
-                  <FiRefreshCw className="mx-auto mb-2 h-5 w-5 animate-spin" />
-                  Loading announcements…
-                </td>
-              </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="ann-ui__table-empty">
-                  <FiSpeaker className="mx-auto mb-2 h-6 w-6 opacity-35" />
-                  <p className="font-semibold text-slate-800">No announcements found</p>
-                  <p className="mt-1 text-xs">Try another filter, or create a new announcement.</p>
-                  {onNew ? (
-                    <button type="button" className="ann-ui__btn ann-ui__btn--primary mt-3" onClick={onNew}>
-                      New announcement
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            ) : (
-              items.map((row) => {
+              {items.map((row) => {
                 const badge = statusMeta(row);
                 const author = row.sender?.name || row.sender?.email || '—';
                 const isPending = row.broadcastStatus === 'draft' || row.broadcastStatus === 'scheduled';
@@ -485,12 +478,13 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
                     </td>
                   </tr>
                 );
-              })
-            )}
+              })}
           </tbody>
         </table>
       </div>
+      ) : null}
 
+      {!showEmpty && !(loading && items.length === 0) ? (
       <div className="ann-ui__pager">
         <span>{rangeLabel}</span>
         <div className="flex gap-2">
@@ -512,6 +506,7 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
           </button>
         </div>
       </div>
+      ) : null}
 
       {readModal ? (
         <div className="ann-ui__modal-backdrop" onClick={() => setReadModal(null)}>

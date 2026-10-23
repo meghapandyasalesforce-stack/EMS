@@ -1,0 +1,1257 @@
+/**
+ * Scoped styles for Super Admin Organization Detail only.
+ */
+.platform-org-detail {
+  --od-forest: #0f2d26;
+  --od-pine: #2a6b52;
+  --od-pine-hover: #1f523e;
+  --od-mint: #1cca9b;
+  --od-coral: #ff7f50;
+  --od-danger: #c62828;
+  --od-warn: #e65100;
+  --od-card: #ecf0ee;
+  --od-white: #ffffff;
+  --od-muted: #5a7a70;
+  --od-outline: #788882;
+  --od-border: #d1dcd8;
+  --od-input: #e8eeeb;
+  --od-danger-bg: #fceeed;
+  --od-font: 'Manrope', 'Inter', system-ui, sans-serif;
+
+  font-family: var(--od-font);
+  color: var(--od-forest);
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* —— Breadcrumbs —— */
+.platform-org-detail .od-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.8125rem;
+}
+
+.platform-org-detail .od-crumb a {
+  font-weight: 600;
+  color: var(--od-outline);
+  text-decoration: none;
+}
+
+.platform-org-detail .od-crumb a:hover {
+  color: var(--od-pine);
+  text-decoration: underline;
+}
+
+.platform-org-detail .od-crumb-sep {
+  color: var(--od-border);
+}
+
+.platform-org-detail .od-crumb-current {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--od-pine);
+  font-size: 0.75rem;
+}
+
+/* —— Header —— */
+.platform-org-detail .od-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.platform-org-detail .od-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.platform-org-detail .od-avatar {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 9999px;
+  background: var(--od-pine);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.platform-org-detail .od-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--od-forest);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+@media (min-width: 640px) {
+  .platform-org-detail .od-title {
+    font-size: 1.75rem;
+  }
+}
+
+.platform-org-detail .od-title-check {
+  color: var(--od-mint);
+  flex-shrink: 0;
+}
+
+.platform-org-detail .od-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--od-muted);
+}
+
+.platform-org-detail .od-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.platform-org-detail .od-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.platform-org-detail .od-pill-ok {
+  background: rgba(28, 202, 155, 0.2);
+  color: #1f523e;
+}
+
+.platform-org-detail .od-pill-warn {
+  background: rgba(255, 127, 80, 0.2);
+  color: #9b4122;
+}
+
+.platform-org-detail .od-pill-muted {
+  background: rgba(15, 45, 38, 0.08);
+  color: var(--od-forest);
+}
+
+.platform-org-detail .od-pill-danger {
+  background: rgba(198, 40, 40, 0.12);
+  color: var(--od-danger);
+}
+
+.platform-org-detail .od-pill-plan {
+  background: rgba(42, 107, 82, 0.16);
+  color: #1f523e;
+}
+
+.platform-org-detail .od-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* —— Buttons —— */
+.platform-org-detail .od-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 2.5rem;
+  padding: 0 1rem;
+  border-radius: 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, opacity 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+}
+
+.platform-org-detail .od-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.platform-org-detail .od-btn-primary {
+  background: var(--od-pine);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(42, 107, 82, 0.22);
+}
+
+.platform-org-detail .od-btn-primary:hover:not(:disabled) {
+  background: var(--od-pine-hover);
+}
+
+.platform-org-detail .od-btn-secondary {
+  background: var(--od-white);
+  color: var(--od-forest);
+  border: 1px solid var(--od-border);
+}
+
+.platform-org-detail .od-btn-secondary:hover:not(:disabled) {
+  background: var(--od-card);
+}
+
+.platform-org-detail .od-btn-ghost {
+  background: transparent;
+  color: var(--od-muted);
+  border: 1px solid transparent;
+}
+
+.platform-org-detail .od-btn-ghost:hover:not(:disabled) {
+  background: var(--od-card);
+  color: var(--od-forest);
+}
+
+.platform-org-detail .od-btn-warn {
+  background: #fff3e0;
+  color: var(--od-warn);
+  border: 1px solid rgba(230, 81, 0, 0.25);
+}
+
+.platform-org-detail .od-btn-warn:hover:not(:disabled) {
+  background: #ffe0b2;
+}
+
+.platform-org-detail .od-btn-danger {
+  background: var(--od-danger);
+  color: #fff;
+}
+
+.platform-org-detail .od-btn-danger:hover:not(:disabled) {
+  background: #a61f1f;
+}
+
+.platform-org-detail .od-btn-danger-outline {
+  background: #fff;
+  color: var(--od-danger);
+  border: 1px solid rgba(198, 40, 40, 0.35);
+}
+
+.platform-org-detail .od-btn-danger-outline:hover:not(:disabled) {
+  background: var(--od-danger-bg);
+}
+
+.platform-org-detail .od-btn-sm {
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+}
+
+/* —— Tabs —— */
+.platform-org-detail .od-tabs-wrap {
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--od-border);
+}
+
+.platform-org-detail .od-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.1rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.platform-org-detail .od-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.75rem 0.9rem;
+  border: none;
+  background: transparent;
+  color: var(--od-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.platform-org-detail .od-tab:hover {
+  color: var(--od-forest);
+  background: rgba(236, 240, 238, 0.55);
+}
+
+.platform-org-detail .od-tab.is-active {
+  color: var(--od-pine);
+  border-bottom-color: var(--od-mint);
+  background: rgba(28, 202, 155, 0.06);
+}
+
+.platform-org-detail .od-tab-count {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 9999px;
+  background: var(--od-card);
+  color: var(--od-outline);
+}
+
+.platform-org-detail .od-tab.is-active .od-tab-count {
+  background: rgba(28, 202, 155, 0.2);
+  color: var(--od-pine);
+}
+
+.platform-org-detail .od-tab-danger {
+  color: var(--od-danger);
+}
+
+.platform-org-detail .od-tab-danger.is-active {
+  color: var(--od-danger);
+  border-bottom-color: var(--od-danger);
+  background: rgba(198, 40, 40, 0.05);
+}
+
+/* —— Panel shell (all tabs) —— */
+.platform-org-detail .od-panel {
+  background: var(--od-white);
+  border: 1px solid var(--od-border);
+  border-radius: 1.1rem;
+  overflow: hidden;
+}
+
+.platform-org-detail .od-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 1.15rem 1.25rem;
+  background: linear-gradient(180deg, #f7faf8 0%, #ffffff 100%);
+  border-bottom: 1px solid var(--od-border);
+}
+
+.platform-org-detail .od-panel-head-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.platform-org-detail .od-panel-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.7rem;
+  background: var(--od-pine);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.platform-org-detail .od-panel-icon.is-danger {
+  background: var(--od-danger);
+}
+
+.platform-org-detail .od-panel-icon.is-warn {
+  background: var(--od-warn);
+}
+
+.platform-org-detail .od-panel-body {
+  padding: 1.15rem 1.25rem;
+}
+
+.platform-org-detail .od-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.95rem 1.25rem;
+  border-top: 1px solid var(--od-border);
+  background: #f7faf8;
+}
+
+/* —— Plan picker —— */
+.platform-org-detail .od-plan-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+  .platform-org-detail .od-plan-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1000px) {
+  .platform-org-detail .od-plan-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.platform-org-detail .od-plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem;
+  border-radius: 0.85rem;
+  background: var(--od-card);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.platform-org-detail .od-plan-card:hover {
+  border-color: rgba(42, 107, 82, 0.28);
+}
+
+.platform-org-detail .od-plan-card.is-selected {
+  background: #fff;
+  border-color: var(--od-pine);
+  box-shadow: 0 4px 14px rgba(42, 107, 82, 0.12);
+}
+
+.platform-org-detail .od-plan-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.platform-org-detail .od-plan-card-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--od-forest);
+  text-transform: capitalize;
+}
+
+.platform-org-detail .od-plan-card.is-selected .od-plan-card-name {
+  color: var(--od-pine);
+}
+
+.platform-org-detail .od-plan-card-meta {
+  font-size: 0.75rem;
+  color: var(--od-muted);
+  font-weight: 600;
+}
+
+/* —— Feature editor —— */
+.platform-org-detail .od-feat-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border-radius: 0.85rem;
+  background: var(--od-card);
+  border: 1px solid transparent;
+  height: 100%;
+}
+
+.platform-org-detail .od-feat-edit.is-override {
+  border-color: rgba(255, 127, 80, 0.4);
+  background: #fff8f5;
+}
+
+.platform-org-detail .od-feat-edit-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.platform-org-detail .od-seg {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+
+.platform-org-detail .od-seg label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  border-radius: 0.45rem;
+  background: #fff;
+  border: 1px solid var(--od-border);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--od-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.platform-org-detail .od-seg label input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.platform-org-detail .od-seg label.is-on {
+  background: var(--od-pine);
+  border-color: var(--od-pine);
+  color: #fff;
+}
+
+.platform-org-detail .od-seg label.is-off {
+  background: var(--od-danger);
+  border-color: var(--od-danger);
+  color: #fff;
+}
+
+.platform-org-detail .od-seg label.is-default {
+  background: rgba(42, 107, 82, 0.1);
+  border-color: rgba(42, 107, 82, 0.25);
+  color: var(--od-pine);
+}
+
+/* —— Status chips in tables —— */
+.platform-org-detail .od-chip-on,
+.platform-org-detail .od-chip-off,
+.platform-org-detail .od-chip-neutral {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.platform-org-detail .od-chip-on {
+  background: rgba(28, 202, 155, 0.18);
+  color: #1f523e;
+}
+
+.platform-org-detail .od-chip-off {
+  background: rgba(198, 40, 40, 0.1);
+  color: var(--od-danger);
+}
+
+.platform-org-detail .od-chip-neutral {
+  background: var(--od-card);
+  color: var(--od-outline);
+}
+
+/* —— Usage hero —— */
+.platform-org-detail .od-usage-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .platform-org-detail .od-usage-hero {
+    grid-template-columns: 1.1fr 1fr;
+  }
+}
+
+.platform-org-detail .od-usage-big {
+  background: var(--od-card);
+  border-radius: 1rem;
+  padding: 1.25rem 1.35rem;
+}
+
+.platform-org-detail .od-usage-big-num {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--od-forest);
+  line-height: 1.1;
+}
+
+.platform-org-detail .od-usage-big-label {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--od-muted);
+}
+
+/* —— Audit timeline —— */
+.platform-org-detail .od-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.platform-org-detail .od-audit-item {
+  display: flex;
+  gap: 0.85rem;
+  padding: 0.95rem 0;
+  border-bottom: 1px solid var(--od-border);
+}
+
+.platform-org-detail .od-audit-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.platform-org-detail .od-audit-item:first-child {
+  padding-top: 0;
+}
+
+.platform-org-detail .od-audit-dot {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: rgba(42, 107, 82, 0.12);
+  color: var(--od-pine);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.platform-org-detail .od-audit-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--od-forest);
+}
+
+.platform-org-detail .od-audit-meta {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--od-muted);
+}
+
+/* —— Billing method cards —— */
+.platform-org-detail .od-pay-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 768px) {
+  .platform-org-detail .od-pay-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.platform-org-detail .od-pay-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 3.25rem;
+  padding: 0.55rem 0.5rem;
+  border-radius: 0.7rem;
+  background: var(--od-card);
+  border: 2px solid transparent;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--od-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.platform-org-detail .od-pay-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.platform-org-detail .od-pay-card.is-selected {
+  background: #fff;
+  border-color: var(--od-pine);
+  color: var(--od-pine);
+}
+
+/* —— Toggle row —— */
+.platform-org-detail .od-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--od-card);
+}
+
+.platform-org-detail .od-toggle-row span {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.platform-org-detail .od-table tbody tr:hover td {
+  background: rgba(236, 240, 238, 0.45);
+}
+
+/* —— Cards / panels —— */
+.platform-org-detail .od-card {
+  background: var(--od-white);
+  border: 1px solid var(--od-border);
+  border-radius: 1rem;
+  padding: 1.15rem 1.25rem;
+}
+
+.platform-org-detail .od-card-soft {
+  background: var(--od-card);
+  border: none;
+  border-radius: 1rem;
+  padding: 1.15rem 1.25rem;
+}
+
+.platform-org-detail .od-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.platform-org-detail .od-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--od-forest);
+}
+
+.platform-org-detail .od-card-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--od-muted);
+}
+
+.platform-org-detail .od-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .platform-org-detail .od-grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.platform-org-detail .od-grid-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .platform-org-detail .od-grid-meta {
+    grid-template-columns: minmax(240px, 0.85fr) 1.15fr;
+  }
+}
+
+.platform-org-detail .od-stat-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .platform-org-detail .od-stat-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.platform-org-detail .od-stat {
+  background: var(--od-card);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.platform-org-detail .od-stat-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--od-outline);
+}
+
+.platform-org-detail .od-stat-value {
+  margin-top: 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--od-forest);
+}
+
+/* —— Usage bars —— */
+.platform-org-detail .od-meter {
+  margin-bottom: 0.85rem;
+}
+
+.platform-org-detail .od-meter:last-child {
+  margin-bottom: 0;
+}
+
+.platform-org-detail .od-meter-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.platform-org-detail .od-meter-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--od-forest);
+}
+
+.platform-org-detail .od-meter-val {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--od-muted);
+}
+
+.platform-org-detail .od-meter-track {
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: var(--od-input);
+  overflow: hidden;
+}
+
+.platform-org-detail .od-meter-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--od-pine);
+  transition: width 0.2s ease;
+}
+
+.platform-org-detail .od-meter-fill.is-high {
+  background: var(--od-coral);
+}
+
+/* —— Meta list —— */
+.platform-org-detail .od-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.platform-org-detail .od-meta-item label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--od-outline);
+  margin-bottom: 0.2rem;
+}
+
+.platform-org-detail .od-meta-item div {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--od-forest);
+  word-break: break-word;
+}
+
+.platform-org-detail .od-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--od-pine);
+}
+
+/* —— Feature grid —— */
+.platform-org-detail .od-feat-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+@media (min-width: 640px) {
+  .platform-org-detail .od-feat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.platform-org-detail .od-feat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  background: var(--od-card);
+  border: 1px solid transparent;
+}
+
+.platform-org-detail .od-feat.is-override {
+  border-color: rgba(255, 127, 80, 0.45);
+  background: #fff8f5;
+}
+
+.platform-org-detail .od-feat-left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.platform-org-detail .od-feat-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: var(--od-white);
+  color: var(--od-pine);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.platform-org-detail .od-feat-name {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--od-forest);
+  line-height: 1.25;
+}
+
+.platform-org-detail .od-feat-hint {
+  font-size: 0.6875rem;
+  color: var(--od-muted);
+  margin-top: 0.1rem;
+}
+
+.platform-org-detail .od-switch {
+  position: relative;
+  width: 2.5rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+}
+
+.platform-org-detail .od-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.platform-org-detail .od-switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #d9dedc;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.platform-org-detail .od-switch span::after {
+  content: '';
+  position: absolute;
+  width: 1.05rem;
+  height: 1.05rem;
+  left: 0.15rem;
+  top: 0.15rem;
+  border-radius: 9999px;
+  background: #fff;
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.platform-org-detail .od-switch input:checked + span {
+  background: var(--od-pine);
+}
+
+.platform-org-detail .od-switch input:checked + span::after {
+  transform: translateX(1.1rem);
+}
+
+.platform-org-detail .od-switch input:disabled + span {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* —— Forms —— */
+.platform-org-detail .od-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--od-forest);
+  margin-bottom: 0.35rem;
+}
+
+.platform-org-detail .od-input,
+.platform-org-detail .od-select,
+.platform-org-detail .od-textarea {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  background: var(--od-input);
+  color: var(--od-forest);
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  padding: 0 0.85rem;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.platform-org-detail .od-input,
+.platform-org-detail .od-select {
+  height: 2.5rem;
+}
+
+.platform-org-detail .od-textarea {
+  padding: 0.65rem 0.85rem;
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.platform-org-detail .od-input:focus,
+.platform-org-detail .od-select:focus,
+.platform-org-detail .od-textarea:focus {
+  background: var(--od-white);
+  border-color: var(--od-pine);
+  box-shadow: 0 0 0 3px rgba(42, 107, 82, 0.12);
+}
+
+.platform-org-detail .od-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+@media (min-width: 768px) {
+  .platform-org-detail .od-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.platform-org-detail .od-span-2 {
+  grid-column: 1 / -1;
+}
+
+.platform-org-detail .od-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  height: 2.5rem;
+}
+
+/* —— Table —— */
+.platform-org-detail .od-table-wrap {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--od-border);
+}
+
+.platform-org-detail .od-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  min-width: 640px;
+}
+
+.platform-org-detail .od-table th {
+  text-align: left;
+  padding: 0.7rem 0.9rem;
+  background: var(--od-card);
+  color: var(--od-outline);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.platform-org-detail .od-table td {
+  padding: 0.85rem 0.9rem;
+  border-top: 1px solid var(--od-border);
+  vertical-align: middle;
+}
+
+.platform-org-detail .od-admin {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.platform-org-detail .od-admin-av {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 9999px;
+  background: var(--od-pine);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.platform-org-detail .od-admin-name {
+  font-weight: 700;
+  color: var(--od-forest);
+}
+
+.platform-org-detail .od-admin-email {
+  font-size: 0.75rem;
+  color: var(--od-muted);
+}
+
+.platform-org-detail .od-link-btn {
+  border: none;
+  background: transparent;
+  color: var(--od-pine);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.platform-org-detail .od-link-btn:hover {
+  color: var(--od-pine-hover);
+}
+
+.platform-org-detail .od-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--od-muted);
+  font-size: 0.875rem;
+}
+
+/* —— Danger zone —— */
+.platform-org-detail .od-danger {
+  background: var(--od-danger-bg);
+  border-radius: 1rem;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid rgba(198, 40, 40, 0.15);
+}
+
+.platform-org-detail .od-danger-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.platform-org-detail .od-danger-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--od-danger);
+}
+
+.platform-org-detail .od-danger-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  background: rgba(198, 40, 40, 0.12);
+  color: var(--od-danger);
+}
+
+.platform-org-detail .od-danger-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .platform-org-detail .od-danger-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.platform-org-detail .od-danger-card {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.platform-org-detail .od-danger-card h4 {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--od-forest);
+}
+
+.platform-org-detail .od-danger-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--od-muted);
+  flex: 1;
+}
+
+.platform-org-detail .od-access-on {
+  color: #1f523e;
+  font-weight: 700;
+}
+
+.platform-org-detail .od-access-off {
+  color: var(--od-danger);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .platform-org-detail .od-title {
+    font-size: 1.25rem;
+  }
+
+  .platform-org-detail .od-avatar {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 0.85rem;
+  }
+
+  .platform-org-detail .od-header-actions {
+    width: 100%;
+  }
+
+  .platform-org-detail .od-header-actions .od-btn {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 0;
+  }
+
+  .platform-org-detail .od-panel-head,
+  .platform-org-detail .od-panel-body,
+  .platform-org-detail .od-panel-foot,
+  .platform-org-detail .od-card {
+    padding-left: 0.95rem;
+    padding-right: 0.95rem;
+  }
+
+  .platform-org-detail .od-table {
+    min-width: 520px;
+  }
+
+  .platform-org-detail .od-pay-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-org-detail .od-usage-big-num {
+    font-size: 1.75rem;
+  }
+
+  .platform-org-detail .od-seg {
+    grid-template-columns: 1fr;
+  }
+}

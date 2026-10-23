@@ -247,6 +247,7 @@ const TeamWfhRequestsPanel = () => {
             <p className="text-sm font-medium">No Work From Home applications match your filters</p>
           </div>
         ) : (
+          <>
           <div className="divide-y divide-slate-100 md:hidden">
             {filteredRequests.map((request) => {
               const employee = request.employeeId || {};
@@ -429,6 +430,7 @@ const TeamWfhRequestsPanel = () => {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/60 px-5 py-3">

@@ -16,6 +16,8 @@ function clearAuthAndRedirectToLogin() {
     path === loginPath ||
     path.startsWith('/login') ||
     path.startsWith('/platform/login') ||
+    path.startsWith('/platform/forgot-password') ||
+    path.startsWith('/platform/reset-password') ||
     path.startsWith('/forgot-password') ||
     path.startsWith('/reset-password') ||
     path.startsWith('/register') ||
@@ -433,8 +435,11 @@ instance.interceptors.request.use(
       if (typeof document !== 'undefined') {
         // Check if this is an auth endpoint (login/register) - tokens are expected to be missing
         const isAuthEndpoint = config.url && (
-          config.url.includes('/auth/login') || 
+          config.url.includes('/auth/login') ||
           config.url.includes('/auth/register') ||
+          config.url.includes('/auth/refresh-token') ||
+          config.url.includes('/auth/forgot-password') ||
+          config.url.includes('/auth/reset-password') ||
           config.url.includes('/password/forgot-password') ||
           config.url.includes('/password/reset-password')
         );
@@ -468,9 +473,11 @@ instance.interceptors.request.use(
       if (typeof document !== 'undefined' && ['post','put','patch','delete'].includes(method)) {
         // Check if this is an auth endpoint that doesn't require CSRF (login/register/password reset/refresh)
         const isAuthEndpoint = config.url && (
-          config.url.includes('/auth/login') || 
+          config.url.includes('/auth/login') ||
           config.url.includes('/auth/register') ||
           config.url.includes('/auth/refresh-token') ||
+          config.url.includes('/auth/forgot-password') ||
+          config.url.includes('/auth/reset-password') ||
           config.url.includes('/password/forgot-password') ||
           config.url.includes('/password/reset-password')
         );
@@ -594,6 +601,8 @@ instance.interceptors.response.use(
         originalRequest.url.includes('/auth/login') ||
         originalRequest.url.includes('/auth/register') ||
         originalRequest.url.includes('/auth/refresh-token') ||
+        originalRequest.url.includes('/auth/forgot-password') ||
+        originalRequest.url.includes('/auth/reset-password') ||
         originalRequest.url.includes('/password/forgot-password') ||
         originalRequest.url.includes('/password/reset-password')
       );

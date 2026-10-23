@@ -794,6 +794,8 @@ function OrganizationChartPage() {
                   </span>
                 ) : null}
               </div>
+            </div>
+            <div className="org-page-header-end">
               {!loading && employees.length > 0 ? (
                 <div className="org-metric-row" aria-label="Organization summary">
                   <span className="org-metric-pill">
@@ -814,34 +816,34 @@ function OrganizationChartPage() {
                   ) : null}
                 </div>
               ) : null}
-            </div>
-            <div className="org-page-actions">
-              <button
-                type="button"
-                onClick={loadChart}
-                className="org-action-btn org-action-icon"
-                title="Refresh chart data"
-                aria-label="Refresh"
-              >
-                <FiRefreshCw />
-                <span className="hide-mobile">Refresh</span>
-              </button>
-              <Link
-                to="/organization/dashboard"
-                className="org-action-btn"
-                title="Organization dashboard"
-              >
-                Dashboard
-              </Link>
-              {canOpenOrgStructure ? (
-                <Link
-                  to="/organization/structure"
-                  className="org-action-btn"
-                  title="Org structure settings"
+              <div className="org-page-actions">
+                <button
+                  type="button"
+                  onClick={loadChart}
+                  className="org-action-btn org-action-icon"
+                  title="Refresh chart data"
+                  aria-label="Refresh"
                 >
-                  Structure
+                  <FiRefreshCw />
+                  <span className="hide-mobile">Refresh</span>
+                </button>
+                <Link
+                  to="/organization/dashboard"
+                  className="org-action-btn"
+                  title="Organization dashboard"
+                >
+                  Dashboard
                 </Link>
-              ) : null}
+                {canOpenOrgStructure ? (
+                  <Link
+                    to="/organization/structure"
+                    className="org-action-btn"
+                    title="Org structure settings"
+                  >
+                    Structure
+                  </Link>
+                ) : null}
+              </div>
             </div>
           </header>
 

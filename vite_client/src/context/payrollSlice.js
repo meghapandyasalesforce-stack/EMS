@@ -93,9 +93,11 @@ const payrollSlice = createSlice({
     builder
       .addCase(fetchPayrolls.pending, (state) => {
         state.status = 'loading';
+        state.error = null;
       })
       .addCase(fetchPayrolls.fulfilled, (state, action) => {
         state.status = 'succeeded';
+        state.error = null;
         state.data = action.payload.list;
         state.pagination = action.payload.pagination;
       })
@@ -156,9 +158,11 @@ const payrollSlice = createSlice({
       })
       .addCase(generatePayrolls.pending, (state) => {
         state.status = 'loading';
+        state.error = null;
       })
       .addCase(generatePayrolls.fulfilled, (state) => {
         state.status = 'succeeded';
+        state.error = null;
       })
       .addCase(generatePayrolls.rejected, (state, action) => {
         state.status = 'failed';

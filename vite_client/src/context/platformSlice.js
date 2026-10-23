@@ -68,6 +68,65 @@ export const platformLogout = createAsyncThunk(
   }
 );
 
+export const platformForgotPassword = createAsyncThunk(
+  'platform/forgotPassword',
+  async (email, { rejectWithValue }) => {
+    try {
+      const res = await axios.post(
+        `${PLATFORM_AUTH_ENDPOINT}/forgot-password`,
+        { email },
+        { withCredentials: true, skipAuthRedirect: true }
+      );
+      return {
+        message: res.data?.message || 'Request received.',
+        emailSent: Boolean(res.data?.emailSent),
+      };
+    } catch (error) {
+      const payload = error.response?.data;
+      const validationMsg =
+        payload?.errors?.[0]?.message ||
+        (typeof payload?.errors?.[0] === 'string' ? payload.errors[0] : null) ||
+        payload?.errors?.[0]?.email;
+      const status = error.response?.status;
+      if (status === 429) {
+        return rejectWithValue(
+          payload?.message || 'Too many password reset attempts. Please try again later.'
+        );
+      }
+      if (!error.response) {
+        return rejectWithValue(
+          'Unable to reach the server. Check your connection and try again.'
+        );
+      }
+      return rejectWithValue(
+        validationMsg || payload?.message || 'Failed to send reset link. Please try again.'
+      );
+    }
+  }
+);
+
+export const platformResetPassword = createAsyncThunk(
+  'platform/resetPassword',
+  async ({ token, password }, { rejectWithValue }) => {
+    try {
+      const res = await axios.post(
+        `${PLATFORM_AUTH_ENDPOINT}/reset-password/${token}`,
+        { password },
+        { withCredentials: true, skipAuthRedirect: true }
+      );
+      return {
+        message: res.data?.message || 'Password reset successful.',
+      };
+    } catch (error) {
+      const payload = error.response?.data;
+      const validationMsg = payload?.errors?.[0]?.message || payload?.errors?.[0]?.password;
+      return rejectWithValue(
+        validationMsg || payload?.message || 'Failed to reset password. Please try again.'
+      );
+    }
+  }
+);
+
 export const fetchPlatformOrganizations = createAsyncThunk(
   'platform/fetchOrganizations',
   async (params = {}, { rejectWithValue }) => {
@@ -364,6 +423,13 @@ const platformSlice = createSlice({
     sessionChecked: false,
     loading: false,
     error: null,
+    passwordReset: {
+      loading: false,
+      success: false,
+      error: null,
+      message: '',
+      emailSent: false,
+    },
     organizations: [],
     pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
     currentOrg: null,
@@ -390,6 +456,15 @@ const platformSlice = createSlice({
       state.usage = null;
       state.admins = [];
       state.auditLogs = [];
+    },
+    clearPlatformPasswordReset: (state) => {
+      state.passwordReset = {
+        loading: false,
+        success: false,
+        error: null,
+        message: '',
+        emailSent: false,
+      };
     },
   },
   extraReducers: (builder) => {
@@ -430,6 +505,40 @@ const platformSlice = createSlice({
         state.auditLogs = [];
         state.dashboardStats = null;
         state.operators = [];
+      })
+      .addCase(platformForgotPassword.pending, (state) => {
+        state.passwordReset.loading = true;
+        state.passwordReset.error = null;
+        state.passwordReset.success = false;
+        state.passwordReset.emailSent = false;
+      })
+      .addCase(platformForgotPassword.fulfilled, (state, action) => {
+        state.passwordReset.loading = false;
+        state.passwordReset.success = true;
+        state.passwordReset.message = action.payload.message;
+        state.passwordReset.emailSent = action.payload.emailSent;
+      })
+      .addCase(platformForgotPassword.rejected, (state, action) => {
+        state.passwordReset.loading = false;
+        state.passwordReset.success = false;
+        state.passwordReset.emailSent = false;
+        state.passwordReset.error = action.payload || 'Failed to send reset link';
+      })
+      .addCase(platformResetPassword.pending, (state) => {
+        state.passwordReset.loading = true;
+        state.passwordReset.error = null;
+        state.passwordReset.success = false;
+      })
+      .addCase(platformResetPassword.fulfilled, (state, action) => {
+        state.passwordReset.loading = false;
+        state.passwordReset.success = true;
+        state.passwordReset.message = action.payload.message;
+        state.user = null;
+      })
+      .addCase(platformResetPassword.rejected, (state, action) => {
+        state.passwordReset.loading = false;
+        state.passwordReset.success = false;
+        state.passwordReset.error = action.payload || 'Failed to reset password';
       })
       .addCase(fetchPlatformOrganizations.fulfilled, (state, action) => {
         state.organizations = action.payload.organizations;
@@ -534,5 +643,6 @@ const platformSlice = createSlice({
   },
 });
 
-export const { clearPlatformError, clearCurrentOrg } = platformSlice.actions;
+export const { clearPlatformError, clearCurrentOrg, clearPlatformPasswordReset } =
+  platformSlice.actions;
 export default platformSlice.reducer;

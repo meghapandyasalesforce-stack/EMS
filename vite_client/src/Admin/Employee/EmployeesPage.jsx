@@ -3,7 +3,6 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { fetchEmployees } from '../../context/employeeSlice';
-import { logoutUser } from '../../context/Auth/authSlice';
 import {
   FaSearch,
   FaTimes,
@@ -17,11 +16,8 @@ import {
   FaFilePdf,
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
-import ProfileDropdown from '../../components/ProfileDropdown';
-import ProfilePicture from '../../Shared/ProfilePicture';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS } from '../../utils/permissions';
-import { getProfileDisplayName, mergeSessionProfile } from '../../utils/profileUtils';
 import EmployeeMemberAvatar from './EmployeeMemberAvatar';
 import '../../styles/directoryUI.css';
 
@@ -59,8 +55,6 @@ const EmployeesPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { employees, status, error, pagination } = useSelector((state) => state.employees);
-  const user = useSelector((state) => state.auth?.user);
-  const employee = useSelector((state) => state.employeeDetails?.employee);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,9 +62,7 @@ const EmployeesPage = () => {
   const [todayStatusMap, setTodayStatusMap] = useState({});
   const [onLeaveTodayMap, setOnLeaveTodayMap] = useState({});
   const [exportOpen, setExportOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const exportRef = useRef(null);
-  const profileRef = useRef(null);
   const pageSize = 20;
 
   const { hasPermission, isOrgOwner, isHrManager, isHrExecutive } = useAuthPermissions();
@@ -155,29 +147,13 @@ const EmployeesPage = () => {
     navigate(`/employees/${employeeId}`);
   };
 
-  const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
-  const profileName = getProfileDisplayName(profile, user, employee);
-  const profileRole =
-    profile?.jobTitle || profile?.position || user?.jobTitle || employee?.jobTitle || 'HR';
-
   useEffect(() => {
     const onPointer = (event) => {
       if (exportRef.current && !exportRef.current.contains(event.target)) setExportOpen(false);
-      if (profileRef.current && !profileRef.current.contains(event.target)) setProfileOpen(false);
     };
     document.addEventListener('pointerdown', onPointer);
     return () => document.removeEventListener('pointerdown', onPointer);
   }, []);
-
-  const handleLogout = useCallback(async () => {
-    try {
-      await dispatch(logoutUser(user?.email || employee?.email)).unwrap();
-      toast.success('Logged out successfully');
-      navigate('/login');
-    } catch (err) {
-      toast.error(err?.message || 'Logout failed. Please try again.');
-    }
-  }, [dispatch, navigate, user?.email, employee?.email]);
 
   const isInitialLoading = status === 'loading' && (!employees || employees.length === 0);
   const teamCount = pagination?.total || (employees || []).length;
@@ -349,69 +325,37 @@ const EmployeesPage = () => {
   return (
     <div className="emp-directory page-shell min-h-screen transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
-        <div className="emp-directory__context">
-          <div className="emp-directory__stats">
-            <div className="emp-directory__stat">
-              <span className="emp-directory__stat-dot" aria-hidden="true" />
-              Total Headcount: <strong>{teamCount.toLocaleString()}</strong>
-            </div>
-            <div className="emp-directory__stat">
-              Active Today: <strong className="is-primary">{liveCounts.present.toLocaleString()}</strong>
-            </div>
-            <div className="emp-directory__stat">
-              On Leave: <strong className="is-secondary">{liveCounts.onLeave.toLocaleString()}</strong>
-            </div>
+        <div className="emp-directory__header">
+          <div className="emp-directory__heading">
+            <p className="emp-directory__eyebrow">People · Directory</p>
+            <h1 className="emp-directory__title">Employee Directory</h1>
           </div>
-
-          <div className="emp-directory__top-right">
-            <div className="emp-directory__profile" ref={profileRef}>
-              <button
-                type="button"
-                className="emp-directory__profile-btn"
-                aria-haspopup="menu"
-                aria-expanded={profileOpen}
-                aria-label="Profile menu"
-                onClick={() => setProfileOpen((open) => !open)}
-              >
-                <div className="emp-directory__profile-text">
-                  <p className="emp-directory__profile-name">{profileName}</p>
-                  <p className="emp-directory__profile-role">{profileRole}</p>
-                </div>
-                <ProfilePicture user={profile} size="header" />
-                <FaChevronDown className="emp-directory__profile-chevron" aria-hidden="true" />
-              </button>
-              {profileOpen ? (
-                <ProfileDropdown
-                  isOpen
-                  onClose={() => setProfileOpen(false)}
-                  onLogout={handleLogout}
-                  onViewProfile={() => navigate('/profile-details')}
-                />
+          <div className="emp-directory__header-end">
+            <div className="emp-directory__stats" aria-label="Directory summary">
+              <div className="emp-directory__stat">
+                <span className="emp-directory__stat-dot" aria-hidden="true" />
+                Total Headcount: <strong>{teamCount.toLocaleString()}</strong>
+              </div>
+              <div className="emp-directory__stat">
+                Active Today: <strong className="is-primary">{liveCounts.present.toLocaleString()}</strong>
+              </div>
+              <div className="emp-directory__stat">
+                On Leave: <strong className="is-secondary">{liveCounts.onLeave.toLocaleString()}</strong>
+              </div>
+            </div>
+            <div className="emp-directory__actions">
+              {exportMenu}
+              {canAddEmployee ? (
+                <button
+                  type="button"
+                  className="emp-directory__btn emp-directory__btn-primary"
+                  onClick={() => navigate('/add-employee')}
+                >
+                  <FaUserPlus aria-hidden="true" />
+                  + Add Employee
+                </button>
               ) : null}
             </div>
-          </div>
-        </div>
-
-        <div className="emp-directory__header">
-          <div>
-            <p className="emp-directory__eyebrow">People · Directory</p>
-            <h1 className="emp-directory__title">Employee Directory &amp; Talent Roster</h1>
-            <p className="emp-directory__subtitle">
-              Central registry of verified permanent, contracted, and international personnel across your organization.
-            </p>
-          </div>
-          <div className="emp-directory__actions">
-            {exportMenu}
-            {canAddEmployee ? (
-              <button
-                type="button"
-                className="emp-directory__btn emp-directory__btn-primary"
-                onClick={() => navigate('/add-employee')}
-              >
-                <FaUserPlus aria-hidden="true" />
-                + Add Employee
-              </button>
-            ) : null}
           </div>
         </div>
 

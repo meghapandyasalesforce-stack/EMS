@@ -428,14 +428,11 @@ const HR_NAV_ITEMS = [
     { path: "/employee/leave-attendance", name: "Leave & attendance", icon: <FaChartLine /> },
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
-    { path: "/attendance-regularization", name: "WFH & Regularization", icon: <FaClock /> },
-    // { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
+    { path: "/attendance-regularization", name: "Regularization/WFH", icon: <FaClock /> },
     { path: "/admin/pending-approvals", name: "Pending approvals", icon: <FaClock /> },
-    // { path: "/attendance-regularization", name: "Regularization & WFH", icon: <FaClock /> },
-    // { path: "/my-attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
-    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
-    { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_SELF] },
+    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
+    { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill /> },
     { path: "/id-card-generator", name: "ID cards", icon: <FaCreditCard /> },
     { path: "/admin/reports", name: "HR reports", icon: <FaFileAlt /> },
 ];
@@ -459,7 +456,6 @@ const getHrPortalNavigation = (permissionFlags = {}) => {
 
 /** @deprecated Use getHrPortalNavigation — kept for imports */
 const getHRNavigation = () => getHRManagerNavigation();
-
 
 /**
  * Finance Navigation Items

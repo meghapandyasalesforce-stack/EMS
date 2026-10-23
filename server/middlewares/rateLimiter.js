@@ -75,10 +75,10 @@ const createPasswordResetLimitHandler = (message) => (req, res) => {
     });
 };
 
-// Forgot-password limiter (kept at 3/hour window for security policy)
+// Forgot-password limiter (kept at 3/hour window for security policy in production)
 export const forgotPasswordLimiter = rateLimit({
     windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS, // 1 hour
-    max: PASSWORD_RESET_RATE_LIMIT_MAX, // 3 requests per hour
+    max: process.env.NODE_ENV === 'production' ? PASSWORD_RESET_RATE_LIMIT_MAX : 30,
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: false,
@@ -86,17 +86,25 @@ export const forgotPasswordLimiter = rateLimit({
         const email = String(req.body?.email || '').trim().toLowerCase();
         return `forgot:${req.ip}:${email || 'no-email'}`;
     },
-    handler: createPasswordResetLimitHandler('Too many password reset attempts. Please try again after 1 hour.')
+    handler: createPasswordResetLimitHandler('Too many password reset attempts. Please try again after 1 hour.'),
+    skip: () => {
+        if (process.env.NODE_ENV === 'production') return false;
+        return process.env.DISABLE_RATE_LIMIT === 'true';
+    },
 });
 
-// Reset-password limiter (kept at 3/hour window for security policy)
+// Reset-password limiter (kept at 3/hour window for security policy in production)
 export const resetPasswordLimiter = rateLimit({
     windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS, // 1 hour
-    max: PASSWORD_RESET_RATE_LIMIT_MAX, // 3 requests per hour
+    max: process.env.NODE_ENV === 'production' ? PASSWORD_RESET_RATE_LIMIT_MAX : 30,
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: false,
-    handler: createPasswordResetLimitHandler('Too many password reset attempts. Please try again after 1 hour.')
+    handler: createPasswordResetLimitHandler('Too many password reset attempts. Please try again after 1 hour.'),
+    skip: () => {
+        if (process.env.NODE_ENV === 'production') return false;
+        return process.env.DISABLE_RATE_LIMIT === 'true';
+    },
 });
 
 // Backward-compatible alias (existing imports continue to work if any remain)

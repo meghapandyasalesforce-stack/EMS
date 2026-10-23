@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 import { useDispatch } from 'react-redux';
@@ -643,6 +643,395 @@ export function JobsDrawer({ open, jobs = [], onClose }) {
                         </p>
                     </article>
                 ))
+            )}
+        </DrawerShell>
+    );
+}
+
+const CELEB_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
+
+const celebrationTypeLabel = (item) => {
+    if (item?.type === 'marriage_anniversary') return 'Marriage anniversary';
+    if (item?.type === 'anniversary') return 'Work anniversary';
+    return 'Birthday';
+};
+
+const celebrationItemKey = (item) => `${item?.type || 'birthday'}_${item?.employeeId}`;
+
+/**
+ * Side drawer: upcoming celebrations with reactions (and private wish for today).
+ */
+export function CelebrationsDrawer({
+    open,
+    items = [],
+    focusItem = null,
+    eventsByKey = {},
+    reacting = false,
+    onClose,
+    onReact,
+    onEnsureEvent,
+}) {
+    const [activeKey, setActiveKey] = useState(null);
+    const [wishText, setWishText] = useState('');
+    const [wishBusy, setWishBusy] = useState(false);
+    const [localEvents, setLocalEvents] = useState({});
+    const [reactionFilter, setReactionFilter] = useState('all');
+    const [showAllReactors, setShowAllReactors] = useState(false);
+    const ensureInFlightRef = useRef(new Set());
+    const onEnsureEventRef = useRef(onEnsureEvent);
+    onEnsureEventRef.current = onEnsureEvent;
+
+    const list = useMemo(() => {
+        const rows = Array.isArray(items) ? [...items] : [];
+        rows.sort((a, b) => {
+            const aDays = Number.isFinite(Number(a?.daysUntil)) ? Number(a.daysUntil) : 9999;
+            const bDays = Number.isFinite(Number(b?.daysUntil)) ? Number(b.daysUntil) : 9999;
+            return aDays - bDays;
+        });
+        return rows;
+    }, [items]);
+
+    const focusKey = focusItem?.employeeId ? celebrationItemKey(focusItem) : null;
+
+    useEffect(() => {
+        if (!open) {
+            setActiveKey(null);
+            setWishText('');
+            setReactionFilter('all');
+            setShowAllReactors(false);
+            ensureInFlightRef.current.clear();
+            return;
+        }
+        if (focusKey) {
+            setActiveKey(focusKey);
+        } else if (list[0]) {
+            setActiveKey(celebrationItemKey(list[0]));
+        }
+    }, [open, focusKey, list]);
+
+    useEffect(() => {
+        setReactionFilter('all');
+        setShowAllReactors(false);
+    }, [activeKey]);
+
+    useEffect(() => {
+        if (!open || !activeKey) return undefined;
+        const item = list.find((row) => celebrationItemKey(row) === activeKey);
+        if (!item || item.daysUntil !== 0) return undefined;
+
+        // Already have event from parent or prior open — do not POST again
+        if (eventsByKey[activeKey]?._id || localEvents[activeKey]?._id) return undefined;
+        if (ensureInFlightRef.current.has(activeKey)) return undefined;
+
+        const ensure = onEnsureEventRef.current;
+        if (!ensure) return undefined;
+
+        let cancelled = false;
+        ensureInFlightRef.current.add(activeKey);
+        (async () => {
+            try {
+                const event = await ensure(item);
+                if (!cancelled && event?._id) {
+                    setLocalEvents((prev) => {
+                        if (prev[activeKey]?._id) return prev;
+                        return { ...prev, [activeKey]: event };
+                    });
+                }
+            } catch {
+                /* toast handled by caller if needed */
+            } finally {
+                ensureInFlightRef.current.delete(activeKey);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // intentionally omit onEnsureEvent / list identity — use activeKey + cache gates
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- stabilize open calls
+    }, [open, activeKey, eventsByKey, localEvents, list]);
+
+    if (!open) return null;
+
+    const activeItem = list.find((row) => celebrationItemKey(row) === activeKey) || null;
+    const activeEvent = (() => {
+        if (!activeKey) return null;
+        const fromParent = eventsByKey[activeKey];
+        const fromLocal = localEvents[activeKey];
+        if (fromParent && fromLocal) return { ...fromLocal, ...fromParent };
+        return fromParent || fromLocal || null;
+    })();
+    const reactionCounts = activeEvent?.reactionCounts || {};
+    const reactors = Array.isArray(activeEvent?.reactions) ? activeEvent.reactions : [];
+    const isToday = activeItem?.daysUntil === 0;
+    const REACTOR_PREVIEW = 8;
+
+    const filteredReactors = useMemo(() => {
+        const rows = reactors.filter((row) => {
+            if (reactionFilter === 'all') return true;
+            return row?.emoji === reactionFilter;
+        });
+        // Dedupe same person+emoji if API ever doubles up
+        const seen = new Set();
+        return rows.filter((row) => {
+            const name =
+                row.name || row.userName || row.employeeName || row.userId || row.employeeId || '';
+            const key = `${name}::${row.emoji || ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [reactors, reactionFilter]);
+
+    const visibleReactors = showAllReactors
+        ? filteredReactors
+        : filteredReactors.slice(0, REACTOR_PREVIEW);
+    const hiddenReactorCount = Math.max(0, filteredReactors.length - REACTOR_PREVIEW);
+
+    const sendWish = async () => {
+        if (!activeItem || !wishText.trim()) {
+            toast.warning('Please write a greeting note');
+            return;
+        }
+        setWishBusy(true);
+        try {
+            let event = activeEvent;
+            if (!event?._id && onEnsureEvent) {
+                event = await onEnsureEvent(activeItem);
+            }
+            if (!event?._id) throw new Error('Celebration event unavailable');
+            await axios.post(`${BOTH_CELEBRATION_ENDPOINT}/events/${event._id}/wish`, {
+                comment: wishText.trim(),
+            });
+            toast.success('Wish sent privately');
+            setWishText('');
+            setLocalEvents((prev) => ({ ...prev, [celebrationItemKey(activeItem)]: event }));
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Failed to send wish');
+        } finally {
+            setWishBusy(false);
+        }
+    };
+
+    return (
+        <DrawerShell
+            eyebrow="Celebrations"
+            title="Upcoming celebrations"
+            onClose={onClose}
+            footer={
+                <button type="button" className="hr-ov-btn hr-ov-btn--ghost" onClick={onClose}>
+                    Close
+                </button>
+            }
+        >
+            {list.length === 0 ? (
+                <div className="hr-ov-empty">No upcoming celebrations right now.</div>
+            ) : (
+                <div className="space-y-3">
+                    {list.map((item) => {
+                        const key = celebrationItemKey(item);
+                        const selected = key === activeKey;
+                        const event = localEvents[key] || eventsByKey[key];
+                        const counts = event?.reactionCounts || {};
+                        const totalReact = Object.values(counts).reduce((sum, n) => sum + Number(n || 0), 0);
+                        const when =
+                            item.daysUntil === 0
+                                ? 'Today'
+                                : item.daysUntil === 1
+                                  ? 'Tomorrow'
+                                  : `in ${item.daysUntil} days`;
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                className={`hr-ov-card w-full text-left transition ${
+                                    selected ? 'ring-2 ring-[#0E9370]/35' : ''
+                                }`}
+                                onClick={() => setActiveKey(key)}
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600">
+                                            {celebrationTypeLabel(item)}
+                                        </p>
+                                        <p className="truncate text-sm font-bold text-[#111C2D]">
+                                            {item.name || 'Team member'}
+                                        </p>
+                                        <p className="text-xs text-[#666666]">{when}</p>
+                                    </div>
+                                    {item.daysUntil === 0 ? (
+                                        <span className="shrink-0 rounded-full bg-[#D1F5EA] px-2 py-0.5 text-[10px] font-bold text-[#07523E]">
+                                            {totalReact} react{totalReact === 1 ? '' : 's'}
+                                        </span>
+                                    ) : (
+                                        <span className="shrink-0 text-[10px] font-semibold uppercase text-[#94A3B8]">
+                                            Upcoming
+                                        </span>
+                                    )}
+                                </div>
+                            </button>
+                        );
+                    })}
+
+                    {activeItem ? (
+                        <div className="hr-ov-card !bg-[#F8FAFC]">
+                            <p className="text-sm font-bold text-[#111C2D]">
+                                {activeItem.name || 'Team member'} · {celebrationTypeLabel(activeItem)}
+                            </p>
+                            {!isToday ? (
+                                <p className="mt-2 text-xs text-[#666666]">
+                                    Wishes and reactions open on their{' '}
+                                    {celebrationTypeLabel(activeItem).toLowerCase()}.
+                                </p>
+                            ) : (
+                                <>
+                                    <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-[#666666]">
+                                        Reactions
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {CELEB_REACTIONS.map((emoji) => {
+                                            const count = Number(reactionCounts[emoji] || 0);
+                                            return (
+                                                <button
+                                                    key={emoji}
+                                                    type="button"
+                                                    disabled={reacting || !onReact}
+                                                    onClick={() => onReact?.(activeItem, emoji)}
+                                                    className={`inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-lg border bg-white px-2.5 py-1.5 text-sm shadow-sm transition hover:border-[#0E9370]/40 disabled:opacity-50 ${
+                                                        count > 0
+                                                            ? 'border-[#0E9370]/35'
+                                                            : 'border-slate-200'
+                                                    }`}
+                                                    aria-label={`React ${emoji}`}
+                                                >
+                                                    <span>{emoji}</span>
+                                                    {count > 0 ? (
+                                                        <span className="text-[10px] font-semibold text-[#666666]">
+                                                            {count}
+                                                        </span>
+                                                    ) : null}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {reactors.length > 0 ? (
+                                        <div className="mt-3">
+                                            <div className="flex flex-wrap gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                                                        reactionFilter === 'all'
+                                                            ? 'bg-[#0E9370] text-white'
+                                                            : 'bg-white text-[#475569] ring-1 ring-slate-200'
+                                                    }`}
+                                                    onClick={() => {
+                                                        setReactionFilter('all');
+                                                        setShowAllReactors(false);
+                                                    }}
+                                                >
+                                                    All ({reactors.length})
+                                                </button>
+                                                {CELEB_REACTIONS.map((emoji) => {
+                                                    const count = Number(reactionCounts[emoji] || 0);
+                                                    if (count <= 0) return null;
+                                                    return (
+                                                        <button
+                                                            key={`filter-${emoji}`}
+                                                            type="button"
+                                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                                                                reactionFilter === emoji
+                                                                    ? 'bg-[#0E9370] text-white'
+                                                                    : 'bg-white text-[#475569] ring-1 ring-slate-200'
+                                                            }`}
+                                                            onClick={() => {
+                                                                setReactionFilter(emoji);
+                                                                setShowAllReactors(false);
+                                                            }}
+                                                        >
+                                                            <span aria-hidden="true">{emoji}</span>
+                                                            {count}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            <div className="hr-ov-reactors-scroll mt-2">
+                                                <ul className="space-y-1">
+                                                    {visibleReactors.map((row, idx) => (
+                                                        <li
+                                                            key={`${row.userId || row.employeeId || idx}-${row.emoji}`}
+                                                            className="flex items-center justify-between gap-2 rounded-md px-1 py-1 text-xs text-[#475569]"
+                                                        >
+                                                            <span className="truncate font-medium text-[#111C2D]">
+                                                                {row.name ||
+                                                                    row.userName ||
+                                                                    row.employeeName ||
+                                                                    'Someone'}
+                                                            </span>
+                                                            <span aria-hidden="true">{row.emoji}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+
+                                            {hiddenReactorCount > 0 && !showAllReactors ? (
+                                                <button
+                                                    type="button"
+                                                    className="mt-2 text-[11px] font-semibold text-[#0E9370] hover:underline"
+                                                    onClick={() => setShowAllReactors(true)}
+                                                >
+                                                    Show {hiddenReactorCount} more
+                                                </button>
+                                            ) : null}
+                                            {showAllReactors && filteredReactors.length > REACTOR_PREVIEW ? (
+                                                <button
+                                                    type="button"
+                                                    className="mt-2 text-[11px] font-semibold text-[#666666] hover:underline"
+                                                    onClick={() => setShowAllReactors(false)}
+                                                >
+                                                    Show less
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ) : (
+                                        <p className="mt-3 text-xs text-[#94A3B8]">
+                                            No reactions yet. Tap an emoji above.
+                                        </p>
+                                    )}
+
+                                    <label
+                                        className="hr-ov-label mt-4"
+                                        htmlFor="hr-celeb-drawer-wish"
+                                    >
+                                        Private wish
+                                    </label>
+                                    <textarea
+                                        id="hr-celeb-drawer-wish"
+                                        className="hr-ov-textarea"
+                                        maxLength={500}
+                                        rows={3}
+                                        value={wishText}
+                                        onChange={(e) => setWishText(e.target.value)}
+                                        placeholder="Write a short greeting…"
+                                    />
+                                    <div className="mt-2 flex items-center justify-between gap-2">
+                                        <span className="text-[11px] text-[#94A3B8]">
+                                            {wishText.length}/500
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="hr-ov-btn hr-ov-btn--primary"
+                                            disabled={wishBusy || !wishText.trim()}
+                                            onClick={sendWish}
+                                        >
+                                            {wishBusy ? 'Sending…' : 'Send wish'}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    ) : null}
+                </div>
             )}
         </DrawerShell>
     );

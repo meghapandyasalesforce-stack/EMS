@@ -1541,7 +1541,7 @@ canvas {
 
 @media (max-width: 639px) {
   .page-shell {
-    padding: 1.5rem 1rem 1.25rem;
+    padding: 0.75rem 1rem 1rem;
     overflow-x: clip;
   }
 
@@ -1564,11 +1564,11 @@ canvas {
   }
 }
 
-/* Mobile header (hamburger bar): give all pages breathing room below nav */
+/* Mobile header (hamburger bar): tight breathing room below nav */
 @media (max-width: 1023px) {
   .main-scroll-area.hrms-page-canvas {
-    padding-top: 1rem;
-    padding-bottom: 1.25rem;
+    padding-top: 0.5rem;
+    padding-bottom: 1rem;
     box-sizing: border-box;
   }
 
@@ -1576,14 +1576,20 @@ canvas {
   .main-scroll-area.hrms-page-canvas .page-shell:not(.fixed):not([role='dialog']),
   .main-scroll-area.hrms-page-canvas > .employee-profile-page,
   .main-scroll-area.hrms-page-canvas .employee-profile-page.page-shell {
-    padding-top: 1.5rem !important;
-    padding-bottom: 1.5rem;
+    padding-top: 0.75rem !important;
+    padding-bottom: 1rem;
+  }
+
+  /* Org chart already tightens its own shell — don't double the top gap */
+  .main-scroll-area.hrms-page-canvas > .org-chart-page .page-shell,
+  .main-scroll-area.hrms-page-canvas .org-chart-page > .page-shell {
+    padding-top: 0.35rem !important;
   }
 
   /* Full-bleed wrappers (min-h-screen) that sit under the mobile header */
   .main-scroll-area.hrms-page-canvas > .min-h-screen:not(.page-shell),
   .main-scroll-area.hrms-page-canvas > [class*='min-h-screen']:not(.page-shell) {
-    padding-top: 0.5rem;
+    padding-top: 0.25rem;
     box-sizing: border-box;
   }
 
@@ -1597,8 +1603,8 @@ canvas {
   .page-shell {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
-    padding-top: 1.25rem;
-    padding-bottom: 1.25rem;
+    padding-top: 0.75rem;
+    padding-bottom: 1rem;
   }
 
   .main-scroll-area :where(form, [role="dialog"]) .flex.justify-end > button {

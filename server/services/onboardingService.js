@@ -941,18 +941,19 @@ export function getOnboardingReminderStage(dueDate, now = new Date()) {
     const due = startOfDay(dueDate);
     const today = startOfDay(now);
     const daysUntilDue = Math.round((due.getTime() - today.getTime()) / 86400000);
+    // Auto onboarding reminders stay "normal" (medium) — not Important in the UI.
     if ([3, 1, 0].includes(daysUntilDue)) {
         return {
             key: daysUntilDue === 0 ? 'due-today' : `due-in-${daysUntilDue}-days`,
             wording: daysUntilDue === 0 ? 'is due today' : `is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`,
-            priority: daysUntilDue === 0 ? 'high' : 'medium',
+            priority: 'medium',
         };
     }
     if (daysUntilDue < 0) {
         return {
             key: `overdue-${localDateKey(today)}`,
             wording: 'is overdue',
-            priority: 'high',
+            priority: 'medium',
         };
     }
     return null;
@@ -1274,7 +1275,12 @@ export async function synchronizeOnboardingWorkflows(organizationId = null) {
                     organizationId: workflow.organizationId,
                     title: notification.title,
                     message: notification.message,
-                    priority: notification.priority,
+                    // Auto onboarding reminders/overdue alerts are normal (not Important) in the inbox.
+                    priority:
+                        notification.eventType === 'onboarding_reminder'
+                        || notification.eventType === 'onboarding_workflow_overdue'
+                            ? 'medium'
+                            : (notification.priority || 'medium'),
                     data: {
                         workflow,
                         recipient: notification.recipient,

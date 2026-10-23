@@ -94,6 +94,15 @@ body.hr-ov-open .kinetic-hrms .hrms-page-canvas::before {
   color: #fff;
 }
 
+.hr-ov-reactors-scroll {
+  max-height: 11.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.15rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
 .hr-ov-drawer__body {
   flex: 1;
   min-height: 0;

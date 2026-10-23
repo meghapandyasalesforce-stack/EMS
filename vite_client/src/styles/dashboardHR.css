@@ -208,6 +208,26 @@
   border-radius: var(--hd-radius);
   box-shadow: var(--hd-shadow);
   padding: 1.25rem 1.5rem;
+  overflow: visible;
+}
+
+.hr-dash__attendance-chart {
+  overflow: visible;
+}
+
+.hr-dash__attendance-chart .recharts-wrapper,
+.hr-dash__attendance-chart .recharts-surface {
+  overflow: visible;
+}
+
+@media (max-width: 640px) {
+  .hr-dash__panel {
+    padding: 1rem 0.9rem;
+  }
+
+  .hr-dash__attendance-chart .recharts-cartesian-axis-tick text {
+    font-size: 10px;
+  }
 }
 
 .hr-dash__panel-title {
@@ -245,6 +265,10 @@
 
 .hr-dash__celeb-head {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   background: var(--hd-navy);
   padding: 0.65rem 0.9rem;
 }
@@ -263,12 +287,90 @@
   color: #1cca9b;
 }
 
+.hr-dash__celeb-view-all {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #1cca9b;
+  cursor: pointer;
+}
+
+.hr-dash__celeb-view-all:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
 /* Announcements */
 .hr-dash__announce-item {
   border-radius: 0.75rem;
   border: 1px solid rgba(109, 122, 115, 0.2);
   background: #f0f3ff;
   padding: 0.75rem;
+}
+
+.hr-dash__panel--announce-empty {
+  padding-bottom: 1rem;
+}
+
+.hr-dash__announce-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.25rem 1rem 0.5rem;
+  max-width: 24rem;
+  margin: 0 auto;
+}
+
+.hr-dash__announce-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: 0.85rem;
+  border-radius: 999px;
+  background: #e8faf4;
+  color: #00694f;
+  font-size: 1.35rem;
+}
+
+.hr-dash__announce-empty-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--hd-on, #111c2d);
+  line-height: 1.25;
+}
+
+.hr-dash__announce-empty-desc {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #666666;
+  max-width: 20rem;
+}
+
+@media (max-width: 640px) {
+  .hr-dash__announce-empty {
+    padding: 0.85rem 0.35rem 0.25rem;
+  }
+
+  .hr-dash__announce-empty-icon {
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: 0.65rem;
+    font-size: 1.2rem;
+  }
+
+  .hr-dash__announce-empty-title {
+    font-size: 0.95rem;
+  }
 }
 
 .hr-dash__btn-ghost {
@@ -548,7 +650,76 @@
   background: #be123c;
 }
 
-/* Action queue tiles */
+/* Metrics band: 4×2 cards + celebrations sidebar */
+.hr-dash__metrics-band {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
+.hr-dash__metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+@media (min-width: 768px) {
+  .hr-dash__metrics-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .hr-dash__metrics-band {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  }
+
+  .hr-dash__celeb--band {
+    min-height: 100%;
+  }
+}
+
+.hr-dash__celeb-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.25rem 0.75rem;
+  gap: 0.35rem;
+}
+
+.hr-dash__celeb-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 0.35rem;
+  border-radius: 999px;
+  background: #e8faf4;
+  color: #0e9370;
+  font-size: 1.35rem;
+}
+
+.hr-dash__celeb-empty-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--hd-on);
+}
+
+.hr-dash__celeb-empty-desc {
+  margin: 0;
+  max-width: 14rem;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--hd-muted);
+}
+
+/* Action queue tiles (legacy class kept for card styles) */
 .hr-dash__queue {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
