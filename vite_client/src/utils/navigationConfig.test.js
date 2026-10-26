@@ -71,7 +71,28 @@ describe('navigationConfig — Me portal', () => {
     expect(items.some((item) => item.path === '/dashboard-manager')).toBe(false);
   });
 
-  it.each(['employee', 'payroll_admin', 'project_manager'])(
+  it('shows Me portal 7-section nav for employee portal (Time covers regularization)', () => {
+    const items = getNavigationItems(
+      { role: 'employee', _id: '1', employeeProfileId: 'e1' },
+      { _id: 'e1' },
+      [],
+      {},
+      'employee'
+    );
+
+    expect(items.map((i) => i.path)).toEqual([
+      '/dashboard-employee',
+      '/employee/leave-attendance',
+      '/employee-payroll',
+      '/employee/projects',
+      '/employee/engagement',
+      '/employee/documents-id',
+      '/profile-details',
+    ]);
+    expect(items.some((item) => item.path === '/my-attendance-regularization')).toBe(false);
+  });
+
+  it.each(['payroll_admin', 'project_manager'])(
     'shows personal regularization in the %s portal sidebar',
     (portalId) => {
       const items = getNavigationItems(

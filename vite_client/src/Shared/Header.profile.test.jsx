@@ -63,16 +63,21 @@ describe('desktop Profile navigation', () => {
     expect(labels.indexOf('Profile')).toBe(labels.length - 1);
     fireEvent.click(within(nav).getByRole('button', { name: 'Profile', exact: true }));
     expect(screen.getByTestId('location')).toHaveTextContent('/profile-details');
-    expect(within(nav).getByRole('button', { name: 'Profile', exact: true })).toHaveClass('text-white', 'shadow-md');
+    expect(within(nav).getByRole('button', { name: 'Profile', exact: true })).toHaveClass('is-active');
   });
   it.each(['/profile-details', '/contact-details', '/education-qualifications', '/professional-experience', '/family-details', '/job-details', '/financial-details', '/profile-security'])('highlights Profile on %s', path => {
     renderHeader('employee', 1366, path);
-    expect(screen.getByRole('button', { name: 'Profile', exact: true })).toHaveClass('text-white', 'shadow-md');
+    expect(screen.getByRole('button', { name: 'Profile', exact: true })).toHaveClass('is-active');
   });
-  it.each([375, 768, 1023])('keeps the additional Profile navigation out of the mobile menu at %spx', width => {
+  it('uses More sheet on Me phone instead of hamburger Profile list', () => {
+    renderHeader('employee', 375);
+    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('button', { name: 'Profile', exact: true })).toBeInTheDocument();
+  });
+  it.each([768, 1023])('keeps Open menu on Me tablet rail at %spx', width => {
     renderHeader('employee', width);
-    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
-    expect(screen.queryByRole('button', { name: 'Profile', exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open menu' })).toBeInTheDocument();
   });
   it('keeps the mobile dropdown own-profile navigation working', () => {
     renderHeader('employee', 375);

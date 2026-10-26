@@ -12,20 +12,28 @@ import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { persistor } from '../context/store';
 import NotificationDropdown from '../components/NotificationDropdown';
-import { getNavigationItems } from '../utils/navigationConfig';
+import { getNavigationItems, isMeSectionActive } from '../utils/navigationConfig';
 import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portalConfig';
 import PortalSwitcher from '../components/PortalSwitcher';
 import ProfileDropdown from '../components/ProfileDropdown';
 import SidebarNavList from '../components/SidebarNavList';
 import ProfilePicture from './ProfilePicture';
+import MePortalShell from '../components/me/MePortalShell';
 import useDocumentModeSettings from '../Hooks/useDocumentModeSettings';
 import { mergeSessionProfile } from '../utils/profileUtils';
 import { clearOrgAdminCredentials } from '../utils/orgAdminCredentials';
 import { isHrmsAuthenticatedUser } from '../utils/authSessionUtils';
 
+const getMeViewport = (width) => {
+    if (width < 768) return 'phone';
+    if (width < 1024) return 'tablet';
+    return 'desktop';
+};
+
 const Header = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+    const [meMoreOpen, setMeMoreOpen] = useState(false);
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const location = useLocation();
@@ -42,14 +50,18 @@ const Header = () => {
     const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [meViewport, setMeViewport] = useState(() => getMeViewport(window.innerWidth));
     const [mobileProfileDropdownOpen, setMobileProfileDropdownOpen] = useState(false);
     const profileDropdownRef = useRef(null);
 
     useEffect(() => {
         const handleResize = () => {
-            setIsMobile(window.innerWidth < 1024);
-            if (window.innerWidth >= 1024) {
+            const w = window.innerWidth;
+            setIsMobile(w < 1024);
+            setMeViewport(getMeViewport(w));
+            if (w >= 1024) {
                 setMobileMenuOpen(false);
+                setMeMoreOpen(false);
             }
         };
         window.addEventListener('resize', handleResize);
@@ -68,6 +80,7 @@ const Header = () => {
     // Close nav overlays on route change so leftover backdrops cannot block sidebar clicks
     useEffect(() => {
         setMobileMenuOpen(false);
+        setMeMoreOpen(false);
         setLogoutModalOpen(false);
         setMobileProfileDropdownOpen(false);
         document.body.style.overflow = '';
@@ -225,15 +238,32 @@ const Header = () => {
         ? effectivePortal === 'employee'
         : (user?.role || employee?.role || '').toLowerCase() === 'employee';
 
+    // Scope Me visual tokens to employee portal only (does not affect other roles)
+    useEffect(() => {
+        const root = document.documentElement;
+        if (useLightEmployeeNav) {
+            root.classList.add('me-portal');
+        } else {
+            root.classList.remove('me-portal');
+        }
+        return () => {
+            root.classList.remove('me-portal');
+        };
+    }, [useLightEmployeeNav]);
+
     // Highlight active route — exact match for '/', startsWith for all others
     const isActive = useCallback(
-        (path) =>
-            path === '/profile-details'
+        (path) => {
+            if (useLightEmployeeNav) {
+                return isMeSectionActive(path, location.pathname);
+            }
+            return path === '/profile-details'
                 ? ['/profile-details', '/contact-details', '/education-qualifications', '/professional-experience', '/family-details', '/job-details', '/financial-details', '/profile-security', '/view-profile'].includes(location.pathname)
                 : path === '/'
                 ? location.pathname === '/'
-                : location.pathname === path || location.pathname.startsWith(path + '/'),
-        [location.pathname]
+                : location.pathname === path || location.pathname.startsWith(path + '/');
+        },
+        [location.pathname, useLightEmployeeNav]
     );
 
     // Use button + navigate only (no <a href>). flushSync keeps the React
@@ -288,14 +318,28 @@ const Header = () => {
 
     return (
         <>
-            {isMobile ? (
-                /* ── Mobile Header ── */
+            {useLightEmployeeNav ? (
+                <MePortalShell
+                    viewport={meViewport}
+                    navItems={navItems}
+                    desktopNavItems={desktopNavItems}
+                    isActive={isActive}
+                    onNavigate={goTo}
+                    profile={profile}
+                    profileDropdownOpen={mobileProfileDropdownOpen}
+                    setProfileDropdownOpen={setMobileProfileDropdownOpen}
+                    profileDropdownRef={profileDropdownRef}
+                    onOpenLogout={openLogoutModal}
+                    onViewProfile={() => navigate('/profile-details')}
+                    drawerOpen={mobileMenuOpen}
+                    setDrawerOpen={setMobileMenuOpen}
+                    moreOpen={meMoreOpen}
+                    setMoreOpen={setMeMoreOpen}
+                />
+            ) : isMobile ? (
+                /* ── Mobile Header (non-Me portals) ── */
                 <header
-                    className={
-                        useLightEmployeeNav
-                            ? 'safe-area-top relative z-30 w-full shrink-0 border-b border-gray-200 bg-white text-gray-800 shadow-sm'
-                            : 'safe-area-top relative z-30 w-full shrink-0 border-b border-white/10 bg-[var(--ui-secondary)] text-white shadow-sm'
-                    }
+                    className="safe-area-top relative z-30 w-full shrink-0 border-b border-white/10 bg-[var(--ui-secondary)] text-white shadow-sm"
                 >
                     <div className="flex min-w-0 items-center justify-between gap-2 p-3 sm:p-4">
                         <button
