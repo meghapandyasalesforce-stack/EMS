@@ -298,6 +298,7 @@ const getAdminNavigation = () => [
     { path: "/leave-management", name: "Leave management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM] },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
+    { path: "/comp-off-requests", name: "Comp-off requests", icon: <FaClock />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
     { path: "/role-hierarchy", name: "Role hierarchy", icon: <FaShieldAlt />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/admin/platform-roles", name: "Users & roles", icon: <FaUserTie />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE] },
@@ -356,6 +357,7 @@ const getProjectManagerNavigation = () => [
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/employee/leave-attendance", name: "Leave & attendance", icon: <FaChartLine /> },
     { path: "/my-attendance-regularization", name: "Regularization", icon: <FaClock /> },
+    { path: "/my-comp-off", name: "Comp-off", icon: <FaClock /> },
     { path: "/employee/internal-jobs", name: "Internal jobs", icon: <FaHandshake /> },
     { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
@@ -379,6 +381,8 @@ const getManagerNavigation = (profile) => {
     { path: "/employee/leave-attendance", name: "Leave & attendance", icon: <FaChartLine /> },
     { path: "/all-attendance-history", name: "Team attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_TEAM, PERMISSIONS.ATTENDANCE_VIEW_ALL] },
     { path: "/manager/attendance-regularization", name: "Regularization/WFH", icon: <FaClock /> },
+    { path: "/comp-off-requests", name: "Comp-off requests", icon: <FaClock /> },
+    { path: "/my-comp-off", name: "My comp-off", icon: <FaClock /> },
     { path: "/employee/internal-jobs", name: "Hiring/Internal jobs", icon: <FaHandshake /> },
     { path: "/team-learning", name: "Team learning", icon: <FaGraduationCap /> },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
@@ -423,6 +427,8 @@ const HR_NAV_ITEMS = [
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
     { path: "/attendance-regularization", name: "Regularization/WFH", icon: <FaClock /> },
+    { path: "/comp-off-requests", name: "Comp-off requests", icon: <FaClock /> },
+    { path: "/my-comp-off", name: "My comp-off", icon: <FaClock /> },
     // { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/admin/pending-approvals", name: "Pending approvals", icon: <FaClock /> },
     // { path: "/attendance-regularization", name: "Regularization & WFH", icon: <FaClock /> },
@@ -432,17 +438,16 @@ const HR_NAV_ITEMS = [
     { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_SELF] },
     { path: "/id-card-generator", name: "ID cards", icon: <FaCreditCard /> },
     { path: "/admin/reports", name: "HR reports", icon: <FaFileAlt /> },
-,
 ];
 
 /** HR Manager — all HR options except Projects */
 const getHRManagerNavigation = () =>
-    HR_NAV_ITEMS.filter((item) => item.path !== '/projects');
+    HR_NAV_ITEMS.filter((item) => item?.path && item.path !== '/projects');
 
 /** HR Executive — no Projects or admin Payroll; keeps My Payroll */
 const getHRExecutiveNavigation = () =>
     HR_NAV_ITEMS.filter(
-        (item) => item.path !== '/projects' && item.path !== '/admin-payroll'
+        (item) => item?.path && item.path !== '/projects' && item.path !== '/admin-payroll'
     );
 
 const getHrPortalNavigation = (permissionFlags = {}) => {
@@ -468,6 +473,7 @@ const getFinanceNavigation = () => [
     { path: "/employees", name: "Employees", icon: <FaUsers /> },
     { path: "/my-leave", name: "My leave", icon: <FaCalendarAlt /> },
     { path: "/my-attendance-regularization", name: "Regularization", icon: <FaClock /> },
+    { path: "/my-comp-off", name: "Comp-off", icon: <FaClock /> },
     { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill /> }
@@ -483,6 +489,7 @@ const getTechNavigation = () => [
     { path: "/employee/projects", name: "My projects", icon: <VscProject /> },
     { path: "/employee/leave-attendance", name: "Leave & attendance", icon: <IoBookmarks /> },
     { path: "/my-attendance-regularization", name: "Regularization", icon: <FaClock /> },
+    { path: "/my-comp-off", name: "Comp-off", icon: <FaClock /> },
     { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
@@ -496,6 +503,7 @@ const getEmployeeNavigation = () => [
     { path: "/dashboard-employee", name: "Dashboard", icon: <FaHome /> },
     { path: "/employee/leave-attendance", name: "Leave & attendance", icon: <IoBookmarks /> },
     { path: "/my-attendance-regularization", name: "Regularization", icon: <FaClock /> },
+    { path: "/my-comp-off", name: "Comp-off", icon: <FaClock /> },
     { path: "/employee/projects", name: "Projects", icon: <VscProject /> },
     { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },

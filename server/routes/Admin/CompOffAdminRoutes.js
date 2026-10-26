@@ -7,7 +7,6 @@ import {
     rejectCompOff
 } from '../../controllers/compOff/compOffController.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
-import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
 
@@ -18,10 +17,10 @@ router.route('/requests')
     .get(isAdminOrManagerOrHRAuthenticated, getAllCompOffRequests);
 
 router.route('/approve/:id')
-    .put(isAdminOrHROrExecutiveAuthenticated, approveCompOff);
+    .put(isAdminOrManagerOrHRAuthenticated, approveCompOff);
 
 router.route('/reject/:id')
-    .put(isAdminOrHROrExecutiveAuthenticated, rejectCompOff);
+    .put(isAdminOrManagerOrHRAuthenticated, rejectCompOff);
 
 export default router;
 

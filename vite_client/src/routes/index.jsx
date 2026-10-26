@@ -276,6 +276,8 @@ export const attendanceRoutes = [
   { path: '/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/manager/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/my-attendance-regularization', component: lazy(() => import('../Employee/AttendanceRegularization/MyRegularizationRequests')), message: 'Loading my attendance regularization...', allowedRoles: [] },
+  { path: '/my-comp-off', component: lazy(() => import('../Employee/Attendance/MyCompOffRequests')), message: 'Loading comp-off...', allowedRoles: [] },
+  { path: '/comp-off-requests', component: lazy(() => import('../Manager/Attendance/CompOffRequests')), message: 'Loading comp-off requests...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/team-learning', component: lazy(() => import('../Manager/TeamLearning/TeamLearningPage')), message: 'Loading team learning...', allowedRoles: [] },
   // Organizer / sender — manage meetings you created
   { path: '/one-on-one', component: lazy(() => import('../components/OneOnOneRouteWrapper')), message: 'Loading one-on-one meetings...', allowedRoles: [] },

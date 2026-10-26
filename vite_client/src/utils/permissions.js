@@ -141,8 +141,9 @@ export const roleBucketLabel = (bucket) => {
 /** Filter nav items that declare `permissions: string[]` */
 export const filterNavByPermissions = (items, permissions) => {
   if (!Array.isArray(items)) return [];
-  if (!permissions?.length) return items;
-  return items.filter((item) => {
+  const present = items.filter((item) => item && item.path);
+  if (!permissions?.length) return present;
+  return present.filter((item) => {
     if (!item.permissions?.length) return true;
     return hasAnyPermission(permissions, item.permissions);
   });

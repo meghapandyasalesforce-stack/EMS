@@ -19,12 +19,19 @@ export const SAAS_FEATURES = {
 
 export const NAV_PATH_FEATURE_MAP = {
   '/employees': SAAS_FEATURES.EMPLOYEES,
+  '/leave': SAAS_FEATURES.LEAVE,
+  '/my-leave': SAAS_FEATURES.LEAVE,
   '/leave-management': SAAS_FEATURES.LEAVE,
   '/employee/leave-attendance': SAAS_FEATURES.LEAVE,
+  '/attendance': SAAS_FEATURES.ATTENDANCE,
+  '/attendance-stats': SAAS_FEATURES.ATTENDANCE,
+  '/attendance-rules': SAAS_FEATURES.ATTENDANCE,
   '/all-attendance-history': SAAS_FEATURES.ATTENDANCE,
   '/my-attendance-regularization': SAAS_FEATURES.ATTENDANCE,
   '/manager/attendance-regularization': SAAS_FEATURES.ATTENDANCE,
   '/attendance-regularization': SAAS_FEATURES.ATTENDANCE,
+  '/my-comp-off': SAAS_FEATURES.ATTENDANCE,
+  '/comp-off-requests': SAAS_FEATURES.ATTENDANCE,
   '/recruitment': SAAS_FEATURES.RECRUITMENT,
   '/admin-payroll': SAAS_FEATURES.PAYROLL,
   '/employee-payroll': SAAS_FEATURES.PAYROLL,
@@ -39,6 +46,7 @@ export const NAV_PATH_FEATURE_MAP = {
   '/employee/document-requests': SAAS_FEATURES.DOCUMENTS,
   '/workforce': SAAS_FEATURES.WORKFORCE_PLANNING,
   '/projects': SAAS_FEATURES.PROJECTS,
+  '/employee/projects': SAAS_FEATURES.PROJECTS,
   '/admin/reports': SAAS_FEATURES.ANALYTICS,
   '/hr/analytics': SAAS_FEATURES.ANALYTICS,
 };
@@ -63,19 +71,24 @@ export const featureKeyForPath = (pathname = '') => {
 };
 
 /**
- * True when feature is enabled or not gated (missing map / empty features = allow).
+ * A page with no feature key is always allowed.
+ * Employees stay available; the seat limit is what the plan enforces.
+ * Before any plan list has loaded, pages stay visible.
+ * Once a list is loaded, a missing or false key hides the page.
  */
 export const isSaasFeatureEnabled = (saasFeatures, featureKey) => {
   if (!featureKey) return true;
+  if (featureKey === SAAS_FEATURES.EMPLOYEES) return true;
   if (!saasFeatures || typeof saasFeatures !== 'object') return true;
   if (!Object.keys(saasFeatures).length) return true;
-  return saasFeatures[featureKey] !== false;
+  return saasFeatures[featureKey] === true;
 };
 
 export const filterNavBySaasFeatures = (items = [], saasFeatures = {}) => {
   if (!Array.isArray(items)) return [];
-  if (!saasFeatures || !Object.keys(saasFeatures).length) return items;
-  return items.filter((item) => {
+  const present = items.filter((item) => item && item.path);
+  if (!saasFeatures || !Object.keys(saasFeatures).length) return present;
+  return present.filter((item) => {
     const key = featureKeyForPath(item.path);
     return isSaasFeatureEnabled(saasFeatures, key);
   });

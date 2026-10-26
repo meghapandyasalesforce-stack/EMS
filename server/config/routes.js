@@ -199,6 +199,7 @@ export const registerRoutes = (app) => {
 app.use("/api/v1/both/lifecycle", lifecycleManagerBothRouter);
 app.use("/api/v1/both/lifecycle", lifecycleEmployeeBothRouter);
   app.use("/api/v1/admin/lifecycle", lifecycleRouter);
+  app.use("/api/v1/both/comp-off", compOffRouter);
   app.use("/api/v1/admin/comp-off", compOffAdminRouter);
   app.use("/api/v1/admin/payroll-reports", payrollReportsRouter);
   app.use("/api/v1/admin/learning", learningAdminRouter);

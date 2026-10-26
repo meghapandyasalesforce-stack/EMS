@@ -4,6 +4,10 @@ import { ADMIN_AUTH_ENDPOINT, EMPLOYEE_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } fr
 import { isPortalSwitchAllowed, syncPortalsForSession, canSwitchPortals } from '../../utils/portalConfig';
 import { resolveSessionAuthUser } from '../../utils/authSessionUtils';
 
+/** A loaded plan map has at least one module key. Null or {} means "unknown" — keep the previous list. */
+const hasFeatureList = (features) =>
+  !!features && typeof features === 'object' && !Array.isArray(features) && Object.keys(features).length > 0;
+
 export const checkAuthSession = createAsyncThunk(
   'auth/checkAuthSession',
   async (_, { rejectWithValue }) => {
@@ -41,7 +45,7 @@ export const checkAuthSession = createAsyncThunk(
         roleBuckets: permData.roleBuckets || [],
         permissionFlags: permData.permissionFlags || permData.flags || {},
         dataScope: permData.dataScope || 'self',
-        saasFeatures: permData.saasFeatures || {},
+        saasFeatures: permData.saasFeatures || null,
         planId: permData.planId || null,
         planName: permData.planName || null,
         subscriptionStatus: permData.subscriptionStatus || null,
@@ -111,7 +115,7 @@ const authSlice = createSlice({
       state.roleBuckets = p.roleBuckets || [];
       state.permissionFlags = p.permissionFlags || {};
       state.dataScope = p.dataScope || 'self';
-      if (p.saasFeatures) state.saasFeatures = p.saasFeatures;
+      if (hasFeatureList(p.saasFeatures)) state.saasFeatures = p.saasFeatures;
       if (p.planId !== undefined) state.planId = p.planId;
       if (p.planName !== undefined) state.planName = p.planName;
       if (p.subscriptionStatus !== undefined) state.subscriptionStatus = p.subscriptionStatus;
@@ -210,7 +214,9 @@ const authSlice = createSlice({
         state.roleBuckets = action.payload?.roleBuckets || [];
         state.permissionFlags = permissionFlags;
         state.dataScope = action.payload?.dataScope || 'self';
-        state.saasFeatures = action.payload?.saasFeatures || {};
+        if (hasFeatureList(action.payload?.saasFeatures)) {
+          state.saasFeatures = action.payload.saasFeatures;
+        }
         state.planId = action.payload?.planId || null;
         state.planName = action.payload?.planName || null;
         state.subscriptionStatus = action.payload?.subscriptionStatus || null;

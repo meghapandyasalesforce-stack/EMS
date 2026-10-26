@@ -138,11 +138,19 @@ export const FEATURE_CATALOG = [
 /** Map frontend nav paths → SaaS feature key (for nav gating) */
 export const NAV_PATH_FEATURE_MAP = {
     '/employees': SAAS_FEATURES.EMPLOYEES,
+    '/leave': SAAS_FEATURES.LEAVE,
+    '/my-leave': SAAS_FEATURES.LEAVE,
     '/leave-management': SAAS_FEATURES.LEAVE,
     '/employee/leave-attendance': SAAS_FEATURES.LEAVE,
+    '/attendance': SAAS_FEATURES.ATTENDANCE,
+    '/attendance-stats': SAAS_FEATURES.ATTENDANCE,
+    '/attendance-rules': SAAS_FEATURES.ATTENDANCE,
     '/all-attendance-history': SAAS_FEATURES.ATTENDANCE,
     '/my-attendance-regularization': SAAS_FEATURES.ATTENDANCE,
     '/manager/attendance-regularization': SAAS_FEATURES.ATTENDANCE,
+    '/attendance-regularization': SAAS_FEATURES.ATTENDANCE,
+    '/my-comp-off': SAAS_FEATURES.ATTENDANCE,
+    '/comp-off-requests': SAAS_FEATURES.ATTENDANCE,
     '/recruitment': SAAS_FEATURES.RECRUITMENT,
     '/admin-payroll': SAAS_FEATURES.PAYROLL,
     '/employee-payroll': SAAS_FEATURES.PAYROLL,
@@ -157,6 +165,7 @@ export const NAV_PATH_FEATURE_MAP = {
     '/employee/document-requests': SAAS_FEATURES.DOCUMENTS,
     '/workforce': SAAS_FEATURES.WORKFORCE_PLANNING,
     '/projects': SAAS_FEATURES.PROJECTS,
+    '/employee/projects': SAAS_FEATURES.PROJECTS,
     '/admin/reports': SAAS_FEATURES.ANALYTICS,
     '/hr/analytics': SAAS_FEATURES.ANALYTICS,
 };
