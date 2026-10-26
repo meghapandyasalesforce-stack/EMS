@@ -76,6 +76,21 @@ function localDateKey(date) {
     ].join('-');
 }
 
+/** Monday-start week key so overdue reminders fire at most once per week. */
+function localWeekKey(date) {
+    const dayStart = startOfDay(date);
+    const day = dayStart.getDay(); // 0 Sun .. 6 Sat
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = new Date(dayStart);
+    monday.setDate(dayStart.getDate() + mondayOffset);
+    return `week-${localDateKey(monday)}`;
+}
+
+function recipientIdKey(recipient) {
+    if (!recipient) return '';
+    return String(recipient._id || recipient);
+}
+
 export function resolveInitialWorkflowStatus({
     joiningDate,
     scheduledStartDate,
@@ -946,13 +961,16 @@ export function getOnboardingReminderStage(dueDate, now = new Date()) {
         return {
             key: daysUntilDue === 0 ? 'due-today' : `due-in-${daysUntilDue}-days`,
             wording: daysUntilDue === 0 ? 'is due today' : `is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`,
+            pluralWording: daysUntilDue === 0 ? 'are due today' : `are due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`,
             priority: 'medium',
         };
     }
     if (daysUntilDue < 0) {
+        // Once per calendar week (Monday–Sunday), not every day.
         return {
-            key: `overdue-${localDateKey(today)}`,
+            key: `overdue-${localWeekKey(today)}`,
             wording: 'is overdue',
+            pluralWording: 'are overdue',
             priority: 'medium',
         };
     }
@@ -968,6 +986,51 @@ function onboardingRoleRecipient(workflow, role = 'employee') {
         task.assigneeRole === role && task.assignedTo)?.assignedTo;
 }
 
+const REMINDER_KIND_LABELS = Object.freeze({
+    task: 'task',
+    document: 'document',
+    checklist: 'checklist item',
+    training: 'training module',
+    policy: 'policy signature',
+});
+
+function digestTitleForGroup(entries, stageKey) {
+    const kinds = [...new Set(entries.map((entry) => entry.reminderType))];
+    const overdue = String(stageKey).startsWith('overdue-');
+    if (kinds.length === 1) {
+        const kind = kinds[0];
+        if (kind === 'task') return overdue ? 'Onboarding Task Overdue' : 'Pending Task Reminder';
+        if (kind === 'document') return 'Pending Document Reminder';
+        if (kind === 'checklist') return 'Pending Checklist Reminder';
+        if (kind === 'training') return 'Pending Training Reminder';
+        if (kind === 'policy') return 'Pending Policy Signature Reminder';
+    }
+    return overdue ? 'Onboarding Items Overdue' : 'Onboarding Reminder';
+}
+
+function digestMessageForGroup(entries, stage) {
+    if (entries.length === 1) {
+        return `${entries[0].label} ${stage.wording}. Please complete it as soon as possible.`;
+    }
+    const kindCounts = entries.reduce((acc, entry) => {
+        const key = entry.reminderType;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+    const parts = Object.entries(kindCounts).map(([kind, count]) => {
+        const label = REMINDER_KIND_LABELS[kind] || kind;
+        return `${count} ${label}${count === 1 ? '' : 's'}`;
+    });
+    const summary = parts.length <= 2
+        ? parts.join(' and ')
+        : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+    return `${summary} ${stage.pluralWording || stage.wording}. Please complete them as soon as possible.`;
+}
+
+/**
+ * One digest notification per recipient + reminder stage (e.g. weekly overdue),
+ * instead of one bell per incomplete checklist/task line.
+ */
 function buildOnboardingReminderItems(workflow, now) {
     const baseDate = workflow.startDate || workflow.scheduledStartDate
         || workflow.joiningDate || workflow.createdAt || now;
@@ -976,11 +1039,11 @@ function buildOnboardingReminderItems(workflow, now) {
         const stage = getOnboardingReminderStage(dueDate, now);
         if (!stage || !recipient) return;
         records.push({
-            key: `${kind}:${item._id}:${stage.key}`,
+            stage,
             eventType: 'onboarding_reminder',
             recipient,
             title,
-            message: `${label} ${stage.wording}. Please complete it as soon as possible.`,
+            label,
             item,
             reminderType: kind,
             dueDate,
@@ -1030,7 +1093,36 @@ function buildOnboardingReminderItems(workflow, now) {
             title: 'Pending Policy Signature Reminder',
         });
     }
-    return records;
+
+    const groups = new Map();
+    for (const record of records) {
+        const rid = recipientIdKey(record.recipient);
+        if (!rid) continue;
+        const groupKey = `${rid}:${record.stage.key}`;
+        if (!groups.has(groupKey)) groups.set(groupKey, []);
+        groups.get(groupKey).push(record);
+    }
+
+    return [...groups.values()].map((entries) => {
+        const stage = entries[0].stage;
+        const recipientKey = recipientIdKey(entries[0].recipient);
+        const earliestDue = entries
+            .map((entry) => entry.dueDate)
+            .filter(Boolean)
+            .sort((a, b) => new Date(a) - new Date(b))[0];
+        return {
+            key: `digest:${recipientKey}:${stage.key}`,
+            eventType: 'onboarding_reminder',
+            recipient: entries[0].recipient,
+            title: digestTitleForGroup(entries, stage.key),
+            message: digestMessageForGroup(entries, stage),
+            item: entries.length === 1 ? entries[0].item : undefined,
+            items: entries.map((entry) => entry.item),
+            reminderType: entries.length === 1 ? entries[0].reminderType : 'digest',
+            dueDate: earliestDue,
+            priority: stage.priority,
+        };
+    });
 }
 
 const ONBOARDING_WELCOME_KEY = 'onboarding-welcome';
@@ -1213,8 +1305,7 @@ export async function synchronizeOnboardingWorkflows(organizationId = null) {
                 .filter((reminder) => !sentReminderKeys.has(reminder.key))
             : [];
 
-        const todayKey = localDateKey(startOfDay(now));
-        const workflowOverdueKey = `workflow-overdue:${todayKey}`;
+        const workflowOverdueKey = `workflow-overdue:${localWeekKey(startOfDay(now))}`;
         if (remindersEnabled && automationActive && workflow.status === 'Overdue' && !sentReminderKeys.has(workflowOverdueKey)) {
             pendingNotifications.push({
                 key: workflowOverdueKey,

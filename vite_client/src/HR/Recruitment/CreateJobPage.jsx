@@ -17,6 +17,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
 import { getStatusHint, toastForSave } from '../../utils/publishStatusUi';
 import { AtsPage } from '../../components/recruitment/atsUi';
+import { useEmployees } from '../../Hooks/useDashboardData';
 
 const STUDIO_SECTIONS = [
     { id: 'sec-basics', label: 'Role Basics', Icon: FaBriefcase },
@@ -75,6 +76,23 @@ const EMPTY = {
     screeningTemplateId: '',
     workforcePlanId: '',
     workforceHiringIndex: '',
+    hiringManager: '',
+};
+
+const employeeLabel = (emp) => {
+    if (!emp) return '';
+    const name = [emp.name, emp.lastName].filter(Boolean).join(' ').trim()
+        || [emp.firstName, emp.lastName].filter(Boolean).join(' ').trim()
+        || emp.email
+        || 'Employee';
+    const dept = emp.department ? ` · ${emp.department}` : '';
+    return `${name}${dept}`;
+};
+
+const employeeId = (emp) => {
+    if (!emp) return '';
+    if (typeof emp === 'string') return emp;
+    return String(emp._id || emp.id || '');
 };
 
 const selectClass = 'cm-select w-full';
@@ -157,6 +175,9 @@ const CreateJobPage = () => {
     const [workforceRequirements, setWorkforceRequirements] = useState([]);
     const [selectedWorkforceKey, setSelectedWorkforceKey] = useState('');
     const [activeSection, setActiveSection] = useState('sec-basics');
+    const { data: employeeData = { employees: [] } } = useEmployees();
+    const employees = employeeData?.employees ?? [];
+    const [editHiringManager, setEditHiringManager] = useState(null);
 
     const scrollToSection = (sectionId) => {
         setActiveSection(sectionId);
@@ -337,7 +358,13 @@ const CreateJobPage = () => {
                     education: sc.education || '',
                     certifications: (sc.certifications || []).join('\n'),
                     screeningTemplateId: sc.templateId || '',
+                    hiringManager: employeeId(job.hiringManager),
                 });
+                setEditHiringManager(
+                    job.hiringManager && typeof job.hiringManager === 'object'
+                        ? job.hiringManager
+                        : null
+                );
             } catch {
                 if (!cancelled) {
                     toast.error('Failed to load job for editing');
@@ -461,6 +488,7 @@ const CreateJobPage = () => {
                     templateId: form.screeningTemplateId || null,
                     templateName: screeningTemplates.find((t) => t._id === form.screeningTemplateId)?.name || '',
                 },
+                hiringManager: form.hiringManager || null,
             };
             const { data } = isEdit
                 ? await axios.put(`/v1/admin/recruitment/jobs/${editId}`, payload, { withCredentials: true })
@@ -738,6 +766,36 @@ const CreateJobPage = () => {
                                 <label className="block text-sm">
                                     <span className="ats-form-label">Closing Date</span>
                                     <input type="date" className={inputClass} value={form.closingDate} onChange={(e) => set('closingDate', e.target.value)} />
+                                </label>
+                                <label className="block text-sm ats-studio__field-span">
+                                    <span className="ats-form-label">Hiring Manager</span>
+                                    <select
+                                        className={selectClass}
+                                        value={form.hiringManager}
+                                        onChange={(e) => set('hiringManager', e.target.value)}
+                                        aria-label="Hiring manager"
+                                    >
+                                        <option value="">Select hiring manager (optional)</option>
+                                        {(() => {
+                                            const list = [...employees];
+                                            const editIdValue = employeeId(editHiringManager);
+                                            if (editIdValue && !list.some((e) => employeeId(e) === editIdValue)) {
+                                                list.unshift(editHiringManager);
+                                            }
+                                            return list.map((emp) => {
+                                                const id = employeeId(emp);
+                                                if (!id) return null;
+                                                return (
+                                                    <option key={id} value={id}>
+                                                        {employeeLabel(emp)}
+                                                    </option>
+                                                );
+                                            });
+                                        })()}
+                                    </select>
+                                    <p className="ats-studio__hint">
+                                        Shown as Hiring Lead on the job overview. Leave blank to assign later.
+                                    </p>
                                 </label>
                             </div>
                         </section>

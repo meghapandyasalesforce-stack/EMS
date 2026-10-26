@@ -6,8 +6,8 @@ import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
     FaArrowLeft, FaBoxOpen, FaCalendarAlt, FaClipboardCheck,
-    FaClock, FaExchangeAlt, FaFileAlt, FaKey,
-    FaMoneyCheckAlt, FaPlus, FaSignOutAlt, FaStickyNote, FaTasks, FaUserFriends,
+    FaClock, FaEllipsisV, FaExchangeAlt, FaFileAlt, FaKey,
+    FaMoneyCheckAlt, FaPlus, FaRedo, FaSignOutAlt, FaStickyNote, FaTasks, FaUserFriends,
     FaTrash,
 } from 'react-icons/fa';
 import axios, { openDocumentPreview } from '../../utils/axios';
@@ -27,7 +27,7 @@ import OffboardingAlumniPanel from './OffboardingAlumniPanel';
 import useLifecycleFeatures from '../../Hooks/useLifecycleFeatures';
 import { filterHrAssignees } from '../../utils/hrAssignees';
 import { filterManagerCandidates } from '../../utils/managerAssignees';
-import { CmBadge, CmButton, CmSearch, CmStat, CmPerson, CmRing, CmEmpty, statusTone } from '../../components/corporateModern';
+import { CmBadge, CmButton, CmSearch, CmPerson, CmEmpty, statusTone } from '../../components/corporateModern';
 
 const OFFBOARDING_STATUSES = [
     'Draft', 'Scheduled', 'Initiated', 'In Progress', 'Paused', 'Completed', 'Cancelled', 'Overdue',
@@ -81,6 +81,87 @@ const EmptyItems = ({ children = 'No items are required.' }) => (
     </p>
 );
 
+function checklistByCategory(item, category) {
+    return (item.clearanceChecklist || []).filter((row) => String(row.category || '').toLowerCase() === category);
+}
+
+function clearanceTone(kind) {
+    if (kind === 'ok') return 'cm-offboard-pill cm-offboard-pill--ok';
+    if (kind === 'warn') return 'cm-offboard-pill cm-offboard-pill--warn';
+    return 'cm-offboard-pill cm-offboard-pill--muted';
+}
+
+/** Map real offboarding fields → ZIP-style IT / Finance / HR clearance labels. */
+function deriveClearancePills(item) {
+    const assets = item.assets || [];
+    const itItems = checklistByCategory(item, 'it');
+    const hrItems = checklistByCategory(item, 'hr');
+    const financeItems = checklistByCategory(item, 'finance');
+    const access = item.accessRevocation || [];
+    const kt = item.knowledgeTransfer || [];
+    const fnf = item.finalSettlement?.status || 'Pending';
+    const letter = item.experienceLetter?.status || 'Pending';
+
+    let it = { label: 'Not Started', tone: 'muted' };
+    if (assets.length) {
+        const allReturned = assets.every((a) => a.returned || a.status === 'Returned' || a.status === 'Waived');
+        const anyReturned = assets.some((a) => a.returned || a.status === 'Returned');
+        if (allReturned) it = { label: 'Assets Returned', tone: 'ok' };
+        else if (anyReturned || assets.some((a) => a.status === 'Pending')) it = { label: 'Pending Device Handover', tone: 'warn' };
+    } else if (itItems.length) {
+        const done = itItems.every((r) => r.completed);
+        const some = itItems.some((r) => r.completed);
+        if (done) it = { label: 'Assets Returned', tone: 'ok' };
+        else if (some) it = { label: 'Pending Device Handover', tone: 'warn' };
+        else if (['Scheduled', 'Initiated'].includes(item.status)) it = { label: 'Scheduled', tone: 'muted' };
+    } else if (access.length) {
+        const done = access.every((a) => a.status === 'Completed' || a.status === 'Waived');
+        if (done) it = { label: 'Assets Returned', tone: 'ok' };
+        else if (['Scheduled', 'Initiated'].includes(item.status)) it = { label: 'Scheduled', tone: 'muted' };
+        else it = { label: 'Pending Device Handover', tone: 'warn' };
+    } else if (['Scheduled', 'Initiated'].includes(item.status)) {
+        it = { label: 'Scheduled', tone: 'muted' };
+    }
+
+    let finance = { label: 'Pending Invoices', tone: 'muted' };
+    if (['Paid', 'Cleared', 'Approved'].includes(fnf)) {
+        finance = { label: fnf === 'Cleared' ? 'Cleared' : 'Full & Final Done', tone: 'ok' };
+    } else if (['In Review', 'Calculated', 'Pending Approval'].includes(fnf)) {
+        finance = { label: 'Audit in Queue', tone: 'muted' };
+    } else if (financeItems.length) {
+        const done = financeItems.every((r) => r.completed);
+        finance = done
+            ? { label: 'Cleared', tone: 'ok' }
+            : { label: 'Pending Invoices', tone: 'muted' };
+    }
+
+    let hr = { label: 'Draft Issued', tone: 'muted' };
+    const ktPending = kt.some((k) => !['Completed', 'Waived'].includes(k.status));
+    if (hrItems.length && hrItems.every((r) => r.completed) && letter === 'Issued') {
+        hr = { label: 'Completed', tone: 'ok' };
+    } else if (ktPending || (hrItems.length && hrItems.some((r) => !r.completed))) {
+        hr = { label: 'IP Signoff Pending', tone: 'warn' };
+    } else if (letter === 'Issued' || (hrItems.length && hrItems.every((r) => r.completed))) {
+        hr = { label: 'Completed', tone: 'ok' };
+    } else if (letter === 'Pending' || item.status === 'Draft') {
+        hr = { label: 'Draft Issued', tone: 'muted' };
+    }
+
+    const ei = item.exitInterview || {};
+    let exitLabel = 'Not Scheduled';
+    if (ei.status === 'Completed' || ei.conductedDate) {
+        const when = ei.conductedDate ? format(new Date(ei.conductedDate), 'd MMM') : null;
+        exitLabel = when ? `Completed (${when})` : 'Completed';
+    } else if (ei.status === 'Scheduled' || ei.scheduledDate) {
+        const when = ei.scheduledDate ? format(new Date(ei.scheduledDate), 'd MMM, h a') : null;
+        exitLabel = when ? `Scheduled (${when})` : 'Scheduled';
+    } else if (ei.status && ei.status !== 'Not Scheduled') {
+        exitLabel = ei.status;
+    }
+
+    return { it, finance, hr, exitLabel };
+}
+
 const OffboardingHub = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const user = useSelector((state) => state.auth.user);
@@ -97,6 +178,8 @@ const OffboardingHub = () => {
     const [selectedWorkflow, setSelectedWorkflow] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [departmentFilter, setDepartmentFilter] = useState('all');
+    const [locationFilter, setLocationFilter] = useState('all');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [pendingDelete, setPendingDelete] = useState(null);
     const [newNote, setNewNote] = useState('');
@@ -115,8 +198,33 @@ const OffboardingHub = () => {
     const fetchInFlight = useRef(false);
     const workflowIdRef = useRef(workflowIdParam);
     workflowIdRef.current = workflowIdParam;
-    const { data: employeeData = { employees: [] } } = useEmployees();
-    const employees = employeeData?.employees || [];
+    const {
+        data: employeeData = { employees: [] },
+        isLoading: employeesLoading,
+        isFetching: employeesFetching,
+        refetch: refetchEmployees,
+    } = useEmployees();
+    const employees = useMemo(() => {
+        const list = Array.isArray(employeeData?.employees)
+            ? employeeData.employees
+            : Array.isArray(employeeData)
+                ? employeeData
+                : [];
+        return [...list].sort((a, b) => {
+            const an = `${a?.name || ''} ${a?.lastName || ''}`.trim().toLowerCase();
+            const bn = `${b?.name || ''} ${b?.lastName || ''}`.trim().toLowerCase();
+            return an.localeCompare(bn);
+        });
+    }, [employeeData]);
+    const selectableEmployees = useMemo(
+        () => employees.filter((emp) => {
+            const id = String(emp._id || emp.id || '');
+            if (!id) return false;
+            const status = String(emp.status || '').toLowerCase();
+            return !(emp.active === false || ['inactive', 'terminated', 'suspended'].includes(status));
+        }),
+        [employees],
+    );
     const hrAssignees = useMemo(() => filterHrAssignees(employees), [employees]);
     const [createForm, setCreateForm] = useState({
         employeeId: '',
@@ -132,6 +240,12 @@ const OffboardingHub = () => {
         () => filterManagerCandidates(employees, createForm.employeeId),
         [employees, createForm.employeeId],
     );
+
+    useEffect(() => {
+        if (!showCreateModal) return undefined;
+        refetchEmployees();
+        return undefined;
+    }, [showCreateModal, refetchEmployees]);
 
     const fetchDashboard = useCallback(async ({ soft = false } = {}) => {
         if (fetchInFlight.current) return;
@@ -249,14 +363,44 @@ const OffboardingHub = () => {
     const workflowEmployeeId = (workflow?.employeeId?._id || workflow?.employeeId)?.toString();
     const isWorkflowEmployee = Boolean(myEmployeeId && workflowEmployeeId === myEmployeeId);
 
+    const departmentOptions = useMemo(() => {
+        const set = new Set();
+        (dashboard.workflows || []).forEach((w) => {
+            const d = w.employeeId?.department;
+            if (d) set.add(d);
+        });
+        return Array.from(set).sort();
+    }, [dashboard.workflows]);
+
+    const locationOptions = useMemo(() => {
+        const set = new Set();
+        (dashboard.workflows || []).forEach((w) => {
+            const loc = w.employeeId?.workLocation || w.employeeId?.location;
+            if (loc) set.add(loc);
+        });
+        return Array.from(set).sort();
+    }, [dashboard.workflows]);
+
     const filteredWorkflows = useMemo(() => {
         const search = searchTerm.trim().toLowerCase();
         return (dashboard.workflows || []).filter((item) => {
-            const name = `${item.employeeId?.name || ''} ${item.employeeId?.lastName || ''} ${item.employeeId?.email || ''}`.toLowerCase();
-            return (!search || name.includes(search))
-                && (statusFilter === 'all' || item.status === statusFilter);
+            const name = `${item.employeeId?.name || ''} ${item.employeeId?.lastName || ''}`.toLowerCase();
+            const email = (item.employeeId?.email || '').toLowerCase();
+            const role = (item.employeeId?.jobTitle || item.employeeId?.position || '').toLowerCase();
+            const empCode = String(item.employeeId?.employeeCode || item.employeeId?.employeeId || '').toLowerCase();
+            const dept = item.employeeId?.department || '';
+            const loc = item.employeeId?.workLocation || item.employeeId?.location || '';
+            const matchSearch = !search
+                || name.includes(search)
+                || email.includes(search)
+                || role.includes(search)
+                || empCode.includes(search);
+            const matchStatus = statusFilter === 'all' || item.status === statusFilter;
+            const matchDept = departmentFilter === 'all' || dept === departmentFilter;
+            const matchLoc = locationFilter === 'all' || loc === locationFilter;
+            return matchSearch && matchStatus && matchDept && matchLoc;
         });
-    }, [dashboard.workflows, searchTerm, statusFilter]);
+    }, [dashboard.workflows, searchTerm, statusFilter, departmentFilter, locationFilter]);
 
     const openWorkflow = (item) => {
         setSelectedWorkflow(item);
@@ -549,27 +693,25 @@ const OffboardingHub = () => {
         <div className="page-shell hrms-lifecycle cm-hrms bg-transparent">
             <div className="page-shell-inner hrms-stack pb-10">
                 {!workflow && (
-                <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                <header className="cm-offboard-hero">
                     <div className="min-w-0">
-                        <p className="text-sm font-medium text-theme-secondary">
+                        {!isHRView && (
+                            <p className="text-sm font-medium text-theme-secondary">
+                                {isManagerView ? 'My Team' : 'Employee'}
+                            </p>
+                        )}
+                        <h1 className="cm-offboard-hero__title">
                             {isHRView
-                                ? 'HR & Administration'
-                                : isManagerView
-                                    ? 'My Team'
-                                    : 'Employee'}
-                        </p>
-                        <h1 className="mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">
-                            {isHRView
-                                ? 'Offboarding Hub'
+                                ? 'Employee Exit & Separation Protocol'
                                 : isManagerView
                                     ? 'My Team'
                                     : 'My Offboarding'}
                         </h1>
-                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500 sm:text-base">
+                        <p className="cm-offboard-hero__subtitle">
                             {isManagerView
                                 ? 'Direct reports who are currently offboarding.'
                                 : isHRView
-                                    ? 'Plan and track every exit journey notice, clearance, and settlement in one place'
+                                    ? 'Asset recovery, knowledge handover sign-offs, and compliance garden leave management.'
                                     : 'Coordinate your exit, handovers, and clearances in one place.'}
                         </p>
                     </div>
@@ -592,123 +734,118 @@ const OffboardingHub = () => {
                         )}
                         {isHRView && (
                             <CmButton variant="inverted" onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
-                                <FaPlus className="shrink-0 text-base" />
-                                <span>Offboard Employee</span>
+                                <FaSignOutAlt className="shrink-0 text-base" />
+                                <span>Initiate Exit Protocol</span>
                             </CmButton>
                         )}
                     </div>
                 </header>
                 )}
 
-                {!workflow && (isHRView || isWorkQueueView) && dashboard.stats && (
-                    <div className="cm-kpi-row cm-kpi-row--3">
-                        <CmStat
-                            label="Active Separations"
-                            value={dashboard.stats.active ?? 0}
-                            attention={(dashboard.stats.overdue ?? 0) > 0}
-                            meta={`${dashboard.stats.overdue ?? 0} overdue · ${dashboard.stats.upcoming ?? 0} upcoming`}
-                        />
-                        <CmStat
-                            label="Pending Clearances"
-                            value={(dashboard.stats.pendingClearances ?? 0) + (dashboard.stats.pendingAssets ?? 0)}
-                            attention={((dashboard.stats.pendingClearances ?? 0) + (dashboard.stats.pendingAssets ?? 0)) > 0}
-                            meta={`${dashboard.stats.pendingClearances ?? 0} clearances · ${dashboard.stats.pendingAssets ?? 0} assets`}
-                        />
-                        <CmStat
-                            label="Average Progress"
-                            value={`${dashboard.stats.averageProgress || 0}%`}
-                            meta={`${dashboard.stats.totalSeparations ?? 0} total separations`}
-                        />
-                    </div>
-                )}
-
-                {!workflow && isHRView && dashboard.analytics && (
-                    <div className="cm-kpi-row cm-kpi-row--3">
-                        <CmStat
-                            label="Completion Rate"
-                            value={`${dashboard.analytics.completionRate || 0}%`}
-                            meta="Exit workflows completed"
-                        />
-                        <CmStat
-                            label="Completed"
-                            value={dashboard.analytics.completed || 0}
-                            meta="Finished separations"
-                        />
-                        <CmStat
-                            label="Top Reasons"
-                            value={(dashboard.analytics.byReason || []).slice(0, 1).map((e) => e._id || 'Other')[0] || '—'}
-                            meta={(dashboard.analytics.byReason || []).slice(0, 3).map((e) => `${e._id || 'Other'}: ${e.count}`).join(' · ') || 'No reason data yet'}
-                        />
-                    </div>
-                )}
-
                 {!workflow && (isHRView || isWorkQueueView) && (
                     <>
-                    <div className="rounded-xl bg-white p-5 shadow-sm">
-                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <div className="flex-1">
+                    <div className="cm-offboard-board">
+                        <div className="cm-roster-toolbar">
+                            <div className="cm-roster-toolbar__search">
                                 <CmSearch
                                     value={searchTerm}
                                     onChange={(event) => setSearchTerm(event.target.value)}
-                                    placeholder="Search by employee name or email..."
+                                    placeholder="Search by candidate name, role, email, or employee ID..."
+                                    className="cm-search--toolbar"
                                 />
                             </div>
-                            <div className="hrms-chip-scroll">
-                                <div className="hrms-chip-scroll-track" aria-label="Filter workflows by status">
-                                    {['all', ...OFFBOARDING_STATUSES].map((status) => (
-                                        <div key={status} className="hrms-chip-scroll-item">
-                                            <button
-                                                type="button"
-                                                onClick={() => setStatusFilter(status)}
-                                                className={`cm-chip ${statusFilter === status ? 'cm-chip--active' : ''}`}
-                                            >
-                                                {status === 'all' ? 'All' : status}
-                                            </button>
-                                        </div>
+                            <div className="cm-roster-toolbar__filters">
+                                <select
+                                    className="cm-roster-toolbar__select"
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    aria-label="Filter by status"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    {OFFBOARDING_STATUSES.map((status) => (
+                                        <option key={status} value={status}>{status}</option>
                                     ))}
-                                </div>
+                                </select>
+                                <select
+                                    className="cm-roster-toolbar__select"
+                                    value={departmentFilter}
+                                    onChange={(e) => setDepartmentFilter(e.target.value)}
+                                    aria-label="Filter by department"
+                                >
+                                    <option value="all">All Departments</option>
+                                    {departmentOptions.map((dept) => (
+                                        <option key={dept} value={dept}>{dept}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    className="cm-roster-toolbar__select"
+                                    value={locationFilter}
+                                    onChange={(e) => setLocationFilter(e.target.value)}
+                                    aria-label="Filter by location"
+                                >
+                                    <option value="all">All Locations</option>
+                                    {locationOptions.map((loc) => (
+                                        <option key={loc} value={loc}>{loc}</option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    className="cm-roster-toolbar__reset"
+                                    onClick={() => {
+                                        setSearchTerm('');
+                                        setStatusFilter('all');
+                                        setDepartmentFilter('all');
+                                        setLocationFilter('all');
+                                    }}
+                                    aria-label="Reset filters"
+                                >
+                                    <FaRedo className="text-[11px]" />
+                                    Reset
+                                </button>
                             </div>
                         </div>
 
                         {filteredWorkflows.length === 0 ? (
-                            <CmEmpty title="No offboarding workflows found">
-                                {isHRView ? 'Create one to get started.' : 'No matching workflows in this view.'}
-                            </CmEmpty>
+                            <div className="p-6">
+                                <CmEmpty title="No offboarding workflows found">
+                                    {isHRView ? 'Initiate an exit protocol to get started.' : 'No matching workflows in this view.'}
+                                </CmEmpty>
+                            </div>
                         ) : (
                             <>
-                                <div className="space-y-3 sm:hidden">
+                                <div className="space-y-3 p-4 sm:hidden">
                                     {filteredWorkflows.map((item) => {
-                                        const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
                                         const fullName = `${item.employeeId?.name || ''} ${item.employeeId?.lastName || ''}`.trim();
-                                        const completed = item.tasks?.filter((task) => task.status === 'Completed').length || 0;
-                                        const total = item.tasks?.length || 0;
+                                        const pills = deriveClearancePills(item);
+                                        const empCode = item.employeeId?.employeeCode || item.employeeId?.employeeId || '';
+                                        const title = item.employeeId?.jobTitle || item.employeeId?.designation || '';
                                         return (
                                             <article
                                                 key={item._id}
                                                 onClick={() => openWorkflow(item)}
-                                                className="cursor-pointer rounded-2xl border border-[rgba(187,202,193,0.35)] bg-white p-4 shadow-sm"
+                                                className="cm-offboard-card"
                                             >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <CmPerson
-                                                        name={fullName}
-                                                        meta={item.employeeId?.jobTitle || item.employeeId?.department || item.reason || ''}
+                                                        name={fullName || 'Employee'}
+                                                        meta={[empCode, title].filter(Boolean).join(' • ') || item.reason || ''}
+                                                        photo={item.employeeId?.profileImage || item.employeeId?.avatar}
                                                     />
                                                     <CmBadge tone={statusTone(item.status)} dot={false}>{item.status}</CmBadge>
                                                 </div>
-                                                <div className="mt-4 flex items-center gap-3">
-                                                    <CmRing value={progress} size={42} attention={item.status === 'Overdue'} />
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-semibold text-[var(--cm-on-surface)]">Progress</p>
-                                                        <p className="text-xs text-[var(--cm-muted)]">{completed}/{total} tasks completed</p>
-                                                    </div>
+                                                <p className="mt-3 text-sm font-medium text-[var(--cm-on-surface)]">
+                                                    {item.employeeId?.department || '—'}
+                                                </p>
+                                                <p className="text-xs text-[var(--cm-muted)]">
+                                                    LWD: {item.lastWorkingDate ? format(new Date(item.lastWorkingDate), 'd MMM yyyy') : '—'}
+                                                </p>
+                                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                                    <span className={clearanceTone(pills.it.tone)}>{pills.it.label}</span>
+                                                    <span className={clearanceTone(pills.finance.tone)}>{pills.finance.label}</span>
+                                                    <span className={clearanceTone(pills.hr.tone)}>{pills.hr.label}</span>
                                                 </div>
-                                                <div className="mt-4 text-sm">
-                                                    <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Last working day</p>
-                                                    <p className="text-[var(--cm-on-surface)]">
-                                                        {item.lastWorkingDate ? format(new Date(item.lastWorkingDate), 'MMM dd, yyyy') : '—'}
-                                                    </p>
-                                                </div>
-                                                <div className="mt-4 flex items-center justify-between gap-3">
+                                                <p className="mt-2 text-xs text-[var(--cm-muted)]">{pills.exitLabel}</p>
+                                                <div className="mt-3 flex items-center justify-between gap-3">
                                                     <CmButton variant="secondary" size="sm" onClick={(event) => { event.stopPropagation(); openWorkflow(item); }}>
                                                         View details
                                                     </CmButton>
@@ -728,65 +865,93 @@ const OffboardingHub = () => {
                                     })}
                                 </div>
 
-                                <div className="hidden sm:block cm-table-wrap">
-                                    <table className="cm-table">
+                                <div className="hidden sm:block cm-offboard-table-wrap">
+                                    <table className="cm-offboard-table">
                                         <thead>
                                             <tr>
                                                 <th>Employee</th>
-                                                <th>Status</th>
-                                                <th>Progress</th>
-                                                <th>Reason</th>
-                                                <th>Actions</th>
-                                                <th>Last working day</th>
+                                                <th>Department &amp; LWD</th>
+                                                <th>IT Clearance</th>
+                                                <th>Finance Clearance</th>
+                                                <th>HR &amp; NDAs</th>
+                                                <th>Exit Interview</th>
+                                                <th className="text-right">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {filteredWorkflows.map((item) => {
-                                                const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
                                                 const fullName = `${item.employeeId?.name || ''} ${item.employeeId?.lastName || ''}`.trim();
-                                                const isSelected = workflow?._id === item._id;
+                                                const pills = deriveClearancePills(item);
+                                                const empCode = item.employeeId?.employeeCode || item.employeeId?.employeeId || '';
+                                                const title = item.employeeId?.jobTitle || item.employeeId?.designation || '';
+                                                const photo = item.employeeId?.profileImage || item.employeeId?.avatar;
+                                                const initials = (fullName || '?')
+                                                    .split(/\s+/)
+                                                    .filter(Boolean)
+                                                    .slice(0, 2)
+                                                    .map((p) => p[0]?.toUpperCase())
+                                                    .join('');
                                                 return (
                                                     <tr
                                                         key={item._id}
                                                         onClick={() => openWorkflow(item)}
-                                                        className={`cursor-pointer ${isSelected ? 'bg-[rgba(28,202,155,0.06)]' : ''}`}
                                                     >
                                                         <td>
-                                                            <CmPerson
-                                                                name={fullName}
-                                                                meta={item.employeeId?.jobTitle || item.employeeId?.department || ''}
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <CmBadge tone={statusTone(item.status)}>{item.status}</CmBadge>
-                                                        </td>
-                                                        <td>
-                                                            <div className="flex items-center gap-3">
-                                                                <CmRing value={progress} size={36} attention={item.status === 'Overdue'} />
-                                                                <span className="text-xs text-[var(--cm-muted)]">
-                                                                    {item.tasks?.filter((task) => task.status === 'Completed').length || 0}/{item.tasks?.length || 0} tasks
-                                                                </span>
+                                                            <div className="cm-offboard-emp">
+                                                                {photo ? (
+                                                                    <img src={photo} alt="" className="cm-offboard-emp__avatar" />
+                                                                ) : (
+                                                                    <span className="cm-offboard-emp__avatar cm-offboard-emp__avatar--initials" aria-hidden>
+                                                                        {initials || '?'}
+                                                                    </span>
+                                                                )}
+                                                                <div className="min-w-0">
+                                                                    <p className="cm-offboard-emp__name">{fullName || 'Employee'}</p>
+                                                                    <p className="cm-offboard-emp__meta">
+                                                                        {[empCode, title].filter(Boolean).join(' • ') || item.reason || '—'}
+                                                                    </p>
+                                                                </div>
                                                             </div>
                                                         </td>
-                                                        <td className="text-sm">{item.reason || '—'}</td>
-                                                        <td onClick={(event) => event.stopPropagation()}>
-                                                            {isHRView ? (
+                                                        <td>
+                                                            <p className="cm-offboard-dept">{item.employeeId?.department || '—'}</p>
+                                                            <p className="cm-offboard-lwd">
+                                                                LWD: {item.lastWorkingDate ? format(new Date(item.lastWorkingDate), 'd MMM yyyy') : '—'}
+                                                            </p>
+                                                        </td>
+                                                        <td>
+                                                            <span className={clearanceTone(pills.it.tone)}>{pills.it.label}</span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={clearanceTone(pills.finance.tone)}>{pills.finance.label}</span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={clearanceTone(pills.hr.tone)}>{pills.hr.label}</span>
+                                                        </td>
+                                                        <td>
+                                                            <span className="cm-offboard-exit">{pills.exitLabel}</span>
+                                                        </td>
+                                                        <td className="text-right" onClick={(event) => event.stopPropagation()}>
+                                                            <div className="cm-offboard-actions">
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => setPendingDelete(item)}
-                                                                    aria-label="Delete workflow"
-                                                                    className="cm-link cm-link--attention"
+                                                                    className="cm-offboard-more"
+                                                                    aria-label="Open workflow"
+                                                                    onClick={() => openWorkflow(item)}
                                                                 >
-                                                                    <FaTrash />
+                                                                    <FaEllipsisV />
                                                                 </button>
-                                                            ) : (
-                                                                <CmButton variant="secondary" size="sm" onClick={() => openWorkflow(item)}>
-                                                                    View
-                                                                </CmButton>
-                                                            )}
-                                                        </td>
-                                                        <td className="text-sm">
-                                                            {item.lastWorkingDate ? format(new Date(item.lastWorkingDate), 'MMM dd, yyyy') : '—'}
+                                                                {isHRView && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPendingDelete(item)}
+                                                                        aria-label="Delete workflow"
+                                                                        className="cm-link cm-link--attention"
+                                                                    >
+                                                                        <FaTrash />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );
@@ -798,14 +963,10 @@ const OffboardingHub = () => {
                         )}
 
                         {filteredWorkflows.length > 0 && (
-                            <div className="cm-pagination">
+                            <div className="cm-offboard-board__foot">
                                 <span>
                                     Showing {filteredWorkflows.length} of {dashboard?.stats?.totalSeparations ?? filteredWorkflows.length} separations
                                 </span>
-                                <div className="flex items-center gap-1">
-                                    <button type="button" className="cm-icon-btn" aria-label="Previous page" disabled>‹</button>
-                                    <button type="button" className="cm-icon-btn" aria-label="Next page" disabled>›</button>
-                                </div>
                             </div>
                         )}
                     </div>
@@ -1360,9 +1521,10 @@ const OffboardingHub = () => {
                                 <select
                                     required
                                     value={createForm.employeeId}
+                                    disabled={employeesLoading || employeesFetching}
                                     onChange={(event) => {
                                         const employeeId = event.target.value;
-                                        const emp = employees.find((row) => String(row._id) === String(employeeId));
+                                        const emp = employees.find((row) => String(row._id || row.id) === String(employeeId));
                                         const managerId = emp?.managerId?._id || emp?.managerId || '';
                                         let assignedManager = managerId ? String(managerId) : '';
                                         if (!assignedManager && emp?.manager) {
@@ -1372,7 +1534,7 @@ const OffboardingHub = () => {
                                                 const first = String(row.name || '').trim().toLowerCase();
                                                 return full === managerName || first === managerName;
                                             });
-                                            if (matched) assignedManager = String(matched._id);
+                                            if (matched) assignedManager = String(matched._id || matched.id);
                                         }
                                         setCreateForm((prev) => {
                                             const allowedManagers = new Set(
@@ -1388,9 +1550,31 @@ const OffboardingHub = () => {
                                     }}
                                     className="mt-1 w-full rounded-lg border p-2"
                                 >
-                                    <option value="">Select employee</option>
-                                    {employees.map((item) => <option key={item._id} value={item._id}>{item.name} {item.lastName} ({item.email})</option>)}
+                                    <option value="">
+                                        {employeesLoading || employeesFetching ? 'Loading employees…' : 'Select employee'}
+                                    </option>
+                                    {selectableEmployees.map((item) => {
+                                        const id = item._id || item.id;
+                                        return (
+                                            <option key={id} value={id}>
+                                                {item.name} {item.lastName || ''}
+                                                {item.email ? ` (${item.email})` : ''}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
+                                {!employeesLoading && !employeesFetching && selectableEmployees.length === 0 && (
+                                    <p className="mt-1 text-xs text-amber-700">
+                                        No active employees found. Check employee access permissions or refresh and try again.
+                                        <button
+                                            type="button"
+                                            className="ml-1 font-semibold underline"
+                                            onClick={() => refetchEmployees()}
+                                        >
+                                            Retry
+                                        </button>
+                                    </p>
+                                )}
                             </label>
                             <label className="text-sm">Last working date *
                                 <input required type="date" value={createForm.lastWorkingDate} onChange={(event) => setCreateForm({ ...createForm, lastWorkingDate: event.target.value })} className="mt-1 w-full rounded-lg border p-2" />

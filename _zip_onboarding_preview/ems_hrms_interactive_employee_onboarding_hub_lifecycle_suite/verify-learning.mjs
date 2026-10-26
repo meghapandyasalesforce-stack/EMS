@@ -1,0 +1,40 @@
+﻿import fs from 'node:fs';
+import path from 'node:path';
+import {transform} from 'esbuild';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),cache=new Map();
+async function compile(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const source=fs.readFileSync(file,'utf8');for(const m of source.matchAll(/from ['"](\.\/[^'"]+)['"]/g))await compile(path.resolve(path.dirname(file),m[1]));const {code}=await transform(source,{loader:file.endsWith('.jsx')?'jsx':'js',jsx:'automatic',format:'cjs'});const mod={exports:{}};new Function('require','module','exports',code)(name=>name.startsWith('./')?cache.get(path.resolve(path.dirname(file),name)):require(name),mod,mod.exports);cache.set(file,mod.exports);return mod.exports;}
+const React=require('react'),{renderToString}=require('react-dom/server');
+const {default:Page}=await compile('src/Learning.jsx');
+const markup=renderToString(React.createElement(Page)).replace(/<!--.*?-->/g,'');
+for(const value of ['Enterprise Learning &amp; Development Hub','Enterprise SOC2 &amp; Data Security','Advanced Distributed Microservices','href="#/learning"','href="#/create-course"'])if(!markup.includes(value))throw new Error('Missing '+value);
+let slots=[],cursor=0;
+const hooks={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],next=>{slots[i]=typeof next==='function'?next(slots[i]):next;}];},useRef(){const i=cursor++;return slots[i]??(slots[i]={current:null});},useEffect(){}};
+const {code}=await transform(fs.readFileSync('src/Learning.jsx','utf8'),{loader:'jsx',jsx:'automatic',format:'cjs'});
+const mod={exports:{}};
+new Function('require','module','exports',code)(name=>name==='react'?hooks:name.startsWith('./')?cache.get(path.resolve('src',name)):require(name),mod,mod.exports);
+function render(){cursor=0;return mod.exports.default();}
+function nodes(tree){if(!tree||typeof tree!=='object')return[];if(Array.isArray(tree))return tree.flatMap(nodes);return[tree,...nodes(tree.props?.children)];}
+const find=predicate=>{const node=nodes(render()).find(predicate);if(!node)throw new Error('Control missing');return node;};
+const click=text=>find(n=>n.type==='button'&&typeof n.props.children==='string'&&n.props.children.trim()===text).props.onClick({});
+const change=(label,value)=>find(n=>n.props?.['aria-label']===label).props.onChange({target:{value}});
+render();
+if(nodes(render()).filter(n=>n.props?.course&&n.props?.onOpen).length!==4)throw new Error('Expected four courses');
+change('Search courses','Microservices');
+if(nodes(render()).filter(n=>n.props?.course&&n.props?.onOpen).length!==1)throw new Error('Search failed');
+find(n=>n.type==='button'&&n.props.onClick?.name==='resetFilters').props.onClick();
+change('Filter category','Leadership');
+if(nodes(render()).filter(n=>n.props?.course&&n.props?.onOpen).length!==1)throw new Error('Category failed');
+change('Filter category','All Categories');
+change('Course title','Test learning course');change('Course duration','2 Weeks');change('Course description','Test curriculum');click('Publish Course');
+if(slots[1].length!==5)throw new Error('Create failed');
+const card=find(n=>n.props?.course?.title==='Test learning course'&&n.props?.onAssign);card.props.onAssign(card.props.course.id);
+change('Assignment due date','2026-12-01');click('Assign & Notify');
+if(slots[2].length!==4||slots[2].at(-1).courseId!==card.props.course.id)throw new Error('Assign failed');
+const row=find(n=>n.props?.item?.id===slots[2].at(-1).id&&n.props.onRemove);row.props.onRemove(row.props.item.id);click('Confirm Remove');
+if(slots[2].length!==3)throw new Error('Remove failed');
+card.props.onOpen(card.props.course.id);click('Edit Course');change('Course title','Edited learning course');click('Publish Course');
+if(!slots[1].some(course=>course.title==='Edited learning course'))throw new Error('Edit failed');
+click('Archive Course');if(!slots[1].find(course=>course.id===card.props.course.id).archived)throw new Error('Archive failed');
+for(const value of slots)if(value&&typeof value==='object'&&'current'in value)clearTimeout(value.current);
+console.log('Passed: Learning render, four course cards, search, category filtering, course creation/editing, assignment creation/removal, and archiving.');

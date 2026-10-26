@@ -1,0 +1,40 @@
+{
+  "name": "ems-hrms-onboarding",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "node verify.mjs",
+    "check:helpdesk": "node verify-helpdesk.mjs",
+    "check:recruitment": "node verify-recruitment.mjs",
+    "check:learning": "node verify-learning.mjs",
+    "check:reports": "node verify-reports.mjs",
+    "check:onboarding-detail": "node verify-onboarding-detail.mjs",
+    "check:meetings": "node verify-meetings.mjs",
+    "check:payroll": "node verify-payroll.mjs",
+    "check:approvals": "node verify-approvals.mjs",
+    "check:interviews": "node verify-interviews.mjs",
+    "check:pipeline": "node verify-pipeline.mjs",
+    "check:regularization": "node verify-regularization.mjs",
+    "check:resume-inbox": "node verify-resume-inbox.mjs",
+    "check:succession": "node verify-succession.mjs",
+    "check:survey": "node verify-survey.mjs",
+    "check:survey-results": "node verify-survey-results.mjs",
+    "check:workforce": "node verify-workforce.mjs",
+    "check:candidate-dossier": "node verify-candidate-dossier.mjs",
+    "check:attendance": "node verify-attendance.mjs"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "tailwindcss": "^3.4.17",
+    "postcss": "^8.5.0",
+    "autoprefixer": "^10.4.20"
+  }
+}

@@ -32,30 +32,38 @@ export const useEmployees = (options = {}) => {
     queryFn: async () => {
       const empty = { employees: [], total: 0 };
       const fromPaginated = (payload) => {
-        const list = payload?.data || payload?.employees || [];
+        const raw = payload?.data ?? payload?.employees ?? payload;
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.employees)
+            ? raw.employees
+            : Array.isArray(raw?.data)
+              ? raw.data
+              : [];
+        const pagination = payload?.pagination || raw?.pagination || null;
         const rawTotal =
-          payload?.pagination?.total != null
-            ? Number(payload.pagination.total)
+          pagination?.total != null
+            ? Number(pagination.total)
             : payload?.total != null
               ? Number(payload.total)
-              : Array.isArray(list)
-                ? list.length
-                : 0;
+              : list.length;
         return {
-          employees: Array.isArray(list) ? list : [],
-          total: Number.isFinite(rawTotal) ? rawTotal : 0
+          employees: list,
+          total: Number.isFinite(rawTotal) ? rawTotal : list.length,
         };
       };
 
-      try {
-        const response = await retryAxios(
-          () =>
-            axios.get('/v1/admin/employee', {
-              params: { page: 1, limit: 100 },
-              withCredentials: true
-            }),
-          { maxRetries: 1, delay: 500 }
+      const listParams = { page: 1, limit: 100 };
+      const tryGet = (url) =>
+        retryAxios(
+          () => axios.get(url, { params: listParams, withCredentials: true }),
+          { maxRetries: 1, delay: 500 },
         );
+
+      // Prefer admin roster; HR falls back to employee auth list (same controller).
+      // Avoid /v1/employee as primary fallback — non-managers only see themselves.
+      try {
+        const response = await tryGet('/v1/admin/employee');
         return fromPaginated(response.data);
       } catch (error) {
         if (error.response?.status === 503 || error.isBackendUnavailable) {
@@ -63,14 +71,14 @@ export const useEmployees = (options = {}) => {
         }
         if (error.response?.status === 403 || error.response?.status === 401) {
           try {
-            const response = await retryAxios(
-              () =>
-                axios.get('/v1/employee', {
-                  params: { page: 1, limit: 100 },
-                  withCredentials: true
-                }),
-              { maxRetries: 1, delay: 500 }
-            );
+            const response = await tryGet('/v1/employee/auth/get-all-employees');
+            const parsed = fromPaginated(response.data);
+            if (parsed.employees.length) return parsed;
+          } catch {
+            /* try next */
+          }
+          try {
+            const response = await tryGet('/v1/employee');
             return fromPaginated(response.data);
           } catch (fallbackError) {
             if (fallbackError.response?.status === 503 || fallbackError.isBackendUnavailable) {

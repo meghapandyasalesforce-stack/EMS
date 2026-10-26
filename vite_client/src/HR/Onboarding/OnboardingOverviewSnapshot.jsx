@@ -1,154 +1,121 @@
 import React, { useMemo } from 'react';
-import { format, isValid, differenceInCalendarDays } from 'date-fns';
-import {
-    FaTasks, FaFileAlt, FaGraduationCap, FaCalendarAlt, FaChevronRight,
-} from 'react-icons/fa';
+import { FaUser, FaUsers } from 'react-icons/fa';
+import { cmInitials } from '../../components/corporateModern';
 
-function formatShortDate(value) {
-    if (!value) return '—';
-    const d = new Date(value);
-    if (!isValid(d)) return '—';
-    return format(d, 'MMM d, yyyy');
+function personFromField(field) {
+    if (!field) return null;
+    if (typeof field === 'object') {
+        const name = [field.name, field.lastName].filter(Boolean).join(' ').trim()
+            || field.email
+            || null;
+        if (!name) return null;
+        return {
+            name,
+            email: field.email || null,
+            role: field.jobTitle || field.position || null,
+        };
+    }
+    return { name: String(field), email: null, role: null };
 }
 
 /**
- * Overview sidebar — dates, progress chips, and tab shortcuts (replaces Key Contacts).
+ * Overview right rail — Onboarding Squad (display-only UI matching dossier mock).
+ * Uses existing assignedHR / assignedManager / assignedBuddy fields only.
  */
-export default function OnboardingOverviewSnapshot({
-    wf,
-    progressPct,
-    onDetailTabChange,
-    isFeatureEnabled,
-}) {
-    const tasks = wf.tasks || [];
-    const pendingTasks = tasks.filter((t) => t.status !== 'Completed').length;
-    const overdueTasks = tasks.filter((t) => t.status === 'Overdue').length;
+export default function OnboardingOverviewSnapshot({ wf }) {
+    const hireFirst = useMemo(() => {
+        const emp = wf?.employeeId;
+        if (!emp) return 'this hire';
+        if (typeof emp === 'object') return emp.name || emp.firstName || 'this hire';
+        return 'this hire';
+    }, [wf?.employeeId]);
 
-    const docTotal = wf.documentSummary?.total ?? (wf.documents?.length || 0);
-    const docVerified = wf.documentSummary?.verified
-        ?? (wf.documents || []).filter((d) => d.status === 'Verified').length;
-    const docsPending = Math.max(0, docTotal - docVerified);
-
-    const modules = wf.trainingModules || [];
-    const trainingPending = modules.filter((m) => m.status !== 'Completed').length;
-
-    const targetDate = wf.expectedCompletionDate || wf.joiningDate;
-    const daysLeft = targetDate
-        ? Math.max(0, differenceInCalendarDays(new Date(targetDate), new Date()))
-        : null;
-
-    const shortcuts = useMemo(() => {
-        const items = [
-            {
-                id: 'tasks',
-                label: 'Tasks',
-                sub: overdueTasks > 0
-                    ? `${overdueTasks} overdue · ${pendingTasks} open`
-                    : `${pendingTasks} open`,
-                icon: FaTasks,
-                show: tasks.length > 0,
-                attention: overdueTasks > 0,
-            },
-        ];
-        if (isFeatureEnabled('documentCollection') && docTotal > 0) {
+    const squad = useMemo(() => {
+        const items = [];
+        const buddy = personFromField(wf.assignedBuddy);
+        if (buddy) {
             items.push({
-                id: 'documents',
-                label: 'Documents',
-                sub: docsPending > 0 ? `${docsPending} pending verification` : 'All verified',
-                icon: FaFileAlt,
-                show: true,
-                attention: docsPending > 0,
+                id: 'buddy',
+                ...buddy,
+                title: buddy.role || 'Onboarding Buddy',
+                badge: 'Buddy',
+                badgeClass: 'cm-squad-badge cm-squad-badge--buddy',
             });
         }
-        if (modules.length > 0 || isFeatureEnabled('mandatoryTraining')) {
+        const manager = personFromField(wf.assignedManager);
+        if (manager) {
             items.push({
-                id: 'training',
-                label: 'Training',
-                sub: trainingPending > 0 ? `${trainingPending} module${trainingPending === 1 ? '' : 's'} left` : 'Complete',
-                icon: FaGraduationCap,
-                show: modules.length > 0,
-                attention: trainingPending > 0,
+                id: 'manager',
+                ...manager,
+                title: manager.role || 'Hiring Manager',
+                badge: 'Manager',
+                badgeClass: 'cm-squad-badge cm-squad-badge--manager',
             });
         }
-        return items.filter((i) => i.show);
-    }, [
-        tasks.length, pendingTasks, overdueTasks, docTotal, docsPending,
-        modules.length, trainingPending, isFeatureEnabled,
-    ]);
+        const hr = personFromField(wf.assignedHR);
+        if (hr) {
+            items.push({
+                id: 'hr',
+                ...hr,
+                title: hr.role || 'HR Business Partner',
+                badge: 'People Partner',
+                badgeClass: 'cm-squad-badge cm-squad-badge--hr',
+                note: 'Direct Escalation Lead',
+            });
+        }
+        return items;
+    }, [wf.assignedHR, wf.assignedManager, wf.assignedBuddy]);
 
     return (
-        <div className="cm-card cm-overview-snapshot">
-            <h2 className="cm-title-sm mb-4">Onboarding snapshot</h2>
-
-            <dl className="cm-overview-snapshot__dates">
-                <div>
-                    <dt className="cm-label flex items-center gap-1.5">
-                        <FaCalendarAlt className="text-[10px]" aria-hidden />
-                        Join date
-                    </dt>
-                    <dd className="mt-0.5 text-sm font-bold text-[var(--cm-on-surface)]">
-                        {formatShortDate(wf.joiningDate)}
-                    </dd>
-                </div>
-                <div>
-                    <dt className="cm-label">Task completion</dt>
-                    <dd className="mt-0.5 text-sm font-bold text-[var(--cm-on-surface)]">
-                        {formatShortDate(wf.expectedCompletionDate)}
-                    </dd>
-                </div>
-            </dl>
-
-            <div className="cm-overview-snapshot__stats">
-                <div className="cm-overview-snapshot__stat">
-                    <span className="cm-label">Overall</span>
-                    <span className="text-xl font-bold text-[var(--cm-primary-deep)]">{progressPct}%</span>
-                </div>
-                <div className="cm-overview-snapshot__stat">
-                    <span className="cm-label">Days left</span>
-                    <span className="text-xl font-bold text-[var(--cm-tertiary)]">
-                        {daysLeft != null ? daysLeft : '—'}
-                    </span>
-                </div>
+        <div className="cm-card cm-onboarding-squad h-full flex flex-col">
+            <div className="mb-1 flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold tracking-tight text-[var(--cm-on-surface)] mb-0">
+                    Onboarding Squad
+                </h2>
+                <FaUsers className="text-[var(--cm-muted)] opacity-70" aria-hidden />
             </div>
+            <p className="mb-4 text-sm leading-snug text-[var(--cm-muted)]">
+                Primary contacts assigned to guide {hireFirst}
+            </p>
 
-            {shortcuts.length > 0 && (
-                <>
-                    <p className="cm-label mb-2 mt-5">Jump to</p>
-                    <ul className="cm-overview-snapshot__links">
-                        {shortcuts.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                                <li key={item.id}>
-                                    <button
-                                        type="button"
-                                        className="cm-overview-snapshot__link"
-                                        onClick={() => onDetailTabChange(item.id)}
-                                    >
-                                        <span className="cm-overview-snapshot__link-icon" aria-hidden>
-                                            <Icon />
-                                        </span>
-                                        <span className="min-w-0 flex-1 text-left">
-                                            <span className="block text-sm font-bold text-[var(--cm-on-surface)]">
-                                                {item.label}
-                                            </span>
-                                            <span className={`block text-xs ${item.attention ? 'text-[var(--cm-tertiary-deep)] font-semibold' : 'text-[var(--cm-muted)]'}`}>
-                                                {item.sub}
-                                            </span>
-                                        </span>
-                                        <FaChevronRight className="shrink-0 text-xs text-[var(--cm-muted)]" aria-hidden />
-                                    </button>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </>
-            )}
-
-            {wf.status && (
-                <p className="mt-4 text-center text-xs text-[var(--cm-muted)]">
-                    Workflow status:{' '}
-                    <span className="font-semibold text-[var(--cm-on-surface)]">{wf.status}</span>
-                </p>
+            {squad.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[rgba(187,202,193,0.55)] px-4 py-6 text-center">
+                    <FaUser className="mx-auto mb-2 text-[var(--cm-muted)] opacity-60" />
+                    <p className="text-sm text-[var(--cm-muted)]">
+                        No HR, manager, or buddy assigned yet.
+                    </p>
+                </div>
+            ) : (
+                <ul className="cm-onboarding-squad__list flex-1">
+                    {squad.map((member) => (
+                        <li key={member.id} className="cm-onboarding-squad__item">
+                            <div className="flex items-start gap-3">
+                                <div className="cm-onboarding-squad__avatar" aria-hidden>
+                                    {cmInitials(member.name)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <p className="text-sm font-bold text-[var(--cm-on-surface)] truncate">
+                                            {member.name}
+                                        </p>
+                                        <span className={member.badgeClass}>{member.badge}</span>
+                                    </div>
+                                    <p className="text-xs text-[var(--cm-muted)] truncate">{member.title}</p>
+                                    {member.note && (
+                                        <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cm-primary-deep)]">
+                                            {member.note}
+                                        </p>
+                                    )}
+                                    {member.email && !member.note && (
+                                        <p className="mt-0.5 truncate text-[11px] text-[var(--cm-outline)]">
+                                            {member.email}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
             )}
         </div>
     );

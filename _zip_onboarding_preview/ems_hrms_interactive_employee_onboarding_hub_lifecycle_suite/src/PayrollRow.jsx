@@ -1,0 +1,10 @@
+const money=value=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(value);
+export default function PayrollRow({row,selected,toggleSelected,onOpen,processRow,voidRow,exportRowPDF}) {
+ return <tr className="hover:bg-surface-container-low transition-colors">
+  <td className="p-space-md"><input type="checkbox" checked={selected} onChange={()=>toggleSelected(row.id)} aria-label={'Select '+row.name} className="w-4 h-4 rounded text-primary"/></td>
+  <td className="p-space-md"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-body-sm">{row.name.split(' ').map(word=>word[0]).join('')}</div><div><button className="text-title-md text-left hover:text-primary" onClick={()=>onOpen(row.name,row.id)}>{row.name}</button><p className="text-body-sm text-on-surface-variant">{row.id}</p></div></div></td>
+  <td className="p-space-md">{row.department}</td><td className="p-space-md font-medium">{money(row.gross)}</td><td className="p-space-md text-on-surface-variant">{money(row.deductions)}</td><td className="p-space-md text-primary font-bold">{money(row.net)}</td>
+  <td className="p-space-md"><span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-label-md">{row.status}</span></td>
+  <td className="p-space-md"><div className="flex justify-end gap-1"><button aria-label={'Process '+row.id} className="p-2 hover:bg-surface-container rounded-lg text-primary" onClick={()=>processRow(row.id)}><span className="material-symbols-outlined text-lg">play_arrow</span></button><button aria-label={'Export '+row.id} className="p-2 hover:bg-surface-container rounded-lg text-primary" onClick={()=>exportRowPDF(row.id)}><span className="material-symbols-outlined text-lg">download</span></button><button aria-label={'Void '+row.id} className="p-2 hover:bg-surface-container rounded-lg text-error" onClick={()=>voidRow(row.id)}><span className="material-symbols-outlined text-lg">block</span></button></div></td>
+ </tr>;
+}

@@ -190,11 +190,7 @@ export function ApprovalsDrawer({ open, escalatedOnly = false, approvals = [], o
                             className={`hr-ov-card ${approval?.slaEscalated ? 'hr-ov-card--escalated' : ''}`}
                         >
                             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                {approval?.slaEscalated ? (
-                                    <span className="hr-ov-tag hr-ov-tag--danger">Breached &gt;48h</span>
-                                ) : (
-                                    <span className="hr-ov-tag hr-ov-tag--ok">In review</span>
-                                )}
+                                <span className="hr-ov-tag hr-ov-tag--ok">In review</span>
                                 <span className="text-[11px] font-medium text-[#94A3B8]">
                                     {(approval?._id || approval?.taxRegimeRequestId || '').toString().slice(-8).toUpperCase()}
                                 </span>
@@ -750,16 +746,15 @@ export function CelebrationsDrawer({
         // eslint-disable-next-line react-hooks/exhaustive-deps -- stabilize open calls
     }, [open, activeKey, eventsByKey, localEvents, list]);
 
-    if (!open) return null;
-
+    // All hooks must run before any early return (Rules of Hooks)
     const activeItem = list.find((row) => celebrationItemKey(row) === activeKey) || null;
-    const activeEvent = (() => {
+    const activeEvent = useMemo(() => {
         if (!activeKey) return null;
         const fromParent = eventsByKey[activeKey];
         const fromLocal = localEvents[activeKey];
         if (fromParent && fromLocal) return { ...fromLocal, ...fromParent };
         return fromParent || fromLocal || null;
-    })();
+    }, [activeKey, eventsByKey, localEvents]);
     const reactionCounts = activeEvent?.reactionCounts || {};
     const reactors = Array.isArray(activeEvent?.reactions) ? activeEvent.reactions : [];
     const isToday = activeItem?.daysUntil === 0;
@@ -786,6 +781,8 @@ export function CelebrationsDrawer({
         ? filteredReactors
         : filteredReactors.slice(0, REACTOR_PREVIEW);
     const hiddenReactorCount = Math.max(0, filteredReactors.length - REACTOR_PREVIEW);
+
+    if (!open) return null;
 
     const sendWish = async () => {
         if (!activeItem || !wishText.trim()) {

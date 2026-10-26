@@ -17,13 +17,39 @@ import {
 import { getTokenFromCookie } from '../../utils/authHelper';
 import { getSocketIOUrl } from '../../utils/socketUrl';
 import {
-    FaUserPlus, FaTasks, FaSearch, FaCalendarAlt, FaTrash, FaFilter,
+    FaUserPlus, FaTasks, FaSearch, FaCalendarAlt, FaTrash, FaFilter, FaUser,
+    FaRedo,
 } from 'react-icons/fa';
 import OnboardingHrDetailView from './OnboardingHrDetailView';
 import useLifecycleFeatures from '../../Hooks/useLifecycleFeatures';
 import { filterHrAssignees } from '../../utils/hrAssignees';
 import { filterManagerCandidates } from '../../utils/managerAssignees';
-import { CmBadge, CmButton, CmSearch, CmStat, CmPerson, CmRing, CmEmpty, statusTone } from '../../components/corporateModern';
+import { CmBadge, CmButton, CmSearch, CmPerson, CmProgress, CmEmpty, statusTone, cmInitials } from '../../components/corporateModern';
+
+function workflowRowFields(w, resolveAssigneeName) {
+    const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
+    const fullName = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.trim();
+    const bankTask = (w.tasks || []).find((t) => /bank/i.test(t.title || ''));
+    const bgvTask = (w.tasks || []).find((t) => /bgv|background.?verif/i.test(`${t.title || ''} ${t.category || ''}`));
+    const bankTone = bankTask ? statusTone(bankTask.status) : 'neutral';
+    const bankLabel = bankTask ? (bankTask.status === 'Completed' ? 'Completed' : bankTask.status) : 'Pending';
+    const bgvTone = bgvTask ? statusTone(bgvTask.status) : 'neutral';
+    const bgvLabel = bgvTask
+        ? (bgvTask.status === 'Completed' ? 'Verified' : bgvTask.status === 'In Progress' ? 'In-Progress' : bgvTask.status)
+        : 'Pending';
+    const completedCount = w.tasks?.filter((task) => task.status === 'Completed').length || 0;
+    const totalCount = w.tasks?.length || 0;
+    const empCode = w.employeeId?.employeeCode || w.employeeId?.employeeId || null;
+    const email = w.employeeId?.email || '';
+    const role = w.employeeId?.jobTitle || w.employeeId?.position || '—';
+    const deptLine = [w.employeeId?.department, w.employeeId?.workLocation || w.employeeId?.location].filter(Boolean).join(' · ') || '—';
+    const buddyName = resolveAssigneeName(w.assignedBuddy) || 'Unassigned';
+    const managerName = resolveAssigneeName(w.assignedManager) || '—';
+    return {
+        progress, fullName, bankTone, bankLabel, bgvTone, bgvLabel,
+        completedCount, totalCount, empCode, email, role, deptLine, buddyName, managerName,
+    };
+}
 
 const TASK_ACTION_SECTIONS = {
     'Assign laptop and equipment': 'onboarding-assets',
@@ -59,6 +85,8 @@ const OnboardingHub = () => {
     const [selectedWorkflow, setSelectedWorkflow] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [departmentFilter, setDepartmentFilter] = useState('all');
+    const [locationFilter, setLocationFilter] = useState('all');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [expandedTaskGroups, setExpandedTaskGroups] = useState(() => new Set(['it']));
@@ -95,6 +123,22 @@ const OnboardingHub = () => {
         if (viewParam === 'tasks' || viewParam === 'buddy') setLifecycleView('self');
         else if (viewParam === 'team' && !canViewTeam) setLifecycleView('self');
     }, [isHRView, roleFromApi, viewParam, canViewTeam]);
+
+    // Shell "Create Onboarding" → open modal (URL + custom event).
+    useEffect(() => {
+        if (!isHRView) return undefined;
+        const openCreate = () => setShowCreateModal(true);
+        if (searchParams.get('create') === '1') {
+            openCreate();
+            setSearchParams((current) => {
+                const next = new URLSearchParams(current);
+                next.delete('create');
+                return next;
+            }, { replace: true });
+        }
+        window.addEventListener('ems:onboarding-create', openCreate);
+        return () => window.removeEventListener('ems:onboarding-create', openCreate);
+    }, [isHRView, searchParams, setSearchParams]);
 
     const { data: employeeData = { employees: [] } } = useEmployees();
     const employees = employeeData?.employees ?? [];
@@ -449,28 +493,42 @@ const OnboardingHub = () => {
         }
     };
 
+    const departmentOptions = useMemo(() => {
+        const set = new Set();
+        (dashboard?.workflows || []).forEach((w) => {
+            const d = w.employeeId?.department;
+            if (d) set.add(d);
+        });
+        return Array.from(set).sort();
+    }, [dashboard?.workflows]);
+
+    const locationOptions = useMemo(() => {
+        const set = new Set();
+        (dashboard?.workflows || []).forEach((w) => {
+            const loc = w.employeeId?.workLocation || w.employeeId?.location;
+            if (loc) set.add(loc);
+        });
+        return Array.from(set).sort();
+    }, [dashboard?.workflows]);
+
     const filteredWorkflows = (dashboard?.workflows || []).filter((w) => {
-        const name = w.employeeId?.name?.toLowerCase() || '';
+        const name = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.toLowerCase();
         const email = w.employeeId?.email?.toLowerCase() || '';
-        const matchSearch = !searchTerm || name.includes(searchTerm.toLowerCase()) || email.includes(searchTerm.toLowerCase());
+        const role = (w.employeeId?.jobTitle || w.employeeId?.position || '').toLowerCase();
+        const empCode = String(w.employeeId?.employeeCode || w.employeeId?.employeeId || '').toLowerCase();
+        const q = searchTerm.toLowerCase().trim();
+        const matchSearch = !q
+            || name.includes(q)
+            || email.includes(q)
+            || role.includes(q)
+            || empCode.includes(q);
         const matchStatus = statusFilter === 'all' || w.status === statusFilter;
-        return Boolean(w.employeeId?.name) && matchSearch && matchStatus;
+        const dept = w.employeeId?.department || '';
+        const loc = w.employeeId?.workLocation || w.employeeId?.location || '';
+        const matchDept = departmentFilter === 'all' || dept === departmentFilter;
+        const matchLoc = locationFilter === 'all' || loc === locationFilter;
+        return Boolean(w.employeeId?.name) && matchSearch && matchStatus && matchDept && matchLoc;
     });
-
-    const offerAcceptanceRate = dashboard?.stats?.totalJoinings
-        ? Math.round(((dashboard.stats.active ?? 0) / dashboard.stats.totalJoinings) * 100)
-        : 0;
-
-    const avgOnboardingDays = useMemo(() => {
-        const completed = (dashboard?.workflows || []).filter((w) =>
-            w.status === 'Completed' && w.actualCompletionDate && w.createdAt);
-        if (!completed.length) return null;
-        const totalDays = completed.reduce((sum, w) => {
-            const days = (new Date(w.actualCompletionDate) - new Date(w.createdAt)) / 86400000;
-            return sum + Math.max(days, 0);
-        }, 0);
-        return (totalDays / completed.length).toFixed(1);
-    }, [dashboard]);
 
     const openWorkflow = (workflow) => {
         setSelectedWorkflow(workflow);
@@ -533,9 +591,6 @@ const OnboardingHub = () => {
         : isManagerView
             ? 'My Team'
             : 'My Onboarding';
-    const sectionCardClass = 'rounded-xl bg-white p-5 shadow-sm';
-    const sectionTitleClass = 'mb-4 flex items-center gap-2 text-lg font-semibold text-gray-800';
-
     const resolveAssigneeName = (field) => {
         if (!field) return null;
         if (typeof field === 'object' && field.name) {
@@ -545,6 +600,53 @@ const OnboardingHub = () => {
         const match = employees.find((e) => (e._id || e.id)?.toString() === id?.toString());
         return match ? [match.name, match.lastName].filter(Boolean).join(' ').trim() : null;
     };
+
+    const exportWorkflowsCsv = useCallback(() => {
+        const rows = filteredWorkflows;
+        if (!rows.length) {
+            toast.info('No workflows to export for the current filters.');
+            return;
+        }
+        const headers = [
+            'Employee', 'Email', 'Employee ID', 'Role', 'Department', 'Location',
+            'Joining Date', 'Buddy', 'Manager', 'Progress', 'Status', 'BGV', 'Banking',
+        ];
+        const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const lines = [headers.join(',')];
+        rows.forEach((w) => {
+            const row = workflowRowFields(w, resolveAssigneeName);
+            lines.push([
+                row.fullName,
+                row.email,
+                row.empCode,
+                row.role,
+                w.employeeId?.department,
+                w.employeeId?.workLocation || w.employeeId?.location,
+                w.joiningDate ? format(new Date(w.joiningDate), 'yyyy-MM-dd') : '',
+                row.buddyName,
+                row.managerName,
+                `${row.progress}%`,
+                w.status,
+                row.bgvLabel,
+                row.bankLabel,
+            ].map(escape).join(','));
+        });
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `onboarding-roster-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`Exported ${rows.length} row${rows.length === 1 ? '' : 's'}`);
+    }, [filteredWorkflows, employees]);
+
+    useEffect(() => {
+        if (!isHRView) return undefined;
+        const onExport = () => exportWorkflowsCsv();
+        window.addEventListener('ems:onboarding-export-csv', onExport);
+        return () => window.removeEventListener('ems:onboarding-export-csv', onExport);
+    }, [isHRView, exportWorkflowsCsv]);
 
     const toggleTaskGroup = (key) => {
         setExpandedTaskGroups((prev) => {
@@ -716,35 +818,21 @@ const OnboardingHub = () => {
             <div className="page-shell-inner hrms-stack pb-10">
 
                 {/* ── Header ── */}
-                {!wf && (
+                {!wf && !isHRView && (
                 <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                         <p className="text-sm font-medium text-theme-secondary">{roleLabel}</p>
-                        <h1 className="mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">
-                            {isHRView
-                                ? 'Onboarding Hub'
-                                : isManagerView
-                                    ? 'My Team'
-                                    : 'My Onboarding Journey'}
+                        <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-[var(--cm-inverted)] sm:text-3xl">
+                            {isManagerView ? 'My Team' : 'My Onboarding Journey'}
                         </h1>
-                        {isManagerView && !wf && (
+                        {isManagerView && (
                             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500 sm:text-base">
                                 Direct reports who are currently onboarding.
                             </p>
                         )}
-                        {isHRView && !wf && (
-                            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500 sm:text-base">
-                                Plan and track every new hire&apos;s onboarding journey in one place
-                            </p>
-                        )}
-                        {wf && isPersonalView && (
-                            <p className="mt-2 text-sm leading-relaxed text-gray-500 sm:text-base">
-                                Welcome, {wf.employeeId?.name}! Track your joining progress below
-                            </p>
-                        )}
                     </div>
                     <div className="flex flex-col gap-2 sm:items-end">
-                        {!isHRView && showRoleToggles && (
+                        {showRoleToggles && (
                             <div
                                 className="inline-flex flex-wrap rounded-xl bg-gray-100 p-1"
                                 role="tablist"
@@ -780,12 +868,6 @@ const OnboardingHub = () => {
                                 )}
                             </div>
                         )}
-                        {isHRView && !wf && (
-                            <CmButton variant="inverted" onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
-                                <FaUserPlus className="shrink-0 text-base" />
-                                <span>Onboard New Employee</span>
-                            </CmButton>
-                        )}
                     </div>
                 </header>
                 )}
@@ -809,108 +891,131 @@ const OnboardingHub = () => {
 
                 {/* ── Employee Workflow Table (HR — Onboarding Hub list) ── */}
                 {!wf && isHRView && (
-                    <div className="space-y-4">
-                        {/* <div className="cm-banner cm-banner--attention">
-                            Pre-boarding portal covers offer-accept only — document/bank/forms upload requires full portal (P0 gap)
-                        </div> */}
-
-                        {dashboard?.stats && (
-                            <div className="cm-kpi-row cm-kpi-row--3">
-                                <CmStat
-                                    label="Pending Actions"
-                                    value={(dashboard.stats.pendingDocuments ?? 0) + (dashboard.stats.pendingVerifications ?? 0)}
-                                    attention={((dashboard.stats.pendingDocuments ?? 0) + (dashboard.stats.pendingVerifications ?? 0)) > 0}
-                                    meta={`${dashboard.stats.pendingDocuments ?? 0} docs · ${dashboard.stats.pendingVerifications ?? 0} verifications`}
-                                />
-                                <CmStat
-                                    label="Offer Acceptance Rate"
-                                    value={`${offerAcceptanceRate}%`}
-                                    meta={`${dashboard.stats.upcomingJoinings ?? 0} upcoming joiners`}
-                                />
-                                <CmStat
-                                    label="Avg. Onboarding Time"
-                                    value={avgOnboardingDays != null ? `${avgOnboardingDays} Days` : '—'}
-                                    meta={`${dashboard.stats.completedThisMonth ?? 0} completed this month`}
-                                />
-                            </div>
-                        )}
-
-                        <div className={sectionCardClass}>
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-5">
-                                <div className="flex-1">
+                    <div className="space-y-2.5">
+                        <div className="cm-card !rounded-2xl !p-0 overflow-hidden">
+                            <div className="cm-roster-toolbar">
+                                <div className="cm-roster-toolbar__search">
                                     <CmSearch
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="Search by employee name or email..."
+                                        placeholder="Search by candidate name, role, email, or employee ID..."
+                                        className="cm-search--toolbar"
                                     />
                                 </div>
-                                <div className="hrms-chip-scroll">
-                                    <div className="hrms-chip-scroll-track" aria-label="Filter workflows by status">
-                                        {['all', ...WORKFLOW_STATUSES].map((status) => (
-                                            <div key={status} className="hrms-chip-scroll-item">
-                                                <button type="button" onClick={() => setStatusFilter(status)}
-                                                    className={`cm-chip ${statusFilter === status ? 'cm-chip--active' : ''}`}>
-                                                    {status === 'all' ? 'All' : status}
-                                                </button>
-                                            </div>
+                                <div className="cm-roster-toolbar__filters">
+                                    <select
+                                        className="cm-roster-toolbar__select"
+                                        value={statusFilter}
+                                        onChange={(e) => setStatusFilter(e.target.value)}
+                                        aria-label="Filter by status"
+                                    >
+                                        <option value="all">All Statuses</option>
+                                        {WORKFLOW_STATUSES.map((status) => (
+                                            <option key={status} value={status}>{status}</option>
                                         ))}
-                                    </div>
+                                    </select>
+                                    <select
+                                        className="cm-roster-toolbar__select"
+                                        value={departmentFilter}
+                                        onChange={(e) => setDepartmentFilter(e.target.value)}
+                                        aria-label="Filter by department"
+                                    >
+                                        <option value="all">All Departments</option>
+                                        {departmentOptions.map((dept) => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        className="cm-roster-toolbar__select"
+                                        value={locationFilter}
+                                        onChange={(e) => setLocationFilter(e.target.value)}
+                                        aria-label="Filter by location"
+                                    >
+                                        <option value="all">All Locations</option>
+                                        {locationOptions.map((loc) => (
+                                            <option key={loc} value={loc}>{loc}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        className="cm-roster-toolbar__reset"
+                                        onClick={() => {
+                                            setSearchTerm('');
+                                            setStatusFilter('all');
+                                            setDepartmentFilter('all');
+                                            setLocationFilter('all');
+                                        }}
+                                        aria-label="Reset filters"
+                                    >
+                                        <FaRedo className="text-[11px]" />
+                                        Reset
+                                    </button>
                                 </div>
                             </div>
 
                             {filteredWorkflows.length === 0 ? (
-                                <CmEmpty title="No workflows found">Create one to get started.</CmEmpty>
+                                <div className="px-6 py-10 text-center">
+                                    <CmEmpty title="No workflows found">
+                                        Create one to get started.
+                                    </CmEmpty>
+                                    <div className="mt-4 flex justify-center">
+                                        <CmButton variant="inverted" onClick={() => setShowCreateModal(true)}>
+                                            <FaUserPlus className="shrink-0" />
+                                            <span>Create Onboarding</span>
+                                        </CmButton>
+                                    </div>
+                                </div>
                             ) : (
                                 <>
-                                    <div className="space-y-3 sm:hidden">
+                                    <div className="space-y-2.5 p-3 lg:hidden">
                                         {filteredWorkflows.map((w) => {
-                                            const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
-                                            const fullName = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.trim();
-                                            const bankTask = (w.tasks || []).find((t) => /bank/i.test(t.title || ''));
-                                            const bgvTask = (w.tasks || []).find((t) => /bgv|background.?verif/i.test(`${t.title || ''} ${t.category || ''}`));
-                                            const bankTone = bankTask ? statusTone(bankTask.status) : 'neutral';
-                                            const bankLabel = bankTask ? (bankTask.status === 'Completed' ? 'Completed' : bankTask.status) : 'Pending';
-                                            const bgvTone = bgvTask ? statusTone(bgvTask.status) : 'neutral';
-                                            const bgvLabel = bgvTask ? (bgvTask.status === 'Completed' ? 'Completed' : bgvTask.status) : 'Pending';
-                                            const completedCount = w.tasks?.filter((task) => task.status === 'Completed').length || 0;
-                                            const totalCount = w.tasks?.length || 0;
+                                            const row = workflowRowFields(w, resolveAssigneeName);
                                             return (
                                                 <article
                                                     key={w._id}
                                                     onClick={() => openWorkflow(w)}
-                                                    className="rounded-2xl border border-[rgba(187,202,193,0.35)] bg-white p-4 shadow-sm"
+                                                    className="rounded-xl border border-[rgba(187,202,193,0.35)] bg-white p-3.5 shadow-sm"
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <CmPerson
-                                                            name={fullName}
-                                                            meta={w.employeeId?.jobTitle || w.employeeId?.department || ''}
+                                                            name={row.fullName}
+                                                            meta={[row.email, row.empCode].filter(Boolean).join(' · ')}
                                                         />
                                                         <CmBadge tone={statusTone(w.status)} dot={false}>{w.status}</CmBadge>
                                                     </div>
-                                                    <div className="mt-4 flex items-center gap-3">
-                                                        <CmRing value={progress} size={42} attention={w.status === 'Overdue'} />
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-semibold text-[var(--cm-on-surface)]">Progress</p>
-                                                            <p className="text-xs text-[var(--cm-muted)]">{completedCount}/{totalCount} tasks completed</p>
+                                                    <p className="mt-2 text-xs text-[var(--cm-muted)]">
+                                                        <span className="font-semibold text-[var(--cm-on-surface)]">{row.role}</span>
+                                                        {' · '}{row.deptLine}
+                                                    </p>
+                                                    <div className="mt-3 space-y-1">
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="font-semibold">{row.progress}%</span>
+                                                            <span className="text-[var(--cm-muted)]">{row.completedCount}/{row.totalCount} tasks</span>
                                                         </div>
+                                                        <CmProgress value={row.progress} attention={w.status === 'Overdue'} />
                                                     </div>
-                                                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                                                         <div>
-                                                            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Banking</p>
-                                                            <CmBadge tone={bankTone}>{bankLabel}</CmBadge>
+                                                            <p className="mb-1 font-semibold uppercase tracking-wide text-gray-500">Banking</p>
+                                                            <CmBadge tone={row.bankTone}>{row.bankLabel}</CmBadge>
                                                         </div>
                                                         <div>
-                                                            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Verification</p>
-                                                            <CmBadge tone={bgvTone}>{bgvLabel}</CmBadge>
+                                                            <p className="mb-1 font-semibold uppercase tracking-wide text-gray-500">Verification</p>
+                                                            <CmBadge tone={row.bgvTone}>{row.bgvLabel}</CmBadge>
                                                         </div>
-                                                        <div className="col-span-2">
-                                                            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Join date</p>
-                                                            <p className="text-sm text-[var(--cm-on-surface)]">
-                                                                {w.joiningDate ? format(new Date(w.joiningDate), 'MMM dd, yyyy') : '—'}
+                                                        <div>
+                                                            <p className="mb-1 font-semibold uppercase tracking-wide text-gray-500">Join date</p>
+                                                            <p className="font-medium text-[var(--cm-on-surface)]">
+                                                                {w.joiningDate ? format(new Date(w.joiningDate), 'dd MMM yyyy') : '—'}
                                                             </p>
                                                         </div>
+                                                        <div>
+                                                            <p className="mb-1 font-semibold uppercase tracking-wide text-gray-500">Buddy / Mgr</p>
+                                                            <p className="font-medium text-[var(--cm-on-surface)]">{row.buddyName}</p>
+                                                            <p className="text-[var(--cm-muted)]">Mgr: {row.managerName}</p>
+                                                        </div>
                                                     </div>
-                                                    <div className="mt-4 flex items-center justify-between gap-3">
+                                                    <div className="mt-3 flex items-center justify-between gap-3">
                                                         <CmButton variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openWorkflow(w); }}>
                                                             View details
                                                         </CmButton>
@@ -927,30 +1032,25 @@ const OnboardingHub = () => {
                                         })}
                                     </div>
 
-                                    <div className="hidden sm:block cm-table-wrap">
-                                        <table className="cm-table">
+                                    <div className="hidden lg:block cm-table-wrap cm-table-wrap--dense">
+                                        <table className="cm-table cm-table--roster">
                                             <thead>
                                                 <tr>
-                                                    <th>Candidate</th>
-                                                    <th>Status</th>
-                                                    <th>Progress</th>
+                                                    <th>Employee / New Hire</th>
+                                                    <th>Role &amp; Department</th>
+                                                    <th>Joining Date</th>
+                                                    <th>Buddy &amp; Manager</th>
+                                                    <th>Induction Progress</th>
                                                     <th>Banking</th>
-                                                    <th>Verification</th>
-                                                    <th>Actions</th>
-                                                    <th>Join date</th>
+                                                    <th>BGV Status</th>
+                                                    <th>Status</th>
+                                                    <th className="text-right">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {filteredWorkflows.map((w) => {
-                                                    const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
+                                                    const row = workflowRowFields(w, resolveAssigneeName);
                                                     const isSelected = selectedWorkflow?._id === w._id;
-                                                    const fullName = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.trim();
-                                                    const bankTask = (w.tasks || []).find((t) => /bank/i.test(t.title || ''));
-                                                    const bgvTask = (w.tasks || []).find((t) => /bgv|background.?verif/i.test(`${t.title || ''} ${t.category || ''}`));
-                                                    const bankTone = bankTask ? statusTone(bankTask.status) : 'neutral';
-                                                    const bankLabel = bankTask ? (bankTask.status === 'Completed' ? 'Completed' : bankTask.status) : 'Pending';
-                                                    const bgvTone = bgvTask ? statusTone(bgvTask.status) : 'neutral';
-                                                    const bgvLabel = bgvTask ? (bgvTask.status === 'Completed' ? 'Completed' : bgvTask.status) : 'Pending';
                                                     return (
                                                         <tr
                                                             key={w._id}
@@ -958,26 +1058,50 @@ const OnboardingHub = () => {
                                                             className={`cursor-pointer ${isSelected ? 'bg-[rgba(28,202,155,0.06)]' : ''}`}
                                                         >
                                                             <td>
-                                                                <CmPerson name={fullName} meta={w.employeeId?.jobTitle || w.employeeId?.department || ''} />
+                                                                <div className="cm-person">
+                                                                    <div className="cm-avatar">{cmInitials(row.fullName)}</div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="cm-person__name truncate">{row.fullName}</p>
+                                                                        {row.email && <p className="cm-person__meta truncate">{row.email}</p>}
+                                                                        {row.empCode && <p className="truncate font-mono text-[10px] text-[var(--cm-outline)]">{row.empCode}</p>}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <p className="text-sm font-semibold text-[var(--cm-on-surface)]">{row.role}</p>
+                                                                <p className="text-xs text-[var(--cm-muted)]">{row.deptLine}</p>
+                                                            </td>
+                                                            <td className="whitespace-nowrap">
+                                                                <p className="text-sm font-semibold text-[var(--cm-on-surface)]">
+                                                                    {w.joiningDate ? format(new Date(w.joiningDate), 'dd MMM yyyy') : '—'}
+                                                                </p>
+                                                            </td>
+                                                            <td>
+                                                                <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--cm-on-surface)]">
+                                                                    <FaUser className="text-[10px] text-[var(--cm-muted)]" />
+                                                                    {row.buddyName}
+                                                                </p>
+                                                                <p className="text-[11px] text-[var(--cm-muted)]">Mgr: {row.managerName}</p>
+                                                            </td>
+                                                            <td>
+                                                                <div className="w-36 space-y-1">
+                                                                    <div className="flex justify-between text-xs">
+                                                                        <span className="font-bold text-[var(--cm-on-surface)]">{row.progress}%</span>
+                                                                        <span className="text-[var(--cm-muted)]">{row.completedCount}/{row.totalCount} tasks</span>
+                                                                    </div>
+                                                                    <CmProgress value={row.progress} attention={w.status === 'Overdue'} />
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <CmBadge tone={row.bankTone}>{row.bankLabel}</CmBadge>
+                                                            </td>
+                                                            <td>
+                                                                <CmBadge tone={row.bgvTone}>{row.bgvLabel}</CmBadge>
                                                             </td>
                                                             <td>
                                                                 <CmBadge tone={statusTone(w.status)}>{w.status}</CmBadge>
                                                             </td>
-                                                            <td>
-                                                                <div className="flex items-center gap-3">
-                                                                    <CmRing value={progress} size={36} attention={w.status === 'Overdue'} />
-                                                                    <span className="text-xs text-[var(--cm-muted)]">
-                                                                        {w.tasks?.filter((task) => task.status === 'Completed').length || 0}/{w.tasks?.length || 0} tasks
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td>
-                                                                <CmBadge tone={bankTone}>{bankLabel}</CmBadge>
-                                                            </td>
-                                                            <td>
-                                                                <CmBadge tone={bgvTone}>{bgvLabel}</CmBadge>
-                                                            </td>
-                                                            <td onClick={(e) => e.stopPropagation()}>
+                                                            <td className="text-right" onClick={(e) => e.stopPropagation()}>
                                                                 <button type="button"
                                                                     onClick={() => deleteWorkflow(w)}
                                                                     disabled={submitting}
@@ -985,9 +1109,6 @@ const OnboardingHub = () => {
                                                                     className="cm-link cm-link--attention">
                                                                     <FaTrash />
                                                                 </button>
-                                                            </td>
-                                                            <td className="text-sm">
-                                                                {w.joiningDate ? format(new Date(w.joiningDate), 'MMM dd, yyyy') : '—'}
                                                             </td>
                                                         </tr>
                                                     );
@@ -998,17 +1119,15 @@ const OnboardingHub = () => {
                                 </>
                             )}
 
-                            {filteredWorkflows.length > 0 && (
-                                <div className="cm-pagination">
-                                    <span>
-                                        Showing {filteredWorkflows.length} of {dashboard?.stats?.totalJoinings ?? filteredWorkflows.length} candidates
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                        <button type="button" className="cm-icon-btn" aria-label="Previous page" disabled>‹</button>
-                                        <button type="button" className="cm-icon-btn" aria-label="Next page" disabled>›</button>
-                                    </div>
+                            <div className="cm-pagination border-t border-[rgba(187,202,193,0.35)] px-4">
+                                <span>
+                                    Showing {filteredWorkflows.length} of {dashboard?.stats?.totalJoinings ?? filteredWorkflows.length} New Hires
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <button type="button" className="cm-icon-btn" aria-label="Previous page" disabled>‹</button>
+                                    <button type="button" className="cm-icon-btn" aria-label="Next page" disabled>›</button>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1159,14 +1278,17 @@ const OnboardingHub = () => {
 
             {/* Create Workflow Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-lg font-bold mb-1">Start Employee Onboarding</h3>
-                        <p className="text-sm text-gray-500 mb-4">Select employee, assignees, and joining date. Workflow stays Scheduled until joining date.</p>
-                        <form onSubmit={createWorkflow} className="space-y-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+                        <div className="border-b border-gray-100 px-6 py-4">
+                            <h3 className="text-lg font-bold text-[var(--cm-inverted)]">Start Employee Onboarding</h3>
+                            <p className="mt-1 text-sm text-gray-500">Select employee, assignees, and joining date. Workflow stays Scheduled until joining date.</p>
+                        </div>
+                        <form onSubmit={createWorkflow} className="flex min-h-0 flex-1 flex-col">
+                            <div className="space-y-4 overflow-y-auto px-6 py-5">
                             <div>
                                 <label className="text-sm font-medium">Employee *</label>
-                                <select required className="w-full p-2 border rounded-lg mt-1" value={createForm.employeeId}
+                                <select required className="mt-1 w-full rounded-lg border border-gray-200 p-2.5" value={createForm.employeeId}
                                     onChange={(e) => {
                                         const employeeId = e.target.value;
                                         const emp = employees.find((row) => String(row._id || row.id) === String(employeeId));
@@ -1211,10 +1333,10 @@ const OnboardingHub = () => {
                                     ))}
                                 </select>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 <div>
                                     <label className="text-sm font-medium">Joining Date *</label>
-                                    <input type="date" required className="w-full p-2 border rounded-lg mt-1"
+                                    <input type="date" required className="mt-1 w-full rounded-lg border border-gray-200 p-2.5"
                                         value={createForm.joiningDate}
                                         onChange={(e) => {
                                             const joiningDate = e.target.value;
@@ -1235,24 +1357,25 @@ const OnboardingHub = () => {
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium">Start Date</label>
-                                    <input type="date" className="w-full p-2 border rounded-lg mt-1"
+                                    <input type="date" className="mt-1 w-full rounded-lg border border-gray-200 p-2.5"
                                         value={createForm.scheduledStartDate}
                                         onChange={(e) => setCreateForm({ ...createForm, scheduledStartDate: e.target.value })} />
                                 </div>
+                                <div>
+                                    <label className="text-sm font-medium">Task completion date</label>
+                                    <input
+                                        type="date"
+                                        className="mt-1 w-full rounded-lg border border-gray-200 p-2.5"
+                                        value={createForm.expectedCompletionDate}
+                                        onChange={(e) => setCreateForm({ ...createForm, expectedCompletionDate: e.target.value })}
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Target for finishing all tasks</p>
+                                </div>
                             </div>
-                            <div>
-                                <label className="text-sm font-medium">Task completion date</label>
-                                <p className="text-xs text-gray-500 mt-0.5 mb-1">Target date for finishing all onboarding tasks.</p>
-                                <input
-                                    type="date"
-                                    className="w-full p-2 border rounded-lg"
-                                    value={createForm.expectedCompletionDate}
-                                    onChange={(e) => setCreateForm({ ...createForm, expectedCompletionDate: e.target.value })}
-                                />
-                            </div>
+                            <div className={`grid grid-cols-1 gap-3 ${isFeatureEnabled('buddyProgram') ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                             <div>
                                 <label className="text-sm font-medium">Assigned Manager</label>
-                                <select className="w-full p-2 border rounded-lg mt-1" value={createForm.assignedManager}
+                                <select className="mt-1 w-full rounded-lg border border-gray-200 p-2.5" value={createForm.assignedManager}
                                     onChange={(e) => setCreateForm({ ...createForm, assignedManager: e.target.value })}>
                                     <option value="">From employee profile</option>
                                     {managerCandidates.map((emp) => (
@@ -1264,7 +1387,7 @@ const OnboardingHub = () => {
                             </div>
                             <div>
                                 <label className="text-sm font-medium">Assigned HR</label>
-                                <select className="w-full p-2 border rounded-lg mt-1" value={createForm.assignedHR}
+                                <select className="mt-1 w-full rounded-lg border border-gray-200 p-2.5" value={createForm.assignedHR}
                                     onChange={(e) => setCreateForm({ ...createForm, assignedHR: e.target.value })}>
                                     <option value="">Auto-assign</option>
                                     {hrAssignees.map((emp) => (
@@ -1281,7 +1404,7 @@ const OnboardingHub = () => {
                             {isFeatureEnabled('buddyProgram') && (
                             <div>
                                 <label className="text-sm font-medium">Buddy</label>
-                                <select className="w-full p-2 border rounded-lg mt-1" value={createForm.assignedBuddy}
+                                <select className="mt-1 w-full rounded-lg border border-gray-200 p-2.5" value={createForm.assignedBuddy}
                                     onChange={(e) => setCreateForm({ ...createForm, assignedBuddy: e.target.value })}>
                                     <option value="">None</option>
                                     {buddyCandidates.map((emp) => (
@@ -1292,9 +1415,10 @@ const OnboardingHub = () => {
                                 </select>
                             </div>
                             )}
+                            </div>
                             <div>
                                 <label className="text-sm font-medium">Welcome Message</label>
-                                <textarea className="w-full p-2 border rounded-lg mt-1" rows={2}
+                                <textarea className="mt-1 w-full rounded-lg border border-gray-200 p-2.5" rows={3}
                                     value={createForm.welcomeMessage}
                                     onChange={(e) => setCreateForm({ ...createForm, welcomeMessage: e.target.value })} />
                             </div>
@@ -1303,11 +1427,12 @@ const OnboardingHub = () => {
                                     onChange={(e) => setCreateForm({ ...createForm, saveAsDraft: e.target.checked })} />
                                 Save as draft (don&apos;t notify yet)
                             </label>
-                            <div className="flex gap-3 justify-end">
+                            </div>
+                            <div className="flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
                                 <button type="button" onClick={() => setShowCreateModal(false)}
-                                    className="px-4 py-2 border rounded-lg">Cancel</button>
+                                    className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium">Cancel</button>
                                 <button type="submit" disabled={submitting}
-                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg disabled:opacity-50">
+                                    className="rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
                                     {submitting ? 'Creating...' : createForm.saveAsDraft ? 'Save Draft' : 'Create Workflow'}
                                 </button>
                             </div>
