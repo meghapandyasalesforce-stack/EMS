@@ -66,6 +66,12 @@ const compOffSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    /** Days already taken through an approved compensatory leave. */
+    usedDays: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     leaveCredited: {
         type: Boolean,
         default: false

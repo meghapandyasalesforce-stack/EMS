@@ -10,6 +10,7 @@ import {
     hoursBetween,
     creditCompensatoryDays,
     settleApprovedCompOffHours,
+    syncCompOffUsage,
 } from '../../helpers/compOffCreditHelper.js';
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -62,7 +63,7 @@ export const createCompOffRequest = async (req, res) => {
             if (!requestedHours) {
                 return sendError(
                     res,
-                    'Enter a start and end time on the same day. End time must be after start time.',
+                    'Enter a start and an end time. The two times cannot be the same.',
                     400,
                     'VALIDATION_ERROR'
                 );
@@ -192,6 +193,17 @@ export const getMyCompOffRequests = async (req, res) => {
 
         if (!employeeId) {
             return sendError(res, 'Employee ID is required', 400, 'MISSING_EMPLOYEE_ID');
+        }
+
+        if (organizationId) {
+            try {
+                await syncCompOffUsage({ employeeId, organizationId });
+            } catch (syncError) {
+                logger.warn('Comp-off usage sync failed while loading requests', {
+                    error: syncError.message,
+                    employeeId,
+                });
+            }
         }
 
         const query = addOrganizationFilter(req, { employeeId });

@@ -454,6 +454,19 @@ export const updateLeaveStatus = async (req, res) => {
             }
         }
 
+        if (leave.leaveType === 'compensatory' && (leave.status === 'approved' || leave.status === 'rejected' || leave.status === 'cancelled')) {
+            try {
+                const { syncCompOffUsageForLeave } = await import('../../helpers/compOffCreditHelper.js');
+                await syncCompOffUsageForLeave(leave);
+            } catch (compOffError) {
+                logger.warn('Error syncing comp-off usage after leave status update', {
+                    error: compOffError.message,
+                    leaveId: leave._id,
+                    status: leave.status,
+                });
+            }
+        }
+
         // Only send a direct requester notification when this update bypassed the workflow
         // notification pipeline. Workflow-driven final approvals/rejections already notify
         // the employee from `approvalWorkflowService`.

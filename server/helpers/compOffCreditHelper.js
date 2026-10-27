@@ -5,6 +5,7 @@
  */
 
 import CompOff from '../models/compOff.model.js';
+import Leave from '../models/leave.model.js';
 import LeaveBalance from '../models/leaveBalance.model.js';
 import { roundLeaveDays } from './leaveBalanceRulesHelper.js';
 import logger from './logger.js';
@@ -15,8 +16,10 @@ export const COMP_OFF_FULL_DAY_HOURS = 8;
 export function hoursBetween(startTime, endTime) {
     const start = parseHm(startTime);
     const end = parseHm(endTime);
-    if (start == null || end == null || end <= start) return 0;
-    return Math.round(((end - start) / 60) * 100) / 100;
+    if (start == null || end == null || end === start) return 0;
+    // An earlier end time is the next morning, still credited to the start date.
+    const span = end > start ? end - start : end + 24 * 60 - start;
+    return Math.round((span / 60) * 100) / 100;
 }
 
 export function creditFromHourTotal(totalHours) {
@@ -139,6 +142,130 @@ export async function settleApprovedCompOffHours({ employeeId, organizationId })
     }
 
     return { creditDays, remainingHours: round2(total - consumeHours) };
+}
+
+const USAGE_EPSILON = 0.001;
+
+/** Days an approved compensatory leave should take from the comp-off ledger. */
+export function compensatoryLeaveDays(leave) {
+    if (!leave) return 0;
+    if (leave.isHalfDay) return 0.5;
+    const working = Number(leave.workingDays);
+    const duration = Number(leave.duration);
+    const days = working > 0 ? working : duration;
+    if (!Number.isFinite(days) || days <= 0) return 0;
+    return round2(days);
+}
+
+/**
+ * Spread approved compensatory leave across credits, oldest work day first.
+ * A pending leave is not passed in, so it leaves the credit unused.
+ */
+export function allocateCompOffUsage(credits = [], leaves = []) {
+    const orderedCredits = [...credits].sort((a, b) => {
+        const byDate = String(a.workDateKey || '').localeCompare(String(b.workDateKey || ''));
+        if (byDate !== 0) return byDate;
+        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    });
+    const slots = new Map(
+        orderedCredits.map((credit) => [
+            String(credit._id || credit.id),
+            { usedDays: 0, isUsed: false, usedAt: null, usedInLeave: null },
+        ])
+    );
+    const orderedLeaves = [...leaves].sort(
+        (a, b) => new Date(a.approvedAt || a.startDate || 0) - new Date(b.approvedAt || b.startDate || 0)
+    );
+
+    for (const leave of orderedLeaves) {
+        let need = compensatoryLeaveDays(leave);
+        const usedAt = leave.approvedAt || leave.startDate || null;
+        const leaveId = leave._id || leave.id || null;
+        for (const credit of orderedCredits) {
+            if (need <= USAGE_EPSILON) break;
+            const id = String(credit._id || credit.id);
+            const slot = slots.get(id);
+            if (!slot || credit.isExpired) continue;
+            if (
+                credit.expiryDate &&
+                leave.startDate &&
+                new Date(credit.expiryDate) < new Date(leave.startDate)
+            ) {
+                continue;
+            }
+            const credited = round2(Number(credit.creditDays) || 0);
+            const left = round2(credited - slot.usedDays);
+            if (left <= USAGE_EPSILON) continue;
+            const take = round2(Math.min(left, need));
+            slot.usedDays = round2(slot.usedDays + take);
+            slot.usedAt = usedAt;
+            slot.usedInLeave = leaveId;
+            slot.isUsed = slot.usedDays >= credited - USAGE_EPSILON;
+            need = round2(need - take);
+        }
+    }
+
+    return orderedCredits.map((credit) => ({
+        id: String(credit._id || credit.id),
+        ...slots.get(String(credit._id || credit.id)),
+    }));
+}
+
+/**
+ * Rewrite used days from approved compensatory leaves.
+ * Safe to run again: the result is calculated from those leaves, not added on top.
+ */
+export async function syncCompOffUsage({ employeeId, organizationId }) {
+    if (!employeeId || !organizationId) return { updated: 0 };
+
+    const [leaves, credits] = await Promise.all([
+        Leave.find({
+            employee: employeeId,
+            organizationId,
+            leaveType: 'compensatory',
+            status: 'approved',
+        })
+            .select('_id isHalfDay workingDays duration startDate approvedAt')
+            .lean(),
+        CompOff.find({
+            employeeId,
+            organizationId,
+            status: 'approved',
+            creditDays: { $gt: 0 },
+        }).sort({ workDateKey: 1, createdAt: 1 }),
+    ]);
+
+    const allocation = allocateCompOffUsage(credits, leaves);
+    const byId = new Map(allocation.map((row) => [row.id, row]));
+    let updated = 0;
+
+    for (const doc of credits) {
+        const slot = byId.get(String(doc._id));
+        if (!slot) continue;
+        const nextLeave = slot.usedDays > 0 ? slot.usedInLeave : null;
+        const nextUsedAt = slot.usedDays > 0 ? slot.usedAt : null;
+        const unchanged =
+            round2(doc.usedDays || 0) === slot.usedDays &&
+            Boolean(doc.isUsed) === Boolean(slot.isUsed) &&
+            String(doc.usedInLeave || '') === String(nextLeave || '');
+        if (unchanged) continue;
+        doc.usedDays = slot.usedDays;
+        doc.isUsed = slot.isUsed;
+        doc.usedAt = nextUsedAt;
+        doc.usedInLeave = nextLeave;
+        await doc.save();
+        updated += 1;
+    }
+
+    return { updated };
+}
+
+export async function syncCompOffUsageForLeave(leave) {
+    if (!leave || leave.leaveType !== 'compensatory') return { updated: 0 };
+    const employeeId = leave.employee?._id || leave.employee;
+    const organizationId = leave.organizationId;
+    if (!employeeId || !organizationId) return { updated: 0 };
+    return syncCompOffUsage({ employeeId, organizationId });
 }
 
 function parseHm(value) {

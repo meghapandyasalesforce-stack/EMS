@@ -52,6 +52,18 @@ const unitLabel = (unit) => {
     return 'Hours';
 };
 
+const usedDaysOf = (item) => {
+    const credited = Number(item?.creditDays) || 0;
+    const used = Number(item?.usedDays);
+    if (Number.isFinite(used) && used > 0) return used;
+    return item?.isUsed ? credited : 0;
+};
+
+const remainingDaysOf = (item) => {
+    const credited = Number(item?.creditDays) || 0;
+    return Math.max(0, Math.round((credited - usedDaysOf(item)) * 100) / 100);
+};
+
 const creditLabel = (item) => {
     if (item.requestUnit === 'half_day') return '0.5 Day';
     if (item.requestUnit === 'full_day') return '1.0 Day';
@@ -148,7 +160,9 @@ const MyCompOffRequests = () => {
                 if (request?.status === 'pending') status = 'requested';
                 else if (request?.status === 'approved') {
                     const expired = request.expiryDate && new Date(request.expiryDate) < new Date();
-                    status = expired || request.isExpired ? 'expired' : 'credited';
+                    if (expired || request.isExpired) status = 'expired';
+                    else if (request.isUsed || remainingDaysOf(request) <= 0) status = 'used';
+                    else status = 'credited';
                 } else if (request?.status === 'rejected') status = 'rejected';
                 return {
                     key,
@@ -191,14 +205,15 @@ const MyCompOffRequests = () => {
             const key = item.workDateKey || dateKeyFromValue(item.date);
             if (item.status === 'pending') pending += 1;
             const days = Number(item.creditDays) || 0;
+            const taken = usedDaysOf(item);
+            const remaining = Math.max(0, Math.round((days - taken) * 100) / 100);
             if (item.status === 'approved' && days > 0) {
                 const expired = item.isExpired || (item.expiryDate && new Date(item.expiryDate) < now);
-                if (item.isUsed) {
-                    if (!key || key.startsWith(String(year))) used += days;
-                } else if (!expired) {
-                    available += days;
-                    if (item.expiryDate && new Date(item.expiryDate) <= soon) {
-                        expiring += days;
+                if (!key || key.startsWith(String(year))) used += taken;
+                if (!expired) {
+                    available += remaining;
+                    if (remaining > 0 && item.expiryDate && new Date(item.expiryDate) <= soon) {
+                        expiring += remaining;
                         if (!expiringDate || new Date(item.expiryDate) < new Date(expiringDate)) {
                             expiringDate = item.expiryDate;
                         }
@@ -321,7 +336,7 @@ const MyCompOffRequests = () => {
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                    <p>Comp-off must be used within {validityDays} days of credit. A weekend or holiday punch stays eligible until you send a request. Hours after you have already punched out are requested with a start and end time.</p>
+                    <p>Comp-off must be used within {validityDays} days of credit. A weekend or holiday punch stays eligible until you send a request. Hours after you have already punched out are requested with a start and end time. An earlier end time counts as the next morning.</p>
                 </div>
 
                 {showForm && (
@@ -348,6 +363,7 @@ const MyCompOffRequests = () => {
                                     <span className="mb-1 block font-medium text-slate-700">End</span>
                                     <input type="time" required value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2" />
                                 </label>
+                                <p className="text-xs text-slate-500 md:col-span-2">If the end time is earlier than the start, it counts as the next morning. 20:00 to 02:00 is 6 hours on the start date.</p>
                             </>
                         )}
                         <label className="text-sm md:col-span-2">
@@ -412,6 +428,7 @@ const MyCompOffRequests = () => {
                                             {row.status === 'credited' ? (
                                                 <button type="button" onClick={useCompOff} className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700">Use Comp-Off</button>
                                             ) : null}
+                                            {row.status === 'used' ? <span className="text-xs text-slate-400">Fully used</span> : null}
                                             {row.status === 'expired' ? <span className="text-xs text-slate-400">Expired</span> : null}
                                         </td>
                                     </tr>
@@ -463,20 +480,21 @@ const MyCompOffRequests = () => {
                                     const key = item.workDateKey || dateKeyFromValue(item.date);
                                     const expired = item.isExpired || (item.expiryDate && new Date(item.expiryDate) < new Date());
                                     const days = Number(item.creditDays) || 0;
-                                    const balance = item.status === 'approved' && !item.isUsed && !expired ? days : 0;
+                                    const taken = usedDaysOf(item);
+                                    const balance = item.status === 'approved' && !expired ? Math.max(0, Math.round((days - taken) * 100) / 100) : 0;
                                     return (
                                         <tr key={item._id} className="border-t border-slate-100">
                                             <td className="px-4 py-3 font-medium text-slate-800">{formatDay(key)}</td>
                                             <td className="px-4 py-3 text-emerald-700">{creditLabel(item)}</td>
-                                            <td className="px-4 py-3 text-slate-600">{item.isUsed && item.usedAt ? formatDay(dateKeyFromValue(item.usedAt)) : '—'}</td>
+                                            <td className="px-4 py-3 text-slate-600">{taken > 0 && item.usedAt ? formatDay(dateKeyFromValue(item.usedAt)) : '—'}</td>
                                             <td className="px-4 py-3 text-slate-700">{item.status === 'approved' ? `${balance.toFixed(1)} Day` : '—'}</td>
                                             <td className="px-4 py-3 text-slate-600">{item.expiryDate ? formatDay(dateKeyFromValue(item.expiryDate)) : '—'}</td>
-                                            <td className="px-4 py-3"><StatusPill status={expired && item.status === 'approved' ? 'expired' : item.status} /></td>
+                                            <td className="px-4 py-3"><StatusPill status={expired && item.status === 'approved' ? 'expired' : item.isUsed ? 'used' : item.status} /></td>
                                             <td className="px-4 py-3">
                                                 {item.status === 'pending' ? (
                                                     <button type="button" onClick={() => cancelRequest(item._id)} className="text-sm text-slate-500 underline">Cancel</button>
                                                 ) : null}
-                                                {item.status === 'approved' && !item.isUsed && !expired && days > 0 ? (
+                                                {item.status === 'approved' && !item.isUsed && !expired && balance > 0 ? (
                                                     <button type="button" onClick={useCompOff} className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700">Use Comp-Off</button>
                                                 ) : null}
                                                 {item.isUsed ? <span className="text-xs text-slate-400">Fully used</span> : null}
@@ -509,6 +527,7 @@ const StatusPill = ({ status }) => {
         pending: 'bg-amber-50 text-amber-700',
         credited: 'bg-emerald-50 text-emerald-700',
         approved: 'bg-emerald-50 text-emerald-700',
+        used: 'bg-slate-100 text-slate-600',
         rejected: 'bg-rose-50 text-rose-700',
         expired: 'bg-slate-100 text-slate-500',
     };
@@ -518,6 +537,7 @@ const StatusPill = ({ status }) => {
         pending: 'Pending',
         credited: 'Credited',
         approved: 'Credited',
+        used: 'Used',
         rejected: 'Rejected',
         expired: 'Expired',
     };
