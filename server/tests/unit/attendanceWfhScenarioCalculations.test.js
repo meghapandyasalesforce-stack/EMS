@@ -460,5 +460,13 @@ describe('WFH/Attendance scenario calculations', () => {
       const plan = planOf({ wfhType: 'none', nowHHmm: '14:00' });
       expect(isWfhOnlyPunchPeriod(plan)).toBe(false);
     });
+
+    it('Home punch is only authorized when approved WFH covers the period', () => {
+      const none = planOf({ wfhType: 'none', nowHHmm: '10:00' });
+      const approved = planOf({ wfhType: 'full', nowHHmm: '10:00' });
+      // clock-in uses isWfhOnlyPunchPeriod: false → WFH_APPROVAL_REQUIRED; true → Home allowed / Office blocked
+      expect(isWfhOnlyPunchPeriod(none)).toBe(false);
+      expect(isWfhOnlyPunchPeriod(approved)).toBe(true);
+    });
   });
 });

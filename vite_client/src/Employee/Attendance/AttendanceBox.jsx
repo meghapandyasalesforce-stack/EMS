@@ -86,14 +86,15 @@ const AttendanceBox = ({ variant = 'default' }) => {
   const [todayWfhSchedule, setTodayWfhSchedule] = useState(null);
   const [wfhNoticeDismissed, setWfhNoticeDismissed] = useState(false);
   const [showAllEmployeesModal, setShowAllEmployeesModal] = useState(false);
+  const [showWfhApprovalPopup, setShowWfhApprovalPopup] = useState(false);
   const [selectedAllEmployeesDate, setSelectedAllEmployeesDate] = useState(new Date());
   const [allEmployeesBreaksData, setAllEmployeesBreaksData] = useState([]);
   const [loadingAllEmployeesData, setLoadingAllEmployeesData] = useState(false);
 
   const locationRequiredForPunch = isLocationRequiredForPunch(attendanceRule);
-  // Org-level WFH availability (defaults to allowed when the rule doesn't specify)
-  const wfhAllowed = attendanceRule?.allowWorkFromHome !== false;
-  const isWfhSelected = wfhAllowed && workLocation === 'work_from_home';
+  // Show Office/Home toggle when org allows WFH (or approved period forces Home).
+  // Actual Home punch is still blocked unless approved WFH covers today.
+  const orgAllowsWfh = attendanceRule?.allowWorkFromHome !== false;
 
   const parseHmToMinutes = (hm) => {
     const parts = String(hm || '').split(':');
@@ -231,9 +232,8 @@ const AttendanceBox = ({ variant = 'default' }) => {
     }
   }, [attendanceRule?.daySchedule]);
 
-  // Hide Office when approved WFH covers the current working half/day
+  // Approved WFH covers the current working half/day → Home punch only
   const lockWfhOnly = useMemo(() => {
-    if (!wfhAllowed) return false;
     const ds = attendanceRule?.daySchedule;
     if (ds?.lockWfhOnly === true) return true;
     if (ds?.expectedWorkLocation === 'work_from_home') return true;
@@ -264,12 +264,15 @@ const AttendanceBox = ({ variant = 'default' }) => {
     }
     return false;
   }, [
-    wfhAllowed,
     todayWfhSchedule,
     inFirstHalfOfDay,
     inFirstHalfBrowser,
     attendanceRule?.daySchedule,
   ]);
+
+  // Keep Home button visible when org allows WFH; punch still requires approved request.
+  const wfhAllowed = orgAllowsWfh || lockWfhOnly;
+  const isWfhSelected = wfhAllowed && workLocation === 'work_from_home';
 
   // Half leave/holiday with no approved WFH on the working half → Office only
   const lockOfficeOnly = useMemo(() => {
@@ -385,19 +388,19 @@ const AttendanceBox = ({ variant = 'default' }) => {
     };
   }, [orgTimezone, attendanceRule?.daySchedule?.wfhType]);
 
-  // If org disables WFH, fall back to office selection
+  // If org disables WFH (and no approved period), fall back to office selection
   useEffect(() => {
     if (!wfhAllowed && workLocation !== 'office') {
       setWorkLocation('office');
     }
   }, [wfhAllowed, workLocation]);
 
-  // When WFH-only window is active, force Home (same existing punch path)
+  // When approved WFH-only window is active, force Home
   useEffect(() => {
-    if (wfhAllowed && lockWfhOnly && workLocation !== 'work_from_home') {
+    if (lockWfhOnly && workLocation !== 'work_from_home') {
       setWorkLocation('work_from_home');
     }
-  }, [wfhAllowed, lockWfhOnly, workLocation]);
+  }, [lockWfhOnly, workLocation]);
 
   // When office-only working half (leave/holiday other half, no approved WFH), force Office
   useEffect(() => {
@@ -678,6 +681,10 @@ const AttendanceBox = ({ variant = 'default' }) => {
         );
         return;
       }
+      if (requestedLocation === 'work_from_home' && !lockWfhOnly) {
+        setShowWfhApprovalPopup(true);
+        return;
+      }
       const primaryLocation =
         openSession?.workLocation === 'home' ? 'work_from_home' : openSession?.workLocation;
       const allowContinue =
@@ -777,7 +784,11 @@ const AttendanceBox = ({ variant = 'default' }) => {
           errorMessage = err.message;
         }
         
-        toast.error(errorMessage);
+        if (errorData?.code === 'WFH_APPROVAL_REQUIRED') {
+          setShowWfhApprovalPopup(true);
+        } else {
+          toast.error(errorMessage);
+        }
 
         if (
           errorData?.code === 'ALREADY_CLOCKED_IN' ||
@@ -1067,6 +1078,69 @@ const AttendanceBox = ({ variant = 'default' }) => {
     );
   }
 
+  const wfhApprovalPopup = showWfhApprovalPopup ? (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wfh-approval-popup-title"
+      onClick={() => setShowWfhApprovalPopup(false)}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+            <FiHome className="h-5 w-5 text-amber-700" />
+          </div>
+          <h3
+            id="wfh-approval-popup-title"
+            className="flex-1 text-lg font-bold text-slate-900 leading-snug"
+          >
+            WFH request required
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowWfhApprovalPopup(false)}
+            className="p-2 -mr-1 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+            aria-label="Close"
+          >
+            <FiX className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+          Work From Home punch-in is allowed only after your WFH request for today is approved.
+          You can punch in from the office, or apply for WFH and wait for approval.
+        </p>
+
+        <div className="mt-5 flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              setShowWfhApprovalPopup(false);
+              navigate('/my-leave', { state: { panelTab: 'wfh-request' } });
+            }}
+            className="w-full rounded-xl bg-[#20C997] px-4 py-3 text-sm font-semibold text-white hover:bg-[#1ab589] transition-colors"
+          >
+            Apply for WFH
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowWfhApprovalPopup(false);
+              setWorkLocation('office');
+            }}
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            Punch in from office
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (variant === 'dashboard') {
     const activeBreakEntry = currentSession?.breaks?.find((b) => b.breakIn && !b.breakOut);
     const currentBreakElapsedSec =
@@ -1109,6 +1183,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
     );
 
     return (
+    <>
       <div className="relative rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
         {error && (
           <div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -1365,6 +1440,8 @@ const AttendanceBox = ({ variant = 'default' }) => {
           )}
         </div>
       </div>
+      {wfhApprovalPopup}
+    </>
     );
   }
 
@@ -1653,7 +1730,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
               Click below to punch in and start tracking your work hours
             </p>
 
-            {/* Work Location Selection (Office / Work From Home) */}
+            {/* Work Location Selection (Office / Work From Home) — Home shown when org allows; punch requires approved WFH */}
             {wfhAllowed && (
               <div className="flex justify-center gap-3 mb-6" role="group" aria-label="Work location">
                 {!lockWfhOnly && (
@@ -1717,6 +1794,8 @@ const AttendanceBox = ({ variant = 'default' }) => {
             </div>
           )}
         </div>
+
+        {wfhApprovalPopup}
 
         {/* All Employee Breaks Modal */}
         {showAllEmployeesModal && (

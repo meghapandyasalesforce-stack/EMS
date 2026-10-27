@@ -10864,3 +10864,674 @@
     text-align: center;
   }
 }
+
+/* ?? Governance Approvals Suite (PendingApprovals mockup UI) ?? */
+.ats-ui.ats-gov-suite,
+.ats-ui .ats-gov-suite__inner {
+  --gov-primary: #00a378;
+  --gov-primary-deep: #0b7458;
+  --gov-ink: #0e2b3d;
+  --gov-muted: #64748b;
+  --gov-line: rgba(14, 43, 61, 0.1);
+  --gov-surface: #ffffff;
+  --gov-soft: #f4f7f9;
+  --gov-error: #be123c;
+  --gov-error-soft: #ffe4e6;
+  --gov-warn: #b45309;
+  --gov-warn-soft: #fef3c7;
+}
+
+.ats-ui .ats-gov-suite__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 100%;
+}
+
+.ats-ui .ats-gov-suite__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ats-ui .ats-gov-suite__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ats-ui .ats-gov-suite__title {
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--gov-ink);
+  letter-spacing: -0.02em;
+}
+
+.ats-ui .ats-gov-suite__pending-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: var(--gov-error-soft);
+  color: var(--gov-error);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ats-ui .ats-gov-suite__pending-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--gov-error);
+  animation: ats-gov-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ats-gov-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.ats-ui .ats-gov-suite__subtitle {
+  margin: 0.45rem 0 0;
+  max-width: 42rem;
+  color: var(--gov-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.ats-ui .ats-gov-suite__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.ats-ui .ats-gov-suite__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 0.95rem;
+  border-radius: 0.65rem;
+  border: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.ats-ui .ats-gov-suite__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ats-ui .ats-gov-suite__btn--ghost {
+  background: #e8eef2;
+  color: var(--gov-ink);
+}
+
+.ats-ui .ats-gov-suite__btn--ghost:hover:not(:disabled) {
+  background: #dbe4ea;
+}
+
+.ats-ui .ats-gov-suite__btn--ghost-dark {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.ats-ui .ats-gov-suite__btn--primary {
+  background: var(--gov-primary);
+  color: #fff;
+}
+
+.ats-ui .ats-gov-suite__btn--primary:hover:not(:disabled) {
+  background: var(--gov-primary-deep);
+}
+
+.ats-ui .ats-gov-suite__btn--danger {
+  background: var(--gov-error);
+  color: #fff;
+}
+
+.ats-ui .ats-gov-suite__btn--danger:hover:not(:disabled) {
+  background: #9f1239;
+}
+
+.ats-ui .ats-gov-suite__sla-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  background: var(--gov-error-soft);
+  color: var(--gov-error);
+}
+
+.ats-ui .ats-gov-suite__sla-banner.is-active {
+  box-shadow: 0 0 0 4px rgba(190, 18, 60, 0.2);
+}
+
+.ats-ui .ats-gov-suite__sla-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.ats-ui .ats-gov-suite__sla-icon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  font-size: 1.35rem;
+}
+
+.ats-ui .ats-gov-suite__sla-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.ats-ui .ats-gov-suite__sla-text {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.95;
+}
+
+.ats-ui .ats-gov-suite__tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--gov-line);
+}
+
+.ats-ui .ats-gov-suite__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--gov-muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ats-ui .ats-gov-suite__tab.is-active {
+  color: var(--gov-primary);
+  border-bottom-color: var(--gov-primary);
+}
+
+.ats-ui .ats-gov-suite__tab-count {
+  display: inline-flex;
+  min-width: 1.4rem;
+  justify-content: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #e8eef2;
+  color: var(--gov-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ats-ui .ats-gov-suite__tab.is-active .ats-gov-suite__tab-count {
+  background: rgba(0, 163, 120, 0.15);
+  color: var(--gov-primary);
+}
+
+.ats-ui .ats-gov-suite__filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.ats-ui .ats-gov-suite__filters-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1 1 18rem;
+  flex-wrap: wrap;
+}
+
+.ats-ui .ats-gov-suite__search {
+  position: relative;
+  flex: 1 1 16rem;
+  max-width: 28rem;
+}
+
+.ats-ui .ats-gov-suite__search svg {
+  position: absolute;
+  left: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gov-muted);
+  pointer-events: none;
+}
+
+.ats-ui .ats-gov-suite__search input,
+.ats-ui .ats-gov-suite__filters-left select,
+.ats-ui .ats-gov-suite__field select,
+.ats-ui .ats-gov-suite__field textarea {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--gov-line);
+  border-radius: 0.65rem;
+  background: var(--gov-soft);
+  color: var(--gov-ink);
+  font-size: 0.875rem;
+}
+
+.ats-ui .ats-gov-suite__search input {
+  padding: 0 0.85rem 0 2.35rem;
+}
+
+.ats-ui .ats-gov-suite__filters-left select {
+  width: auto;
+  min-width: 10rem;
+  padding: 0 0.7rem;
+}
+
+.ats-ui .ats-gov-suite__showing {
+  margin: 0;
+  color: var(--gov-muted);
+  font-size: 0.85rem;
+}
+
+.ats-ui .ats-gov-suite__table-wrap {
+  background: var(--gov-surface);
+  border: 1px solid var(--gov-line);
+  border-radius: 0.9rem;
+  overflow: hidden;
+  box-shadow: 0 1px 8px rgba(14, 43, 61, 0.04);
+}
+
+.ats-ui .ats-gov-suite__table {
+  min-width: 860px;
+  overflow-x: auto;
+}
+
+.ats-ui .ats-gov-suite__thead,
+.ats-ui .ats-gov-suite__trow {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(11rem, 1.3fr) minmax(12rem, 1.4fr) 7.5rem 6.5rem 11rem;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+}
+
+.ats-ui .ats-gov-suite__thead {
+  background: var(--gov-soft);
+  color: var(--gov-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ats-ui .ats-gov-suite__trow {
+  border-top: 1px solid rgba(14, 43, 61, 0.06);
+}
+
+.ats-ui .ats-gov-suite__trow:hover {
+  background: rgba(244, 247, 249, 0.65);
+}
+
+.ats-ui .ats-gov-suite__th--actions,
+.ats-ui .ats-gov-suite__td--actions {
+  text-align: right;
+  justify-self: end;
+}
+
+.ats-ui .ats-gov-suite__td--check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.ats-ui .ats-gov-suite__avatar {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 163, 120, 0.12);
+  color: var(--gov-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ats-ui .ats-gov-suite__name {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--gov-ink);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ats-ui .ats-gov-suite__name:hover {
+  color: var(--gov-primary);
+}
+
+.ats-ui .ats-gov-suite__meta,
+.ats-ui .ats-gov-suite__td--muted {
+  margin: 0.15rem 0 0;
+  color: var(--gov-muted);
+  font-size: 0.8rem;
+}
+
+.ats-ui .ats-gov-suite__req-title {
+  margin: 0;
+  color: var(--gov-ink);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.ats-ui .ats-gov-suite__sla {
+  display: inline-flex;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ats-ui .ats-gov-suite__sla.is-ok {
+  background: var(--gov-warn-soft);
+  color: var(--gov-warn);
+}
+
+.ats-ui .ats-gov-suite__sla.is-breached {
+  background: var(--gov-error-soft);
+  color: var(--gov-error);
+}
+
+.ats-ui .ats-gov-suite__td--actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.ats-ui .ats-gov-suite__approve {
+  border: 0;
+  border-radius: 0.55rem;
+  background: var(--gov-primary);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.ats-ui .ats-gov-suite__approve:hover:not(:disabled) {
+  background: var(--gov-primary-deep);
+}
+
+.ats-ui .ats-gov-suite__approve:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ats-ui .ats-gov-suite__icon-btn {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.55rem;
+  background: #e8eef2;
+  color: var(--gov-ink);
+  cursor: pointer;
+}
+
+.ats-ui .ats-gov-suite__icon-btn.is-reject {
+  background: var(--gov-error-soft);
+  color: var(--gov-error);
+}
+
+.ats-ui .ats-gov-suite__icon-btn.is-delegate {
+  background: transparent;
+  color: var(--gov-primary);
+}
+
+.ats-ui .ats-gov-suite__table-foot {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--gov-line);
+  color: var(--gov-muted);
+  font-size: 0.8rem;
+}
+
+.ats-ui .ats-gov-suite__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.65rem;
+  padding: 3.5rem 1.5rem;
+  background: var(--gov-surface);
+  border: 1px solid var(--gov-line);
+  border-radius: 0.9rem;
+}
+
+.ats-ui .ats-gov-suite__empty-icon {
+  display: flex;
+  width: 4.5rem;
+  height: 4.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 163, 120, 0.12);
+  color: var(--gov-primary);
+  font-size: 2rem;
+}
+
+.ats-ui .ats-gov-suite__empty h2 {
+  margin: 0;
+  color: var(--gov-ink);
+  font-size: 1.25rem;
+}
+
+.ats-ui .ats-gov-suite__empty p {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--gov-muted);
+}
+
+.ats-ui .ats-gov-suite__bulk {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  transform: translateX(-50%);
+  padding: 0.85rem 1.25rem;
+  border-radius: 1rem;
+  background: var(--gov-ink);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(14, 43, 61, 0.28);
+}
+
+.ats-ui .ats-gov-suite__bulk-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 650;
+}
+
+.ats-ui .ats-gov-suite__bulk-count span {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--gov-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ats-ui .ats-gov-suite__bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.ats-ui .ats-gov-suite__drawer-overlay,
+.ats-ui .ats-gov-suite__modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(14, 43, 61, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.ats-ui .ats-gov-suite__drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(28rem, 100%);
+  height: 100%;
+  background: #fff;
+  box-shadow: -8px 0 30px rgba(14, 43, 61, 0.18);
+}
+
+.ats-ui .ats-gov-suite__drawer-head,
+.ats-ui .ats-gov-suite__drawer-foot,
+.ats-ui .ats-gov-suite__modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.15rem;
+  background: var(--gov-soft);
+}
+
+.ats-ui .ats-gov-suite__drawer-head h3,
+.ats-ui .ats-gov-suite__modal-head h3 {
+  margin: 0;
+  color: var(--gov-ink);
+  font-size: 1.05rem;
+}
+
+.ats-ui .ats-gov-suite__drawer-head p {
+  margin: 0.2rem 0 0;
+  color: var(--gov-muted);
+  font-size: 0.8rem;
+}
+
+.ats-ui .ats-gov-suite__drawer-head button,
+.ats-ui .ats-gov-suite__modal-head button {
+  border: 0;
+  background: transparent;
+  color: var(--gov-muted);
+  cursor: pointer;
+}
+
+.ats-ui .ats-gov-suite__drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 1.15rem;
+}
+
+.ats-ui .ats-gov-suite__drawer-body dl {
+  margin: 0;
+  padding: 0.9rem;
+  border-radius: 0.75rem;
+  background: var(--gov-soft);
+}
+
+.ats-ui .ats-gov-suite__drawer-body dt {
+  color: var(--gov-muted);
+  font-size: 0.75rem;
+}
+
+.ats-ui .ats-gov-suite__drawer-body dd {
+  margin: 0.15rem 0 0.75rem;
+  color: var(--gov-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ats-ui .ats-gov-suite__drawer-foot {
+  justify-content: flex-end;
+}
+
+.ats-ui .ats-gov-suite__modal-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.ats-ui .ats-gov-suite__modal {
+  width: min(32rem, 100%);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(14, 43, 61, 0.25);
+  overflow: hidden;
+}
+
+.ats-ui .ats-gov-suite__modal-copy {
+  margin: 0;
+  padding: 0 1.15rem;
+  color: var(--gov-muted);
+  font-size: 0.88rem;
+}
+
+.ats-ui .ats-gov-suite__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 1.15rem 0;
+  color: var(--gov-ink);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.ats-ui .ats-gov-suite__field textarea,
+.ats-ui .ats-gov-suite__field select {
+  padding: 0.7rem 0.8rem;
+  font-weight: 500;
+}
+
+.ats-ui .ats-gov-suite__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+@media (max-width: 900px) {
+  .ats-ui .ats-gov-suite__table-wrap {
+    overflow-x: auto;
+  }
+
+  .ats-ui .ats-gov-suite__bulk {
+    left: 1rem;
+    right: 1rem;
+    transform: none;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

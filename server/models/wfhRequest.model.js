@@ -2,9 +2,12 @@ import mongoose from "mongoose";
 
 /**
  * Work From Home request.
- * Independent from attendance punches, leave, and regularization.
+ * Independent from leave and regularization.
  * Submitting a request notifies manager/HR/admin by email, and a
- * manager/HR/admin can approve or reject it. It does NOT gate WFH punch-ins.
+ * manager/HR/admin can approve or reject it.
+ * Punch-in gate (attendance date / half, status=approved only):
+ * - approved → Home punch allowed, office punch blocked
+ * - pending / rejected / none → Home punch blocked, office unchanged
  */
 const wfhRequestSchema = new mongoose.Schema({
     organizationId: {

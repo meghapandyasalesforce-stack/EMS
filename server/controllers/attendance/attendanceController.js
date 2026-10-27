@@ -403,16 +403,6 @@ export const clockIn = async (req, res) => {
       .select('settings.allowWorkFromHome settings.allowNonWorkingDayPunch')
       .lean();
 
-    if (isWfhPunch) {
-      if (org?.settings?.allowWorkFromHome === false) {
-        return res.status(403).json({
-          success: false,
-          message: 'Work From Home punch-in is disabled by your organization. Please punch in from the office.',
-          code: 'WFH_DISABLED'
-        });
-      }
-    }
-
     // Block punch-in on weekends / configured off-days / holidays unless admin allows it
     const allowNonWorkingDayPunch = org?.settings?.allowNonWorkingDayPunch === true;
     const workingDayStatus = await resolveWorkingDayStatus(
@@ -444,6 +434,7 @@ export const clockIn = async (req, res) => {
     const timingRule = applyEmployeeShiftToRule(activeRule, shiftEmployee);
 
     // Day plan: approved leave + approved WFH + optional half-day holiday
+    // Uses authenticated employee id + DB status/date only (pending/rejected never count).
     const dayPlan = await loadAttendanceDayPlan({
       organizationId,
       employeeId: req.employee?._id || userId,
@@ -471,8 +462,30 @@ export const clockIn = async (req, res) => {
       });
     }
 
+    const approvedWfhPeriod = isWfhOnlyPunchPeriod(dayPlan);
+
+    // Home punch requires an approved WFH request covering this attendance date/half.
+    // Pending / rejected / other-date / no request → block Home; office punch stays available.
+    if (isWfhPunch && !approvedWfhPeriod) {
+      if (org?.settings?.allowWorkFromHome === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'Work From Home punch-in is disabled by your organization. Please punch in from the office.',
+          code: 'WFH_DISABLED'
+        });
+      }
+      return res.status(403).json({
+        success: false,
+        message:
+          'Work From Home punch-in requires an approved WFH request for today. Please punch in from the office, or wait for WFH approval.',
+        code: 'WFH_APPROVAL_REQUIRED',
+        wfhType: dayPlan.wfhType,
+        currentHalf: dayPlan.currentHalf,
+      });
+    }
+
     // Approved WFH for current working half/day → Home punch only (block Office via API)
-    if (isWfhOnlyPunchPeriod(dayPlan) && !isWfhPunch) {
+    if (approvedWfhPeriod && !isWfhPunch) {
       return res.status(403).json({
         success: false,
         message:
@@ -508,7 +521,7 @@ export const clockIn = async (req, res) => {
           dayPlan.firstHalfOff);
 
       if (canContinue) {
-        if (isWfhOnlyPunchPeriod(dayPlan) && requestedLocation !== 'work_from_home') {
+        if (approvedWfhPeriod && requestedLocation !== 'work_from_home') {
           return res.status(403).json({
             success: false,
             message:
