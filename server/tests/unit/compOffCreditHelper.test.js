@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { hoursBetween, creditFromHourTotal, allocateCompOffUsage, compensatoryLeaveDays } from '../../helpers/compOffCreditHelper.js';
+import { hoursBetween, creditFromHourTotal, allocateCompOffUsage, compensatoryLeaveDays, compOffRequestDays, compOffHeldDays } from '../../helpers/compOffCreditHelper.js';
 
 describe('compOffCreditHelper', () => {
     it('counts hours on the same day and across midnight', () => {
@@ -32,6 +32,24 @@ describe('compOffCreditHelper', () => {
             [{ id: 'leave-2', isHalfDay: true, approvedAt: '2026-10-27' }]
         );
         expect(partial[0]).toMatchObject({ usedDays: 0.5, isUsed: false, usedInLeave: 'leave-2' });
+    });
+
+    it('measures a request in days instead of counting the form', () => {
+        expect(compOffRequestDays({ requestUnit: 'hours', requestedHours: 2 })).toBe(0.25);
+        expect(compOffRequestDays({ requestUnit: 'hours', requestedHours: 6 })).toBe(0.75);
+        expect(compOffRequestDays({ requestUnit: 'half_day' })).toBe(0.5);
+        expect(compOffRequestDays({ requestUnit: 'full_day' })).toBe(1);
+        expect(compOffHeldDays({
+            status: 'approved',
+            requestUnit: 'hours',
+            requestedHours: 6,
+            usedDays: 0.5,
+        })).toBe(0.25);
+        expect(compOffHeldDays({
+            status: 'approved',
+            requestUnit: 'full_day',
+            isUsed: true,
+        })).toBe(0);
     });
 
     it('turns 4 hours into half a day and 8 into a full day', () => {

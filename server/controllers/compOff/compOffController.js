@@ -11,9 +11,21 @@ import {
     creditCompensatoryDays,
     settleApprovedCompOffHours,
     syncCompOffUsage,
+    compOffRequestDays,
+    compOffHeldDays,
 } from '../../helpers/compOffCreditHelper.js';
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+function roundDays(value) {
+    return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function formatDays(value) {
+    const days = roundDays(value);
+    const label = Number.isInteger(days) ? String(days) : days.toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
+    return `${label} day${days === 1 ? '' : 's'}`;
+}
 
 async function grantApprovedCompOff(compOff) {
     if (compOff.requestUnit === 'half_day' || compOff.requestUnit === 'full_day') {
@@ -89,42 +101,38 @@ export const createCompOffRequest = async (req, res) => {
         }
 
         const validityDays = rule?.compOffRules?.validity || 90;
-        const maxAccumulation = rule?.compOffRules?.maxAccumulation || 5;
-        const allowedPerMonth = rule?.compOffRules?.allowedPerMonth || 2;
+        const maxAccumulation = Number(rule?.compOffRules?.maxAccumulation ?? 5);
+        const allowedPerMonth = Number(rule?.compOffRules?.allowedPerMonth ?? 2);
+        const incomingDays = compOffRequestDays({ requestUnit: unit, requestedHours });
 
-        const requestDate = new Date(`${workDateKey}T12:00:00.000Z`);
-        const monthStart = new Date(requestDate.getFullYear(), requestDate.getMonth(), 1);
-        const monthEnd = new Date(requestDate.getFullYear(), requestDate.getMonth() + 1, 0, 23, 59, 59, 999);
-
-        const monthlyCompOffs = await CompOff.countDocuments({
+        const openDocs = await CompOff.find({
             organizationId,
             employeeId,
-            date: { $gte: monthStart, $lte: monthEnd },
-            status: { $in: ['pending', 'approved'] }
-        });
+            status: { $in: ['pending', 'approved'] },
+        }).select('requestUnit requestedHours usedDays isUsed isExpired status workDateKey');
 
-        if (monthlyCompOffs >= allowedPerMonth) {
+        const monthKey = workDateKey.slice(0, 7);
+        const monthDays = roundDays(openDocs
+            .filter((doc) => String(doc.workDateKey || '').startsWith(monthKey))
+            .reduce((sum, doc) => sum + compOffRequestDays(doc), 0));
+
+        if (allowedPerMonth > 0 && roundDays(monthDays + incomingDays) > allowedPerMonth + 0.001) {
             return sendError(
                 res,
-                `Maximum ${allowedPerMonth} comp-off requests allowed per month. You have already requested ${monthlyCompOffs} this month.`,
+                `You can request ${formatDays(allowedPerMonth)} of comp-off this month. ${formatDays(monthDays)} are already requested, and this request is ${formatDays(incomingDays)}.`,
                 400,
                 'MONTHLY_LIMIT_EXCEEDED'
             );
         }
 
-        // Check total accumulation
-        const totalCompOffs = await CompOff.countDocuments({
-            organizationId,
-            employeeId,
-            status: { $in: ['pending', 'approved'] },
-            isExpired: false,
-            isUsed: false
-        });
+        const heldDays = roundDays(openDocs
+            .filter((doc) => !doc.isExpired)
+            .reduce((sum, doc) => sum + compOffHeldDays(doc), 0));
 
-        if (totalCompOffs >= maxAccumulation) {
+        if (maxAccumulation > 0 && roundDays(heldDays + incomingDays) > maxAccumulation + 0.001) {
             return sendError(
                 res,
-                `Maximum ${maxAccumulation} comp-offs can be accumulated. You currently have ${totalCompOffs} active comp-offs.`,
+                `You can hold ${formatDays(maxAccumulation)} of unused comp-off. You already hold ${formatDays(heldDays)}, and this request is ${formatDays(incomingDays)}.`,
                 400,
                 'MAX_ACCUMULATION_EXCEEDED'
             );
@@ -141,6 +149,8 @@ export const createCompOffRequest = async (req, res) => {
         if (existingCompOff) {
             return sendError(res, 'Comp-off request already exists for this date', 400, 'DUPLICATE_REQUEST');
         }
+
+        const requestDate = new Date(`${workDateKey}T12:00:00.000Z`);
 
         // Create comp-off request
         const compOff = new CompOff({

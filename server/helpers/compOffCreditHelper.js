@@ -13,6 +13,28 @@ import logger from './logger.js';
 export const COMP_OFF_HALF_DAY_HOURS = 4;
 export const COMP_OFF_FULL_DAY_HOURS = 8;
 
+/** Days a request asks for. Hours count as a fraction of an 8-hour day. */
+export function compOffRequestDays({ requestUnit, requestedHours } = {}) {
+    if (requestUnit === 'half_day') return 0.5;
+    if (requestUnit === 'full_day') return 1;
+    const hours = Math.max(0, Number(requestedHours) || 0);
+    return round2(hours / COMP_OFF_FULL_DAY_HOURS);
+}
+
+/** Days still held by a pending or approved request. */
+export function compOffHeldDays(doc = {}) {
+    if (doc.isExpired || doc.status === 'expired' || doc.status === 'rejected') return 0;
+    if (doc.status && doc.status !== 'pending' && doc.status !== 'approved') return 0;
+    const requested = compOffRequestDays(doc);
+    const recordedUsed = Number(doc.usedDays);
+    const used = Number.isFinite(recordedUsed) && recordedUsed > 0
+        ? recordedUsed
+        : doc.isUsed
+            ? requested
+            : 0;
+    return round2(Math.max(0, requested - used));
+}
+
 export function hoursBetween(startTime, endTime) {
     const start = parseHm(startTime);
     const end = parseHm(endTime);
