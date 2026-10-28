@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
@@ -14,11 +15,12 @@ import {
   FiLoader,
   FiChevronLeft,
   FiChevronRight,
-  FiHome,
+  FiDownload,
+  FiPlus,
+  FiLock,
   FiUser,
   FiCalendar,
 } from 'react-icons/fi';
-import LoadingSpinner from '../../components/LoadingSpinner';
 import TeamWfhRequestsPanel from './TeamWfhRequestsPanel';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
@@ -176,6 +178,9 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
   const authUser = useSelector((state) => state.auth.user);
   const employeeProfile = useSelector((state) => state.employeeDetails.employee);
   const userObj = authUser || employeeProfile;
+  const org = useSelector((state) => state.organization?.profile);
+  const orgName = org?.name || org?.companyName || 'Your organization';
+  const [wfhTotal, setWfhTotal] = useState(0);
 
   const isAdmin = isOrgOwner;
   const isHr = useMemo(() => {
@@ -207,6 +212,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
   const [statusDropdown, setStatusDropdown] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -218,6 +224,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
   const [rejectReason, setRejectReason] = useState('');
 
   const [actionBusy, setActionBusy] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const closeRejectModal = useCallback(() => {
     setRejectModalOpen(false);
@@ -226,7 +233,13 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    const next = search.trim();
+    const t = setTimeout(() => {
+      setDebouncedSearch((prev) => {
+        if (prev !== next) setPage(1);
+        return next;
+      });
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -243,17 +256,33 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [drawerReq, rejectModalOpen, closeRejectModal]);
 
+  const buildListParams = useCallback((pageNum, limit = PAGE_SIZE) => {
+    const params = { page: pageNum, limit };
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    const start = (startDate || '').trim();
+    const end = (endDate || '').trim();
+    if (iso.test(start)) params.startDate = start;
+    if (iso.test(end)) params.endDate = end;
+    if (statusDropdown !== 'all') params.status = statusDropdown;
+    if (typeFilter !== 'all') params.regularizationType = typeFilter;
+    if (debouncedSearch) params.search = debouncedSearch;
+    return params;
+  }, [startDate, endDate, statusDropdown, typeFilter, debouncedSearch]);
+
   const fetchRequests = useCallback(async () => {
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    const start = (startDate || '').trim();
+    const end = (endDate || '').trim();
+    if (iso.test(start) && iso.test(end) && start > end) {
+      toast.warning('From date must be on or before the To date');
+      setRequests([]);
+      setPagination((prev) => ({ ...prev, total: 0, page: 1, pages: 1 }));
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      const params = { page, limit: PAGE_SIZE };
-      const iso = /^\d{4}-\d{2}-\d{2}$/;
-      if (iso.test((startDate || '').trim())) params.startDate = startDate.trim();
-      if (iso.test((endDate || '').trim())) params.endDate = endDate.trim();
-      if (statusDropdown !== 'all') {
-        params.status = statusDropdown;
-      }
-      const response = await axios.get(API_LIST, { params, withCredentials: true });
+      const response = await axios.get(API_LIST, { params: buildListParams(page), withCredentials: true });
       setRequests(response.data?.data ?? []);
       setStatusCounts(
         response.data?.statusCounts ?? {
@@ -275,7 +304,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, statusDropdown, page]);
+  }, [buildListParams, page, startDate, endDate]);
 
   /** If totals shrink (e.g. after approvals), clamp so we do not stay on an empty page */
   useEffect(() => {
@@ -295,16 +324,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
     if (updated) setDrawerReq(updated);
   }, [requests, drawerReq?._id]);
 
-  const filteredRequests = useMemo(() => {
-    if (!debouncedSearch) return requests;
-    const q = debouncedSearch.toLowerCase();
-    return requests.filter((r) => {
-      const emp = r.employeeId;
-      const name = `${emp?.name || ''} ${emp?.lastName || ''} ${emp?.email || ''}`.toLowerCase();
-      const reason = (r.reason || '').toLowerCase();
-      return name.includes(q) || reason.includes(q);
-    });
-  }, [requests, debouncedSearch]);
+  const filteredRequests = requests;
 
   useEffect(() => {
     const validPending = new Set(requests.filter((r) => r.status === 'pending').map((r) => String(r._id)));
@@ -351,8 +371,77 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
     setStartDate(b.start);
     setEndDate(b.end);
     setStatusDropdown('all');
+    setTypeFilter('all');
     setSearch('');
     setDebouncedSearch('');
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    axios.get('/v1/both/wfh-requests/all', { params: { page: 1, limit: 1 }, withCredentials: true })
+      .then((response) => {
+        if (!cancelled) setWfhTotal(response.data?.allTotal ?? response.data?.total ?? 0);
+      })
+      .catch(() => {
+        if (!cancelled) setWfhTotal(0);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const exportCsv = async () => {
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    const start = (startDate || '').trim();
+    const end = (endDate || '').trim();
+    if (iso.test(start) && iso.test(end) && start > end) {
+      toast.warning('From date must be on or before the To date');
+      return;
+    }
+    setExporting(true);
+    try {
+      const collected = [];
+      let pageNum = 1;
+      let pages = 1;
+      do {
+        const response = await axios.get(API_LIST, {
+          params: buildListParams(pageNum, 500),
+          withCredentials: true,
+        });
+        collected.push(...(response.data?.data ?? []));
+        pages = Math.max(1, response.data?.pagination?.pages ?? 1);
+        pageNum += 1;
+      } while (pageNum <= pages && pageNum <= 40);
+      if (!collected.length) {
+        toast.info('Nothing to export for these filters');
+        return;
+      }
+      const header = ['Employee', 'Employee ID', 'Date', 'Type', 'Requested in', 'Requested out', 'Reason', 'Status'];
+      const cell = (value) => `"${String(value ?? '').split('"').join('""')}"`;
+      const lines = collected.map((req) => {
+        const emp = req.employeeId || {};
+        const name = [emp.name, emp.lastName].filter(Boolean).join(' ').trim();
+        return [
+          name,
+          emp.employeeId || '',
+          req.attendanceDate ? format(new Date(req.attendanceDate), 'yyyy-MM-dd') : '',
+          getTypeLabel(req.regularizationType),
+          req.requestedClockIn ? format(new Date(req.requestedClockIn), 'HH:mm') : '',
+          req.requestedClockOut ? format(new Date(req.requestedClockOut), 'HH:mm') : '',
+          req.reason || '',
+          req.status || '',
+        ].map(cell).join(',');
+      });
+      const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'attendance-regularization.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const statusSummary = useMemo(
@@ -371,7 +460,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
 
     setActionBusy(ids.length === 1 ? `${ids[0]}` : '__bulk');
     try {
-      await Promise.all(
+      const results = await Promise.allSettled(
         ids.map((requestId) =>
           axios.patch(
             `/v1/both/attendance-regularization/manager/approve/${requestId}`,
@@ -383,15 +472,23 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
           )
         )
       );
-      toast.success(
-        useAdminBypass
-          ? ids.length === 1
-            ? 'Request approved (all workflow steps completed)'
-            : `${ids.length} requests approved (all steps completed)`
-          : ids.length === 1
-            ? 'Request approved'
-            : `${ids.length} requests approved`
-      );
+      const failed = results.filter((result) => result.status === 'rejected').length;
+      const approved = results.length - failed;
+      if (approved) {
+        toast.success(
+          useAdminBypass
+            ? approved === 1
+              ? 'Request approved (all workflow steps completed)'
+              : `${approved} requests approved (all steps completed)`
+            : approved === 1
+              ? 'Request approved'
+              : `${approved} requests approved`
+        );
+      }
+      if (failed) {
+        const reason = results.find((result) => result.status === 'rejected')?.reason;
+        toast.error(reason?.response?.data?.message || (approved ? `${failed} could not be approved` : 'Approve failed'));
+      }
       setSelectedIds(new Set());
       setDrawerReq(null);
       fetchRequests();
@@ -443,25 +540,35 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
     }
 
     setActionBusy(rejectTargetIds.length === 1 ? String(rejectTargetIds[0]) : '__bulk');
+    let rejected = 0;
+    let failed = 0;
+    let failMessage = '';
     try {
       for (const requestId of rejectTargetIds) {
-        /* eslint-disable no-await-in-loop */
-        await axios.patch(
-          `/v1/both/attendance-regularization/manager/reject/${requestId}`,
-          {
-            rejectionReason: rejectReason,
-          },
-          { withCredentials: true }
-        );
-        /* eslint-enable no-await-in-loop */
+        try {
+          /* eslint-disable no-await-in-loop */
+          await axios.patch(
+            `/v1/both/attendance-regularization/manager/reject/${requestId}`,
+            { rejectionReason: rejectReason },
+            { withCredentials: true }
+          );
+          /* eslint-enable no-await-in-loop */
+          rejected += 1;
+        } catch (error) {
+          failed += 1;
+          failMessage = error.response?.data?.message || failMessage;
+        }
       }
-      toast.success(
-        rejectTargetIds.length === 1 ? 'Request rejected' : `${rejectTargetIds.length} requests rejected`
-      );
+      if (rejected) {
+        toast.success(rejected === 1 ? 'Request rejected' : `${rejected} requests rejected`);
+      }
+      if (failed) {
+        toast.error(failMessage || (rejected ? `${failed} could not be rejected` : 'Reject failed'));
+      }
       closeRejectModal();
       setDrawerReq(null);
       setSelectedIds(new Set());
-      fetchRequests();
+      if (rejected) fetchRequests();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Reject failed');
     } finally {
@@ -475,10 +582,6 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
       .filter((r) => r.status === 'pending' && isMyTurn(r, actorRoles))
       .every((r) => selectedIds.has(String(r._id)));
 
-  if (activeSection === 'regularization' && loading && !requests.length) {
-    return <LoadingSpinner message="Loading regularization requests..." />;
-  }
-
   const currentPageNum = pagination.page ?? page;
   const totalPagesNum = pagination.pages ?? 1;
   const canPrev = currentPageNum > 1 && !loading;
@@ -487,54 +590,28 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
   return (
     <div className={embedded ? 'min-w-0' : 'page-shell min-h-screen bg-[#f4f7f6]'}>
       <div className={embedded ? 'hrms-stack' : 'page-shell-inner hrms-stack'}>
-        <header className={`flex flex-col ${embedded ? 'gap-2' : 'gap-3'}`}>
-          {!embedded && (
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">
-              Regularization &amp; Work From Home
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#0a8f6c]">{orgName}</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#0E2B3D] lg:text-[1.7rem]">
+              Attendance Regularization &amp; WFH
             </h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-600">
-              Review team attendance corrections and work from home applications.
+            <p className="mt-1 text-sm text-slate-500">
+              Review punch corrections and work-from-home requests for your organization.
             </p>
           </div>
-          )}
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div
-              className="flex w-full max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm sm:inline-flex sm:w-fit"
-              role="tablist"
-              aria-label="Request type"
-            >
-              {[
-                { key: 'regularization', label: 'Regularization', icon: FiClock },
-                { key: 'wfh', label: 'Work From Home', icon: FiHome },
-              ].map(({ key, label, icon: Icon }) => {
-                const active = activeSection === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    title={key === 'wfh' ? 'Work From Home' : 'Regularization'}
-                    onClick={() => setActiveSection(key)}
-                    className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold transition sm:flex-none sm:px-3 sm:text-sm ${
-                      active
-                        ? 'bg-[#0a8f6c] shadow-sm'
-                        : 'bg-transparent text-slate-700 hover:bg-slate-50'
-                    }`}
-                    style={active ? { color: '#ffffff' } : undefined}
-                  >
-                    <Icon
-                      className="h-3.5 w-3.5 shrink-0"
-                      style={{ color: active ? '#ffffff' : 'currentColor' }}
-                    />
-                    <span style={{ color: active ? '#ffffff' : undefined }}>{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {activeSection === 'regularization' ? (
+              <button
+                type="button"
+                disabled={exporting}
+                onClick={exportCsv}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <FiDownload className="h-4 w-4" />
+                {exporting ? 'Exporting…' : 'Export CSV'}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -544,95 +621,93 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                 }
                 navigate('/my-attendance-regularization');
               }}
-              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#0a8f6c]/30 hover:bg-[#0a8f6c]/5 hover:text-[#0a8f6c] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 sm:w-auto"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#0a8f6c] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#087a5c]"
             >
-              <FiUser className="h-4 w-4 shrink-0" />
-              My Requests
+              <FiPlus className="h-4 w-4" />
+              {activeSection === 'wfh' ? 'Request WFH' : 'Request Regularization'}
             </button>
           </div>
-
-          {activeSection === 'regularization' ? (
-            <div className="hrms-chip-scroll">
-              <div
-                className="hrms-chip-scroll-track"
-                role="tablist"
-                aria-label="Quick filter by status"
-              >
-                {[
-                  { key: 'all', label: 'All', n: statusSummary, bg: '#ffffff', color: '#0f172a' },
-                  { key: 'pending', label: 'Pending', n: statusCounts.pending, bg: '#fef2f2', color: '#b91c1c' },
-                  { key: 'approved', label: 'Approved', n: statusCounts.approved, bg: `${TEAL}18`, color: TEAL },
-                  { key: 'rejected', label: 'Rejected', n: statusCounts.rejected, bg: '#f1f5f9', color: '#64748b' },
-                  { key: 'cancelled', label: 'Cancelled', n: statusCounts.cancelled, bg: '#fafafa', color: '#737373' },
-                ].map((b) => {
-                  const active = statusDropdown === b.key;
-                  return (
-                    <div key={b.key} className="hrms-chip-scroll-item">
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        title={`Show ${b.label}${b.key === 'all' ? ' statuses' : ' only'}`}
-                        onClick={() => {
-                          setPage(1);
-                          setStatusDropdown(b.key === 'all' ? 'all' : b.key);
-                        }}
-                        className={`whitespace-nowrap rounded-full border px-4 py-2 text-center text-xs font-bold uppercase tracking-wide transition hover:brightness-[0.98] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 ${
-                          active ? 'border-[#0a8f6c]' : 'border-[#e2e8f0]'
-                        }`}
-                        style={{ background: b.bg, color: b.color }}
-                      >
-                        {(b.n ?? 0)} {b.label}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
         </header>
 
+        <div className="flex gap-6 border-b border-slate-200" role="tablist" aria-label="Request type">
+          {[
+            { key: 'regularization', label: 'Regularization', count: statusSummary },
+            { key: 'wfh', label: 'WFH Requests', count: wfhTotal },
+          ].map((tab) => {
+            const active = activeSection === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveSection(tab.key)}
+                className={`-mb-px border-b-2 pb-3 text-sm font-semibold ${
+                  active ? 'border-[#0a8f6c] text-[#0a8f6c]' : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {tab.label}
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${active ? 'bg-[#0a8f6c]/10 text-[#0a8f6c]' : 'bg-slate-100 text-slate-500'}`}>
+                  {tab.count ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className={activeSection === 'regularization' ? 'block' : 'hidden'}>
-        <section className="mb-3 rounded-xl border border-slate-100 bg-white p-2.5 shadow-sm sm:mb-4 sm:p-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-            <div className="min-w-0 flex-1 sm:min-w-[180px]">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Search
-              </label>
+        <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.4fr_0.8fr_0.9fr_0.7fr_0.7fr_auto] xl:items-end">
+            <div className="min-w-0">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Search</label>
               <div className="relative">
-                <FiSearch className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <FiSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"
-                  placeholder="Name, email or reason…"
+                  placeholder="Name, ID, email, or reason"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 py-1.5 pl-8 pr-2.5 text-xs focus:border-[#0a8f6c] focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/20 sm:text-sm"
+                  className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm focus:border-[#0a8f6c] focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/20"
                 />
               </div>
             </div>
-            <div className="w-full sm:w-[8.5rem]">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </label>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Status</label>
               <select
                 value={statusDropdown}
                 onChange={(e) => {
                   setPage(1);
                   setStatusDropdown(e.target.value);
                 }}
-                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
               >
-                <option value="all">All</option>
+                <option value="all">All statuses</option>
                 <option value="pending">Pending</option>
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-            <div className="w-full sm:w-[9.5rem]">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                From
-              </label>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Request type</label>
+              <select
+                value={typeFilter}
+                onChange={(e) => {
+                  setPage(1);
+                  setTypeFilter(e.target.value);
+                }}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+              >
+                <option value="all">All types</option>
+                <option value="missing_clock_in">Missing clock in</option>
+                <option value="missing_clock_out">Missing clock out</option>
+                <option value="both">Both punches</option>
+                <option value="incorrect_time">Incorrect time</option>
+                <option value="full_day">Full day</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">From</label>
               <input
                 type="date"
                 value={startDate}
@@ -640,13 +715,11 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                   setPage(1);
                   setStartDate(e.target.value);
                 }}
-                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
               />
             </div>
-            <div className="w-full sm:w-[9.5rem]">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                To
-              </label>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">To</label>
               <input
                 type="date"
                 value={endDate}
@@ -654,16 +727,15 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                   setPage(1);
                   setEndDate(e.target.value);
                 }}
-                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
               />
             </div>
             <button
               type="button"
               onClick={clearFilters}
-              className="shrink-0 self-start rounded-lg px-2.5 py-1.5 text-xs font-semibold hover:bg-[#0a8f6c]/5 sm:self-end"
-              style={{ color: TEAL }}
+              className="rounded-xl px-3 py-2.5 text-sm font-semibold text-[#0a8f6c] hover:bg-[#0a8f6c]/5"
             >
-              Clear
+              Reset
             </button>
           </div>
         </section>
@@ -700,7 +772,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
         ) : null}
 
         <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-          {loading && requests.length > 0 ? (
+          {loading ? (
             <div
               className="absolute inset-0 z-[4] flex items-center justify-center bg-white/65 backdrop-blur-[1px]"
               aria-busy="true"
@@ -819,7 +891,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
           <div className="hidden max-w-full overflow-x-auto overscroll-x-contain md:block [-webkit-overflow-scrolling:touch]">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   <th className="whitespace-nowrap px-4 py-3 pl-5">
                     <input
                       type="checkbox"
@@ -831,11 +903,10 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                     />
                   </th>
                   <th className="px-4 py-3">Employee</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="min-w-[180px] px-4 py-3">Check-in / out (requested)</th>
+                  <th className="px-4 py-3">Request type</th>
+                  <th className="min-w-[180px] px-4 py-3">Requested time</th>
                   <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Manager Name</th>
                   <th className="px-4 py-3 pr-5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -843,11 +914,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                 {filteredRequests.map((req) => {
                   const emp = req.employeeId;
                   const name = [emp?.name, emp?.lastName].filter(Boolean).join(' ').trim() || 'Unknown';
-                  const dept = emp?.department || '—';
-                  const managerObj = req.managerId;
-                  const managerName = managerObj && typeof managerObj === 'object'
-                    ? [managerObj.name, managerObj.lastName].filter(Boolean).join(' ').trim() || '—'
-                    : (typeof managerObj === 'string' && managerObj.trim() ? managerObj : '—');
+                  const dept = emp?.department || '';
                   const isPending = req.status === 'pending';
                   const canAct = isPending && isMyTurn(req, actorRoles);
                   const inFmt = req.requestedClockIn
@@ -873,26 +940,24 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                           <RowAvatar employee={emp} />
                           <div className="min-w-0">
                             <div className="font-semibold text-slate-900">{name}</div>
-                            <div className="text-xs text-slate-500">{dept}</div>
+                            <div className="text-xs text-slate-500">
+                              {[emp?.employeeId, dept].filter((part) => part && part !== '—').join(' · ') || '—'}
+                            </div>
                           </div>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-slate-700">
-                        {format(new Date(req.attendanceDate), 'MMM d, yyyy')}
+                      <td className="px-4 py-4">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                          {getTypeLabel(req.regularizationType)}
+                        </span>
                       </td>
-                      <td className="px-4 py-4 text-slate-700">
-                        {inFmt || outFmt ? (
-                          <>
-                            <span className="font-medium" style={{ color: TEAL }}>
-                              {inFmt ?? '—'}
-                            </span>
-                            {' · '}
-                            <span className="text-slate-600">{outFmt ?? '—'}</span>
-                            <div className="mt-0.5 text-xs text-slate-400">{getTypeLabel(req.regularizationType)}</div>
-                          </>
-                        ) : (
-                          <span className="italic text-slate-400">{getTypeLabel(req.regularizationType)}</span>
-                        )}
+                      <td className="px-4 py-4">
+                        <p className="text-xs text-slate-400">{format(new Date(req.attendanceDate), 'MMM d, yyyy')}</p>
+                        <p className="mt-0.5 text-sm font-semibold text-[#0a8f6c]">
+                          {inFmt || '—'}
+                          <span className="mx-1 font-normal text-slate-400">→</span>
+                          {outFmt || '—'}
+                        </p>
                       </td>
                       <td className="max-w-[220px] px-4 py-4 text-slate-600">
                         <span className="line-clamp-2" title={req.reason}>
@@ -903,24 +968,25 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                         <StatusPill status={req.status} workflowSummary={req.workflowSummary} />
                         <WorkflowStepPill req={req} />
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-slate-700">
-                        {managerName}
-                      </td>
                       <td className="whitespace-nowrap px-4 py-4 pr-5 text-right">
                         <div className="inline-flex items-center gap-2">
-                          {isPending ? (
+                          {isPending && !canAct ? (
+                            <span
+                              title={`Waiting for ${req.workflowSummary?.pendingStep?.approverType || 'next approver'}`}
+                              className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-400"
+                            >
+                              <FiLock className="h-4 w-4" />
+                            </span>
+                          ) : null}
+                          {isPending && canAct ? (
                             <>
                               <button
                                 type="button"
-                                title={
-                                  !canAct
-                                    ? `Waiting for ${req.workflowSummary?.pendingStep?.approverType || 'next approver'}`
-                                    : isAdmin ? 'Approve and complete all steps' : 'Approve current step'
-                                }
-                                disabled={!!actionBusy || !canAct}
-                                onClick={() => canAct && handleApproveIds([req._id], { adminBypass: isAdmin })}
+                                title={isAdmin ? 'Approve and complete all steps' : 'Approve current step'}
+                                disabled={!!actionBusy}
+                                onClick={() => handleApproveIds([req._id], { adminBypass: isAdmin })}
                                 className="rounded-lg p-2 text-white disabled:opacity-40"
-                                style={{ background: canAct ? TEAL : '#94a3b8' }}
+                                style={{ background: TEAL }}
                               >
                                 {actionBusy === `${req._id}` ? (
                                   <FiLoader className="h-4 w-4 animate-spin" />
@@ -930,42 +996,26 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                               </button>
                               <button
                                 type="button"
-                                title={!canAct ? `Waiting for ${req.workflowSummary?.pendingStep?.approverType || 'next approver'}` : 'Reject'}
-                                disabled={!!actionBusy || !canAct}
-                                onClick={() => canAct && openRejectModal([req._id])}
-                                className={`rounded-lg border p-2 disabled:opacity-40 ${
-                                  canAct
-                                    ? 'border-red-200 bg-red-50 text-red-600'
-                                    : 'border-slate-200 bg-slate-100 text-slate-400'
-                                }`}
+                                title="Reject"
+                                disabled={!!actionBusy}
+                                onClick={() => openRejectModal([req._id])}
+                                className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-600 disabled:opacity-40"
                               >
                                 <FiX className="h-4 w-4" />
                               </button>
-                              <button
-                                type="button"
-                                title="View"
-                                onClick={() => {
-                                  setRejectReason('');
-                                  setDrawerReq(req);
-                                }}
-                                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
-                              >
-                                <FiEye className="h-4 w-4" />
-                              </button>
                             </>
-                          ) : (
-                            <button
-                              type="button"
-                              title="View"
-                              onClick={() => {
-                                setRejectReason('');
-                                setDrawerReq(req);
-                              }}
-                              className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
-                            >
-                              <FiEye className="h-4 w-4" />
-                            </button>
-                          )}
+                          ) : null}
+                          <button
+                            type="button"
+                            title="View"
+                            onClick={() => {
+                              setRejectReason('');
+                              setDrawerReq(req);
+                            }}
+                            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                          >
+                            <FiEye className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -974,23 +1024,17 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
               </tbody>
             </table>
           </div>
-          {!filteredRequests.length ? (
+          {!loading && !filteredRequests.length ? (
             <div className="flex flex-col items-center py-14 text-center text-slate-500">
               <FiClock className="mb-3 h-10 w-10 text-slate-300" />
               <p className="text-sm font-medium text-slate-600">No regularization requests match your filters</p>
             </div>
           ) : null}
           <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-5">
-            <p className="text-xs leading-relaxed text-slate-600">
-              Page <span className="font-semibold text-slate-800">{currentPageNum}</span> of{' '}
-              <span className="font-semibold text-slate-800">{totalPagesNum}</span> ·{' '}
-              <span className="font-semibold text-slate-800">{pagination.limit ?? PAGE_SIZE}</span> per page · Showing{' '}
-              <span className="font-semibold text-slate-800">{filteredRequests.length}</span> row(s) on this page (client search). Matching{' '}
-              <span className="font-semibold text-slate-800">{pagination.total ?? 0}</span> requests for{' '}
-              <span className="font-semibold text-slate-800">
-                {statusDropdown === 'all' ? 'all statuses' : statusDropdown}
-              </span>
-              .
+            <p className="text-sm text-slate-600">
+              Showing <span className="font-semibold text-slate-800">{filteredRequests.length}</span> on this page
+              {' · '}
+              <span className="font-semibold text-slate-800">{pagination.total ?? 0}</span> matching
             </p>
             <div className="flex shrink-0 items-center gap-2">
               <button
@@ -1016,7 +1060,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
         </div>
         </div>
 
-        {activeSection === 'wfh' ? <TeamWfhRequestsPanel /> : null}
+        {activeSection === 'wfh' ? <TeamWfhRequestsPanel onTotalChange={setWfhTotal} /> : null}
       </div>
 
       {activeSection === 'regularization' && drawerReq ? (() => {
@@ -1040,11 +1084,11 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
           setRejectReason('');
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Regularization request">
+        return createPortal(
+          <div className="fixed inset-0 z-[12000] flex justify-end" role="dialog" aria-modal="true" aria-label="Regularization request">
             <button
               type="button"
-              className="absolute inset-0 bg-black/30"
+              className="absolute inset-0 bg-[#0E2B3D]/60"
               aria-label="Close panel"
               onClick={closeDrawer}
             />
@@ -1269,13 +1313,14 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                 </div>
               ) : null}
             </aside>
-          </div>
+          </div>,
+          document.body
         );
       })() : null}
 
       {/* Reject modal (single & bulk) */}
-      {activeSection === 'regularization' && rejectModalOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      {activeSection === 'regularization' && rejectModalOpen ? createPortal(
+        <div className="fixed inset-0 z-[12050] flex items-center justify-center bg-[#0E2B3D]/70 p-4">
           <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="mb-2 text-lg font-bold text-slate-900">
               Reject {rejectTargetIds.length === 1 ? 'regularization request' : `${rejectTargetIds.length} requests`}
@@ -1307,7 +1352,8 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

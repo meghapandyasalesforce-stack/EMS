@@ -492,6 +492,8 @@ export const getRegularizationRequestsForManager = async (req, res) => {
     try {
         const organizationId = getOrganizationId(req);
         const { status: statusFilter, startDate, endDate } = req.query;
+        const REG_TYPES = new Set(['missing_clock_in', 'missing_clock_out', 'both', 'incorrect_time', 'full_day']);
+        const typeFilter = String(req.query.regularizationType || '').trim();
 
         // If user is a manager (not admin or HR), filter by their department
         const isManager = shouldScopeDataToManagedTeam(req);
@@ -533,6 +535,39 @@ export const getRegularizationRequestsForManager = async (req, res) => {
             query.attendanceDate = {};
             if (startBound) query.attendanceDate.$gte = startBound;
             if (endBound) query.attendanceDate.$lte = endBound;
+        }
+
+        if (REG_TYPES.has(typeFilter)) {
+            query.regularizationType = typeFilter;
+        }
+
+        const search = String(req.query.search || '').trim().slice(0, 80);
+        if (search) {
+            const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const rx = new RegExp(escaped, 'i');
+            const matchedEmployees = await Employee.find(
+                addOrganizationFilter(req, {
+                    $or: [
+                        { name: rx },
+                        { lastName: rx },
+                        { email: rx },
+                        { employeeId: rx },
+                    ],
+                })
+            ).select('_id').limit(300).lean();
+            const employeeIds = matchedEmployees.map((row) => row._id);
+            const searchClause = {
+                $or: [
+                    ...(employeeIds.length ? [{ employeeId: { $in: employeeIds } }] : []),
+                    { reason: rx },
+                ],
+            };
+            if (query.$or) {
+                query.$and = [...(query.$and || []), { $or: query.$or }, searchClause];
+                delete query.$or;
+            } else {
+                query.$and = [...(query.$and || []), searchClause];
+            }
         }
 
         if (statusFilter) {

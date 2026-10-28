@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FaSpinner, FaTimes } from 'react-icons/fa';
 
 export const wfStatusClass = (status) => {
@@ -261,31 +262,56 @@ export const WfEmpty = ({ icon: Icon, title, description, action }) => (
     </div>
 );
 
-export const WfModal = ({ title, subtitle, onClose, children, maxWidth = 'max-w-3xl' }) => (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+export const WfModal = ({ title, subtitle, onClose, children, maxWidth = 'max-w-3xl' }) => {
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    useEffect(() => {
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const onKey = (event) => {
+            if (event.key === 'Escape') onCloseRef.current?.();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => {
+            document.body.style.overflow = previous;
+            window.removeEventListener('keydown', onKey);
+        };
+    }, []);
+
+    return createPortal(
         <div
-            className={`max-h-[92vh] w-full overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl ${maxWidth}`}
-            role="dialog"
-            aria-modal="true"
+            className="fixed inset-0 z-[12000] flex items-center justify-center bg-[#0E2B3D]/70 p-4 sm:p-6"
+            role="presentation"
+            onClick={onClose}
         >
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-                <div>
-                    <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-                    {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+            <div
+                className={`flex max-h-[min(88vh,860px)] w-full flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl ${maxWidth}`}
+                role="dialog"
+                aria-modal="true"
+                aria-label={title}
+                onClick={(event) => event.stopPropagation()}
+            >
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#E2E8F0] bg-[#f8faf9] px-5 py-4 sm:px-6">
+                    <div className="min-w-0">
+                        <h3 className="text-lg font-semibold text-[#0E2B3D]">{title}</h3>
+                        {subtitle ? <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p> : null}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg p-2 text-slate-400 transition hover:bg-white hover:text-slate-700"
+                        aria-label="Close"
+                    >
+                        <FaTimes />
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                    aria-label="Close"
-                >
-                    <FaTimes />
-                </button>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
             </div>
-            <div className="max-h-[calc(92vh-4.5rem)] overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
-        </div>
-    </div>
-);
+        </div>,
+        document.body
+    );
+};
 
 export const WfField = ({ label, required, hint, children }) => (
     <div>

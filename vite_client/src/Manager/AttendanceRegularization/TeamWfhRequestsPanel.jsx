@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { FiCheck, FiChevronLeft, FiChevronRight, FiEye, FiHome, FiLoader, FiSearch, FiX } from 'react-icons/fi';
@@ -83,10 +84,12 @@ function EmployeeAvatar({ employee }) {
   );
 }
 
-const TeamWfhRequestsPanel = () => {
+const TeamWfhRequestsPanel = ({ onTotalChange } = {}) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
@@ -99,48 +102,52 @@ const TeamWfhRequestsPanel = () => {
   const fetchRequests = useCallback(async () => {
     try {
       setLoading(true);
+      if (startDate && endDate && startDate > endDate) {
+        toast.warning('From date must be on or before the To date');
+        setRequests([]);
+        setTotal(0);
+        setLoading(false);
+        return;
+      }
       const response = await axios.get('/v1/both/wfh-requests/all', {
         params: {
           page,
           limit: PAGE_SIZE,
           ...(startDate ? { startDate } : {}),
           ...(endDate ? { endDate } : {}),
+          ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
         },
         withCredentials: true,
       });
       setRequests(response.data?.requests || []);
       setTotal(response.data?.total || 0);
-    } catch {
+      onTotalChange?.(response.data?.allTotal ?? response.data?.total ?? 0);
+    } catch (error) {
       setRequests([]);
       setTotal(0);
+      toast.error(error?.response?.data?.message || 'Failed to load Work From Home requests');
     } finally {
       setLoading(false);
     }
-  }, [endDate, page, startDate]);
+  }, [debouncedSearch, endDate, onTotalChange, page, startDate, statusFilter]);
+
+  useEffect(() => {
+    const next = search.trim();
+    const timer = setTimeout(() => {
+      setDebouncedSearch((prev) => {
+        if (prev !== next) setPage(1);
+        return next;
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests]);
 
-  const filteredRequests = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return requests;
-    return requests.filter((request) => {
-      const employee = request.employeeId || {};
-      return [
-        employee.name,
-        employee.lastName,
-        employee.email,
-        employee.employeeId,
-        employee.department,
-        employee.manager,
-        employee.managerId?.name,
-        employee.managerId?.lastName,
-        request.reason,
-        request.remarks,
-      ].some((value) => String(value || '').toLowerCase().includes(query));
-    });
-  }, [requests, search]);
+  const filteredRequests = requests;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -185,6 +192,8 @@ const TeamWfhRequestsPanel = () => {
               type="button"
               onClick={() => {
                 setSearch('');
+                setDebouncedSearch('');
+                setStatusFilter('all');
                 setStartDate('');
                 setEndDate('');
                 setPage(1);
@@ -194,7 +203,25 @@ const TeamWfhRequestsPanel = () => {
               Clear filters
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Status
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+              >
+                <option value="all">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Date from
@@ -276,7 +303,7 @@ const TeamWfhRequestsPanel = () => {
                         <WfhStatusPill status={status} />
                         {isPending ? (
                           <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                            Waiting for manager
+                            Pending review
                           </p>
                         ) : request.reviewerName ? (
                           <p className="mt-1 text-[11px] text-slate-500">by {request.reviewerName}</p>
@@ -371,7 +398,7 @@ const TeamWfhRequestsPanel = () => {
                         <WfhStatusPill status={status} />
                         {isPending ? (
                           <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                            Waiting for manager
+                            Pending review
                           </p>
                         ) : request.reviewerName ? (
                           <p className="mt-1 text-[11px] text-slate-500">by {request.reviewerName}</p>
@@ -458,11 +485,11 @@ const TeamWfhRequestsPanel = () => {
         </div>
       </div>
 
-      {viewTarget ? (
-        <div className="fixed inset-0 z-50 flex justify-end">
+      {viewTarget ? createPortal(
+        <div className="fixed inset-0 z-[12000] flex justify-end">
           <button
             type="button"
-            className="absolute inset-0 bg-black/30"
+            className="absolute inset-0 bg-[#0E2B3D]/60"
             aria-label="Close details"
             onClick={() => setViewTarget(null)}
           />
@@ -519,11 +546,12 @@ const TeamWfhRequestsPanel = () => {
               </section>
             </div>
           </aside>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {rejectTarget ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {rejectTarget ? createPortal(
+        <div className="fixed inset-0 z-[12050] flex items-center justify-center bg-[#0E2B3D]/70 p-4">
           <button
             type="button"
             className="absolute inset-0 bg-black/40"
@@ -566,7 +594,8 @@ const TeamWfhRequestsPanel = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );
