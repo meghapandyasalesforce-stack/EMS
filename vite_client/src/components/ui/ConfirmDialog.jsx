@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './Button';
 
 export function ConfirmDialog({
@@ -14,9 +15,9 @@ export function ConfirmDialog({
   className = '',
   ...props
 }) {
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <>
       <button type="button" className="ui-modal-backdrop" aria-label="Close dialog" onClick={onClose} />
       <div className="ui-modal" role="presentation">
@@ -41,7 +42,8 @@ export function ConfirmDialog({
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

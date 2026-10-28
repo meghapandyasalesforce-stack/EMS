@@ -1043,10 +1043,14 @@ body,
   overscroll-behavior-y: contain;
 }
 
-/* Soft warm-gray page canvas (Precision Enterprise). */
+/*
+ * Soft warm-gray page canvas (Precision Enterprise).
+ * Do NOT use isolation/z-index here: it traps in-page fixed drawers/modals
+ * under .ui-shell-topbar (z-index 40) and clips their headers.
+ * ::before blur stays behind via z-index 0 vs children z-index 1.
+ */
 .hrms-page-canvas {
   position: relative;
-  isolation: isolate;
   min-height: 100%;
   background-color: var(--ui-page-bg, #f0efef);
   background-image:

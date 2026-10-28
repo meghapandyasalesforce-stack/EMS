@@ -45,7 +45,7 @@ export const getEmployeeCalendar = async (req, res) => {
     }
 
     // Filter only active holidays for employee view and enhance with theme
-    const activeHolidays = calendar.holidays
+    const activeHolidays = (calendar.holidays || [])
       .filter(holiday => holiday.isActive)
       .map(holiday => {
         const holidayObj = holiday.toObject ? holiday.toObject() : holiday;
@@ -61,9 +61,31 @@ export const getEmployeeCalendar = async (req, res) => {
         return holidayObj;
       });
 
+    // HR-enabled WFH dates for apply eligibility (no attendance/punch impact)
+    const employeeId = String(req.employee?._id || '');
+    const wfhDates = (calendar.wfhDates || []).map((entry) => {
+      const obj = entry.toObject ? entry.toObject() : entry;
+      const excludedIds = (obj.excludedEmployeeIds || []).map((id) => String(id?._id || id));
+      const access = obj.employeeAccess === 'only_these' ? 'only_these' : 'all_except';
+      const inList = employeeId ? excludedIds.includes(employeeId) : false;
+      const blocked =
+        !employeeId
+          ? false
+          : access === 'only_these'
+            ? !inList
+            : inList;
+      return {
+        date: obj.date,
+        employeeAccess: access,
+        excluded: blocked,
+      };
+    });
+
+    const base = calendar.toObject ? calendar.toObject() : calendar;
     res.json({
-      ...calendar.toObject ? calendar.toObject() : calendar,
-      holidays: activeHolidays
+      ...base,
+      holidays: activeHolidays,
+      wfhDates,
     });
 
   } catch (error) {
@@ -137,28 +159,24 @@ export const isWorkingDay = async (req, res) => {
     const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][dayOfWeek];
     const isWorkingDay = calendar.workingDays[dayName];
 
-    // Check if it's a holiday
-    const isHoliday = calendar.holidays.some(holiday => {
-      const holidayDate = new Date(holiday.date);
+    const holiday = calendar.holidays.find((h) => {
+      if (!h?.isActive) return false;
+      const holidayDate = new Date(h.date);
       return holidayDate.getDate() === checkDate.getDate() &&
              holidayDate.getMonth() === checkDate.getMonth() &&
-             holidayDate.getFullYear() === checkDate.getFullYear() &&
-             holiday.isActive;
+             holidayDate.getFullYear() === checkDate.getFullYear();
     });
-
-    const holiday = calendar.holidays.find(holiday => {
-      const holidayDate = new Date(holiday.date);
-      return holidayDate.getDate() === checkDate.getDate() &&
-             holidayDate.getMonth() === checkDate.getMonth() &&
-             holidayDate.getFullYear() === checkDate.getFullYear() &&
-             holiday.isActive;
-    });
+    const isBlockingHoliday =
+      Boolean(holiday) &&
+      holiday.workModeOverride !== 'office' &&
+      holiday.workModeOverride !== 'home';
 
     res.json({
-      isWorkingDay: isWorkingDay && !isHoliday,
-      isHoliday: isHoliday,
+      isWorkingDay: isWorkingDay && !isBlockingHoliday,
+      isHoliday: isBlockingHoliday,
       holidayName: holiday ? holiday.name : null,
-      holidayType: holiday ? holiday.type : null
+      holidayType: holiday ? holiday.type : null,
+      workModeOverride: holiday?.workModeOverride || null
     });
 
   } catch (error) {

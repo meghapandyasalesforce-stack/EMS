@@ -138,6 +138,7 @@ async function resolveWorkingDayStatus(organizationId, attendanceDateKey, timezo
 
   const holiday = (calendar?.holidays || []).find((h) => {
     if (!h || h.isActive === false) return false;
+    if (h.workModeOverride === 'office' || h.workModeOverride === 'home') return false;
     return getDateKey(h.date) === dateKey;
   });
 
@@ -146,6 +147,7 @@ async function resolveWorkingDayStatus(organizationId, attendanceDateKey, timezo
     isHalfDayHoliday && (holiday.halfDayType === 'second_half' ? 'second_half' : 'first_half');
 
   // Full-day holiday → non-working. Half-day holiday → still a working day (other half works).
+  // Converted holidays (office/home) are excluded above.
   const isHoliday = Boolean(holiday) && !isHalfDayHoliday;
   const isWorkingDay = isConfiguredWorkingDay && !isHoliday;
 
@@ -200,6 +202,7 @@ async function calculateWorkingDays(startDate, endDate, organizationId) {
     const keys = new Set(
       (calendar?.holidays || [])
         .filter((holiday) => holiday?.isActive !== false)
+        .filter((holiday) => holiday?.workModeOverride !== 'office' && holiday?.workModeOverride !== 'home')
         .map((holiday) => getDateKey(holiday.date))
     );
     holidayKeysByYear.set(year, keys);
@@ -2651,6 +2654,7 @@ const buildCalendarLookups = async (organizationId, startDay, endDay) => {
     const holidayKeys = new Set(
       (calendar?.holidays || [])
         .filter((holiday) => holiday?.isActive !== false)
+        .filter((holiday) => holiday?.workModeOverride !== 'office' && holiday?.workModeOverride !== 'home')
         .map((holiday) => toYmd(holiday.date))
     );
     holidayKeysByYear.set(year, holidayKeys);

@@ -1,9 +1,10 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 export function Modal({ open = false, onClose, title, children, actions = null, className = '', ...props }) {
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <>
       <button type="button" className="ui-modal-backdrop" aria-label="Close dialog" onClick={onClose} />
       <div className="ui-modal" role="presentation">
@@ -19,7 +20,8 @@ export function Modal({ open = false, onClose, title, children, actions = null, 
           {actions ? <div className="ui-modal__actions">{actions}</div> : null}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

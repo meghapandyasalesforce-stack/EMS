@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 import { FiSend, FiLoader, FiClock } from 'react-icons/fi';
@@ -11,6 +11,26 @@ const toDateInput = (d) => {
   const mm = String(dt.getMonth() + 1).padStart(2, '0');
   const dd = String(dt.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
+};
+
+const toLocalDateKey = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim().slice(0, 10);
+  }
+  return toDateInput(value);
+};
+
+const expandLocalDateKeys = (from, to) => {
+  if (!from || !to || to < from) return [];
+  const keys = [];
+  const cursor = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  while (cursor <= end) {
+    keys.push(toDateInput(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
 };
 
 const formatDate = (value) => {
@@ -59,8 +79,18 @@ const WfhRequestPanel = () => {
   const [submitting, setSubmitting] = useState(false);
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+  const [wfhAvailability, setWfhAvailability] = useState([]); // [{ date, excluded }]
 
   const isSameDay = Boolean(wfhDateFrom && wfhDateTo && wfhDateFrom === wfhDateTo);
+
+  const availabilityByDate = useMemo(() => {
+    const map = new Map();
+    (wfhAvailability || []).forEach((entry) => {
+      const key = toLocalDateKey(entry.date);
+      if (key) map.set(key, entry);
+    });
+    return map;
+  }, [wfhAvailability]);
 
   const resetForm = () => {
     setWfhDateFrom(emptyToday());
@@ -87,6 +117,33 @@ const WfhRequestPanel = () => {
     fetchMyRequests();
   }, []);
 
+  useEffect(() => {
+    const years = new Set();
+    if (wfhDateFrom) years.add(Number(wfhDateFrom.slice(0, 4)));
+    if (wfhDateTo) years.add(Number(wfhDateTo.slice(0, 4)));
+    if (!years.size) years.add(new Date().getFullYear());
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.all(
+          [...years].map((year) =>
+            axios.get(`/v1/employee/calendar/${year}`, { withCredentials: true })
+          )
+        );
+        if (cancelled) return;
+        const merged = results.flatMap((res) => res.data?.wfhDates || []);
+        setWfhAvailability(merged);
+      } catch {
+        if (!cancelled) setWfhAvailability([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [wfhDateFrom, wfhDateTo]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!wfhDateFrom) {
@@ -107,6 +164,26 @@ const WfhRequestPanel = () => {
     }
     if (!reason.trim()) {
       toast.error('Please enter a reason');
+      return;
+    }
+
+    const rangeKeys = expandLocalDateKeys(wfhDateFrom, wfhDateTo);
+    const notEnabled = rangeKeys.filter((key) => !availabilityByDate.has(key));
+    const excluded = rangeKeys.filter((key) => availabilityByDate.get(key)?.excluded);
+    if (notEnabled.length) {
+      toast.error(
+        notEnabled.length === 1
+          ? `Work From Home is not enabled by HR for ${notEnabled[0]}`
+          : `Work From Home is not enabled by HR for: ${notEnabled.join(', ')}`
+      );
+      return;
+    }
+    if (excluded.length) {
+      toast.error(
+        excluded.length === 1
+          ? `You are excluded from Work From Home on ${excluded[0]}`
+          : `You are excluded from Work From Home on: ${excluded.join(', ')}`
+      );
       return;
     }
 
@@ -144,6 +221,9 @@ const WfhRequestPanel = () => {
     <div className="wfh-ui space-y-4">
       <form onSubmit={handleSubmit} className="wfh-ui__form">
         <h2 className="wfh-ui__title">New Work From Home Request</h2>
+        <p className="text-sm text-slate-500 -mt-2 mb-1">
+          You can apply only on dates HR has enabled for Work From Home.
+        </p>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>

@@ -655,8 +655,9 @@
 @media (min-width: 1024px) {
   /*
    * Desktop top bar must sit ABOVE page content but BELOW overlays/drawers/modals
-   * (hr-ov-* use z-index 80–82). A previous z-index of 10040 clipped drawer headers
-   * under this bar. Height must clear avatar (2.25rem) + notification badge offset.
+   * (ui-drawer 90–91, ui-modal 92–93, hr-ov-* 80–82). Keep z-index at 40 — not
+   * 10040 — so side panels are not clipped. Page canvas must not use isolation.
+   * Height must clear avatar (2.25rem) + notification badge offset.
    */
   .ui-shell-topbar {
     display: flex;

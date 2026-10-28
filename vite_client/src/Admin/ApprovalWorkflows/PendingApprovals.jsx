@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
   FiCheck,
@@ -6,7 +7,6 @@ import {
   FiDownload,
   FiInfo,
   FiSearch,
-  FiShare2,
   FiX,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -22,9 +22,9 @@ const TABS = [
   { id: 'leave', label: 'Leave' },
   { id: 'regularization', label: 'Regularization' },
   { id: 'documents', label: 'Documents' },
-  { id: 'tax', label: 'Tax Regime' },
-  { id: 'other', label: 'Other' },
 ];
+
+const VISIBLE_CATEGORIES = new Set(TABS.map((tab) => tab.id));
 
 const categoryFromEntityType = (entityType) => {
   switch (entityType) {
@@ -34,10 +34,8 @@ const categoryFromEntityType = (entityType) => {
       return 'regularization';
     case 'Document':
       return 'documents';
-    case 'TaxRegimeChange':
-      return 'tax';
     default:
-      return 'other';
+      return null;
   }
 };
 
@@ -98,26 +96,15 @@ const normalizeWorkflow = (approval) => {
     '';
   const department = approval.requestedBy?.department || '';
   const entityType = approval.entityType || 'Other';
-  const title =
-    entityType === 'TaxRegimeChange'
-      ? 'Tax Regime Switch'
-      : humanizeEntity(entityType);
-  let details = approval.currentPendingStep?.stepName || approval.priority || '';
-  if (entityType === 'TaxRegimeChange') {
-    details = [
-      approval.metadata?.currentTaxRegime,
-      approval.metadata?.requestedTaxRegime
-        ? `→ ${approval.metadata.requestedTaxRegime}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' ');
-  }
+  const category = categoryFromEntityType(entityType);
+  if (!category) return null;
+  const title = humanizeEntity(entityType);
+  const details = approval.currentPendingStep?.stepName || approval.priority || '';
   return {
     ...approval,
     rowId: `wf-${approval._id}`,
     source: 'workflow',
-    category: categoryFromEntityType(entityType),
+    category,
     displayName: name,
     displayRole: role,
     displayDepartment: department,
@@ -125,30 +112,6 @@ const normalizeWorkflow = (approval) => {
     displayDetails: details || humanizeEntity(entityType),
     submittedAt: approval.createdAt || approval.currentPendingStep?.dueDate,
     slaBreached: isSlaBreached(approval),
-  };
-};
-
-const normalizeTaxDirect = (item) => {
-  const name = requesterNameOf(item.requestedBy);
-  return {
-    ...item,
-    rowId: `tax-${item.taxRegimeRequestId || item._id}`,
-    source: 'tax',
-    category: 'tax',
-    entityType: 'TaxRegimeChange',
-    displayName: name,
-    displayRole: item.requestedBy?.designation || item.requestedBy?.role || '',
-    displayDepartment: item.requestedBy?.department || '',
-    displayTitle: 'Tax Regime Switch',
-    displayDetails: [
-      item.metadata?.currentTaxRegime,
-      item.metadata?.requestedTaxRegime ? `→ ${item.metadata.requestedTaxRegime}` : null,
-    ]
-      .filter(Boolean)
-      .join(' ') || 'Tax regime change request',
-    submittedAt: item.createdAt || item.submittedAt,
-    slaBreached: Boolean(item.slaEscalated),
-    isDirectTaxRegimeRequest: true,
   };
 };
 
@@ -181,6 +144,8 @@ const normalizeWfh = (request) => {
 const normalizeDocVerify = (doc) => {
   const employee = doc.employeeId || doc.uploadedBy || {};
   const name = requesterNameOf(employee);
+  const fileLabel = doc.fileName || doc.originalName || '';
+  const typeLabel = doc.documentType || doc.name || '';
   return {
     ...doc,
     rowId: `docv-${doc._id}`,
@@ -190,8 +155,10 @@ const normalizeDocVerify = (doc) => {
     displayName: name,
     displayRole: employee.designation || employee.role || '',
     displayDepartment: employee.department || '',
-    displayTitle: doc.documentType || doc.name || 'Document verification',
-    displayDetails: doc.fileName || doc.originalName || 'Pending HR verification',
+    displayTitle: fileLabel || typeLabel || 'Document verification',
+    displayDetails: fileLabel && typeLabel && typeLabel !== fileLabel
+      ? typeLabel
+      : (fileLabel ? 'Document upload' : 'Pending HR verification'),
     submittedAt: doc.createdAt || doc.uploadedAt,
     slaBreached: false,
     requestedBy: employee,
@@ -251,9 +218,8 @@ const PendingApprovals = () => {
   const fetchPendingApprovals = useCallback(async () => {
     try {
       setLoading(true);
-      const [workflowRes, taxRegimeRes, docsRes, docReqRes, wfhRes] = await Promise.all([
+      const [workflowRes, docsRes, docReqRes, wfhRes] = await Promise.all([
         axios.get('/v1/admin/approvals/my-pending').catch(emptyCatch),
-        axios.get('/v1/both/tax-regime-change/admin/pending').catch(emptyCatch),
         axios.get('/v1/admin/documents/pending', { withCredentials: true }).catch(emptyCatch),
         axios
           .get(`${BOTH_EMPLOYEE_DOCUMENT_REQUEST_ENDPOINT}/approvals`, { withCredentials: true })
@@ -266,16 +232,9 @@ const PendingApprovals = () => {
           .catch(() => ({ data: { requests: [] } })),
       ]);
 
-      const workflowApprovals = (workflowRes.data?.data || []).map(normalizeWorkflow);
-      const taxRegimeApprovals = taxRegimeRes.data?.data || [];
-      const workflowTaxIds = new Set(
-        workflowApprovals
-          .filter((a) => a.entityType === 'TaxRegimeChange')
-          .map((a) => String(a.entityId))
-      );
-      const directTaxCards = taxRegimeApprovals
-        .filter((item) => !workflowTaxIds.has(String(item.taxRegimeRequestId)))
-        .map(normalizeTaxDirect);
+      const workflowApprovals = (workflowRes.data?.data || [])
+        .map(normalizeWorkflow)
+        .filter((item) => item && VISIBLE_CATEGORIES.has(item.category));
 
       const workflowDocIds = new Set(
         workflowApprovals
@@ -295,7 +254,6 @@ const PendingApprovals = () => {
         .map(normalizeWfh);
 
       const merged = [
-        ...directTaxCards,
         ...workflowApprovals,
         ...pendingDocs,
         ...pendingDocRequests,
@@ -375,23 +333,6 @@ const PendingApprovals = () => {
   const processOne = async (approval, action, comments = '') => {
     if (!canDecideApproval(approval)) {
       throw new Error('This request can only be decided by an organization admin');
-    }
-
-    if (approval.source === 'tax' || approval.entityType === 'TaxRegimeChange') {
-      const requestId = approval.taxRegimeRequestId || approval.entityId || approval._id;
-      if (action === 'Approve') {
-        await axios.patch(`/v1/both/tax-regime-change/admin/approve/${requestId}`, {
-          stepNumber: approval.currentPendingStep?.stepNumber,
-          comments,
-        });
-      } else {
-        await axios.patch(`/v1/both/tax-regime-change/admin/reject/${requestId}`, {
-          stepNumber: approval.currentPendingStep?.stepNumber,
-          comments,
-          rejectionReason: comments,
-        });
-      }
-      return;
     }
 
     if (approval.source === 'wfh') {
@@ -491,7 +432,7 @@ const PendingApprovals = () => {
     const targets = resolveTargets(rowId);
     if (!targets.length) return;
     const first = targets[0];
-    if (first.source === 'workflow' || first.source === 'tax') {
+    if (first.source === 'workflow') {
       setSelectedApproval(first);
       setShowDetail(true);
       return;
@@ -823,16 +764,6 @@ const PendingApprovals = () => {
                       >
                         <FiInfo />
                       </button>
-                      {row.source === 'workflow' ? (
-                        <button
-                          type="button"
-                          className="ats-gov-suite__icon-btn is-delegate"
-                          aria-label={`Delegate ${row.displayName}`}
-                          onClick={() => openDelegate(row.rowId)}
-                        >
-                          <FiShare2 />
-                        </button>
-                      ) : null}
                     </div>
                   </div>
                 );
@@ -879,71 +810,126 @@ const PendingApprovals = () => {
         </div>
       ) : null}
 
-      {drawerItem ? (
-        <div className="ats-gov-suite__drawer-overlay" role="presentation" onClick={() => setDrawerItem(null)}>
-          <aside
-            className="ats-gov-suite__drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Request details"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="ats-gov-suite__drawer-head">
-              <div>
-                <h3>{drawerItem.displayName}</h3>
-                <p>
-                  {drawerItem.displayTitle} · {drawerItem.rowId}
-                </p>
-              </div>
-              <button type="button" aria-label="Close" onClick={() => setDrawerItem(null)}>
-                <FiX />
-              </button>
-            </header>
-            <div className="ats-gov-suite__drawer-body">
-              <dl>
-                <div>
-                  <dt>Role and department</dt>
-                  <dd>
-                    {[drawerItem.displayRole, drawerItem.displayDepartment].filter(Boolean).join(' · ') ||
-                      '—'}
-                  </dd>
+      {drawerItem
+        ? createPortal(
+            <div
+              className="cm-hrms ats-ui ats-gov-suite ats-gov-suite__drawer-overlay"
+              role="presentation"
+              onClick={() => setDrawerItem(null)}
+            >
+              <aside
+                className="ats-gov-suite__drawer"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Request details"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <header className="ats-gov-suite__drawer-head">
+                  <div className="ats-gov-suite__drawer-head-text">
+                    <p className="ats-gov-suite__drawer-kicker">Request details</p>
+                    <h3 title={drawerItem.displayTitle}>{drawerItem.displayTitle}</h3>
+                  </div>
+                  <button type="button" aria-label="Close" onClick={() => setDrawerItem(null)}>
+                    <FiX />
+                  </button>
+                </header>
+
+                <div className="ats-gov-suite__drawer-body">
+                  <section className="ats-gov-suite__drawer-card">
+                    <div className="ats-gov-suite__drawer-identity">
+                      <span className="ats-gov-suite__drawer-avatar" aria-hidden>
+                        {initialsOf(drawerItem.displayName)}
+                      </span>
+                      <div className="ats-gov-suite__drawer-head-text">
+                        <h4 title={drawerItem.displayName}>{drawerItem.displayName}</h4>
+                        <p className="ats-gov-suite__drawer-sub">
+                          {[drawerItem.displayRole, drawerItem.displayDepartment]
+                            .filter(Boolean)
+                            .join(' · ') || 'Employee'}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="ats-gov-suite__drawer-card ats-gov-suite__drawer-card--accent">
+                    <p className="ats-gov-suite__drawer-label">Request</p>
+                    <p className="ats-gov-suite__drawer-value">{drawerItem.displayTitle}</p>
+                    {drawerItem.source === 'wfh' && (drawerItem.startDate || drawerItem.endDate) ? (
+                      <p className="ats-gov-suite__drawer-meta">
+                        {[
+                          drawerItem.startDate
+                            ? new Date(drawerItem.startDate).toLocaleDateString()
+                            : null,
+                          drawerItem.endDate
+                            ? new Date(drawerItem.endDate).toLocaleDateString()
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' – ')}
+                      </p>
+                    ) : null}
+                    {drawerItem.source === 'wfh' && drawerItem.reason ? (
+                      <p className="ats-gov-suite__drawer-meta">{drawerItem.reason}</p>
+                    ) : null}
+                    {drawerItem.source !== 'wfh'
+                    && drawerItem.displayDetails
+                    && drawerItem.displayDetails !== drawerItem.displayTitle ? (
+                      <p className="ats-gov-suite__drawer-meta">{drawerItem.displayDetails}</p>
+                    ) : null}
+                  </section>
+
+                  <section className="ats-gov-suite__drawer-card">
+                    <div className="ats-gov-suite__drawer-row">
+                      <div>
+                        <p className="ats-gov-suite__drawer-label">Deadline</p>
+                        <span
+                          className={`ats-gov-suite__sla ${drawerItem.slaBreached ? 'is-breached' : 'is-ok'}`}
+                        >
+                          {drawerItem.slaBreached ? 'Overdue' : 'On time'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="ats-gov-suite__drawer-label">Submitted</p>
+                        <p className="ats-gov-suite__drawer-value ats-gov-suite__drawer-value--sm">
+                          {relativeSubmitted(drawerItem.submittedAt)}
+                        </p>
+                      </div>
+                    </div>
+                    {drawerItem.currentPendingStep?.stepName ? (
+                      <div className="ats-gov-suite__drawer-step">
+                        <p className="ats-gov-suite__drawer-label">Current step</p>
+                        <p className="ats-gov-suite__drawer-value ats-gov-suite__drawer-value--sm">
+                          {drawerItem.currentPendingStep.stepName}
+                        </p>
+                      </div>
+                    ) : null}
+                  </section>
                 </div>
-                <div>
-                  <dt>Request</dt>
-                  <dd>{drawerItem.displayDetails || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Submitted</dt>
-                  <dd>{relativeSubmitted(drawerItem.submittedAt)}</dd>
-                </div>
-                <div>
-                  <dt>Deadline</dt>
-                  <dd>{drawerItem.slaBreached ? 'Overdue' : 'On time'}</dd>
-                </div>
-              </dl>
-            </div>
-            {canDecideApproval(drawerItem) ? (
-              <footer className="ats-gov-suite__drawer-foot">
-                <button
-                  type="button"
-                  className="ats-gov-suite__btn ats-gov-suite__btn--ghost"
-                  onClick={() => openReject(drawerItem.rowId)}
-                >
-                  Reject
-                </button>
-                <button
-                  type="button"
-                  className="ats-gov-suite__btn ats-gov-suite__btn--primary"
-                  disabled={busy}
-                  onClick={() => runBatch([drawerItem], 'Approve')}
-                >
-                  Approve
-                </button>
-              </footer>
-            ) : null}
-          </aside>
-        </div>
-      ) : null}
+
+                {canDecideApproval(drawerItem) ? (
+                  <footer className="ats-gov-suite__drawer-foot">
+                    <button
+                      type="button"
+                      className="ats-gov-suite__btn ats-gov-suite__btn--ghost ats-gov-suite__drawer-action"
+                      onClick={() => openReject(drawerItem.rowId)}
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      className="ats-gov-suite__btn ats-gov-suite__btn--primary ats-gov-suite__drawer-action"
+                      disabled={busy}
+                      onClick={() => runBatch([drawerItem], 'Approve')}
+                    >
+                      Approve
+                    </button>
+                  </footer>
+                ) : null}
+              </aside>
+            </div>,
+            document.body
+          )
+        : null}
 
       {modal === 'reject' ? (
         <div className="ats-gov-suite__modal-overlay" role="presentation" onClick={() => setModal(null)}>

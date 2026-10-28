@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -870,9 +871,10 @@ const LeaveManagement = () => {
         </div>
       </div>
 
-      {selectedLeave ? (
+      {selectedLeave
+        ? createPortal(
         <div
-          className="fixed inset-0 z-50 flex justify-end"
+          className="fixed inset-0 z-[100] flex justify-end"
           role="dialog"
           aria-modal="true"
           aria-label="Leave request details"
@@ -1143,7 +1145,8 @@ const LeaveManagement = () => {
                 </div>
               )}
           </aside>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       <div className="pointer-events-none fixed bottom-8 right-8 z-30 hidden lg:block">

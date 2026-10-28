@@ -132,6 +132,56 @@
   box-shadow: 0 0 0 3px rgba(14, 147, 112, 0.15);
 }
 
+.hol-cal__menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.hol-cal__menu-caret {
+  width: 0.9rem;
+  height: 0.9rem;
+  opacity: 0.75;
+}
+
+.hol-cal__menu-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 30;
+  min-width: 11.5rem;
+  padding: 0.35rem;
+  border-radius: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--hol-line);
+  box-shadow: 0 10px 28px -8px rgba(14, 43, 61, 0.22);
+}
+
+.hol-cal__menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--hol-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hol-cal__menu-item:hover:not(:disabled) {
+  background: var(--hol-mint);
+  color: var(--hol-primary-deep);
+}
+
+.hol-cal__menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .hol-cal__btn--primary {
   border: none;
   background: var(--hol-primary);
@@ -360,6 +410,50 @@
   cursor: not-allowed;
 }
 
+.hol-cal__text-btn {
+  display: inline-flex;
+  align-items: center;
+  margin: 0.15rem 0.15rem 0 0;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid rgba(14, 147, 112, 0.35);
+  border-radius: 0.4rem;
+  background: #e8faf4;
+  color: #00694f;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hol-cal__text-btn:hover:not(:disabled) {
+  background: #d1f5ea;
+  border-color: #0e9370;
+}
+
+.hol-cal__text-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hol-cal__type--converted {
+  background: #d1f5ea;
+  color: #00694f;
+}
+
+.hol-cal__item--converted {
+  box-shadow: inset 0 0 0 1px rgba(14, 147, 112, 0.22);
+}
+
+.hol-cal__day--converted {
+  background: #e8faf4;
+}
+
+.hol-cal__day-tag--converted {
+  background: #0e9370;
+  color: #fff;
+}
+
 .hol-cal__empty {
   flex: 1 1 auto;
   display: flex;
@@ -563,6 +657,19 @@
   border-color: #bfdbfe;
 }
 
+.hol-cal__day--wfh {
+  box-shadow: inset 0 0 0 2px rgba(14, 147, 112, 0.45);
+}
+
+.hol-cal__day--clickable {
+  cursor: pointer;
+}
+
+.hol-cal__day-tag--wfh {
+  background: #d1f5ea;
+  color: #00694f;
+}
+
 .hol-cal__day--religious {
   background: #f5f3ff;
   border-color: #ddd6fe;
@@ -635,4 +742,212 @@
     font-size: 0.5rem;
     padding: 0.1rem 0.2rem;
   }
+}
+
+/*
+ * Calendar modals (WFH / Holiday / Settings / Upload)
+ *
+ * Root cause of “stuck to top”: overlay used align-items:center. When the dialog
+ * is taller than the viewport, flex centering overflows equally top+bottom and
+ * scroll cannot reach the clipped top (same bug fixed in Ant Design / MUI / Semi).
+ *
+ * Fix: safe-centering — flex-start on the overlay + margin:auto on the dialog.
+ * Portaled to document.body so fixed is not under .main-scroll-area.
+ */
+.cal-modal-overlay,
+.wfh-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.5);
+  -webkit-overflow-scrolling: touch;
+}
+
+.cal-modal,
+.wfh-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 32rem; /* max-w-lg */
+  min-height: 0;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow: hidden;
+  margin: auto;
+}
+
+.cal-modal--xl {
+  max-width: 48rem; /* max-w-3xl */
+}
+
+.cal-modal__form,
+.wfh-modal__form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #fff;
+  border-radius: 0 0 1rem 1rem;
+}
+
+.cal-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cal-modal__footer {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(14, 43, 61, 0.08);
+  background: #fff;
+}
+
+.wfh-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  margin: 0;
+  border-radius: 1rem 1rem 0 0;
+  background: linear-gradient(165deg, #0e2b3d 0%, #134056 100%);
+}
+
+.wfh-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.35rem;
+  margin: 0;
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wfh-modal__footer {
+  display: flex;
+  flex-direction: column-reverse;
+  flex-shrink: 0;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.35rem 1.15rem;
+  border-top: 1px solid rgba(14, 43, 61, 0.08);
+  background: #fff;
+}
+
+@media (min-width: 640px) {
+  .wfh-modal__footer {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.wfh-modal__label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0e2b3d;
+}
+
+.wfh-modal__input {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(14, 43, 61, 0.14);
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  color: #0e2b3d;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.wfh-modal__input:focus {
+  border-color: #0e9370;
+  box-shadow: 0 0 0 3px rgba(14, 147, 112, 0.18);
+}
+
+/* Search field: icon must not sit on typed text (.wfh-modal__input padding overrides Tailwind pl-*) */
+.wfh-modal__search {
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+
+.wfh-modal__search-icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  color: #9ca3af;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wfh-modal__input--search {
+  padding-left: 2.5rem;
+}
+
+.wfh-modal__input--search::-webkit-search-decoration,
+.wfh-modal__input--search::-webkit-search-cancel-button,
+.wfh-modal__input--search::-webkit-search-results-button,
+.wfh-modal__input--search::-webkit-search-results-decoration {
+  display: none;
+}
+
+.wfh-modal__notice {
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #00694f;
+  background: #e8faf4;
+  border: 1px solid #d1f5ea;
+}
+
+.wfh-modal__section {
+  padding: 0.85rem;
+  border-radius: 0.85rem;
+  background: #f7fbf9;
+  border: 1px solid rgba(14, 147, 112, 0.16);
+}
+
+.wfh-modal__btn-primary {
+  padding: 0.65rem 1.15rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: #0e9370;
+  border: none;
+  cursor: pointer;
+}
+
+.wfh-modal__btn-primary:hover {
+  background: #00694f;
+}
+
+.wfh-modal__btn-secondary {
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0e9370;
+  background: #fff;
+  border: 1px solid #0e9370;
+  cursor: pointer;
+}
+
+.wfh-modal__btn-secondary:hover {
+  background: #e8faf4;
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 export function Drawer({
   open = false,
@@ -10,9 +11,9 @@ export function Drawer({
   className = '',
   ...props
 }) {
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <>
       <button
         type="button"
@@ -40,7 +41,8 @@ export function Drawer({
         <div className="ui-drawer__body">{children}</div>
         {footer ? <div className="ui-drawer__footer">{footer}</div> : null}
       </aside>
-    </>
+    </>,
+    document.body
   );
 }
 
