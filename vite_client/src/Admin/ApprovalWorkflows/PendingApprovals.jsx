@@ -17,6 +17,7 @@ import ApprovalDetailModal from './ApprovalDetailModal';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { BOTH_EMPLOYEE_DOCUMENT_REQUEST_ENDPOINT } from '../../utils/constant';
 
+/** Category tabs for the pending approvals inbox. */
 const TABS = [
   { id: 'leave', label: 'Leave' },
   { id: 'regularization', label: 'Regularization' },
