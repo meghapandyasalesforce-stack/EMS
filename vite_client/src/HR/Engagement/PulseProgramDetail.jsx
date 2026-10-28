@@ -8,7 +8,7 @@ import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EngagementFormShell from './EngagementFormShell';
 
-const MINT = '#20C997';
+const MINT = '#0E9370';
 
 const statusStyle = (s) => {
     if (s === 'Active') return 'bg-emerald-100 text-emerald-700';
@@ -90,7 +90,7 @@ const PulseProgramDetail = () => {
         }
     };
 
-    if (loading) return <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#F5F7FB]"><LoadingSpinner /></div>;
+    if (loading) return <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent"><LoadingSpinner /></div>;
     if (!program) return null;
 
     const tabs = [
@@ -200,7 +200,7 @@ const PulseProgramDetail = () => {
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs font-medium text-slate-500">Q{i + 1}</span>
                                 {q.required && <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Required</span>}
-                                <span className="text-xs bg-[#20C997]/10 text-[#0d9488] px-2 py-0.5 rounded">{q.type}</span>
+                                <span className="text-xs bg-[#0E9370]/10 text-[#0d9488] px-2 py-0.5 rounded">{q.type}</span>
                             </div>
                             <p className="font-medium text-slate-800">{q.question}</p>
                             {q.options?.filter(Boolean).length > 0 && !['Text', 'Yes/No', 'eNPS', 'Rating'].includes(q.type) && (

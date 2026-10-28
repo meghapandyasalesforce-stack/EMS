@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import axios from '../../utils/axios';
 import { applyBranding } from '../../utils/theme';
 
-const DEFAULT_PRIMARY = '#16a34a';
-const DEFAULT_SECONDARY = '#2563eb';
-const DEFAULT_ACCENT = '#f97316';
+const DEFAULT_PRIMARY = '#0e9370';
+const DEFAULT_SECONDARY = '#476175';
+const DEFAULT_ACCENT = '#f59e0b';
 
 const ThemeSettings = () => {
   const [branding, setBranding] = useState({

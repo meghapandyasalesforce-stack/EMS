@@ -225,9 +225,9 @@ const LearningPage = () => {
 
     if (loading) {
         return (
-            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#F3F7F5]">
+            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent">
                 <div className="text-center">
-                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]" />
                     <p className="text-sm font-medium text-slate-600">Loading learning data...</p>
                 </div>
             </div>
@@ -235,7 +235,7 @@ const LearningPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-transparent">
             <div className="page-shell-inner hrms-stack">
                 <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
@@ -542,7 +542,7 @@ const LearningPage = () => {
                                                         <div className="flex items-center gap-3">
                                                             <div className="h-2 flex-1 max-w-[120px] overflow-hidden rounded-full bg-slate-100">
                                                                 <div
-                                                                    className="h-full rounded-full bg-[#20C997] transition-all"
+                                                                    className="h-full rounded-full bg-[#0E9370] transition-all"
                                                                     style={{ width: `${progress}%` }}
                                                                 />
                                                             </div>

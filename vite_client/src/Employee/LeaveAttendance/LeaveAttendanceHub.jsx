@@ -6,7 +6,21 @@ import { toast } from 'react-toastify';
 import { getAuthEmployeeId } from '../../utils/authUser';
 import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
-import { FiChevronLeft, FiChevronRight, FiPlus, FiCoffee, FiX, FiUsers, FiArrowLeft, FiLoader, FiDownload } from 'react-icons/fi';
+import {
+  FiChevronLeft,
+  FiChevronRight,
+  FiPlus,
+  FiCoffee,
+  FiX,
+  FiUsers,
+  FiArrowLeft,
+  FiLoader,
+  FiDownload,
+  FiFileText,
+  FiCalendar,
+  FiClock,
+  FiHome,
+} from 'react-icons/fi';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import * as XLSX from 'xlsx';
 import {
@@ -25,6 +39,7 @@ import {
   formatStatusLabel,
 } from '../../utils/textFormat.js';
 import WfhRequestPanel from '../Wfh/WfhRequestPanel';
+import '../../styles/wfhRequestUI.css';
 
 const toDateInput = (d) => {
   const dt = new Date(d);
@@ -935,24 +950,26 @@ const LeaveAttendanceHub = () => {
           </div>
         </div>
 
-        <section className="leave-attendance-hub hrms-mobile-full min-w-0 rounded-2xl border border-[#E2E8F0] bg-[#FFFFFF] p-3 shadow-sm md:p-4">
-          <div className="la-panel-tabs mb-4 flex w-full gap-2 overflow-x-auto sm:flex-wrap sm:overflow-x-visible">
+        <section className="leave-attendance-hub la-hub--stitch hrms-mobile-full min-w-0 rounded-2xl border border-[#E2E8F0] bg-[#FFFFFF] p-3 shadow-sm md:p-4">
+          <div className="la-panel-tabs la-panel-tabs--stitch" role="tablist">
             {[
-              { id: 'attendance-log', label: 'Attendance log' },
-              { id: 'leave-summary', label: 'Leave summary' },
-              { id: 'regularization-history', label: 'Regularization history' },
-              { id: 'wfh-request', label: 'Work From Home' }
+              { id: 'attendance-log', label: 'Attendance log', short: 'Attendance', Icon: FiFileText },
+              { id: 'leave-summary', label: 'Leave summary', short: 'Leave', Icon: FiCalendar },
+              { id: 'regularization-history', label: 'Regularization history', short: 'Regularization', Icon: FiClock },
+              { id: 'wfh-request', label: 'Work From Home', short: 'WFH', Icon: FiHome },
             ].map((tab) => (
               <button
                 key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={panelTab === tab.id}
+                title={tab.label}
                 onClick={() => setPanelTab(tab.id)}
-                className={`inline-flex shrink-0 items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-semibold transition sm:min-w-0 sm:flex-1 sm:shrink ${
-                  panelTab === tab.id
-                    ? 'border-[#20C997] bg-[#ECFDF5] text-[#0F766E]'
-                    : 'border-[#CBD5E1] text-[#475569] hover:bg-[#F8FAFC]'
-                }`}
+                className={panelTab === tab.id ? 'is-active' : ''}
               >
-                {tab.label}
+                <tab.Icon aria-hidden />
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.short}</span>
               </button>
             ))}
           </div>
@@ -1308,23 +1325,32 @@ const LeaveAttendanceHub = () => {
           {showBreaksModal && selectedBreaksRow && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
               <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
-                      <FiCoffee className="h-6 w-6 text-[#0F766E]" />
+                <div className="flex flex-col gap-3 border-b border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ECFDF5] sm:h-12 sm:w-12">
+                        <FiCoffee className="h-5 w-5 text-[#0F766E] sm:h-6 sm:w-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900 sm:text-xl">Break Details</h3>
+                        <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+                          {selectedBreaksRow?.date ? new Date(selectedBreaksRow.date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : '--'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-900">Break Details</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">
-                        {selectedBreaksRow?.date ? new Date(selectedBreaksRow.date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : '--'}
-                      </p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCloseBreaksModal}
+                      className="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 sm:hidden"
+                    >
+                      <FiX className="h-5 w-5" />
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={handleExportEmployeeDateToExcel}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0F766E] text-white text-xs font-semibold hover:bg-[#0D9488] transition-colors"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#0F766E] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#0D9488] sm:flex-none"
                     >
                       <FiDownload className="h-3.5 w-3.5" />
                       Export Date
@@ -1332,7 +1358,7 @@ const LeaveAttendanceHub = () => {
                     <button
                       type="button"
                       onClick={handleExportEmployeeMonthToExcel}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0F766E] text-white text-xs font-semibold hover:bg-[#0D9488] transition-colors"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#0F766E] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#0D9488] sm:flex-none"
                     >
                       <FiDownload className="h-3.5 w-3.5" />
                       Export Month
@@ -1340,7 +1366,7 @@ const LeaveAttendanceHub = () => {
                     <button
                       type="button"
                       onClick={handleCloseBreaksModal}
-                      className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                      className="hidden shrink-0 rounded-xl p-2.5 text-slate-500 transition-colors hover:bg-slate-100 sm:inline-flex"
                     >
                       <FiX className="h-6 w-6" />
                     </button>
@@ -1396,22 +1422,31 @@ const LeaveAttendanceHub = () => {
           {showAllEmployeesModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
               <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
-                      <FiUsers className="h-6 w-6 text-[#0F766E]" />
+                <div className="flex flex-col gap-3 border-b border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ECFDF5] sm:h-12 sm:w-12">
+                        <FiUsers className="h-5 w-5 text-[#0F766E] sm:h-6 sm:w-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900 sm:text-xl">All Employee Breaks</h3>
+                        <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">View break details for all employees</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-900">All Employee Breaks</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">View break details for all employees</p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCloseAllEmployeesModal}
+                      className="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 sm:hidden"
+                    >
+                      <FiX className="h-5 w-5" />
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => handleExportClick('date')}
                       disabled={loadingAllEmployeesData}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0F766E] text-white text-sm font-semibold hover:bg-[#0D9488] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#0F766E] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#0D9488] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-4 sm:text-sm"
                     >
                       <FiDownload className="h-4 w-4" />
                       Export Date
@@ -1420,7 +1455,7 @@ const LeaveAttendanceHub = () => {
                       type="button"
                       onClick={() => handleExportClick('month')}
                       disabled={loadingAllEmployeesData}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0F766E] text-white text-sm font-semibold hover:bg-[#0D9488] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#0F766E] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#0D9488] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-4 sm:text-sm"
                     >
                       <FiDownload className="h-4 w-4" />
                       Export Month
@@ -1428,7 +1463,7 @@ const LeaveAttendanceHub = () => {
                     <button
                       type="button"
                       onClick={handleCloseAllEmployeesModal}
-                      className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                      className="hidden shrink-0 rounded-xl p-2.5 text-slate-500 transition-colors hover:bg-slate-100 sm:inline-flex"
                     >
                       <FiX className="h-6 w-6" />
                     </button>
@@ -1851,14 +1886,14 @@ const LeaveAttendanceHub = () => {
 
           {panelTab === 'regularization-history' && (
             <div>
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold uppercase tracking-wide text-[#334155]">
                   Regularization history —{' '}
                   {calendarCursor.toLocaleString('default', { month: 'long' })} {calendarCursor.getFullYear()}
                 </p>
                 <button
                   onClick={() => navigate('/my-attendance-regularization')}
-                  className="rounded-lg border border-[#CBD5E1] px-3 py-1.5 text-xs font-semibold text-[#475569] hover:border-[#20C997] hover:text-[#0F766E]"
+                  className="w-full rounded-lg border border-[#CBD5E1] px-3 py-1.5 text-xs font-semibold text-[#475569] hover:border-[#20C997] hover:text-[#0F766E] sm:w-auto"
                 >
                   View Full Regularization Page
                 </button>

@@ -117,6 +117,16 @@ export const authRoutes = [
     path: '/platform/login',
     component: lazy(() => import('../Platform/Login')),
     message: 'Loading platform login...'
+  },
+  {
+    path: '/platform/forgot-password',
+    component: lazy(() => import('../Platform/ForgotPassword')),
+    message: 'Loading platform forgot password...'
+  },
+  {
+    path: '/platform/reset-password/:token',
+    component: lazy(() => import('../Platform/ResetPassword')),
+    message: 'Loading platform password reset...'
   }
 ];
 

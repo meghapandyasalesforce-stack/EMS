@@ -80,7 +80,15 @@ export async function buildManagerTrainingDashboard(organizationId, managerId) {
     }));
 }
 
-export async function assignCourseToWorkflow(workflow, { courseId, title, mandatory = true, courseUrl }, { actor, req } = {}) {
+export async function assignCourseToWorkflow(workflow, {
+    courseId,
+    title,
+    mandatory = true,
+    courseUrl,
+    description,
+    type,
+    dueDate,
+}, { actor, req } = {}) {
     const settings = await assertAnyFeatureEnabled(
         workflow.organizationId,
         ['trainingLms', 'mandatoryTraining'],
@@ -117,13 +125,16 @@ export async function assignCourseToWorkflow(workflow, { courseId, title, mandat
         }
     }
 
+    const allowedTypes = new Set(['video', 'quiz', 'document']);
     const mod = {
         title: title || courseId || 'Course',
-        type: 'course',
+        description: description || undefined,
+        type: allowedTypes.has(type) ? type : 'video',
         status: 'Not Started',
         mandatory,
         externalCourseId: courseId,
         courseUrl,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
         lmsProvider: provider,
         enrolledAt: new Date(),
         enrollmentRef: enrollResult.id || enrollResult.enrolled ? 'ok' : null,

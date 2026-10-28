@@ -32,7 +32,7 @@ const TimelineTab = ({ employee }) => {
         <SectionCard title="Milestones" icon={FiClock}>
           <ul className="space-y-4">
             {milestones.map((m) => (
-              <li key={m.id} className="flex gap-4 border-l-2 border-[#20C997] pl-4">
+              <li key={m.id} className="flex gap-4 border-l-2 border-[#0E9370] pl-4">
                 <div>
                   <p className="font-medium text-slate-900">{m.event}</p>
                   <p className="text-xs text-slate-500">{m.date}</p>

@@ -124,6 +124,12 @@ export const getAllEmployees = async (req, res) => {
             });
         }
 
+        // Optional department filter (exact match on employee.department string)
+        const department = String(req.query.department || '').trim();
+        if (department) {
+            query.department = department;
+        }
+
         // Optional server-side search (name, last name, email, employeeId)
         const search = String(req.query.search || '').trim();
         if (search) {
@@ -153,6 +159,12 @@ export const getAllEmployees = async (req, res) => {
                     searchClause
                 ];
             }
+        }
+
+        // Optional status filter (active | inactive | suspended | terminated)
+        const status = String(req.query.status || '').trim().toLowerCase();
+        if (['active', 'inactive', 'suspended', 'terminated'].includes(status)) {
+            query.status = status;
         }
 
         // Execute optimized query with pagination

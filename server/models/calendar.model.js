@@ -59,6 +59,17 @@ const calendarSchema = new mongoose.Schema({
             type: Boolean,
             default: true
         },
+        /**
+         * HR can convert a holiday into a working day without deleting it:
+         * - null: normal holiday (blocks work)
+         * - office: work from office that day
+         * - home: work from home that day (also enables WFH on calendar)
+         */
+        workModeOverride: {
+            type: String,
+            enum: [null, 'office', 'home'],
+            default: null
+        },
         /** Optional half-day holiday (attendance treats other half as working). */
         isHalfDay: {
             type: Boolean,
@@ -80,6 +91,45 @@ const calendarSchema = new mongoose.Schema({
         },
         uploadedAt: {
             type: Date
+        }
+    }],
+    /**
+     * HR-enabled Work From Home dates for this calendar year.
+     * Presence = WFH is enabled for that date.
+     * employeeAccess:
+     *   - all_except (default): everyone may apply except excludedEmployeeIds
+     *   - only_these: only excludedEmployeeIds may apply (allowlist; same field, inverted meaning)
+     * Punch rules are separate: office punch is blocked only when the employee has approved WFH.
+     */
+    wfhDates: [{
+        date: {
+            type: Date,
+            required: true
+        },
+        employeeAccess: {
+            type: String,
+            enum: ['all_except', 'only_these'],
+            default: 'all_except'
+        },
+        excludedEmployeeIds: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Employee'
+        }],
+        note: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ''
+        },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Employee',
+            default: null
+        },
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Employee',
+            default: null
         }
     }],
     workingDays: {
@@ -133,6 +183,7 @@ const calendarSchema = new mongoose.Schema({
 // Index for efficient queries
 calendarSchema.index({ year: 1 });
 calendarSchema.index({ 'holidays.date': 1 });
+calendarSchema.index({ organizationId: 1, year: 1, 'wfhDates.date': 1 });
 
 // Virtual for getting total working days in a month
 calendarSchema.virtual('totalWorkingDaysInMonth').get(function() {
@@ -150,14 +201,15 @@ calendarSchema.virtual('totalWorkingDaysInMonth').get(function() {
         
         if (this.workingDays[dayName]) {
             // Check if it's not a holiday
-            const isHoliday = this.holidays.some(holiday => {
+            const isHoliday = this.holidays.some((holiday) => {
+                if (!holiday?.isActive) return false;
+                if (holiday.workModeOverride === 'office' || holiday.workModeOverride === 'home') return false;
                 const holidayDate = new Date(holiday.date);
-                return holidayDate.getDate() === day && 
-                       holidayDate.getMonth() === month && 
-                       holidayDate.getFullYear() === year &&
-                       holiday.isActive;
+                return holidayDate.getDate() === day &&
+                       holidayDate.getMonth() === month &&
+                       holidayDate.getFullYear() === year;
             });
-            
+
             if (!isHoliday) {
                 workingDays++;
             }

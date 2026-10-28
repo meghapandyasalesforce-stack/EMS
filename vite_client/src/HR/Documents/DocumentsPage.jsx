@@ -726,7 +726,7 @@ const DocumentsPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen bg-slate-50 transition-all duration-300">
+        <div className="page-shell min-h-screen bg-transparent transition-all duration-300">
             <div className="page-shell-inner mx-auto max-w-[1600px] space-y-5">
                 <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>

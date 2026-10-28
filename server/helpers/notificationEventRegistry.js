@@ -930,7 +930,7 @@ registerEvent({
   type: 'onboarding_workflow_overdue',
   defaultTitle: 'Onboarding Overdue',
   defaultType: 'onboarding',
-  defaultPriority: 'high',
+  defaultPriority: 'medium',
   recipientResolver: async ({ workflow, organizationId }) =>
     getOnboardingProgressRecipients(workflow, organizationId, {
       employee: true, hr: true, manager: true,
@@ -958,6 +958,7 @@ registerEvent({
     reminderType,
     dueDate,
     eventType: 'onboarding_reminder',
+    important: false,
   }),
 });
 

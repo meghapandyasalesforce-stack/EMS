@@ -12,11 +12,13 @@ import {
     resolveStoredThreadRootMessageId,
     THREAD_ROOT_REPLY_LOOKUP
 } from "../../helpers/emailThreadPersistenceHelper.js";
+import { validateEmployeeWfhEligibility } from "../../helpers/wfhCalendarHelper.js";
 
 /**
  * Create a Work From Home request (employee).
  * Informational only — notifies manager/HR/admin by email.
  * Does NOT affect attendance, punches, or leave.
+ * Dates must be HR-enabled on the calendar; excluded employees cannot apply.
  */
 export const createWfhRequest = async (req, res) => {
     try {
@@ -86,6 +88,21 @@ export const createWfhRequest = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Reason is required'
+            });
+        }
+
+        const eligibility = await validateEmployeeWfhEligibility({
+            organizationId,
+            employeeId: req.employee._id,
+            fromDate: fromDateRaw,
+            toDate: toDateRaw
+        });
+        if (!eligibility.ok) {
+            return res.status(400).json({
+                success: false,
+                message: eligibility.message,
+                code: eligibility.code,
+                details: eligibility.details
             });
         }
 

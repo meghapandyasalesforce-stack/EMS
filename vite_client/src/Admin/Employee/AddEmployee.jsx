@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { createEmployee } from '../../context/employeeSlice';
 import { checkAuthSession } from '../../context/Auth/authSlice';
@@ -26,6 +26,7 @@ import {
 } from '../../utils/systemRoleHelpers';
 import { getSystemRoleHome } from '../../utils/systemRoleHome';
 import useOrgStructureCatalog from '../../Hooks/useOrgStructureCatalog';
+import '../../styles/directoryUI.css';
 
 const VISIBLE_STEPS = [
     { id: 'personal', label: 'Personal' },
@@ -33,8 +34,7 @@ const VISIBLE_STEPS = [
     { id: 'review', label: 'Review' },
 ];
 
-const inputClass =
-    'w-full min-w-0 max-w-full flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30';
+const inputClass = 'emp-add-input';
 const selectClass = inputClass;
 
 function ResponsiveSelect({ name, value, onChange, required, disabled, options, placeholder }) {
@@ -92,12 +92,12 @@ function ResponsiveSelect({ name, value, onChange, required, disabled, options, 
                     if (disabled) return;
                     setOpen((current) => !current);
                 }}
-                className={`${selectClass} flex items-center justify-between gap-2 bg-white text-left disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
+                className={`${selectClass} flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60`}
             >
-                <span className={`truncate ${selected ? 'text-slate-900' : 'text-slate-500'}`}>
+                <span className={`truncate ${selected ? 'text-[var(--dir-on,#111c2d)]' : 'text-[var(--dir-outline,#6d7a73)]'}`}>
                     {selected?.label || placeholder}
                 </span>
-                <svg className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <svg className="h-4 w-4 shrink-0 text-[var(--dir-outline,#6d7a73)]" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                 </svg>
             </button>
@@ -105,7 +105,7 @@ function ResponsiveSelect({ name, value, onChange, required, disabled, options, 
                 <ul
                     role="listbox"
                     style={menuStyle}
-                    className="overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                    className="overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl"
                 >
                     <li>
                         <button
@@ -191,6 +191,7 @@ function AddEmployee() {
 
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const location = useLocation();
     const [error, setError] = useState('');
     const [managers, setManagers] = useState([]);
     const [loadingManagers, setLoadingManagers] = useState(false);
@@ -306,6 +307,19 @@ function AddEmployee() {
     useEffect(() => {
         fetchManagers();
     }, [fetchManagers]);
+
+    useEffect(() => {
+        const prefill = location.state?.quickPrefill;
+        if (!prefill || typeof prefill !== 'object') return undefined;
+        setForm((prev) => ({
+            ...prev,
+            name: prefill.name ? String(prefill.name) : prev.name,
+            jobTitle: prefill.jobTitle ? String(prefill.jobTitle) : prev.jobTitle,
+            department: prefill.department ? String(prefill.department) : prev.department,
+        }));
+        navigate(location.pathname, { replace: true, state: {} });
+        return undefined;
+    }, [location.state, location.pathname, navigate]);
 
     useEffect(() => {
         let cancelled = false;
@@ -691,39 +705,29 @@ function AddEmployee() {
     };
 
     const renderStepIndicator = () => (
-        <ol className="mb-8 flex flex-wrap gap-2 sm:gap-4">
+        <div className="emp-add__steps" aria-label="Add employee steps">
             {VISIBLE_STEPS.map((item, index) => {
                 const isActive = index === step;
                 const isDone = index < step;
                 return (
-                    <li key={item.id} className="flex items-center gap-2">
-                        <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
-                                isActive
-                                    ? 'bg-emerald-600 text-white'
-                                    : isDone
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : 'bg-slate-100 text-slate-500'
-                            }`}
-                        >
-                            {index + 1}
-                        </span>
-                        <span className={`text-sm font-medium ${isActive ? 'text-slate-900' : 'text-slate-500'}`}>
-                            {item.label}
-                        </span>
-                        {index < VISIBLE_STEPS.length - 1 ? (
-                            <span className="hidden text-slate-300 sm:inline">›</span>
-                        ) : null}
-                    </li>
+                    <React.Fragment key={item.id}>
+                        <div className={`emp-add__step${isActive ? ' is-active' : ''}${isDone ? ' is-done' : ''}`}>
+                            <span className="emp-add__step-num">{index + 1}</span>
+                            <span className="emp-add__step-label">{item.label}</span>
+                        </div>
+                        {index < VISIBLE_STEPS.length - 1 ? <div className="emp-add__step-rule" aria-hidden="true" /> : null}
+                    </React.Fragment>
                 );
             })}
-        </ol>
+        </div>
     );
 
     const renderPersonalStep = () => (
-        <div className="space-y-4">
-            <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="emp-add__grid">
+            <div className="emp-add__field">
+                <label className="emp-add__label" htmlFor="add-emp-name">First name *</label>
                 <input
+                    id="add-emp-name"
                     className={inputClass}
                     name="name"
                     placeholder="First name"
@@ -731,7 +735,11 @@ function AddEmployee() {
                     onChange={handleChange}
                     required
                 />
+            </div>
+            <div className="emp-add__field">
+                <label className="emp-add__label" htmlFor="add-emp-lastName">Last name (optional)</label>
                 <input
+                    id="add-emp-lastName"
                     className={inputClass}
                     name="lastName"
                     placeholder="Last name (optional)"
@@ -739,8 +747,10 @@ function AddEmployee() {
                     onChange={handleChange}
                 />
             </div>
-            <div className="flex flex-col gap-4 lg:flex-row">
+            <div className="emp-add__field">
+                <label className="emp-add__label" htmlFor="add-emp-email">Work email *</label>
                 <input
+                    id="add-emp-email"
                     className={inputClass}
                     name="email"
                     placeholder="Work email"
@@ -749,7 +759,11 @@ function AddEmployee() {
                     onChange={handleChange}
                     required
                 />
+            </div>
+            <div className="emp-add__field">
+                <label className="emp-add__label" htmlFor="add-emp-password">Password (optional)</label>
                 <input
+                    id="add-emp-password"
                     className={inputClass}
                     name="password"
                     placeholder="Password (optional — auto-generated if empty)"
@@ -759,193 +773,225 @@ function AddEmployee() {
                     onChange={handleChange}
                 />
             </div>
-            {isOrgOwner && adminEmail ? (
-                <button
-                    type="button"
-                    onClick={fillAdminCredentials}
-                    className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
-                >
-                    Use my admin email ({adminEmail})
-                </button>
-            ) : null}
-            {isOrgOwner && usingAdminEmail ? (
-                <p className="text-xs text-emerald-700">
-                    Only your organization admin email can share login. One employee profile will link to your admin account (same email and password).
-                </p>
-            ) : (
-                <p className="text-xs text-slate-500">
-                    Use a unique email for each employee. Leave password empty to auto-generate and email credentials to the new hire.
-                </p>
-            )}
-            {isOrgOwner ? (
-                <label className="flex items-start gap-2 text-sm text-slate-700">
-                    <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={usingAdminEmail || linkAsMyProfile}
-                        disabled={usingAdminEmail}
-                        onChange={(event) => setLinkAsMyProfile(event.target.checked)}
-                    />
-                    <span>
-                        Show this employee on my Me tab
-                        {usingAdminEmail ? ' (always on when using your admin email)' : ''}
-                    </span>
-                </label>
-            ) : null}
+            <div className="emp-add__field emp-add__field--full">
+                {isOrgOwner && adminEmail ? (
+                    <button
+                        type="button"
+                        onClick={fillAdminCredentials}
+                        className="emp-add__btn emp-add__btn-ghost"
+                        style={{ justifyContent: 'flex-start', paddingLeft: 0 }}
+                    >
+                        Use my admin email ({adminEmail})
+                    </button>
+                ) : null}
+                {isOrgOwner && usingAdminEmail ? (
+                    <p className="emp-add__hint is-ok">
+                        Only your organization admin email can share login. One employee profile will link to your admin account (same email and password).
+                    </p>
+                ) : (
+                    <p className="emp-add__hint">
+                        Use a unique email for each employee. Leave password empty to auto-generate and email credentials to the new hire.
+                    </p>
+                )}
+                {isOrgOwner ? (
+                    <label className="emp-add__check" style={{ marginTop: '0.5rem' }}>
+                        <input
+                            type="checkbox"
+                            checked={usingAdminEmail || linkAsMyProfile}
+                            disabled={usingAdminEmail}
+                            onChange={(event) => setLinkAsMyProfile(event.target.checked)}
+                        />
+                        <span>
+                            Show this employee on my Me tab
+                            {usingAdminEmail ? ' (always on when using your admin email)' : ''}
+                        </span>
+                    </label>
+                ) : null}
+            </div>
         </div>
     );
 
     const renderJobStep = () => (
         <div className="space-y-4">
             {catalogLoading ? (
-                <p className="text-sm text-slate-500">Loading organization structure…</p>
+                <p className="emp-add__hint">Loading organization structure…</p>
             ) : null}
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
-                <ResponsiveSelect
-                    name="departmentId"
-                    value={form.departmentId}
-                    onChange={handleChange}
-                    required
-                    placeholder="Select department"
-                    options={(catalog.departments || []).map((dep) => ({ value: dep._id, label: dep.name }))}
-                />
-                <ResponsiveSelect
-                    name="teamId"
-                    value={form.teamId}
-                    onChange={handleChange}
-                    disabled={!form.departmentId}
-                    placeholder="Team (optional)"
-                    options={filteredTeams.map((team) => ({ value: team._id, label: team.name }))}
-                />
+            <div className="emp-add__grid">
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Select department *</span>
+                    <ResponsiveSelect
+                        name="departmentId"
+                        value={form.departmentId}
+                        onChange={handleChange}
+                        required
+                        placeholder="Select department"
+                        options={(catalog.departments || []).map((dep) => ({ value: dep._id, label: dep.name }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Team (optional)</span>
+                    <ResponsiveSelect
+                        name="teamId"
+                        value={form.teamId}
+                        onChange={handleChange}
+                        disabled={!form.departmentId}
+                        placeholder="Team (optional)"
+                        options={filteredTeams.map((team) => ({ value: team._id, label: team.name }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Select job role *</span>
+                    <ResponsiveSelect
+                        name="jobRoleId"
+                        value={form.jobRoleId}
+                        onChange={handleChange}
+                        required
+                        disabled={!form.departmentId}
+                        placeholder="Select job role"
+                        options={filteredJobRoles.map((role) => ({ value: role._id, label: role.name }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Select designation *</span>
+                    <ResponsiveSelect
+                        name="designationId"
+                        value={form.designationId}
+                        onChange={handleChange}
+                        required
+                        placeholder="Select designation"
+                        options={(catalog.designations || []).map((des) => ({ value: des._id, label: des.name }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Employment type (optional)</span>
+                    <ResponsiveSelect
+                        name="employmentTypeId"
+                        value={form.employmentTypeId}
+                        onChange={handleChange}
+                        placeholder="Employment type (optional)"
+                        options={(catalog.employmentTypes || []).map((et) => ({ value: et._id, label: et.name }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Work mode (optional)</span>
+                    <ResponsiveSelect
+                        name="workModeId"
+                        value={form.workModeId}
+                        onChange={handleChange}
+                        placeholder="Work mode (optional)"
+                        options={(catalog.workModes || []).map((wm) => ({ value: wm._id, label: wm.name }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Location (optional)</span>
+                    <ResponsiveSelect
+                        name="locationId"
+                        value={form.locationId}
+                        onChange={handleChange}
+                        placeholder="Location (optional)"
+                        options={(catalog.locations || []).map((loc) => ({ value: loc._id, label: loc.name }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">No Shift</span>
+                    <ResponsiveSelect
+                        name="shiftId"
+                        value={form.shiftId}
+                        onChange={handleChange}
+                        placeholder="No Shift"
+                        options={shiftOptions.map((s) => ({
+                            value: s.key,
+                            label: `${s.name}${s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}`,
+                        }))}
+                    />
+                </div>
+                <div className="emp-add__field emp-add__field--full">
+                    <span className="emp-add__label">
+                        {managers.length > 0 ? 'Select manager (required) *' : 'Select manager'}
+                    </span>
+                    <ResponsiveSelect
+                        name="manager"
+                        value={form.manager}
+                        onChange={handleChange}
+                        required={managers.length > 0}
+                        disabled={loadingManagers}
+                        placeholder={loadingManagers ? 'Loading managers...' : managers.length > 0 ? 'Select manager (required)' : 'Select manager'}
+                        options={[
+                            ...(managers.length === 0 && !loadingManagers
+                                ? [{ value: 'Admin', label: 'Admin profile — organization root (no manager)' }]
+                                : []),
+                            ...managers.map((mgr) => {
+                                const fullName = `${mgr.name}${mgr.lastName ? ` ${mgr.lastName}` : ''}`.trim();
+                                const isRoot = !mgr.managerId;
+                                return {
+                                    value: mgr._id || fullName,
+                                    label: `${fullName} — ${mgr.position}${isRoot ? ' (Admin root)' : ''}`,
+                                };
+                            }),
+                        ]}
+                    />
+                    {!loadingManagers && managers.length === 0 ? (
+                        <p className="emp-add__hint">
+                            No employees yet — this profile becomes the organization Admin root (managerId empty).
+                            Department managers added later should report to this Admin.
+                        </p>
+                    ) : !loadingManagers ? (
+                        <p className="emp-add__hint">
+                            Every employee after the Admin root must select a manager. Department managers
+                            can report directly to Admin; others follow their department hierarchy.
+                        </p>
+                    ) : null}
+                </div>
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Select job category *</span>
+                    <ResponsiveSelect
+                        name="jobCategory"
+                        value={form.jobCategory}
+                        onChange={handleChange}
+                        required
+                        placeholder="Select job category"
+                        options={jobCategories.map((cat) => ({ value: cat, label: cat }))}
+                    />
+                </div>
+                <div className="emp-add__field">
+                    <label className="emp-add__label" htmlFor="add-emp-salary">Annual salary *</label>
+                    <input
+                        id="add-emp-salary"
+                        className={inputClass}
+                        name="salary"
+                        placeholder="Annual salary"
+                        type="number"
+                        value={form.salary}
+                        onChange={handleChange}
+                        required
+                    />
+                </div>
             </div>
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
-                <ResponsiveSelect
-                    name="jobRoleId"
-                    value={form.jobRoleId}
-                    onChange={handleChange}
-                    required
-                    disabled={!form.departmentId}
-                    placeholder="Select job role"
-                    options={filteredJobRoles.map((role) => ({ value: role._id, label: role.name }))}
-                />
-                <ResponsiveSelect
-                    name="designationId"
-                    value={form.designationId}
-                    onChange={handleChange}
-                    required
-                    placeholder="Select designation"
-                    options={(catalog.designations || []).map((des) => ({ value: des._id, label: des.name }))}
-                />
-            </div>
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
-                <ResponsiveSelect
-                    name="employmentTypeId"
-                    value={form.employmentTypeId}
-                    onChange={handleChange}
-                    placeholder="Employment type (optional)"
-                    options={(catalog.employmentTypes || []).map((et) => ({ value: et._id, label: et.name }))}
-                />
-                <ResponsiveSelect
-                    name="workModeId"
-                    value={form.workModeId}
-                    onChange={handleChange}
-                    placeholder="Work mode (optional)"
-                    options={(catalog.workModes || []).map((wm) => ({ value: wm._id, label: wm.name }))}
-                />
-            </div>
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
-                <ResponsiveSelect
-                    name="locationId"
-                    value={form.locationId}
-                    onChange={handleChange}
-                    placeholder="Location (optional)"
-                    options={(catalog.locations || []).map((loc) => ({ value: loc._id, label: loc.name }))}
-                />
-                <ResponsiveSelect
-                    name="shiftId"
-                    value={form.shiftId}
-                    onChange={handleChange}
-                    placeholder="No Shift"
-                    options={shiftOptions.map((s) => ({
-                        value: s.key,
-                        label: `${s.name}${s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : ''}`,
-                    }))}
-                />
-            </div>
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
-                <ResponsiveSelect
-                    name="manager"
-                    value={form.manager}
-                    onChange={handleChange}
-                    required={managers.length > 0}
-                    disabled={loadingManagers}
-                    placeholder={loadingManagers ? 'Loading managers...' : managers.length > 0 ? 'Select manager (required)' : 'Select manager'}
-                    options={[
-                        ...(managers.length === 0 && !loadingManagers
-                            ? [{ value: 'Admin', label: 'Admin profile — organization root (no manager)' }]
-                            : []),
-                        ...managers.map((mgr) => {
-                            const fullName = `${mgr.name}${mgr.lastName ? ` ${mgr.lastName}` : ''}`.trim();
-                            const isRoot = !mgr.managerId;
-                            return {
-                                value: mgr._id || fullName,
-                                label: `${fullName} — ${mgr.position}${isRoot ? ' (Admin root)' : ''}`,
-                            };
-                        }),
-                    ]}
-                />
-            </div>
-            {!loadingManagers && managers.length === 0 ? (
-                <p className="text-xs text-slate-500">
-                    No employees yet — this profile becomes the organization Admin root (managerId empty).
-                    Department managers added later should report to this Admin.
-                </p>
-            ) : !loadingManagers ? (
-                <p className="text-xs text-slate-500">
-                    Every employee after the Admin root must select a manager. Department managers
-                    can report directly to Admin; others follow their department hierarchy.
-                </p>
-            ) : null}
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row">
-                <ResponsiveSelect
-                    name="jobCategory"
-                    value={form.jobCategory}
-                    onChange={handleChange}
-                    required
-                    placeholder="Select job category"
-                    options={jobCategories.map((cat) => ({ value: cat, label: cat }))}
-                />
-                <input
-                    className={inputClass}
-                    name="salary"
-                    placeholder="Annual salary"
-                    type="number"
-                    value={form.salary}
-                    onChange={handleChange}
-                    required
-                />
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+
+            <div className="emp-add__panel emp-add__panel--accent space-y-3">
                 <div>
-                    <h3 className="text-sm font-semibold text-slate-900">Access &amp; home screen</h3>
-                    <p className="mt-1 text-xs text-slate-600">
+                    <h3>Access &amp; home screen</h3>
+                    <p className="emp-add__hint">
                         This controls which dashboard and modules they get after login. Department and job title are labels only — they do not pick the home screen.
                     </p>
                 </div>
-                <ResponsiveSelect
-                    name="systemRole"
-                    value={form.systemRole || DEFAULT_SYSTEM_ROLE}
-                    onChange={handleChange}
-                    required
-                    disabled={loadingRoles}
-                    placeholder={loadingRoles ? 'Loading access options…' : 'Select access & home'}
-                    options={roleCatalog.map((role) => ({
-                        value: role.id,
-                        label: `${role.label} → ${getSystemRoleHome(role.id).label}`,
-                    }))}
-                />
+                <div className="emp-add__field">
+                    <span className="emp-add__label">Select access &amp; home *</span>
+                    <ResponsiveSelect
+                        name="systemRole"
+                        value={form.systemRole || DEFAULT_SYSTEM_ROLE}
+                        onChange={handleChange}
+                        required
+                        disabled={loadingRoles}
+                        placeholder={loadingRoles ? 'Loading access options…' : 'Select access & home'}
+                        options={roleCatalog.map((role) => ({
+                            value: role.id,
+                            label: `${role.label} → ${getSystemRoleHome(role.id).label}`,
+                        }))}
+                    />
+                </div>
                 {form.systemRole ? (
-                    <p className="text-xs text-slate-600">
+                    <p className="emp-add__hint">
                         Opens <span className="font-medium text-slate-800">{getSystemRoleHome(form.systemRole).label}</span>
                         {' '}({getSystemRoleHome(form.systemRole).path})
                         {roleCatalog.find((r) => r.id === form.systemRole)?.description
@@ -954,7 +1000,7 @@ function AddEmployee() {
                     </p>
                 ) : null}
                 {!systemRoleManual && roleSuggestionReason ? (
-                    <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                    <p className="emp-add__hint">
                         Suggested from job details: {roleSuggestionReason}. You can change the selection above.
                     </p>
                 ) : null}
@@ -965,11 +1011,10 @@ function AddEmployee() {
                 ) : null}
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
-                <label className="flex items-start gap-3 cursor-pointer">
+            <div className="emp-add__panel space-y-3">
+                <label className="emp-add__check">
                     <input
                         type="checkbox"
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                         checked={Boolean(form.onProbation)}
                         onChange={(e) =>
                             setForm((prev) => ({ ...prev, onProbation: e.target.checked }))
@@ -985,11 +1030,12 @@ function AddEmployee() {
                     </span>
                 </label>
                 {form.onProbation ? (
-                    <div className="max-w-xs">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <div className="emp-add__field" style={{ maxWidth: '16rem' }}>
+                        <label className="emp-add__label" htmlFor="add-emp-probationMonths">
                             Probation duration (months)
                         </label>
                         <input
+                            id="add-emp-probationMonths"
                             className={inputClass}
                             name="probationMonths"
                             type="number"
@@ -1010,48 +1056,48 @@ function AddEmployee() {
 
         return (
             <div className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-5">
-                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Summary</h3>
-                    <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <div className="emp-add__panel">
+                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--dir-outline)]">Summary</h3>
+                    <dl className="emp-add__summary">
                         <div>
-                            <dt className="text-slate-500">Name</dt>
-                            <dd className="font-medium text-slate-900">{form.name} {form.lastName}</dd>
+                            <dt>Name</dt>
+                            <dd>{form.name} {form.lastName}</dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Email</dt>
-                            <dd className="font-medium text-slate-900">{form.email}</dd>
+                            <dt>Email</dt>
+                            <dd>{form.email}</dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Department</dt>
-                            <dd className="font-medium text-slate-900">{selectedDepartmentName}</dd>
+                            <dt>Department</dt>
+                            <dd>{selectedDepartmentName}</dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Job title</dt>
-                            <dd className="font-medium text-slate-900">{selectedJobRoleName}</dd>
+                            <dt>Job title</dt>
+                            <dd>{selectedJobRoleName}</dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Position</dt>
-                            <dd className="font-medium text-slate-900">{selectedDesignationName}</dd>
+                            <dt>Position</dt>
+                            <dd>{selectedDesignationName}</dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Manager</dt>
-                            <dd className="font-medium text-slate-900">{managerLabel}</dd>
+                            <dt>Manager</dt>
+                            <dd>{managerLabel}</dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Shift</dt>
-                            <dd className="font-medium text-slate-900">{selectedShiftLabel}</dd>
+                            <dt>Shift</dt>
+                            <dd>{selectedShiftLabel}</dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Probation</dt>
-                            <dd className="font-medium text-slate-900">
+                            <dt>Probation</dt>
+                            <dd>
                                 {form.onProbation
                                     ? `Yes — ${form.probationMonths || 6} month(s)`
                                     : 'No'}
                             </dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Access &amp; home</dt>
-                            <dd className="font-semibold text-emerald-700">
+                            <dt>Access &amp; home</dt>
+                            <dd style={{ color: 'var(--dir-primary)' }}>
                                 {selectedRoleLabel}
                                 <span className="ml-1 text-xs font-normal text-slate-500">
                                     → {getSystemRoleHome(form.systemRole).label}
@@ -1060,12 +1106,12 @@ function AddEmployee() {
                             </dd>
                         </div>
                         <div>
-                            <dt className="text-slate-500">Salary</dt>
-                            <dd className="font-medium text-slate-900">₹{Number(form.salary).toLocaleString('en-IN')}</dd>
+                            <dt>Salary</dt>
+                            <dd>₹{Number(form.salary).toLocaleString('en-IN')}</dd>
                         </div>
                     </dl>
                     {selected?.description ? (
-                        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{selected.description}</p>
+                        <p className="emp-add__hint" style={{ marginTop: '1rem' }}>{selected.description}</p>
                     ) : null}
                 </div>
 
@@ -1084,58 +1130,85 @@ function AddEmployee() {
     }
 
     return (
-        <div className="min-h-screen overflow-x-hidden bg-[#F5F7FB]">
+        <div className="emp-add min-h-screen overflow-x-hidden">
             <div className="page-shell">
-                <div className="page-shell-inner min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
-                    <h1 className="mb-2 text-xl font-semibold text-slate-900 sm:text-2xl">Add employee</h1>
-                    <p className="mb-6 text-sm text-slate-500">
-                        Job details describe where they sit. Access &amp; home screen chooses their dashboard and modules (like Zoho roles).
-                    </p>
-
-                    {renderStepIndicator()}
-
-                    {(error || employeeError) && (
-                        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                            {error ||
-                                (typeof employeeError === 'string'
-                                    ? employeeError
-                                    : employeeError?.message || 'Failed to create employee')}
-                        </p>
-                    )}
-
-                    <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            if (step < VISIBLE_STEPS.length - 1) goNext();
-                            else submitEmployee();
-                        }}
-                    >
-                        {step === 0 && renderPersonalStep()}
-                        {step === 1 && renderJobStep()}
-                        {step === 2 && renderReviewStep()}
-
-                        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+                <div className="page-shell-inner emp-add__shell">
+                    <div className="emp-add__card">
+                        <div className="emp-add__header">
+                            <div>
+                                <span className="emp-add__kicker">Talent Onboarding</span>
+                                <h1>Add New Employee Record</h1>
+                            </div>
                             <button
                                 type="button"
-                                onClick={goBack}
-                                disabled={step === 0 || employeeStatus === 'loading'}
-                                className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="emp-add__close"
+                                aria-label="Close add employee"
+                                onClick={() => navigate('/employees')}
                             >
-                                Back
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={employeeStatus === 'loading'}
-                                className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                            >
-                                {employeeStatus === 'loading'
-                                    ? 'Creating…'
-                                    : step < VISIBLE_STEPS.length - 1
-                                      ? 'Continue'
-                                      : 'Create employee'}
+                                ×
                             </button>
                         </div>
-                    </form>
+
+                        {renderStepIndicator()}
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                if (step < VISIBLE_STEPS.length - 1) goNext();
+                                else submitEmployee();
+                            }}
+                        >
+                            <div className="emp-add__body">
+                                {(error || employeeError) && (
+                                    <p className="emp-add__error">
+                                        {error ||
+                                            (typeof employeeError === 'string'
+                                                ? employeeError
+                                                : employeeError?.message || 'Failed to create employee')}
+                                    </p>
+                                )}
+                                {step === 0 && renderPersonalStep()}
+                                {step === 1 && renderJobStep()}
+                                {step === 2 && renderReviewStep()}
+                            </div>
+
+                            <div className="emp-add__footer">
+                                {step > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={goBack}
+                                        disabled={employeeStatus === 'loading'}
+                                        className="emp-add__btn emp-add__btn-secondary"
+                                    >
+                                        Back
+                                    </button>
+                                ) : (
+                                    <span />
+                                )}
+                                <div className="emp-add__footer-right">
+                                    <button
+                                        type="button"
+                                        className="emp-add__btn emp-add__btn-ghost"
+                                        onClick={() => navigate('/employees')}
+                                        disabled={employeeStatus === 'loading'}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={employeeStatus === 'loading'}
+                                        className="emp-add__btn emp-add__btn-primary"
+                                    >
+                                        {employeeStatus === 'loading'
+                                            ? 'Creating…'
+                                            : step < VISIBLE_STEPS.length - 1
+                                              ? 'Continue'
+                                              : 'Create & Provision Employee'}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

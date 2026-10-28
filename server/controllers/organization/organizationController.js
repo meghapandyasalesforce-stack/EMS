@@ -679,14 +679,14 @@ export const updateOrganizationBranding = async (req, res) => {
         else {
             if (primaryColor !== undefined) {
                 if (primaryColor && !isHexColor(primaryColor)) {
-                    return sendError(res, 'Invalid primaryColor value. Expected hex color like #16a34a', 400);
+                    return sendError(res, 'Invalid primaryColor value. Expected hex color like #0e9370', 400);
                 }
                 organization.branding.primaryColor = primaryColor;
             }
 
             if (secondaryColor !== undefined) {
                 if (secondaryColor && !isHexColor(secondaryColor)) {
-                    return sendError(res, 'Invalid secondaryColor value. Expected hex color like #2563eb', 400);
+                    return sendError(res, 'Invalid secondaryColor value. Expected hex color like #476175', 400);
                 }
                 organization.branding.secondaryColor = secondaryColor;
             }

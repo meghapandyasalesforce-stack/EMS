@@ -60,9 +60,11 @@ export async function ensureDefaultOfferTemplate(organizationId) {
     return template;
 }
 
-export async function listOfferTemplates(organizationId) {
+export async function listOfferTemplates(organizationId, { includeInactive = true } = {}) {
     await ensureDefaultOfferTemplate(organizationId);
-    const templates = await OfferLetterTemplate.find({ organizationId, isActive: { $ne: false } }).sort({ isDefault: -1, name: 1 }).lean();
+    const query = { organizationId };
+    if (!includeInactive) query.isActive = { $ne: false };
+    const templates = await OfferLetterTemplate.find(query).sort({ isDefault: -1, isActive: -1, name: 1 }).lean();
     return templates.map((template) => normalizeRichHtmlFields(template));
 }
 

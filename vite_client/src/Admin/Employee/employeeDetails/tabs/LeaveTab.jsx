@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FiClock, FiEdit2, FiLayers, FiRefreshCw } from 'react-icons/fi';
+import { FiClock, FiEdit2, FiLayers } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../../../utils/axios';
 import SectionCard from '../SectionCard';
@@ -276,7 +276,7 @@ const ManualAdjustModal = ({
                         onClick={() => onChange(typeKey, 'carryMode', 'add')}
                         className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
                           carryMode === 'add'
-                            ? 'bg-[#20C997] text-white'
+                            ? 'bg-[#0E9370] text-white'
                             : 'text-slate-600 hover:bg-slate-50'
                         }`}
                       >
@@ -504,7 +504,7 @@ const ManualAdjustModal = ({
             type="button"
             onClick={onSave}
             disabled={saving || leaveTypes.length === 0}
-            className="rounded-xl bg-[#20C997] px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-xl bg-[#0E9370] px-4 py-2 text-sm font-semibold text-white"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -523,7 +523,6 @@ const LeaveTab = ({ employeeId }) => {
   const [auditLog, setAuditLog] = useState([]);
   const [viewYear, setViewYear] = useState(currentYear);
   const [viewMonth, setViewMonth] = useState(currentMonth);
-  const [showTools, setShowTools] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustForms, setAdjustForms] = useState({});
   const [adjustInitialForms, setAdjustInitialForms] = useState({});
@@ -590,7 +589,6 @@ const LeaveTab = ({ employeeId }) => {
   useEffect(() => {
     setViewYear(currentYear);
     setViewMonth(currentMonth);
-    setShowTools(false);
     setShowAllActivity(false);
   }, [employeeId, currentYear, currentMonth]);
 
@@ -861,7 +859,6 @@ const LeaveTab = ({ employeeId }) => {
   const overviewSubtitle = useMemo(() => {
     const parts = [];
     parts.push(isCurrentPeriod ? 'As of today' : `As of ${formatMonthYear(viewMonth, viewYear)}`);
-    if (balance?.policy?.policyName) parts.push(balance.policy.policyName);
     if (employeeContext?.joiningDate) {
       parts.push(`Joined ${formatMonthYear(joiningMonth, joiningYear)}`);
     }
@@ -870,107 +867,92 @@ const LeaveTab = ({ employeeId }) => {
     isCurrentPeriod,
     viewMonth,
     viewYear,
-    balance?.policy?.policyName,
     employeeContext?.joiningDate,
     joiningMonth,
     joiningYear,
   ]);
 
   return (
-    <div className="space-y-5">
+    <div className={`leave-tab leave-tab--compact ${styles.leaveTab}`}>
       <EmployeeLeaveSummaryPanel
         className={styles.summaryPanel}
         summary={leaveSummary}
         loading={loading}
         subtitle={!loading ? overviewSubtitle : undefined}
+        compact
       />
 
-      {canAdjust && (
-        <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-          <button
-            type="button"
-            onClick={() => setShowTools((v) => !v)}
-            className="flex w-full items-center justify-between px-5 py-4 text-left"
-          >
-            <span className="flex items-center gap-2 font-semibold text-slate-800">
-              <FiRefreshCw className="h-4 w-4 text-[#20C997]" />
-              Balance Adjustments
-            </span>
-            <span className="text-sm text-[#0d9488]">{showTools ? 'Hide' : 'Show'}</span>
-          </button>
-          {showTools && (
-            <div className="border-t border-slate-100 px-5 pb-5 pt-4">
-              <button
-                type="button"
-                onClick={openEditModal}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-              >
-                <FiEdit2 className="h-4 w-4" />
-                Balance Adjustment
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       <SectionCard
+        className="leave-balances-section"
         title="Leave balances"
         icon={FiLayers}
         action={
-          <LeavePeriodDropdowns
-            viewMonth={viewMonth}
-            viewYear={viewYear}
-            onMonthChange={setViewMonth}
-            onYearChange={setViewYear}
-            monthOptions={viewMonthOptions}
-            yearOptions={yearOptions}
-            className={`ml-0 ${styles.periodControls}`}
-          />
+          <div className={`leave-tab__balances-actions ${styles.balancesActions}`}>
+            {canAdjust ? (
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="leave-tab__adjust-btn"
+              >
+                <FiEdit2 className="h-3.5 w-3.5" />
+                Adjust
+              </button>
+            ) : null}
+            <LeavePeriodDropdowns
+              viewMonth={viewMonth}
+              viewYear={viewYear}
+              onMonthChange={setViewMonth}
+              onYearChange={setViewYear}
+              monthOptions={viewMonthOptions}
+              yearOptions={yearOptions}
+              className={`leave-tab__period ml-0 ${styles.periodControls}`}
+            />
+          </div>
         }
       >
-        {loading ? (
-          <div className="flex justify-center py-14">
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
-          </div>
-        ) : !balance ? (
-          <p className="py-8 text-center text-sm text-slate-500">No leave balance for this period. Assign a leave policy first.</p>
-        ) : (
-          <>
-            {balance.policy?.policyName && (
-              <div className="mb-4 rounded-lg border border-[#20C997]/25 bg-[#20C997]/10 px-4 py-2.5 text-sm text-[#0d9488]">
-                <span className="font-semibold">Policy:</span> {balance.policy.policyName}
-              </div>
-            )}
-            {displayBalances.length > 0 ? (
-              <div className={styles.balanceGrid}>
-                {displayBalances.map((typeBalance) => (
-                  <LeaveBalanceCard
-                    className={styles.balanceCard}
-                    key={typeBalance.leaveType}
-                    typeBalance={typeBalance}
-                    policyLeaveTypes={policyLeaveTypes}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="py-8 text-center text-sm text-slate-500">No leave types configured for this policy.</p>
-            )}
-          </>
-        )}
+        <div className="leave-balances-content">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370]" />
+            </div>
+          ) : !balance ? (
+            <p className="py-4 text-center text-sm text-slate-500">
+              No leave balance for this period. Assign a leave policy first.
+            </p>
+          ) : displayBalances.length > 0 ? (
+            <div className="leave-balance-grid">
+              {displayBalances.map((typeBalance) => (
+                <LeaveBalanceCard
+                  key={typeBalance.leaveType}
+                  typeBalance={typeBalance}
+                  policyLeaveTypes={policyLeaveTypes}
+                  compact
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="py-4 text-center text-sm text-slate-500">
+              No leave types configured for this policy.
+            </p>
+          )}
+        </div>
       </SectionCard>
 
       {auditLog.length > 0 && (
-        <SectionCard title="Recent activity" icon={FiClock}>
+        <SectionCard className="leave-tab__activity" title="Recent activity" icon={FiClock}>
           <ul className="divide-y divide-slate-100">
             {visibleActivity.map((entry) => {
               const prev = entry.previousBalance?.available;
               const next = entry.newBalance?.available;
               const changed = prev != null && next != null && prev !== next;
               return (
-                <li key={entry._id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <li
+                  key={entry._id}
+                  className="flex flex-col gap-0.5 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div>
-                    <p className="font-medium text-slate-800">{friendlyAction(entry.action)}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm font-medium text-slate-800">{friendlyAction(entry.action)}</p>
+                    <p className="text-[11px] text-slate-500">
                       {entry.leaveType && (
                         <span className="font-medium text-slate-600">
                           {entry.leaveType === 'employee'
@@ -996,18 +978,18 @@ const LeaveTab = ({ employeeId }) => {
                     ) : next != null ? (
                       <span className="font-semibold text-[#0d9488]">{fmtDays(next)} days</span>
                     ) : null}
-                    <p className="text-xs text-slate-400">{formatDate(entry.performedAt)}</p>
+                    <p className="text-[11px] text-slate-400">{formatDate(entry.performedAt)}</p>
                   </div>
                 </li>
               );
             })}
           </ul>
           {hasMoreActivity && (
-            <div className="border-t border-slate-100 pt-3 text-center">
+            <div className="border-t border-slate-100 pt-2 text-center">
               <button
                 type="button"
                 onClick={() => setShowAllActivity((expanded) => !expanded)}
-                className="text-sm font-semibold text-[#0d9488] transition hover:text-[#0f766e]"
+                className="text-xs font-semibold text-[#0d9488] transition hover:text-[#0f766e]"
               >
                 {showAllActivity
                   ? 'Show less'

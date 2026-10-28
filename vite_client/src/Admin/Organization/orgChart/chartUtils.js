@@ -216,34 +216,84 @@ export function buildChartLayout(employees, allowedIds, expandedIds) {
 }
 
 /**
- * Prototype-style orthogonal connectors: parent bottom → mid bar → child top.
+ * Orthogonal connectors: T-junction under parent for row 0; left-spine
+ * outside the subtree for wrapped rows (avoids lines through sibling cards).
  */
-export function buildConnectorEdges(positions, employees, pathIds) {
+export function buildConnectorEdges(positions, employees, pathIds, selectedId = null) {
   const pathSet = new Set([...(pathIds || [])].map(String));
+  const selected = selectedId != null ? String(selectedId) : null;
   const pos = (id) => (id == null ? null : positions.get(String(id)) || null);
   const edges = [];
-  const byId = new Map(employees.map(employee => [String(employee.id), employee]));
+  const byId = new Map(employees.map((employee) => [String(employee.id), employee]));
+
+  /** @type {Map<string, Array<{ id: string, child: object, parent: object }>>} */
+  const byParent = new Map();
 
   for (const id of positions.keys()) {
     const emp = byId.get(String(id));
     if (!emp?.reportsTo) continue;
-
     const parent = pos(emp.reportsTo);
     const child = pos(id);
     if (!parent || !child) continue;
+    const pid = String(emp.reportsTo);
+    if (!byParent.has(pid)) byParent.set(pid, []);
+    byParent.get(pid).push({ id: String(id), child, parent });
+  }
 
-    const x1 = parent.x + NODE_CENTER_X;
-    const y1 = parent.y + NODE_HEIGHT;
-    const x2 = child.x + NODE_CENTER_X;
-    const y2 = child.y;
-    const mid = y1 + Math.max(28, (y2 - y1) * 0.42);
-    const highlighted = pathSet.has(String(id)) && pathSet.has(String(emp.reportsTo));
+  for (const [pid, kids] of byParent) {
+    const parent = kids[0].parent;
+    const y1 = parent.y + parent.height;
+    const stub = 24;
+    // Spine sits left of every child of this parent — never through a card.
+    const spineX = Math.min(...kids.map((k) => k.child.x)) - 20;
+    // Derive rows from actual Y (more reliable than parentRoute when packing changes).
+    const rowYs = [...new Set(kids.map((k) => k.child.y))].sort((a, b) => a - b);
+    const firstRowY = rowYs[0];
 
-    edges.push({
-      id: `${emp.reportsTo}-${id}`,
-      d: child.width ? desktopConnectorPath(child, parent) : `M ${x1} ${y1} V ${mid} H ${x2} V ${y2}`,
-      highlighted,
-    });
+    /** @type {Map<number, typeof kids>} */
+    const rows = new Map();
+    for (const kid of kids) {
+      const row = rowYs.indexOf(kid.child.y);
+      if (!rows.has(row)) rows.set(row, []);
+      rows.get(row).push(kid);
+    }
+
+    for (const [row, rowKids] of rows) {
+      const childYs = rowKids.map((k) => k.child.y);
+      const firstRow = row === 0 || Math.abs(rowKids[0].child.y - firstRowY) < 1;
+      const busY = firstRow ? y1 + stub : Math.min(...childYs) - stub;
+
+      for (const kid of rowKids) {
+        const onAncestorPath = pathSet.has(kid.id) && pathSet.has(pid);
+        const isDirectReportOfSelected = selected != null && pid === selected;
+        const highlighted = onAncestorPath || isDirectReportOfSelected;
+        const focused =
+          !selected ||
+          onAncestorPath ||
+          isDirectReportOfSelected ||
+          kid.id === selected;
+
+        const x1 = parent.x + (parent.width || NODE_WIDTH) / 2;
+        const y2 = kid.child.y;
+        const x2 = kid.child.x + (kid.child.width || NODE_WIDTH) / 2;
+        const mid = y1 + Math.max(28, (y2 - y1) * 0.42);
+
+        edges.push({
+          id: `${pid}-${kid.id}`,
+          parentId: pid,
+          childId: kid.id,
+          d: kid.child.width
+            ? desktopConnectorPath(kid.child, parent, {
+                busY,
+                firstRow,
+                spineX: firstRow ? undefined : spineX,
+              })
+            : `M ${x1} ${y1} V ${mid} H ${x2} V ${y2}`,
+          highlighted,
+          focused,
+        });
+      }
+    }
   }
 
   return edges;
@@ -331,9 +381,12 @@ export function renderOrgChartToCanvas({
     const parentPos = positions.get(String(emp.reportsTo));
     if (!parentPos) continue;
 
-    const x1 = ox + parentPos.x + NODE_CENTER_X;
-    const y1 = oy + parentPos.y + NODE_HEIGHT;
-    const x2 = ox + childPos.x + NODE_CENTER_X;
+    const pw = parentPos.width || NODE_WIDTH;
+    const ph = parentPos.height || NODE_HEIGHT;
+    const cw = childPos.width || NODE_WIDTH;
+    const x1 = ox + parentPos.x + pw / 2;
+    const y1 = oy + parentPos.y + ph;
+    const x2 = ox + childPos.x + cw / 2;
     const y2 = oy + childPos.y;
     const mid = y1 + Math.max(28, (y2 - y1) * 0.42);
 
@@ -342,8 +395,8 @@ export function renderOrgChartToCanvas({
       const path = new Path2D(desktopConnectorPath(childPos, parentPos));
       ctx.save();
       ctx.translate(ox, oy);
-      ctx.strokeStyle = '#c5cfc0';
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = '#7f9086';
+      ctx.lineWidth = 1.8;
       ctx.stroke(path);
       ctx.restore();
       continue;

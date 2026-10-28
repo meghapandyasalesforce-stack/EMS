@@ -19,7 +19,7 @@ export const REPORT_NAV = [
 ];
 
 export const CHART_COLORS = {
-    primary: '#20C997',
+    primary: '#0E9370',
     primaryDark: '#0d9488',
     secondary: '#14b8a6',
     orange: '#fb923c',
@@ -29,4 +29,4 @@ export const CHART_COLORS = {
     gray: '#94a3b8',
 };
 
-export const MINT_GRADIENT = 'linear-gradient(135deg, #20C997 0%, #0d9488 100%)';
+export const MINT_GRADIENT = 'linear-gradient(135deg, #0E9370 0%, #00694F 100%)';

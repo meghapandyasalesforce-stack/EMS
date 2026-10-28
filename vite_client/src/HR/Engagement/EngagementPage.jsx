@@ -37,7 +37,7 @@ import DraftAwaitingBanner from '../../components/DraftAwaitingBanner';
 import { useAuthPermissions } from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS } from '../../utils/permissions';
 
-const MINT = '#20C997';
+const MINT = '#0E9370';
 const MINT_DARK = '#0d9488';
 
 /** Map legacy tab ids (and new section ids) → { section, sub } for deep links. */
@@ -81,7 +81,7 @@ const SubTabBar = ({ tabs, active, onChange, trailing = null }) => {
                         onClick={() => onChange(tab.id)}
                         className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
                             active === tab.id
-                                ? 'bg-[#20C997] text-white shadow-sm'
+                                ? 'bg-[#0E9370] text-white shadow-sm'
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                     >
@@ -528,9 +528,9 @@ const EngagementPage = () => {
 
     if (loading) {
         return (
-            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#F5F7FB]">
+            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent">
                 <div className="text-center">
-                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]" />
                     <p className="text-sm font-medium text-slate-600">Loading engagement data...</p>
                 </div>
             </div>
@@ -538,7 +538,7 @@ const EngagementPage = () => {
     }
 
     return (
-        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-[#F5F7FB]">
+        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-transparent">
             <div className="page-shell-inner hrms-stack min-w-0">
                 <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
@@ -596,7 +596,7 @@ const EngagementPage = () => {
                                 onClick={() => goToNav(tab.id, tab.defaultSub)}
                                 className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
                                     activeSection === tab.id
-                                        ? 'bg-[#20C997]/10 text-[#0d9488] ring-1 ring-[#20C997]/30'
+                                        ? 'bg-[#0E9370]/10 text-[#0d9488] ring-1 ring-[#0E9370]/30'
                                         : 'text-slate-600 hover:bg-slate-50'
                                 }`}
                             >
@@ -627,7 +627,7 @@ const EngagementPage = () => {
                                               ? 'Search suggestions...'
                                               : 'Search feedback...'
                                     }
-                                    className="h-9 w-full rounded-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-[#20C997] focus:bg-white focus:ring-2 focus:ring-[#20C997]/20 sm:h-10"
+                                    className="h-9 w-full rounded-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-[#0E9370] focus:bg-white focus:ring-2 focus:ring-[#0E9370]/20 sm:h-10"
                                 />
                             </label>
                         )}
@@ -710,7 +710,7 @@ const EngagementPage = () => {
                                     {filteredSurveys.map((survey) => (
                                         <article
                                             key={survey._id}
-                                            className="flex flex-col overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/50 transition hover:border-[#20C997]/30 hover:shadow-md"
+                                            className="flex flex-col overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/50 transition hover:border-[#0E9370]/30 hover:shadow-md"
                                         >
                                             <div className="flex-1 border-b border-slate-100 bg-white p-5">
                                                 <h3 className="truncate text-lg font-semibold text-slate-900">

@@ -61,12 +61,15 @@ export function CmSearch({ value, onChange, placeholder = 'Search...', onKeyDown
   );
 }
 
-export function CmStat({ label, value, meta, metaTone, attention, icon, iconAttention, className = '' }) {
+export function CmStat({ label, value, meta, metaTone, attention, icon, iconAttention, badge, className = '' }) {
   return (
     <div className={`cm-stat ${icon ? 'cm-stat--row' : ''} ${className}`}>
       <div className="min-w-0">
         <p className="cm-stat__label">{label}</p>
-        <p className={`cm-stat__value ${attention ? 'cm-stat__value--attention' : ''}`}>{value}</p>
+        <div className="cm-stat__value-row">
+          <p className={`cm-stat__value ${attention ? 'cm-stat__value--attention' : ''}`}>{value}</p>
+          {badge ? <span className="cm-stat__badge">{badge}</span> : null}
+        </div>
         {meta ? <p className={`cm-stat__meta ${metaTone ? `cm-stat__meta--${metaTone}` : ''}`}>{meta}</p> : null}
       </div>
       {icon ? (

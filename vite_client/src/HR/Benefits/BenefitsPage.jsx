@@ -1,15 +1,47 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
     FaMoneyBillWave, FaPlus, FaSpinner, FaSearch, FaEdit, FaTrash, FaEye,
-    FaCheckCircle, FaTimesCircle, FaDownload, FaTimes
+    FaCheckCircle, FaTimesCircle, FaDownload, FaTimes, FaUsers, FaShieldAlt,
+    FaMapMarkerAlt, FaArrowRight, FaWallet, FaFolderOpen, FaUserFriends
 } from 'react-icons/fa';
+import { FiCheckCircle, FiShield } from 'react-icons/fi';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'react-toastify';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import { isHR } from '../../utils/managerHelper';
 import { exportToExcel } from '../../utils/exportUtils';
+import '../../styles/benefitsUI.css';
+
+const CATEGORY_THEME = {
+    'Health Insurance': 'health',
+    Dental: 'health',
+    Vision: 'health',
+    'Life Insurance': 'life',
+    Transportation: 'meal',
+    Wellness: 'wellness',
+    Retirement: 'other',
+    Education: 'other',
+    Other: 'other',
+};
+
+const planTheme = (category) => CATEGORY_THEME[category] || 'other';
+
+const initialsOf = (name = '') => {
+    const parts = String(name).trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+};
+
+const fyLabel = () => {
+    const now = new Date();
+    const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return `FY ${year}-${String(year + 1).slice(-2)} Active`;
+};
 
 const emptyForm = () => ({
     name: '',
@@ -64,6 +96,11 @@ const formatEligibility = (plan) => {
     return 'All Employees';
 };
 
+const displayOrDash = (value) => {
+    const text = String(value ?? '').trim();
+    return text || 'Not set';
+};
+
 const toDateInput = (value) => {
     if (!value) return '';
     try {
@@ -74,6 +111,7 @@ const toDateInput = (value) => {
 };
 
 const BenefitsPage = () => {
+    const navigate = useNavigate();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
 
@@ -98,6 +136,9 @@ const BenefitsPage = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [statusFilter, setStatusFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [planSearch, setPlanSearch] = useState('');
+    const [planDrawer, setPlanDrawer] = useState(null);
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [formData, setFormData] = useState(emptyForm());
 
@@ -144,21 +185,22 @@ const BenefitsPage = () => {
 
     // Close Benefits overlays with Escape so they cannot block navbar clicks
     useEffect(() => {
-        if (!showCreateModal && !drawerOpen) return undefined;
+        if (!showCreateModal && !drawerOpen && !planDrawer) return undefined;
         const onKeyDown = (event) => {
             if (event.key !== 'Escape') return;
             setShowCreateModal(false);
             setDrawerOpen(false);
+            setPlanDrawer(null);
             setSelectedPlan(null);
             setAddingDependentFor(null);
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [showCreateModal, drawerOpen]);
+    }, [showCreateModal, drawerOpen, planDrawer]);
 
     // Ensure body scroll lock is cleared if overlays unmount unexpectedly
     useEffect(() => {
-        if (showCreateModal || drawerOpen) {
+        if (showCreateModal || drawerOpen || planDrawer) {
             const previous = document.body.style.overflow;
             document.body.style.overflow = 'hidden';
             return () => {
@@ -166,7 +208,11 @@ const BenefitsPage = () => {
             };
         }
         return undefined;
-    }, [showCreateModal, drawerOpen]);
+    }, [showCreateModal, drawerOpen, planDrawer]);
+
+    useEffect(() => {
+        if (isHRUser) fetchAllEnrollments();
+    }, [isHRUser, benefitPlans.length]);
 
     const fetchEmployeeDirectory = async () => {
         try {
@@ -378,13 +424,104 @@ const BenefitsPage = () => {
         }
     };
 
+    const enrollmentCountByPlan = useMemo(() => {
+        const map = {};
+        allEnrollments.forEach((e) => {
+            const id = String(e.benefitPlanId?._id || e.benefitPlanId || '');
+            if (!id) return;
+            if (!map[id]) map[id] = { active: 0, total: 0 };
+            map[id].total += 1;
+            if (['Active', 'Enrolled'].includes(e.status)) map[id].active += 1;
+        });
+        return map;
+    }, [allEnrollments]);
+
+    const workforceTotal = useMemo(() => {
+        const fromDir = employeeDirectory.length;
+        const fromOverview = employeeOverview.length;
+        return Math.max(fromDir, fromOverview, 1);
+    }, [employeeDirectory.length, employeeOverview.length]);
+
+    const kpiStats = useMemo(() => {
+        const activePlans = benefitPlans.filter((p) => p.isActive).length;
+        const activeEnrollments = reportSummary.activeEnrollments || 0;
+        const optIn = Math.min(100, Math.round((activeEnrollments / workforceTotal) * 1000) / 10);
+        const subsidyVals = benefitPlans
+            .map((p) => Number(p.companyContribution?.percentage))
+            .filter((n) => !Number.isNaN(n) && n > 0);
+        const avgSubsidy = subsidyVals.length
+            ? Math.round((subsidyVals.reduce((a, b) => a + b, 0) / subsidyVals.length) * 10) / 10
+            : 0;
+        const annualPremium = benefitPlans.reduce((sum, p) => {
+            const amt = Number(p.companyContribution?.amount || 0);
+            const freq = p.employeeContribution?.frequency || 'Monthly';
+            return sum + (freq === 'Monthly' ? amt * 12 : amt);
+        }, 0);
+        const premiumLabel =
+            annualPremium >= 1e7
+                ? `₹${(annualPremium / 1e7).toFixed(2)} Cr`
+                : annualPremium >= 1e5
+                    ? `₹${(annualPremium / 1e5).toFixed(2)} L`
+                    : `₹${annualPremium.toLocaleString('en-IN')}`;
+        return {
+            activePlans,
+            activeEnrollments,
+            optIn,
+            avgSubsidy,
+            premiumLabel,
+            employeeCopay: Math.max(0, Math.round((100 - avgSubsidy) * 10) / 10),
+        };
+    }, [benefitPlans, reportSummary.activeEnrollments, workforceTotal]);
+
+    const categoryChips = useMemo(() => {
+        const counts = {};
+        benefitPlans.forEach((p) => {
+            const cat = p.category || 'Other';
+            counts[cat] = (counts[cat] || 0) + 1;
+        });
+        return [
+            { id: 'all', label: `All Types (${benefitPlans.length})` },
+            ...Object.keys(counts)
+                .sort()
+                .map((cat) => ({ id: cat, label: cat })),
+        ];
+    }, [benefitPlans]);
+
+    const coverageLocations = useMemo(() => {
+        const set = new Set();
+        benefitPlans.forEach((p) => {
+            (p.eligibility?.locations || []).forEach((loc) => {
+                if (loc) set.add(loc);
+            });
+        });
+        const list = Array.from(set);
+        if (!list.length) return 'Pan-India Coverage';
+        return `Pan-India Coverage: ${list.slice(0, 4).join(', ')}`;
+    }, [benefitPlans]);
+
     const filteredPlans = benefitPlans.filter((plan) => {
         const matchesStatus =
             statusFilter === 'all' ||
             (statusFilter === 'active' && plan.isActive) ||
             (statusFilter === 'inactive' && !plan.isActive);
-        return matchesStatus;
+        const matchesCategory = categoryFilter === 'all' || plan.category === categoryFilter;
+        const q = planSearch.trim().toLowerCase();
+        const matchesSearch =
+            !q ||
+            `${plan.name || ''} ${plan.provider || ''} ${plan.benefitCode || ''} ${plan.category || ''} ${plan.description || ''}`
+                .toLowerCase()
+                .includes(q);
+        return matchesStatus && matchesCategory && matchesSearch;
     });
+
+    const planDrawerEnrollments = useMemo(() => {
+        if (!planDrawer?._id) return [];
+        const pid = String(planDrawer._id);
+        return allEnrollments
+            .filter((e) => String(e.benefitPlanId?._id || e.benefitPlanId) === pid)
+            .filter((e) => ['Active', 'Enrolled', 'Pending'].includes(e.status))
+            .slice(0, 8);
+    }, [planDrawer, allEnrollments]);
 
     const departments = useMemo(() => {
         const set = new Set();
@@ -669,170 +806,248 @@ const BenefitsPage = () => {
         return events.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }, [selectedEmployeeRow]);
 
-    const sectionTabs = [
-        { id: 'plans', label: 'Benefit Plans' },
-        { id: 'employees', label: 'Employee Benefits' },
-        { id: 'reports', label: 'Reports & Settings' }
-    ];
-
     if (loading) {
         return <LoadingSpinner message="Loading benefits..." />;
     }
 
+    const renderPlanCard = (plan) => {
+        const theme = planTheme(plan.category);
+        const counts = enrollmentCountByPlan[String(plan._id)] || { active: 0, total: 0 };
+        const pct = workforceTotal > 0 ? Math.min(100, Math.round((counts.active / workforceTotal) * 100)) : 0;
+        const companyPct = Number(plan.companyContribution?.percentage || 0);
+        const freq = plan.employeeContribution?.frequency || 'Monthly';
+        const companyAmt = formatContribution(plan.companyContribution?.amount, freq);
+        const empAmt = formatContribution(plan.employeeContribution?.amount, freq);
+        return (
+            <article key={plan._id} className={`ben-plan ben-plan--${theme}`}>
+                <div className="ben-plan__top">
+                    <span className="ben-plan__cat">
+                        <span className="ben-plan__dot" aria-hidden="true" />
+                        {plan.category || 'Benefit'}
+                    </span>
+                    <span className={`ben-plan__status${plan.isActive ? '' : ' is-off'}`}>
+                        {plan.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                </div>
+                <h3 className="ben-plan__name">{plan.name}</h3>
+                <p className="ben-plan__desc">
+                    {[plan.provider, plan.description].filter(Boolean).join(' • ') || 'Company benefit plan'}
+                </p>
+                <div className="ben-plan__stats">
+                    <div>
+                        <p className="ben-plan__stat-label">Coverage</p>
+                        <p className="ben-plan__stat-value">{plan.coverage || plan.planType || '—'}</p>
+                    </div>
+                    <div>
+                        <p className="ben-plan__stat-label">Annual / premium</p>
+                        <p className="ben-plan__stat-value">{companyAmt}</p>
+                    </div>
+                    <div>
+                        <p className="ben-plan__stat-label">Company subsidy</p>
+                        <p className="ben-plan__stat-value is-green">
+                            {companyPct > 0 ? `${companyPct}%` : companyAmt}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="ben-plan__stat-label">Employee co-pay</p>
+                        <p className="ben-plan__stat-value">{empAmt}</p>
+                    </div>
+                </div>
+                <ul className="ben-plan__meta">
+                    <li>
+                        <FiCheckCircle aria-hidden="true" />
+                        Eligibility: {formatEligibility(plan)}
+                    </li>
+                    <li>
+                        <FiShield aria-hidden="true" />
+                        {plan.enrollmentType || 'Optional'} enrollment
+                        {plan.benefitCode ? ` • ${plan.benefitCode}` : ''}
+                    </li>
+                </ul>
+                <div className="ben-plan__roster">
+                    <div className="ben-plan__roster-row">
+                        <span className="ben-plan__roster-label">Active roster</span>
+                        <span className="ben-plan__roster-value">
+                            {counts.active} Enrolled ({pct}%)
+                        </span>
+                    </div>
+                    <div className="ben-plan__progress" aria-hidden="true">
+                        <span style={{ width: `${pct}%` }} />
+                    </div>
+                    <button
+                        type="button"
+                        className="ben-plan__cta"
+                        onClick={() => setPlanDrawer(plan)}
+                    >
+                        View Details &amp; Roster <FaArrowRight className="text-xs" />
+                    </button>
+                </div>
+            </article>
+        );
+    };
+
     return (
-        <div className="min-h-screen bg-gray-50 transition-all duration-300">
-            <div className="page-shell">
-                <div className="page-shell-inner">
-                    <div className="hrms-stack">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="ben-ui">
+            <div className="ben-ui__inner">
+                        <header className="ben-ui__header">
                             <div>
-                                <h1 className="text-3xl font-bold text-gray-800">Benefits Administration</h1>
-                                <p className="text-gray-600 mt-1">Manage employee benefits and enrollments</p>
+                                <div className="ben-ui__crumb-row">
+                                    <p className="ben-ui__crumb">People &amp; Compensation / Benefits &amp; Insurance Suite</p>
+                                    <span className="ben-ui__fy">
+                                        <span className="ben-ui__fy-dot" aria-hidden="true" />
+                                        {fyLabel()}
+                                    </span>
+                                </div>
+                                <h1 className="ben-ui__title">Benefits &amp; Insurance Administration</h1>
+                                <p className="ben-ui__subtitle">
+                                    Curate healthcare tiers, oversee lifecycle enrollments, and track employer subsidy across office hubs.
+                                </p>
                             </div>
-                            {isHRUser && activeSection === 'plans' && (
-                                <button
-                                    onClick={openCreateModal}
-                                    className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
-                                >
-                                    <FaPlus />
-                                    Add Benefit
-                                </button>
-                            )}
+                            <div className="ben-ui__actions">
+                                {isHRUser ? (
+                                    <button
+                                        type="button"
+                                        className="ben-ui__btn ben-ui__btn--ghost"
+                                        onClick={async () => {
+                                            await fetchAllEnrollments();
+                                            handleExport();
+                                        }}
+                                    >
+                                        <FaDownload /> Export Ledger
+                                    </button>
+                                ) : null}
+                                {isHRUser ? (
+                                    <button type="button" className="ben-ui__btn ben-ui__btn--primary" onClick={openCreateModal}>
+                                        <FaPlus /> Create Plan
+                                    </button>
+                                ) : null}
+                            </div>
+                        </header>
+
+                        <div className="ben-ui__kpis">
+                            <div className="ben-ui__kpi">
+                                <p className="ben-ui__kpi-label">Annual Gross Premium</p>
+                                <span className="ben-ui__kpi-icon">₹</span>
+                                <p className="ben-ui__kpi-value">{kpiStats.premiumLabel}</p>
+                                <p className="ben-ui__kpi-meta">{kpiStats.activePlans} active plans in pool</p>
+                                <div className="ben-ui__kpi-bar"><span style={{ width: '72%' }} /></div>
+                            </div>
+                            <div className="ben-ui__kpi">
+                                <p className="ben-ui__kpi-label">Enrolled Personnel</p>
+                                <span className="ben-ui__kpi-icon"><FaUsers /></span>
+                                <p className="ben-ui__kpi-value">
+                                    {kpiStats.activeEnrollments} / {workforceTotal}
+                                </p>
+                                <p className="ben-ui__kpi-meta">{kpiStats.optIn}% workforce opt-in rate</p>
+                                <div className="ben-ui__kpi-bar">
+                                    <span style={{ width: `${Math.min(100, kpiStats.optIn)}%` }} />
+                                </div>
+                            </div>
+                            <div className="ben-ui__kpi">
+                                <p className="ben-ui__kpi-label">Avg Employer Subsidy</p>
+                                <span className="ben-ui__kpi-icon ben-ui__kpi-icon--blue"><FaWallet /></span>
+                                <p className="ben-ui__kpi-value">{kpiStats.avgSubsidy || 0}%</p>
+                                <p className="ben-ui__kpi-meta ben-ui__kpi-meta--muted">
+                                    Employee co-pay avg: {kpiStats.employeeCopay}%
+                                </p>
+                                <div className="ben-ui__kpi-bar ben-ui__kpi-bar--navy">
+                                    <span style={{ width: `${Math.min(100, kpiStats.avgSubsidy || 0)}%` }} />
+                                </div>
+                            </div>
+                            <div className="ben-ui__kpi">
+                                <p className="ben-ui__kpi-label">Claims Settled Ratio</p>
+                                <span className="ben-ui__kpi-icon"><FaShieldAlt /></span>
+                                <p className="ben-ui__kpi-value">
+                                    {reportSummary.expiringBenefits != null
+                                        ? `${Math.max(0, 100 - Math.min(20, reportSummary.pendingEnrollments || 0))}%`
+                                        : '—'}
+                                </p>
+                                <p className="ben-ui__kpi-meta">
+                                    {reportSummary.pendingEnrollments || 0} pending • {reportSummary.expiringBenefits || 0} expiring
+                                </p>
+                                <div className="ben-ui__kpi-bar"><span style={{ width: '88%' }} /></div>
+                            </div>
                         </div>
 
-                        {/* In-page sections — same navbar tab */}
-                        <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-0">
-                            {sectionTabs.map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    type="button"
-                                    onClick={() => {
-                                        setActiveSection(tab.id);
-                                        if (tab.id === 'reports' && isHRUser) {
-                                            fetchAllEnrollments();
-                                            fetchReportSummary();
-                                            fetchEmployeeDirectory();
-                                        }
-                                        if (tab.id === 'employees' && isHRUser) {
-                                            fetchEmployeeOverview();
-                                        }
-                                    }}
-                                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
-                                        activeSection === tab.id
-                                            ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
+                        <div className="ben-ui__board">
+                            <div className="ben-ui__board-head">
+                                <div className="ben-ui__tabs">
+                                    <button
+                                        type="button"
+                                        className={`ben-ui__tab${activeSection === 'plans' ? ' is-active' : ''}`}
+                                        onClick={() => setActiveSection('plans')}
+                                    >
+                                        <FaFolderOpen /> Plans Catalog
+                                        <span className="ben-ui__tab-count">{kpiStats.activePlans} Active</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`ben-ui__tab${activeSection === 'employees' ? ' is-active' : ''}`}
+                                        onClick={() => {
+                                            setActiveSection('employees');
+                                            if (isHRUser) fetchEmployeeOverview();
+                                        }}
+                                    >
+                                        <FaUserFriends /> Employee Enrollments
+                                        <span className="ben-ui__tab-count">{kpiStats.activeEnrollments || employeeOverview.length}</span>
+                                    </button>
+                                </div>
+                                <p className="ben-ui__coverage">
+                                    <FaMapMarkerAlt aria-hidden="true" /> {coverageLocations}
+                                </p>
+                            </div>
 
                         {/* ========== Benefit Plans ========== */}
                         {activeSection === 'plans' && (
                             <>
-                                <div className="flex flex-wrap gap-2">
-                                    {[
-                                        { id: 'all', label: 'All' },
-                                        { id: 'active', label: 'Active' },
-                                        { id: 'inactive', label: 'Inactive' }
-                                    ].map((chip) => (
-                                        <button
-                                            key={chip.id}
-                                            type="button"
-                                            onClick={() => setStatusFilter(chip.id)}
-                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                                                statusFilter === chip.id
-                                                    ? 'bg-theme-secondary text-white'
-                                                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            {chip.label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                                    <div className="overflow-x-auto">
-                                        <table className="min-w-full text-sm">
-                                            <thead className="bg-gray-50 text-left text-gray-600">
-                                                <tr>
-                                                    <th className="px-4 py-3 font-medium">Benefit</th>
-                                                    <th className="px-4 py-3 font-medium">Category</th>
-                                                    <th className="px-4 py-3 font-medium">Eligibility</th>
-                                                    <th className="px-4 py-3 font-medium">Employer Contribution</th>
-                                                    <th className="px-4 py-3 font-medium">Employee Contribution</th>
-                                                    <th className="px-4 py-3 font-medium">Status</th>
-                                                    <th className="px-4 py-3 font-medium">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filteredPlans.map((plan) => (
-                                                    <tr key={plan._id} className="border-t border-gray-100 hover:bg-gray-50/80">
-                                                        <td className="px-4 py-3">
-                                                            <div className="font-medium text-gray-800">{plan.name}</div>
-                                                            {plan.benefitCode && (
-                                                                <div className="text-xs text-gray-500">{plan.benefitCode}</div>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-600">{plan.category}</td>
-                                                        <td className="px-4 py-3 text-gray-600">{formatEligibility(plan)}</td>
-                                                        <td className="px-4 py-3 text-gray-700">
-                                                            {formatContribution(
-                                                                plan.companyContribution?.amount,
-                                                                plan.employeeContribution?.frequency
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-700">
-                                                            {formatContribution(
-                                                                plan.employeeContribution?.amount,
-                                                                plan.employeeContribution?.frequency
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(plan.isActive ? 'Active' : 'Cancelled')}`}>
-                                                                {plan.isActive ? 'Active' : 'Inactive'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <div className="flex gap-2">
-                                                                {isHRUser && (
-                                                                    <>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => openEditModal(plan)}
-                                                                            className="px-2.5 py-1.5 text-theme-secondary hover:bg-theme-secondary/10 rounded transition"
-                                                                            title="Edit"
-                                                                        >
-                                                                            <FaEdit />
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleDeleteBenefit(plan._id)}
-                                                                            className="px-2.5 py-1.5 text-red-500 hover:bg-red-50 rounded transition"
-                                                                            title="Delete"
-                                                                        >
-                                                                            <FaTrash />
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                                {filteredPlans.length === 0 && (
-                                                    <tr>
-                                                        <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
-                                                            <FaMoneyBillWave className="mx-auto text-gray-400 text-4xl mb-3" />
-                                                            {benefitPlans.length === 0
-                                                                ? 'No benefit plans configured yet.'
-                                                                : 'No benefit plans match your filters.'}
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
+                                <div className="ben-ui__toolbar">
+                                    <div className="ben-ui__chips">
+                                        {categoryChips.map((chip) => (
+                                            <button
+                                                key={chip.id}
+                                                type="button"
+                                                className={`ben-ui__chip${categoryFilter === chip.id ? ' is-active' : ''}`}
+                                                onClick={() => setCategoryFilter(chip.id)}
+                                            >
+                                                {chip.label}
+                                            </button>
+                                        ))}
+                                        {[
+                                            { id: 'all', label: 'All status' },
+                                            { id: 'active', label: 'Active' },
+                                            { id: 'inactive', label: 'Inactive' },
+                                        ].map((chip) => (
+                                            <button
+                                                key={`st-${chip.id}`}
+                                                type="button"
+                                                className={`ben-ui__chip${statusFilter === chip.id ? ' is-active' : ''}`}
+                                                onClick={() => setStatusFilter(chip.id)}
+                                            >
+                                                {chip.label}
+                                            </button>
+                                        ))}
                                     </div>
+                                    <div className="ben-ui__search">
+                                        <FaSearch className="ben-ui__search-ico" aria-hidden="true" />
+                                        <input
+                                            type="search"
+                                            value={planSearch}
+                                            onChange={(e) => setPlanSearch(e.target.value)}
+                                            placeholder="Search plans, sum insured…"
+                                            aria-label="Search benefit plans"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="ben-ui__grid">
+                                    {filteredPlans.map(renderPlanCard)}
+                                    {filteredPlans.length === 0 ? (
+                                        <div className="ben-ui__empty">
+                                            <FaMoneyBillWave className="mx-auto mb-3 text-3xl opacity-40" />
+                                            {benefitPlans.length === 0
+                                                ? 'No benefit plans configured yet.'
+                                                : 'No benefit plans match your filters.'}
+                                        </div>
+                                    ) : null}
                                 </div>
                             </>
                         )}
@@ -840,15 +1055,15 @@ const BenefitsPage = () => {
                         {/* ========== Employee Benefits ========== */}
                         {activeSection === 'employees' && isHRUser && (
                             <>
-                                <div className="flex flex-col lg:flex-row gap-3">
-                                    <div className="relative flex-1">
-                                        <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <div className="ben-ui__toolbar">
+                                    <div className="ben-ui__search" style={{ maxWidth: '100%', flex: 1 }}>
+                                        <FaSearch className="ben-ui__search-ico" aria-hidden="true" />
                                         <input
-                                            type="text"
-                                            placeholder="Search Employee"
+                                            type="search"
+                                            placeholder="Search employee"
                                             value={empSearch}
                                             onChange={(e) => setEmpSearch(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+                                            aria-label="Search employee"
                                         />
                                     </div>
                                     <select
@@ -883,16 +1098,16 @@ const BenefitsPage = () => {
                                     </select>
                                 </div>
 
-                                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                                <div className="ben-ui__table-wrap">
                                     <div className="overflow-x-auto">
-                                        <table className="min-w-full text-sm">
-                                            <thead className="bg-gray-50 text-left text-gray-600">
+                                        <table className="ben-ui__table">
+                                            <thead>
                                                 <tr>
-                                                    <th className="px-4 py-3 font-medium">Employee</th>
-                                                    <th className="px-4 py-3 font-medium">Benefits</th>
-                                                    <th className="px-4 py-3 font-medium">Active</th>
-                                                    <th className="px-4 py-3 font-medium">Pending</th>
-                                                    <th className="px-4 py-3 font-medium">Actions</th>
+                                                    <th>Employee</th>
+                                                    <th>Benefits</th>
+                                                    <th>Active</th>
+                                                    <th>Pending</th>
+                                                    <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -940,629 +1155,426 @@ const BenefitsPage = () => {
                             </div>
                         )}
 
-                        {/* ========== Reports & Settings ========== */}
-                        {activeSection === 'reports' && isHRUser && (
-                            <>
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                    {[
-                                        { label: 'Total Benefit Plans', value: reportSummary.totalPlans },
-                                        { label: 'Active Plans', value: reportSummary.activePlans },
-                                        { label: 'Active Enrollments', value: reportSummary.activeEnrollments },
-                                        { label: 'Pending Enrollments', value: reportSummary.pendingEnrollments },
-                                        { label: 'Expiring Soon', value: reportSummary.expiringBenefits }
-                                    ].map((card) => (
-                                        <div key={card.label} className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
-                                            <p className="text-xs text-gray-500 uppercase tracking-wide">{card.label}</p>
-                                            <p className="text-2xl font-semibold text-gray-800 mt-1">{card.value}</p>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm space-y-4">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <div>
-                                            <h3 className="font-semibold text-gray-800">Reports</h3>
-                                            <p className="text-sm text-gray-500 mt-0.5">
-                                                Preview enrollments, then export to Excel
-                                            </p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleExport}
-                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition shrink-0"
-                                        >
-                                            <FaDownload /> Export Excel
-                                        </button>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                        <select
-                                            value={reportType}
-                                            onChange={(e) => setReportType(e.target.value)}
-                                            className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                                            aria-label="Report type"
-                                        >
-                                            <option value="enrollment">Benefit Enrollment Report</option>
-                                            <option value="department">Department-wise Report</option>
-                                            <option value="contribution">Contribution Report</option>
-                                            <option value="expiring">Expiring Benefits</option>
-                                        </select>
-                                        <select
-                                            value={reportBenefit}
-                                            onChange={(e) => setReportBenefit(e.target.value)}
-                                            className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                                            aria-label="Benefit filter"
-                                        >
-                                            <option value="all">Benefit: All</option>
-                                            {benefitPlans.map((p) => (
-                                                <option key={p._id} value={p._id}>{p.name}</option>
-                                            ))}
-                                        </select>
-                                        <select
-                                            value={reportDepartment}
-                                            onChange={(e) => setReportDepartment(e.target.value)}
-                                            className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                                            aria-label="Department filter"
-                                        >
-                                            <option value="all">Department: All</option>
-                                            {departments.map((d) => (
-                                                <option key={d} value={d}>{d}</option>
-                                            ))}
-                                        </select>
-                                        <select
-                                            value={reportStatus}
-                                            onChange={(e) => setReportStatus(e.target.value)}
-                                            className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                                            aria-label="Status filter"
-                                        >
-                                            <option value="all">Status: All</option>
-                                            <option value="Active">Active</option>
-                                            <option value="Pending">Pending</option>
-                                            <option value="Cancelled">Cancelled</option>
-                                            <option value="Expired">Expired</option>
-                                        </select>
-                                    </div>
-                                    <p className="text-sm text-gray-500">
-                                        {filteredReportRows.length} enrollment record{filteredReportRows.length === 1 ? '' : 's'} match the current filters
-                                        {allEnrollments.length === 0
-                                            ? ' (no enrollments yet — Export will download benefit plans list).'
-                                            : '.'}
-                                    </p>
-
-                                    <div className="overflow-x-auto border border-gray-100 rounded-lg">
-                                        <table className="min-w-full text-sm">
-                                            <thead className="bg-gray-50 text-left text-gray-600">
-                                                <tr>
-                                                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">Employee Name</th>
-                                                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">Department</th>
-                                                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">Benefit</th>
-                                                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">Status</th>
-                                                    <th className="px-3 py-2.5 font-medium whitespace-nowrap text-right">Employer Contrib. (₹)</th>
-                                                    <th className="px-3 py-2.5 font-medium whitespace-nowrap text-right">Employee Contrib. (₹)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filteredReportRows.slice(0, 50).map((e) => (
-                                                    <tr key={e._id} className="border-t border-gray-100 hover:bg-gray-50/80">
-                                                        <td className="px-3 py-2.5 font-medium text-gray-800">{e.employeeId?.name || '—'}</td>
-                                                        <td className="px-3 py-2.5 text-gray-600">{e.employeeId?.department || '—'}</td>
-                                                        <td className="px-3 py-2.5 text-gray-800">{e.benefitPlanId?.name || '—'}</td>
-                                                        <td className="px-3 py-2.5">
-                                                            <span
-                                                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                                    e.status === 'Active'
-                                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                                        : e.status === 'Pending'
-                                                                            ? 'bg-amber-50 text-amber-700'
-                                                                            : e.status === 'Cancelled'
-                                                                                ? 'bg-red-50 text-red-600'
-                                                                                : 'bg-gray-100 text-gray-600'
-                                                                }`}
-                                                            >
-                                                                {e.status || '—'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">
-                                                            {Number(e.companyContribution || 0).toLocaleString('en-IN')}
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">
-                                                            {Number(e.employeeContribution || 0).toLocaleString('en-IN')}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                                {filteredReportRows.length === 0 && (
-                                                    <tr>
-                                                        <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
-                                                            No enrollment rows for these filters.
-                                                            {allEnrollments.length === 0
-                                                                ? ' Create enrollments from Employee Benefits or wait for employee requests.'
-                                                                : ' Try Status: All and Report: Benefit Enrollment Report.'}
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm space-y-4">
-                                    <div>
-                                        <h3 className="font-semibold text-gray-800">Settings</h3>
-                                        <p className="text-sm text-gray-500 mt-0.5">
-                                            Manage enrollment windows and assign benefits on behalf of employees
-                                        </p>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <h4 className="text-sm font-medium text-gray-700">Enrollment windows</h4>
-                                        <p className="text-sm text-gray-600">Open or close enrollment for each plan.</p>
-                                        {benefitPlans.map((plan) => (
-                                            <div key={plan._id} className="flex flex-wrap items-center justify-between gap-2 border border-gray-100 rounded-lg px-3 py-2.5">
-                                                <div>
-                                                    <p className="font-medium text-gray-800">{plan.name}</p>
-                                                    <p className="text-xs text-gray-500">
-                                                        {plan.enrollmentType || 'Optional'} · {plan.enrollmentPeriod?.isOpen === false ? 'Closed' : 'Open'}
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleEnrollmentOpen(plan)}
-                                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                                                        plan.enrollmentPeriod?.isOpen === false
-                                                            ? 'bg-theme-secondary/10 text-theme-secondary'
-                                                            : 'bg-red-50 text-red-600'
-                                                    }`}
-                                                >
-                                                    {plan.enrollmentPeriod?.isOpen === false ? 'Open Enrollment' : 'Close Enrollment'}
-                                                </button>
-                                            </div>
-                                        ))}
-                                        {benefitPlans.length === 0 && (
-                                            <p className="text-sm text-gray-500 py-2">No benefit plans yet. Add plans from Benefit Plans.</p>
-                                        )}
-                                    </div>
-
-                                    <div className="border-t border-gray-100 pt-4 space-y-3">
-                                        <h4 className="text-sm font-medium text-gray-700">Assign benefit to employee</h4>
-                                        <p className="text-xs text-gray-500">
-                                            {employeeDirectory.length} employee{employeeDirectory.length === 1 ? '' : 's'} loaded
-                                        </p>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <select
-                                                value={assignEmployeeId}
-                                                onChange={(e) => setAssignEmployeeId(e.target.value)}
-                                                className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                                            >
-                                                <option value="">
-                                                    {employeeDirectory.length === 0 ? 'No employees found' : 'Select employee'}
-                                                </option>
-                                                {employeeDirectory.map((emp) => (
-                                                    <option key={emp._id} value={emp._id}>
-                                                        {emp.name || 'Employee'}
-                                                        {emp.lastName ? ` ${emp.lastName}` : ''}
-                                                        {emp.employeeId ? ` (${emp.employeeId})` : ''}
-                                                        {emp.department ? ` — ${emp.department}` : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <select
-                                                value={assignPlanId}
-                                                onChange={(e) => setAssignPlanId(e.target.value)}
-                                                className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                                            >
-                                                <option value="">Select benefit plan</option>
-                                                {benefitPlans.filter((p) => p.isActive).map((p) => (
-                                                    <option key={p._id} value={p._id}>{p.name}</option>
-                                                ))}
-                                            </select>
-                                            <select
-                                                value={assignCoverage}
-                                                onChange={(e) => setAssignCoverage(e.target.value)}
-                                                className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                                            >
-                                                <option value="Individual">Individual</option>
-                                                <option value="Family">Family</option>
-                                            </select>
-                                            <label className="inline-flex items-center gap-2 text-sm text-gray-700 px-1">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={assignActivate}
-                                                    onChange={(e) => setAssignActivate(e.target.checked)}
-                                                    className="rounded border-gray-300"
-                                                />
-                                                Activate immediately
-                                            </label>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleAssignFromSettings}
-                                            disabled={assigning || employeeDirectory.length === 0}
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50"
-                                        >
-                                            {assigning ? <FaSpinner className="animate-spin" /> : <FaPlus />}
-                                            Assign Benefit
-                                        </button>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-                        {activeSection === 'reports' && !isHRUser && (
-                            <div className="bg-white rounded-lg p-8 text-center text-gray-500 border border-gray-100">
-                                Reports are available to HR and Admin.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+                        </div>
 
             {/* Create/Edit Modal */}
-            {showCreateModal && isHRUser && (
-                <div
-                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 lg:left-64"
-                    onMouseDown={(e) => {
-                        if (e.target === e.currentTarget) {
-                            setShowCreateModal(false);
-                            setFormData(emptyForm());
-                            setSelectedPlan(null);
-                        }
-                    }}
-                >
-                    <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-semibold mb-4">
-                            {selectedPlan ? 'Edit Benefit Plan' : 'Add Benefit'}
-                        </h3>
-                        <form onSubmit={handleSaveBenefit} className="space-y-6">
-                            <section className="space-y-4">
-                                <h4 className="font-medium text-gray-800 border-b pb-2">Basic Information</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Benefit Name <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Benefit Code</label>
-                                        <input
-                                            type="text"
-                                            value={formData.benefitCode}
-                                            onChange={(e) => setFormData({ ...formData, benefitCode: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                            placeholder="e.g. HEALTH-001"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Category <span className="text-red-500">*</span>
-                                        </label>
-                                        <select
-                                            value={formData.category}
-                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                            required
-                                        >
-                                            <option value="Health Insurance">Health Insurance</option>
-                                            <option value="Dental">Dental</option>
-                                            <option value="Vision">Vision</option>
-                                            <option value="Life Insurance">Life Insurance</option>
-                                            <option value="Retirement">Retirement</option>
-                                            <option value="Wellness">Wellness</option>
-                                            <option value="Education">Education</option>
-                                            <option value="Transportation">Transportation</option>
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
-                                        <input
-                                            type="text"
-                                            value={formData.provider}
-                                            onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                </div>
+            {showCreateModal && isHRUser
+                ? createPortal(
+                    <div className="ben-form-root" role="presentation">
+                        <button
+                            type="button"
+                            className="ben-form-backdrop"
+                            aria-label="Dismiss form"
+                            onClick={() => {
+                                setShowCreateModal(false);
+                                setFormData(emptyForm());
+                                setSelectedPlan(null);
+                            }}
+                        />
+                        <div
+                            className="ben-form"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={selectedPlan ? 'Edit Benefit Plan' : 'Add Benefit'}
+                        >
+                            <header className="ben-form__head">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                    <textarea
-                                        value={formData.description}
-                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                        className="w-full p-3 border rounded-lg"
-                                        rows="3"
-                                    />
+                                    <p className="ben-form__eyebrow">Benefits catalog</p>
+                                    <h3 className="ben-form__title">
+                                        {selectedPlan ? 'Edit Benefit Plan' : 'Add Benefit'}
+                                    </h3>
+                                    <p className="ben-form__sub">
+                                        {selectedPlan
+                                            ? 'Update coverage, subsidy, and eligibility for this plan.'
+                                            : 'Define coverage, contributions, and who can enroll.'}
+                                    </p>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Plan Type</label>
-                                        <select
-                                            value={formData.planType}
-                                            onChange={(e) => setFormData({ ...formData, planType: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                        >
-                                            <option value="Individual">Individual</option>
-                                            <option value="Family">Family</option>
-                                            <option value="Both">Both</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Coverage</label>
-                                        <select
-                                            value={formData.coverage}
-                                            onChange={(e) => setFormData({ ...formData, coverage: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                        >
-                                            <option value="Full">Full</option>
-                                            <option value="Partial">Partial</option>
-                                            <option value="Employee Contribution">Employee Contribution</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section className="space-y-4">
-                                <h4 className="font-medium text-gray-800 border-b pb-2">Contribution</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Employer Contribution (₹)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.companyContribution.amount}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                companyContribution: {
-                                                    ...formData.companyContribution,
-                                                    amount: parseFloat(e.target.value) || 0
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee Contribution (₹)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.employeeContribution.amount}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                employeeContribution: {
-                                                    ...formData.employeeContribution,
-                                                    amount: parseFloat(e.target.value) || 0
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
-                                        <select
-                                            value={formData.employeeContribution.frequency}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                employeeContribution: {
-                                                    ...formData.employeeContribution,
-                                                    frequency: e.target.value
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                        >
-                                            <option value="Monthly">Monthly</option>
-                                            <option value="Annual">Annual</option>
-                                            <option value="One-time">One-time</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section className="space-y-4">
-                                <h4 className="font-medium text-gray-800 border-b pb-2">Eligibility</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Employment Type</label>
-                                        <select
-                                            value={formData.eligibility.employmentType[0] || 'Full-time'}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                eligibility: {
-                                                    ...formData.eligibility,
-                                                    employmentType: [e.target.value]
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                        >
-                                            <option value="Full-time">Full-time</option>
-                                            <option value="Part-time">Part-time</option>
-                                            <option value="Contract">Contract</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Department (comma-separated)</label>
-                                        <input
-                                            type="text"
-                                            value={(formData.eligibility.departments || []).join(', ')}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                eligibility: {
-                                                    ...formData.eligibility,
-                                                    departments: e.target.value
-                                                        .split(',')
-                                                        .map((s) => s.trim())
-                                                        .filter(Boolean)
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                            placeholder="Leave blank for all"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Tenure (months)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.eligibility.tenure}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                eligibility: {
-                                                    ...formData.eligibility,
-                                                    tenure: parseInt(e.target.value, 10) || 0
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Position Level (comma-separated)</label>
-                                        <input
-                                            type="text"
-                                            value={(formData.eligibility.positionLevels || []).join(', ')}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                eligibility: {
-                                                    ...formData.eligibility,
-                                                    positionLevels: e.target.value
-                                                        .split(',')
-                                                        .map((s) => s.trim())
-                                                        .filter(Boolean)
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                            placeholder="e.g. Junior, Senior"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Location (comma-separated)</label>
-                                        <input
-                                            type="text"
-                                            value={(formData.eligibility.locations || []).join(', ')}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                eligibility: {
-                                                    ...formData.eligibility,
-                                                    locations: e.target.value
-                                                        .split(',')
-                                                        .map((s) => s.trim())
-                                                        .filter(Boolean)
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                            placeholder="Matches employee city"
-                                        />
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section className="space-y-4">
-                                <h4 className="font-medium text-gray-800 border-b pb-2">Enrollment</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Enrollment Type</label>
-                                        <select
-                                            value={formData.enrollmentType}
-                                            onChange={(e) => setFormData({ ...formData, enrollmentType: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                        >
-                                            <option value="Optional">Optional</option>
-                                            <option value="Required">Required</option>
-                                            <option value="Automatic">Automatic</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center gap-2 pt-6">
-                                        <input
-                                            type="checkbox"
-                                            id="isActive"
-                                            checked={formData.isActive}
-                                            onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                                            className="w-4 h-4"
-                                        />
-                                        <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-                                            Active Plan
-                                        </label>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Enrollment Start Date</label>
-                                        <input
-                                            type="date"
-                                            value={formData.enrollmentPeriod.startDate}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                enrollmentPeriod: {
-                                                    ...formData.enrollmentPeriod,
-                                                    startDate: e.target.value
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Enrollment End Date</label>
-                                        <input
-                                            type="date"
-                                            value={formData.enrollmentPeriod.endDate}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                enrollmentPeriod: {
-                                                    ...formData.enrollmentPeriod,
-                                                    endDate: e.target.value
-                                                }
-                                            })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Effective Date</label>
-                                        <input
-                                            type="date"
-                                            value={formData.effectiveDate}
-                                            onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
-                                        <input
-                                            type="date"
-                                            value={formData.expiryDate}
-                                            onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-                                            className="w-full p-3 border rounded-lg"
-                                        />
-                                    </div>
-                                </div>
-                            </section>
-
-                            <div className="flex gap-2 justify-end pt-4 border-t">
                                 <button
                                     type="button"
+                                    className="ben-form__close"
+                                    aria-label="Close"
                                     onClick={() => {
                                         setShowCreateModal(false);
                                         setFormData(emptyForm());
                                         setSelectedPlan(null);
                                     }}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
                                 >
-                                    Cancel
+                                    <FaTimes />
                                 </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
-                                >
-                                    {submitting ? (
-                                        <>
-                                            <FaSpinner className="animate-spin" />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        selectedPlan ? 'Update Plan' : 'Create Plan'
-                                    )}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                            </header>
+
+                            <form onSubmit={handleSaveBenefit} className="contents">
+                                <div className="ben-form__body">
+                                    <section className="ben-form__section">
+                                        <div className="ben-form__section-head">
+                                            <span className="ben-form__section-icon"><FiShield /></span>
+                                            <h4 className="ben-form__section-title">Basic Information</h4>
+                                        </div>
+                                        <div className="ben-form__grid ben-form__grid--2">
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">
+                                                    Benefit Name <span className="ben-form__req">*</span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.name}
+                                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                    className="ben-form__control"
+                                                    required
+                                                    placeholder="e.g. Group Health Insurance"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Benefit Code</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.benefitCode}
+                                                    onChange={(e) => setFormData({ ...formData, benefitCode: e.target.value })}
+                                                    className="ben-form__control"
+                                                    placeholder="e.g. HEALTH-001"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">
+                                                    Category <span className="ben-form__req">*</span>
+                                                </label>
+                                                <select
+                                                    value={formData.category}
+                                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                                    className="ben-form__control"
+                                                    required
+                                                >
+                                                    <option value="Health Insurance">Health Insurance</option>
+                                                    <option value="Dental">Dental</option>
+                                                    <option value="Vision">Vision</option>
+                                                    <option value="Life Insurance">Life Insurance</option>
+                                                    <option value="Retirement">Retirement</option>
+                                                    <option value="Wellness">Wellness</option>
+                                                    <option value="Education">Education</option>
+                                                    <option value="Transportation">Transportation</option>
+                                                    <option value="Other">Other</option>
+                                                </select>
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Provider / Underwriter</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.provider}
+                                                    onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
+                                                    className="ben-form__control"
+                                                    placeholder="e.g. HDFC Ergo"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field ben-form__field--span">
+                                                <label className="ben-form__label">Description</label>
+                                                <textarea
+                                                    value={formData.description}
+                                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                                    className="ben-form__control"
+                                                    rows={3}
+                                                    placeholder="Short summary of what this plan covers"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Plan Type</label>
+                                                <select
+                                                    value={formData.planType}
+                                                    onChange={(e) => setFormData({ ...formData, planType: e.target.value })}
+                                                    className="ben-form__control"
+                                                >
+                                                    <option value="Individual">Individual</option>
+                                                    <option value="Family">Family</option>
+                                                    <option value="Both">Both</option>
+                                                </select>
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Coverage</label>
+                                                <select
+                                                    value={formData.coverage}
+                                                    onChange={(e) => setFormData({ ...formData, coverage: e.target.value })}
+                                                    className="ben-form__control"
+                                                >
+                                                    <option value="Full">Full</option>
+                                                    <option value="Partial">Partial</option>
+                                                    <option value="Employee Contribution">Employee Contribution</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="ben-form__section">
+                                        <div className="ben-form__section-head">
+                                            <span className="ben-form__section-icon"><FaWallet /></span>
+                                            <h4 className="ben-form__section-title">Contribution</h4>
+                                        </div>
+                                        <div className="ben-form__grid ben-form__grid--3">
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Employer Contribution (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={formData.companyContribution.amount}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        companyContribution: {
+                                                            ...formData.companyContribution,
+                                                            amount: parseFloat(e.target.value) || 0
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Employee Contribution (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={formData.employeeContribution.amount}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        employeeContribution: {
+                                                            ...formData.employeeContribution,
+                                                            amount: parseFloat(e.target.value) || 0
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Frequency</label>
+                                                <select
+                                                    value={formData.employeeContribution.frequency}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        employeeContribution: {
+                                                            ...formData.employeeContribution,
+                                                            frequency: e.target.value
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                >
+                                                    <option value="Monthly">Monthly</option>
+                                                    <option value="Annual">Annual</option>
+                                                    <option value="One-time">One-time</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="ben-form__section">
+                                        <div className="ben-form__section-head">
+                                            <span className="ben-form__section-icon"><FaUsers /></span>
+                                            <h4 className="ben-form__section-title">Eligibility</h4>
+                                        </div>
+                                        <div className="ben-form__grid ben-form__grid--3">
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Employment Type</label>
+                                                <select
+                                                    value={formData.eligibility.employmentType[0] || 'Full-time'}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        eligibility: {
+                                                            ...formData.eligibility,
+                                                            employmentType: [e.target.value]
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                >
+                                                    <option value="Full-time">Full-time</option>
+                                                    <option value="Part-time">Part-time</option>
+                                                    <option value="Contract">Contract</option>
+                                                </select>
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Departments</label>
+                                                <input
+                                                    type="text"
+                                                    value={(formData.eligibility.departments || []).join(', ')}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        eligibility: {
+                                                            ...formData.eligibility,
+                                                            departments: e.target.value
+                                                                .split(',')
+                                                                .map((s) => s.trim())
+                                                                .filter(Boolean)
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                    placeholder="Comma-separated, blank = all"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Min. Tenure (months)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={formData.eligibility.tenure}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        eligibility: {
+                                                            ...formData.eligibility,
+                                                            tenure: parseInt(e.target.value, 10) || 0
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Position Levels</label>
+                                                <input
+                                                    type="text"
+                                                    value={(formData.eligibility.positionLevels || []).join(', ')}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        eligibility: {
+                                                            ...formData.eligibility,
+                                                            positionLevels: e.target.value
+                                                                .split(',')
+                                                                .map((s) => s.trim())
+                                                                .filter(Boolean)
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                    placeholder="e.g. Junior, Senior"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Locations</label>
+                                                <input
+                                                    type="text"
+                                                    value={(formData.eligibility.locations || []).join(', ')}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        eligibility: {
+                                                            ...formData.eligibility,
+                                                            locations: e.target.value
+                                                                .split(',')
+                                                                .map((s) => s.trim())
+                                                                .filter(Boolean)
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                    placeholder="Matches employee city"
+                                                />
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="ben-form__section">
+                                        <div className="ben-form__section-head">
+                                            <span className="ben-form__section-icon"><FaCheckCircle /></span>
+                                            <h4 className="ben-form__section-title">Enrollment</h4>
+                                        </div>
+                                        <div className="ben-form__grid ben-form__grid--2">
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Enrollment Type</label>
+                                                <select
+                                                    value={formData.enrollmentType}
+                                                    onChange={(e) => setFormData({ ...formData, enrollmentType: e.target.value })}
+                                                    className="ben-form__control"
+                                                >
+                                                    <option value="Optional">Optional</option>
+                                                    <option value="Required">Required</option>
+                                                    <option value="Automatic">Automatic</option>
+                                                </select>
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <div className="ben-form__check">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="isActive"
+                                                        checked={formData.isActive}
+                                                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                                                    />
+                                                    <label htmlFor="isActive">Active plan — visible for enrollment</label>
+                                                </div>
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Enrollment Start</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.enrollmentPeriod.startDate}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        enrollmentPeriod: {
+                                                            ...formData.enrollmentPeriod,
+                                                            startDate: e.target.value
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Enrollment End</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.enrollmentPeriod.endDate}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        enrollmentPeriod: {
+                                                            ...formData.enrollmentPeriod,
+                                                            endDate: e.target.value
+                                                        }
+                                                    })}
+                                                    className="ben-form__control"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Effective Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.effectiveDate}
+                                                    onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
+                                                    className="ben-form__control"
+                                                />
+                                            </div>
+                                            <div className="ben-form__field">
+                                                <label className="ben-form__label">Expiry / Renewal Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.expiryDate}
+                                                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                                                    className="ben-form__control"
+                                                />
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <footer className="ben-form__foot">
+                                    <button
+                                        type="button"
+                                        className="ben-ui__btn ben-ui__btn--ghost"
+                                        onClick={() => {
+                                            setShowCreateModal(false);
+                                            setFormData(emptyForm());
+                                            setSelectedPlan(null);
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={submitting}
+                                        className="ben-ui__btn ben-ui__btn--primary"
+                                    >
+                                        {submitting ? (
+                                            <>
+                                                <FaSpinner className="animate-spin" />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            selectedPlan ? 'Update Plan' : 'Create Plan'
+                                        )}
+                                    </button>
+                                </footer>
+                            </form>
+                        </div>
+                    </div>,
+                    document.body
+                )
+                : null}
 
             {/* Employee Benefit Drawer */}
             {drawerOpen && selectedEmployeeRow && (
@@ -1842,6 +1854,201 @@ const BenefitsPage = () => {
                     </div>
                 </div>
             )}
+
+            {planDrawer
+                ? createPortal(
+                    <div className="ben-drawer-root" role="presentation">
+                        <button
+                            type="button"
+                            className="ben-drawer-backdrop"
+                            aria-label="Dismiss plan details"
+                            onClick={() => setPlanDrawer(null)}
+                        />
+                        <aside className="ben-drawer" role="dialog" aria-modal="true" aria-label={planDrawer.name}>
+                            <header className="ben-drawer__head">
+                                <div className="ben-drawer__head-top">
+                                    <div>
+                                        <div className="ben-drawer__badge-row">
+                                            <span className="ben-drawer__badge">{planDrawer.category || 'Benefit'}</span>
+                                            <span className="ben-drawer__tier">
+                                                {planDrawer.isActive ? 'Active Tier' : 'Inactive'}
+                                            </span>
+                                        </div>
+                                        <h2 className="ben-drawer__title">{planDrawer.name || 'Benefit plan'}</h2>
+                                        <p className="ben-drawer__policy">
+                                            Master Policy:{' '}
+                                            <strong>{displayOrDash(planDrawer.benefitCode)}</strong>
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="ben-drawer__close"
+                                        aria-label="Close"
+                                        onClick={() => setPlanDrawer(null)}
+                                    >
+                                        <FaTimes />
+                                    </button>
+                                </div>
+                            </header>
+                            <div className="ben-drawer__body">
+                                <div className="ben-drawer__card">
+                                    <div className="ben-drawer__card-grid">
+                                        <div>
+                                            <p className="ben-drawer__mini-label">Underwriter</p>
+                                            <p className="ben-drawer__mini-value">
+                                                {displayOrDash(planDrawer.provider)}
+                                            </p>
+                                            <p className="ben-drawer__mini-sub">
+                                                {planDrawer.enrollmentType || 'Optional'} enrollment
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="ben-drawer__mini-label">Annual renewal date</p>
+                                            <p className="ben-drawer__mini-value">
+                                                {planDrawer.expiryDate
+                                                    ? format(new Date(planDrawer.expiryDate), 'dd MMM yyyy')
+                                                    : 'Not set'}
+                                            </p>
+                                            <p className="ben-drawer__mini-sub is-muted">
+                                                {planDrawer.expiryDate
+                                                    ? `${Math.max(
+                                                        0,
+                                                        differenceInCalendarDays(new Date(planDrawer.expiryDate), new Date())
+                                                    )} days remaining`
+                                                    : 'No expiry set'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="ben-drawer__block">
+                                    <h3 className="ben-drawer__section-title">
+                                        <FiShield /> Coverage Terms &amp; Entitlements
+                                    </h3>
+                                    <ul className="ben-drawer__rows ben-drawer__rows--soft">
+                                        <li>
+                                            <span>Plan type</span>
+                                            <span>{displayOrDash(planDrawer.planType)}</span>
+                                        </li>
+                                        <li>
+                                            <span>Coverage</span>
+                                            <span>{displayOrDash(planDrawer.coverage)}</span>
+                                        </li>
+                                        <li>
+                                            <span>Eligibility</span>
+                                            <span>{formatEligibility(planDrawer)}</span>
+                                        </li>
+                                    </ul>
+                                    {planDrawer.description ? (
+                                        <p className="ben-drawer__desc">{String(planDrawer.description)}</p>
+                                    ) : null}
+                                </div>
+
+                                <div className="ben-drawer__block">
+                                    <h3 className="ben-drawer__section-title">
+                                        <FaWallet /> Subsidy &amp; Payroll Cost Model
+                                    </h3>
+                                    <ul className="ben-drawer__rows">
+                                        <li>
+                                            <span>Employer contribution</span>
+                                            <span>
+                                                {formatContribution(
+                                                    planDrawer.companyContribution?.amount,
+                                                    planDrawer.employeeContribution?.frequency
+                                                )}
+                                            </span>
+                                        </li>
+                                        <li>
+                                            <span>Company subsidy</span>
+                                            <span className="is-green">
+                                                {Number(planDrawer.companyContribution?.percentage) > 0
+                                                    ? `${planDrawer.companyContribution.percentage}% Company Subsidy`
+                                                    : 'Company sponsored'}
+                                            </span>
+                                        </li>
+                                        <li>
+                                            <span>Employee contribution</span>
+                                            <span>
+                                                {formatContribution(
+                                                    planDrawer.employeeContribution?.amount,
+                                                    planDrawer.employeeContribution?.frequency
+                                                )}
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div className="ben-drawer__block">
+                                    <div className="ben-drawer__staff-head">
+                                        <h3 className="ben-drawer__section-title">
+                                            <FaUsers /> Enrolled Staff Sample
+                                        </h3>
+                                        <span className="ben-drawer__staff-count">
+                                            {(enrollmentCountByPlan[String(planDrawer._id)]?.active || 0)} Active
+                                        </span>
+                                    </div>
+                                    {planDrawerEnrollments.length === 0 ? (
+                                        <div className="ben-drawer__staff-empty">
+                                            <FaUsers />
+                                            <span>No enrollments yet for this plan</span>
+                                        </div>
+                                    ) : (
+                                        <ul className="ben-drawer__staff-list">
+                                            {planDrawerEnrollments.map((enr) => {
+                                                const emp = enr.employeeId || {};
+                                                const name = emp.name || emp.email || 'Employee';
+                                                const deps = Array.isArray(enr.dependents) ? enr.dependents.length : 0;
+                                                return (
+                                                    <li key={enr._id}>
+                                                        <span className="ben-drawer__avatar">{initialsOf(name)}</span>
+                                                        <div className="min-w-0">
+                                                            <p className="ben-drawer__staff-name">{name}</p>
+                                                            <p className="ben-drawer__staff-meta">
+                                                                {[emp.employeeId, emp.department].filter(Boolean).join(' • ') || enr.status}
+                                                            </p>
+                                                        </div>
+                                                        <span className="ben-drawer__staff-deps">
+                                                            {deps} Dependent{deps === 1 ? '' : 's'}
+                                                        </span>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    )}
+                                </div>
+                            </div>
+                            <footer className="ben-drawer__foot">
+                                {isHRUser ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="ben-ui__btn ben-ui__btn--ghost"
+                                            onClick={() => {
+                                                openEditModal(planDrawer);
+                                                setPlanDrawer(null);
+                                            }}
+                                        >
+                                            <FaEdit /> Edit Plan
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="ben-ui__btn ben-drawer__btn--danger"
+                                            onClick={() => {
+                                                handleDeleteBenefit(planDrawer._id);
+                                                setPlanDrawer(null);
+                                            }}
+                                        >
+                                            <FaTrash /> Delete
+                                        </button>
+                                    </>
+                                ) : null}
+                            </footer>
+                        </aside>
+                    </div>,
+                    document.body
+                )
+                : null}
+            </div>
         </div>
     );
 };

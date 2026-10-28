@@ -5,17 +5,78 @@ import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternal
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { detectHolidayTheme, isIndianHoliday } from '../../helpers/indianHolidayService.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
+import {
+    expandDateRange,
+    findWfhEntryOnCalendar,
+    parseLocalDate,
+    toDateKey,
+} from '../../helpers/wfhCalendarHelper.js';
 
 const toStartOfDay = (value) => {
+    const parsed = parseLocalDate(value);
+    if (parsed) return parsed;
     const d = new Date(value);
     d.setHours(0, 0, 0, 0);
     return d;
+};
+
+const actorEmployeeId = (req) => req.employee?._id || req.user?._id || null;
+
+const ensureCalendarForYear = async (organizationId, yearNum) => {
+    let calendar = await Calendar.findOne({ organizationId, year: yearNum });
+    if (!calendar) {
+        calendar = new Calendar({
+            organizationId,
+            year: yearNum,
+            holidays: [],
+            wfhDates: [],
+            workingDays: {
+                monday: true,
+                tuesday: true,
+                wednesday: true,
+                thursday: true,
+                friday: true,
+                saturday: false,
+                sunday: false
+            },
+            workingHours: {
+                startTime: '09:00',
+                endTime: '17:00',
+                breakDuration: 60
+            },
+            companySettings: {
+                timezone: 'UTC',
+                dateFormat: 'DD/MM/YYYY',
+                weekStartsOn: 'monday'
+            }
+        });
+        await calendar.save();
+    }
+    return calendar;
 };
 
 const isPastDate = (value) => {
     const target = toStartOfDay(value);
     const today = toStartOfDay(new Date());
     return target < today;
+};
+
+const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+/** WFH is only meaningful on org working days (not weekends/off days or blocking holidays). */
+const isWfhEligibleDay = (calendar, day) => {
+    if (!day || Number.isNaN(day.getTime())) return false;
+    const dayName = WEEKDAY_NAMES[day.getDay()];
+    const workingDays = calendar?.workingDays || {};
+    if (workingDays[dayName] === false) return false;
+    const dayKey = toDateKey(day);
+    const holidays = calendar?.holidays || [];
+    const onBlockingHoliday = holidays.some((holiday) => {
+        if (holiday?.isActive === false) return false;
+        if (holiday?.workModeOverride === 'office' || holiday?.workModeOverride === 'home') return false;
+        return toDateKey(holiday.date) === dayKey;
+    });
+    return !onBlockingHoliday;
 };
 
 // Get calendar for a specific year
@@ -44,6 +105,7 @@ export const getCalendar = async (req, res) => {
                 organizationId: organizationId,
                 year: yearNum,
                 holidays: [],
+                wfhDates: [],
                 workingDays: {
                     monday: true,
                     tuesday: true,
@@ -70,9 +132,15 @@ export const getCalendar = async (req, res) => {
         // Return calendar data in the format expected by frontend
         // Frontend expects response.data to contain the calendar object
         // Since sendSuccess merges object properties, we need to manually construct the response
+        await calendar.populate({
+            path: 'wfhDates.excludedEmployeeIds',
+            select: 'name lastName employeeId department'
+        });
+
         const calendarData = {
             ...calendar.toObject(),
             holidays: calendar.holidays || [],
+            wfhDates: calendar.wfhDates || [],
             workingDays: calendar.workingDays || {},
             workingHours: calendar.workingHours || {},
             companySettings: calendar.companySettings || {}
@@ -284,6 +352,135 @@ export const deleteHoliday = async (req, res) => {
     }
 };
 
+/**
+ * Convert a holiday into a working day (office or home) without deleting the holiday record.
+ * Body: { workMode: 'office' | 'home' }
+ * - office: day counts as normal office working day
+ * - home: day counts as working + WFH enabled so employees can apply / punch home after approval
+ */
+export const convertHolidayToWorkingDay = async (req, res) => {
+    try {
+        const yearNum = parseInt(req.params.year, 10);
+        const { holidayId } = req.params;
+        const workMode = String(req.body?.workMode || '').trim().toLowerCase();
+
+        if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
+            return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
+        }
+        if (workMode !== 'office' && workMode !== 'home') {
+            return sendValidationError(res, { workMode: 'workMode must be "office" or "home"' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const calendar = await Calendar.findOne({ organizationId, year: yearNum });
+        if (!calendar) return sendNotFound(res, 'Calendar');
+
+        const holiday = calendar.holidays.id(holidayId);
+        if (!holiday) return sendNotFound(res, 'Holiday');
+        if (holiday.isActive === false) {
+            return sendValidationError(res, { holiday: 'Inactive holidays cannot be converted' });
+        }
+
+        holiday.workModeOverride = workMode;
+        const dayKey = toDateKey(holiday.date);
+        const actor = actorEmployeeId(req);
+
+        if (!Array.isArray(calendar.wfhDates)) calendar.wfhDates = [];
+
+        if (workMode === 'home') {
+            const existingIndex = calendar.wfhDates.findIndex((entry) => toDateKey(entry.date) === dayKey);
+            if (existingIndex >= 0) {
+                const existing = calendar.wfhDates[existingIndex];
+                existing.note = existing.note || `Converted from holiday: ${holiday.name}`;
+                existing.updatedBy = actor;
+            } else {
+                const day = parseLocalDate(dayKey);
+                calendar.wfhDates.push({
+                    date: day || holiday.date,
+                    employeeAccess: 'all_except',
+                    excludedEmployeeIds: [],
+                    note: `Converted from holiday: ${holiday.name}`,
+                    createdBy: actor,
+                    updatedBy: actor
+                });
+            }
+        } else {
+            // Office mode — remove WFH on this date so it is clearly office work
+            calendar.wfhDates = calendar.wfhDates.filter((entry) => toDateKey(entry.date) !== dayKey);
+        }
+
+        calendar.markModified('holidays');
+        calendar.markModified('wfhDates');
+        await calendar.save({ validateBeforeSave: true });
+        await calendar.populate({
+            path: 'wfhDates.excludedEmployeeIds',
+            select: 'name lastName employeeId department'
+        });
+
+        return sendSuccess(res, {
+            holiday,
+            wfhDates: calendar.wfhDates || [],
+            holidays: calendar.holidays || []
+        }, workMode === 'home'
+            ? 'Holiday converted to working day (Work From Home)'
+            : 'Holiday converted to working day (Office)');
+    } catch (error) {
+        logger.error('Convert holiday to working day error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to convert holiday', error);
+    }
+};
+
+/**
+ * Restore a converted holiday back to a normal off day.
+ * Removes auto-enabled WFH for that date when it was converted to home.
+ */
+export const restoreHolidayFromWorkingDay = async (req, res) => {
+    try {
+        const yearNum = parseInt(req.params.year, 10);
+        const { holidayId } = req.params;
+
+        if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
+            return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const calendar = await Calendar.findOne({ organizationId, year: yearNum });
+        if (!calendar) return sendNotFound(res, 'Calendar');
+
+        const holiday = calendar.holidays.id(holidayId);
+        if (!holiday) return sendNotFound(res, 'Holiday');
+
+        const previousMode = holiday.workModeOverride;
+        holiday.workModeOverride = null;
+        const dayKey = toDateKey(holiday.date);
+
+        if (previousMode === 'home' && Array.isArray(calendar.wfhDates)) {
+            calendar.wfhDates = calendar.wfhDates.filter((entry) => toDateKey(entry.date) !== dayKey);
+            calendar.markModified('wfhDates');
+        }
+
+        calendar.markModified('holidays');
+        await calendar.save({ validateBeforeSave: true });
+
+        return sendSuccess(res, {
+            holiday,
+            wfhDates: calendar.wfhDates || [],
+            holidays: calendar.holidays || []
+        }, 'Holiday restored as a non-working day');
+    } catch (error) {
+        logger.error('Restore holiday error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to restore holiday', error);
+    }
+};
+
 // Update working days
 export const updateWorkingDays = async (req, res) => {
     try {
@@ -444,22 +641,33 @@ export const isWorkingDay = async (req, res) => {
         const isWorkingDayBySchedule = calendar.workingDays[dayName];
 
         // Check if it's a holiday
-        const isHoliday = calendar.holidays.some(holiday => {
-            const holidayDate = new Date(holiday.date);
-            return holidayDate.getTime() === checkDate.getTime() && holiday.isActive;
-        });
+        const checkKey = toDateKey(checkDate);
+        const holidayData = (calendar.holidays || []).find((h) => {
+            if (!h?.isActive) return false;
+            return toDateKey(h.date) === checkKey;
+        }) || null;
+        const isBlockingHoliday =
+            Boolean(holidayData) &&
+            holidayData.workModeOverride !== 'office' &&
+            holidayData.workModeOverride !== 'home';
 
-        const isWorkingDay = isWorkingDayBySchedule && !isHoliday;
+        const isWorkingDay = isWorkingDayBySchedule && !isBlockingHoliday;
 
-        const holidayData = isHoliday ? calendar.holidays.find(h => 
-            new Date(h.date).getTime() === checkDate.getTime() && h.isActive
-        ) : null;
+        const reason = !isWorkingDayBySchedule
+            ? 'weekend'
+            : isBlockingHoliday
+              ? 'holiday'
+              : holidayData?.workModeOverride === 'home'
+                ? 'holiday_converted_home'
+                : holidayData?.workModeOverride === 'office'
+                  ? 'holiday_converted_office'
+                  : 'working_day';
 
         return sendSuccess(res, {
             isWorkingDay,
-            reason: isHoliday ? 'holiday' : (isWorkingDayBySchedule ? 'working_day' : 'weekend'),
+            reason,
             holiday: holidayData ? {
-                ...holidayData.toObject(),
+                ...(holidayData.toObject ? holidayData.toObject() : holidayData),
                 theme: holidayData.theme || 'default',
                 icon: holidayData.icon || '📅',
                 color: holidayData.color || '#808080'
@@ -551,3 +759,260 @@ export const importIndianHolidays = asyncHandler(async (req, res) => {
         return sendInternalError(res, 'Failed to import Indian holidays', error);
     }
 });
+
+/**
+ * Enable WFH for a date or inclusive date range (creates missing day entries).
+ * Body: { dateFrom, dateTo?, note?, excludedEmployeeIds? }
+ */
+export const enableWfhDates = async (req, res) => {
+    try {
+        const yearNum = parseInt(req.params.year, 10);
+        if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
+            return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const { dateFrom, dateTo, note, excludedEmployeeIds, employeeAccess } = req.body || {};
+        const from = parseLocalDate(dateFrom || req.body?.date);
+        const to = parseLocalDate(dateTo || dateFrom || req.body?.date);
+        if (!from || !to) {
+            return sendValidationError(res, { dateFrom: 'A valid date or date range is required' });
+        }
+        if (to < from) {
+            return sendValidationError(res, { dateTo: 'End date cannot be before start date' });
+        }
+
+        const days = expandDateRange(from, to);
+        const outOfYear = days.filter((d) => d.getFullYear() !== yearNum);
+        if (outOfYear.length) {
+            return sendValidationError(res, {
+                dateFrom: `All dates must fall within calendar year ${yearNum}`
+            });
+        }
+
+        const exclusionIds = Array.isArray(excludedEmployeeIds)
+            ? [...new Set(excludedEmployeeIds.map((id) => String(id)).filter(Boolean))]
+            : [];
+        const accessMode =
+            employeeAccess === 'only_these' ? 'only_these' : 'all_except';
+        if (accessMode === 'only_these' && exclusionIds.length === 0) {
+            return sendValidationError(res, {
+                excludedEmployeeIds:
+                    'Select at least one employee when “Only selected employees” is used'
+            });
+        }
+
+        const calendar = await ensureCalendarForYear(organizationId, yearNum);
+        if (!Array.isArray(calendar.wfhDates)) calendar.wfhDates = [];
+
+        const actor = actorEmployeeId(req);
+        let added = 0;
+        let updated = 0;
+        let skippedPast = 0;
+        let skippedNonWorking = 0;
+
+        // Drop any existing WFH rows in this range that fall on non-working / holiday days
+        const rangeKeys = new Set(days.map((d) => toDateKey(d)).filter(Boolean));
+        const beforeCleanup = calendar.wfhDates.length;
+        calendar.wfhDates = (calendar.wfhDates || []).filter((entry) => {
+            const key = toDateKey(entry.date);
+            if (!rangeKeys.has(key)) return true;
+            const entryDay = parseLocalDate(entry.date) || new Date(entry.date);
+            return isWfhEligibleDay(calendar, entryDay);
+        });
+        const cleanedNonWorking = beforeCleanup - calendar.wfhDates.length;
+
+        for (const day of days) {
+            if (!isWfhEligibleDay(calendar, day)) {
+                skippedNonWorking += 1;
+                continue;
+            }
+            const dayKey = toDateKey(day);
+            const existingIndex = (calendar.wfhDates || []).findIndex(
+                (entry) => toDateKey(entry.date) === dayKey
+            );
+            if (existingIndex >= 0) {
+                // Always allow updating note/exclusions on already-enabled dates (incl. past).
+                const existing = calendar.wfhDates[existingIndex];
+                if (note != null) existing.note = String(note).trim();
+                existing.employeeAccess = accessMode;
+                if (Array.isArray(excludedEmployeeIds)) {
+                    existing.set?.('excludedEmployeeIds', exclusionIds);
+                    if (!existing.set) existing.excludedEmployeeIds = exclusionIds;
+                }
+                existing.updatedBy = actor;
+                updated += 1;
+            } else if (isPastDate(day)) {
+                // Do not create brand-new WFH rows for past dates
+                skippedPast += 1;
+            } else {
+                calendar.wfhDates.push({
+                    date: day,
+                    employeeAccess: accessMode,
+                    excludedEmployeeIds: exclusionIds,
+                    note: note ? String(note).trim() : '',
+                    createdBy: actor,
+                    updatedBy: actor
+                });
+                added += 1;
+            }
+        }
+
+        if (added === 0 && updated === 0) {
+            return sendValidationError(res, {
+                dateFrom: skippedPast && !skippedNonWorking
+                    ? 'Cannot enable WFH for past dates. Only today or future dates are allowed.'
+                    : skippedNonWorking
+                      ? 'WFH can only be enabled on working days (not weekends, off days, or holidays).'
+                      : 'No dates were updated'
+            });
+        }
+
+        if (cleanedNonWorking > 0) {
+            logger.info('Removed WFH from non-working days in range', {
+                cleanedNonWorking,
+                organizationId: String(organizationId),
+                year: yearNum
+            });
+        }
+
+        // Nested array mutations are not always detected — force persistence.
+        calendar.markModified('wfhDates');
+        await calendar.save({ validateBeforeSave: true });
+        await calendar.populate({
+            path: 'wfhDates.excludedEmployeeIds',
+            select: 'name lastName employeeId department'
+        });
+
+        return sendSuccess(res, {
+            added,
+            updated,
+            wfhDates: calendar.wfhDates || []
+        }, `WFH enabled for ${added + updated} date(s)`);
+    } catch (error) {
+        logger.error('Enable WFH dates error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to enable WFH dates', error);
+    }
+};
+
+/**
+ * Disable WFH for a date or inclusive date range (removes day entries).
+ * Body: { dateFrom, dateTo? } or { dates: ['YYYY-MM-DD', ...] }
+ */
+export const disableWfhDates = async (req, res) => {
+    try {
+        const yearNum = parseInt(req.params.year, 10);
+        if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
+            return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        let keys = new Set();
+        if (Array.isArray(req.body?.dates) && req.body.dates.length) {
+            req.body.dates.forEach((d) => {
+                const key = toDateKey(d);
+                if (key) keys.add(key);
+            });
+        } else {
+            const from = parseLocalDate(req.body?.dateFrom || req.body?.date);
+            const to = parseLocalDate(req.body?.dateTo || req.body?.dateFrom || req.body?.date);
+            expandDateRange(from, to).forEach((d) => keys.add(toDateKey(d)));
+        }
+
+        if (!keys.size) {
+            return sendValidationError(res, { dateFrom: 'A valid date or date range is required' });
+        }
+
+        const calendar = await Calendar.findOne({ organizationId, year: yearNum });
+        if (!calendar || !calendar.wfhDates?.length) {
+            return sendSuccess(res, { removed: 0, wfhDates: [] }, 'No WFH dates to disable');
+        }
+
+        const before = calendar.wfhDates.length;
+        const remaining = (calendar.wfhDates || []).filter(
+            (entry) => !keys.has(toDateKey(entry.date))
+        );
+        calendar.set('wfhDates', remaining);
+        calendar.markModified('wfhDates');
+        const removed = before - remaining.length;
+        await calendar.save({ validateBeforeSave: true });
+
+        return sendSuccess(res, {
+            removed,
+            wfhDates: calendar.wfhDates || []
+        }, `WFH disabled for ${removed} date(s)`);
+    } catch (error) {
+        logger.error('Disable WFH dates error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to disable WFH dates', error);
+    }
+};
+
+/**
+ * Replace excluded employees for one WFH-enabled date.
+ * Body: { date, excludedEmployeeIds: [] }
+ */
+export const updateWfhExclusions = async (req, res) => {
+    try {
+        const yearNum = parseInt(req.params.year, 10);
+        if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
+            return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const date = parseLocalDate(req.body?.date);
+        if (!date || date.getFullYear() !== yearNum) {
+            return sendValidationError(res, { date: `A valid date in ${yearNum} is required` });
+        }
+
+        if (!Array.isArray(req.body?.excludedEmployeeIds)) {
+            return sendValidationError(res, {
+                excludedEmployeeIds: 'excludedEmployeeIds must be an array'
+            });
+        }
+
+        const calendar = await Calendar.findOne({ organizationId, year: yearNum });
+        if (!calendar) {
+            return sendNotFound(res, 'Calendar not found');
+        }
+
+        const entry = findWfhEntryOnCalendar(calendar, date);
+        if (!entry) {
+            return sendError(
+                res,
+                'WFH is not enabled for this date. Enable WFH first, then manage exclusions.',
+                400,
+                'WFH_DATE_NOT_ENABLED'
+            );
+        }
+
+        entry.excludedEmployeeIds = [
+            ...new Set(req.body.excludedEmployeeIds.map((id) => String(id)).filter(Boolean))
+        ];
+        entry.updatedBy = actorEmployeeId(req);
+        entry.markModified?.('excludedEmployeeIds');
+        calendar.markModified('wfhDates');
+        await calendar.save();
+        await calendar.populate({
+            path: 'wfhDates.excludedEmployeeIds',
+            select: 'name lastName employeeId department'
+        });
+
+        const refreshed = findWfhEntryOnCalendar(calendar, date);
+        return sendSuccess(res, { entry: refreshed, wfhDates: calendar.wfhDates || [] }, 'WFH exclusions updated');
+    } catch (error) {
+        logger.error('Update WFH exclusions error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to update WFH exclusions', error);
+    }
+};

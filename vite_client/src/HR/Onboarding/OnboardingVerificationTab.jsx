@@ -1,34 +1,159 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { format, isValid } from 'date-fns';
 import {
-    FaCheckCircle, FaEye, FaShieldAlt, FaFileAlt, FaGraduationCap,
-    FaHistory, FaFileInvoiceDollar, FaUpload, FaSync, FaExternalLinkAlt,
+    FaFileAlt, FaGraduationCap, FaFileInvoiceDollar, FaUpload, FaSync,
+    FaExclamationCircle,
 } from 'react-icons/fa';
-import { CmBadge, CmButton, statusTone } from '../../components/corporateModern';
+import { CmButton } from '../../components/corporateModern';
 import { toast } from 'react-toastify';
 import { getUploadUrl, openDocumentPreview } from '../../utils/axios';
 
+const PAGE_SIZE = 5;
+
+/** Always listed on the dossier Documents tab (employee pending / uploaded). */
+const REQUIRED_DOSSIER_DOC_TYPES = [
+    { key: 'PASSPORT', label: 'PASSPORT' },
+    { key: 'DEGREE', label: 'DEGREE' },
+    { key: 'EXPERIENCE', label: 'EXPERIENCE' },
+    { key: 'RESUME', label: 'RESUME' },
+    { key: 'OFFER_ACK', label: 'OFFER_ACK' },
+    { key: 'NDA', label: 'NDA' },
+    { key: 'PHOTO', label: 'PHOTO' },
+    { key: 'BANK_DETAILS', label: 'BANK_DETAILS' },
+    { key: 'OTHER', label: 'OTHER' },
+];
+
+function placeholderDoc(type) {
+    return {
+        _id: `placeholder-${type.key}`,
+        documentType: type.key,
+        name: type.label,
+        status: 'Pending',
+        mandatory: true,
+        __placeholder: true,
+    };
+}
+
+/** Merge workflow docs with the fixed required types so all rows always appear. */
+function buildEmployeeDocumentRows(workflowDocs = []) {
+    const byType = new Map();
+    workflowDocs.forEach((doc) => {
+        const key = String(doc.documentType || '').toUpperCase();
+        if (!key) return;
+        if (!byType.has(key)) byType.set(key, doc);
+    });
+
+    const rows = REQUIRED_DOSSIER_DOC_TYPES.map((type) => {
+        const existing = byType.get(type.key);
+        if (existing) {
+            return {
+                ...existing,
+                name: existing.name || type.label,
+                documentType: existing.documentType || type.key,
+            };
+        }
+        return placeholderDoc(type);
+    });
+
+    // Keep any extra workflow docs that are not in the fixed list (still employee-facing).
+    workflowDocs.forEach((doc) => {
+        const key = String(doc.documentType || '').toUpperCase();
+        if (key && REQUIRED_DOSSIER_DOC_TYPES.some((t) => t.key === key)) return;
+        rows.push(doc);
+    });
+
+    return rows;
+}
+
+/** Employee still needs to upload (or re-upload after reject). */
+function isPendingByEmployee(doc) {
+    const s = String(doc?.status || 'Pending');
+    if (s === 'Verified') return false;
+    if (s === 'Rejected') return true;
+    return !docHasFile(doc);
+}
+
+/** Employee has uploaded (includes verified so every required type stays listed). */
+function isUploadedByEmployee(doc) {
+    const s = String(doc?.status || 'Pending');
+    if (s === 'Rejected') return false;
+    if (s === 'Verified') return true;
+    return docHasFile(doc);
+}
+
 function documentCheckLabel(doc) {
+    const typeKey = String(doc.documentType || '').toUpperCase();
+    const fromList = REQUIRED_DOSSIER_DOC_TYPES.find((t) => t.key === typeKey);
+    if (fromList) return fromList.label;
     return doc.name || String(doc.documentType || 'Document').replace(/_/g, ' ');
 }
 
 function checkIcon(label = '') {
     const l = label.toLowerCase();
     if (/edu|degree|bsc|msc/.test(l)) return FaGraduationCap;
-    if (/employ|history|contract/.test(l)) return FaFileInvoiceDollar;
+    if (/employ|history|contract|salary|slip|reliev/.test(l)) return FaFileInvoiceDollar;
     return FaFileAlt;
-}
-
-function mapDocStatus(status) {
-    const s = String(status || 'Pending');
-    if (s === 'Verified') return { tone: 'done', label: 'Verified' };
-    if (s === 'Rejected') return { tone: 'attention', label: 'Rejected' };
-    if (s === 'Uploaded') return { tone: 'progress', label: 'In Review' };
-    return { tone: 'attention', label: 'Pending' };
 }
 
 function docHasFile(doc) {
     return Boolean(doc?.url || doc?.canonicalDocumentId);
+}
+
+function formatUploadDate(value) {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (!isValid(date)) return null;
+    return format(date, 'dd MMM yyyy');
+}
+
+function fileMetaLine(doc) {
+    const name = doc.originalFileName || doc.fileName;
+    if (!name) {
+        return docHasFile(doc) ? 'File on record' : 'Awaiting employee upload';
+    }
+    const size = doc.fileSize || doc.size;
+    if (size && Number(size) > 0) {
+        const kb = Number(size) / 1024;
+        const label = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`;
+        return `${name} (${label})`;
+    }
+    return name;
+}
+
+function sourceLabel(doc) {
+    if (doc.source || doc.sourceRef) return doc.source || doc.sourceRef;
+    if (docHasFile(doc)) return 'Uploaded by employee';
+    return 'Pending by employee';
+}
+
+function statusBadge(doc) {
+    const s = String(doc.status || 'Pending');
+    if (s === 'Verified') {
+        return {
+            className: 'cm-dossier-docs__badge cm-dossier-docs__badge--verified',
+            label: 'Verified by HR',
+            Icon: null,
+        };
+    }
+    if (s === 'Rejected') {
+        return {
+            className: 'cm-dossier-docs__badge cm-dossier-docs__badge--missing',
+            label: 'Rejected — re-upload needed',
+            Icon: FaExclamationCircle,
+        };
+    }
+    if (docHasFile(doc)) {
+        return {
+            className: 'cm-dossier-docs__badge cm-dossier-docs__badge--pending',
+            label: 'Uploaded — awaiting HR verify',
+            Icon: null,
+        };
+    }
+    return {
+        className: 'cm-dossier-docs__badge cm-dossier-docs__badge--missing',
+        label: 'Pending by employee',
+        Icon: FaExclamationCircle,
+    };
 }
 
 async function previewOnboardingDocument(doc) {
@@ -47,14 +172,14 @@ async function previewOnboardingDocument(doc) {
     throw new Error('No file available to view');
 }
 
-function ViewDocumentButton({ doc, className = 'cm-doc-view-btn', label = 'View' }) {
+function ViewDocumentButton({ doc, label = 'View PDF' }) {
     const [busy, setBusy] = useState(false);
     if (!docHasFile(doc)) return null;
 
     return (
         <button
             type="button"
-            className={className}
+            className="cm-dossier-docs__link"
             disabled={busy}
             onClick={async () => {
                 setBusy(true);
@@ -67,50 +192,25 @@ function ViewDocumentButton({ doc, className = 'cm-doc-view-btn', label = 'View'
                 }
             }}
         >
-            <FaEye aria-hidden />
-            {label ? <span>{busy ? 'Opening…' : label}</span> : null}
+            {busy ? 'Opening…' : label}
         </button>
     );
 }
 
+/**
+ * Documents tab — employee pending + employee uploaded only.
+ * Employees upload; HR reviews uploaded files for verification.
+ */
 export default function OnboardingVerificationTab({
     wf,
-    breakdown,
     viewerRole = 'hr',
     navigate,
     onRefresh,
     returnToOnboarding,
 }) {
-    const documents = wf.documents || [];
-    const verifiedCount = documents.filter((d) => d.status === 'Verified').length;
-    const totalCount = documents.length;
-    const uploadedCount = documents.filter((d) => docHasFile(d)).length;
-    const pendingCount = documents.filter((d) => d.status === 'Pending' || d.status === 'Uploaded').length;
-    const missingCount = Math.max(0, totalCount - uploadedCount);
-    const compliancePct = totalCount > 0
-        ? Math.round((verifiedCount / totalCount) * 100)
-        : Math.max(0, Math.min(100, Number(breakdown?.documents) || 0));
-
-    const docByKey = useMemo(() => {
-        const map = new Map();
-        documents.forEach((doc) => {
-            map.set(doc._id || doc.documentType, doc);
-        });
-        return map;
-    }, [documents]);
-
-    const rows = useMemo(() => documents.map((doc) => ({
-        id: doc._id || doc.documentType,
-        checkType: documentCheckLabel(doc),
-        status: doc.status,
-        verifiedBy: doc.verifiedBy?.name || (doc.verifiedBy ? String(doc.verifiedBy) : null),
-        verifiedAt: doc.verifiedAt,
-        doc,
-    })), [documents]);
-
-    const lastActivity = (wf.activityFeed || [])[0];
-    const isHr = viewerRole === 'hr';
     const isEmployee = viewerRole === 'employee';
+    const [filter, setFilter] = useState('pending');
+    const [page, setPage] = useState(1);
 
     const employeeDocumentsPath = useMemo(() => {
         const base = '/employee/documents-id';
@@ -120,21 +220,51 @@ export default function OnboardingVerificationTab({
 
     const goToEmployeeUpload = useCallback(() => {
         if (!navigate) {
-            toast.info('Open Documents & ID from the main menu to upload.');
+            toast.info('Open Documents & ID to upload required files.');
             return;
         }
         navigate(employeeDocumentsPath);
     }, [navigate, employeeDocumentsPath]);
 
-    const goToHrDocuments = useCallback(() => {
+    const goToHrVerify = useCallback(() => {
         if (!navigate) {
-            toast.info('Open Documents from the HR menu.');
+            toast.info('Open Documents from the HR menu to verify.');
             return;
         }
         const emp = wf.employeeId || {};
         const searchHint = [emp.name, emp.lastName].filter(Boolean).join(' ').trim();
         navigate('/documents', searchHint ? { state: { search: searchHint } } : undefined);
     }, [navigate, wf.employeeId]);
+
+    const allEmployeeDocs = useMemo(
+        () => buildEmployeeDocumentRows(wf.documents || []),
+        [wf.documents],
+    );
+
+    const pendingByEmployee = useMemo(
+        () => allEmployeeDocs.filter(isPendingByEmployee),
+        [allEmployeeDocs],
+    );
+    const uploadedByEmployee = useMemo(
+        () => allEmployeeDocs.filter(isUploadedByEmployee),
+        [allEmployeeDocs],
+    );
+
+    const filteredDocs = filter === 'uploaded' ? uploadedByEmployee : pendingByEmployee;
+    const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
+
+    useEffect(() => {
+        setPage(1);
+    }, [filter, wf._id]);
+
+    useEffect(() => {
+        if (page > totalPages) setPage(totalPages);
+    }, [page, totalPages]);
+
+    const pageDocs = useMemo(() => {
+        const start = (page - 1) * PAGE_SIZE;
+        return filteredDocs.slice(start, start + PAGE_SIZE);
+    }, [filteredDocs, page]);
 
     useEffect(() => {
         if (!onRefresh) return undefined;
@@ -143,230 +273,184 @@ export default function OnboardingVerificationTab({
         return () => window.removeEventListener('focus', onFocus);
     }, [onRefresh]);
 
+    const filters = [
+        { id: 'pending', label: 'Pending by employee', count: pendingByEmployee.length },
+        { id: 'uploaded', label: 'Uploaded by employee', count: uploadedByEmployee.length },
+    ];
+
     return (
-        <div className="space-y-4">
-            <div className="hrms-main-rail">
-                <div className="cm-card overflow-visible p-0 sm:overflow-hidden">
-                    <div className="flex flex-col gap-3 border-b border-[rgba(187,202,193,0.35)] px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
-                        <h2 className="cm-title-sm flex items-center gap-2">
-                            <FaShieldAlt className="text-[var(--cm-primary-deep)]" />
-                            Verification Checklist
+        <div className="cm-dossier-docs">
+            <div className="cm-card cm-dossier-docs__panel">
+                <div className="cm-dossier-docs__header">
+                    <div className="min-w-0">
+                        <h2 className="cm-dossier-docs__title">
+                            Mandatory Compliance &amp; Dossier Documents
                         </h2>
-                        <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {onRefresh && (
-                                    <span className="hidden sm:inline-flex">
-                                        <button
-                                            type="button"
-                                            className="cm-icon-btn text-[var(--cm-muted)]"
-                                            aria-label="Refresh document status"
-                                            onClick={() => onRefresh()}
-                                        >
-                                            <FaSync />
-                                        </button>
-                                    </span>
-                                )}
-                                {isEmployee && (
-                                    <CmButton type="button" variant="primary" size="sm" onClick={goToEmployeeUpload}>
-                                        <FaUpload className="mr-1" /> Upload documents
-                                    </CmButton>
-                                )}
-                                {isHr && (
-                                    <CmButton type="button" variant="secondary" size="sm" onClick={goToHrDocuments}>
-                                        <FaExternalLinkAlt className="mr-1" /> Document hub
-                                    </CmButton>
-                                )}
-                            </div>
-                            <span className="hidden sm:inline-flex items-center rounded-full bg-[rgba(28,202,155,0.12)] px-3 py-1 text-xs font-semibold text-[var(--cm-primary-deep)] sm:bg-transparent sm:px-0 sm:py-0 sm:text-sm sm:font-semibold sm:pl-0">
-                                {totalCount > 0 ? `${verifiedCount} of ${totalCount} Completed` : 'No checks yet'}
-                            </span>
-                        </div>
+                        <p className="cm-dossier-docs__subtitle">
+                            Employees upload documents here for HR verification. Lists only pending and uploaded employee files.
+                        </p>
                     </div>
-                    <div className="cm-table-wrap">
-                        <table className="cm-table">
-                            <thead>
+                    <div className="cm-dossier-docs__header-actions">
+                        {onRefresh && (
+                            <button
+                                type="button"
+                                className="cm-icon-btn text-[var(--cm-muted)]"
+                                aria-label="Refresh document status"
+                                onClick={() => onRefresh()}
+                            >
+                                <FaSync />
+                            </button>
+                        )}
+                        {isEmployee && (
+                            <button
+                                type="button"
+                                className="cm-dossier-docs__upload-btn"
+                                onClick={goToEmployeeUpload}
+                            >
+                                <FaUpload aria-hidden />
+                                Upload Document
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="cm-dossier-docs__toolbar" role="group" aria-label="Employee document filters">
+                    {filters.map((f) => (
+                        <button
+                            key={f.id}
+                            type="button"
+                            className={`cm-dossier-docs__filter${filter === f.id ? ' cm-dossier-docs__filter--active' : ''}`}
+                            aria-pressed={filter === f.id}
+                            onClick={() => setFilter(f.id)}
+                        >
+                            {f.label}
+                            <span className="cm-dossier-docs__filter-count">{f.count}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="cm-dossier-docs__table-wrap">
+                    <table className="cm-dossier-docs__table">
+                        <thead>
+                            <tr>
+                                <th>Document Name</th>
+                                <th>Source / Ref</th>
+                                <th>Uploaded Date</th>
+                                <th>Status</th>
+                                <th className="cm-dossier-docs__th-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {pageDocs.length === 0 ? (
                                 <tr>
-                                    <th>Check Type</th>
-                                    <th>Status</th>
-                                    <th>Verified By</th>
-                                    <th>Verified Date</th>
-                                    <th>View</th>
+                                    <td colSpan={5} className="cm-dossier-docs__empty">
+                                        {filter === 'uploaded'
+                                            ? 'No documents uploaded by the employee yet.'
+                                            : isEmployee
+                                                ? 'No pending documents. Upload required files from Documents & ID.'
+                                                : 'No pending employee documents. Waiting for the employee to upload.'}
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {rows.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={5} className="py-10 text-center text-sm text-[var(--cm-muted)]">
-                                            {isEmployee
-                                                ? 'Upload required files from Documents & ID; they will appear here after sync.'
-                                                : 'Verification checks appear when documents are synced from the employee profile.'}
+                            ) : pageDocs.map((doc) => {
+                                const label = documentCheckLabel(doc);
+                                const Icon = checkIcon(label);
+                                const badge = statusBadge(doc);
+                                const BadgeIcon = badge.Icon;
+                                const uploadedLabel = formatUploadDate(doc.uploadedAt || doc.createdAt);
+                                const hasFile = docHasFile(doc);
+
+                                return (
+                                    <tr key={doc._id || doc.documentType}>
+                                        <td>
+                                            <div className="cm-dossier-docs__name-cell">
+                                                <span className="cm-dossier-docs__doc-icon" aria-hidden>
+                                                    <Icon />
+                                                </span>
+                                                <div className="min-w-0">
+                                                    <p className="cm-dossier-docs__name">{label}</p>
+                                                    <p className="cm-dossier-docs__filemeta">{fileMetaLine(doc)}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="cm-dossier-docs__muted">{sourceLabel(doc)}</td>
+                                        <td className="cm-dossier-docs__muted">
+                                            {uploadedLabel || '—'}
+                                        </td>
+                                        <td>
+                                            <span className={badge.className}>
+                                                {BadgeIcon ? <BadgeIcon aria-hidden /> : null}
+                                                {badge.label}
+                                            </span>
+                                        </td>
+                                        <td className="cm-dossier-docs__actions">
+                                            {hasFile ? (
+                                                <>
+                                                    <ViewDocumentButton doc={doc} />
+                                                    {!isEmployee && String(doc.status) !== 'Verified' && (
+                                                        <button
+                                                            type="button"
+                                                            className="cm-dossier-docs__link"
+                                                            onClick={goToHrVerify}
+                                                        >
+                                                            Verify
+                                                        </button>
+                                                    )}
+                                                </>
+                                            ) : isEmployee ? (
+                                                <button
+                                                    type="button"
+                                                    className="cm-dossier-docs__upload-for"
+                                                    onClick={goToEmployeeUpload}
+                                                >
+                                                    <FaUpload aria-hidden /> Upload
+                                                </button>
+                                            ) : (
+                                                <span className="cm-dossier-docs__muted text-xs">
+                                                    Waiting for employee
+                                                </span>
+                                            )}
                                         </td>
                                     </tr>
-                                ) : rows.map((row) => {
-                                    const st = mapDocStatus(row.status);
-                                    const Icon = checkIcon(row.checkType);
-                                    const hasFile = docHasFile(row.doc);
-                                    return (
-                                        <tr key={row.id}>
-                                            <td>
-                                                <span className="inline-flex items-center gap-2 font-medium">
-                                                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--cm-surface-low)] text-[var(--cm-primary-deep)]">
-                                                        <Icon className="text-sm" />
-                                                    </span>
-                                                    {row.checkType}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                {st.label === 'Verified' ? (
-                                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-[var(--cm-primary-deep)]">
-                                                        <FaCheckCircle /> Verified
-                                                    </span>
-                                                ) : (
-                                                    <CmBadge tone={statusTone(row.status)} dot={false}>{st.label}</CmBadge>
-                                                )}
-                                            </td>
-                                            <td className="text-sm">{row.verifiedBy || '—'}</td>
-                                            <td className="text-sm">
-                                                {row.verifiedAt ? format(new Date(row.verifiedAt), 'MMM dd, yyyy') : '—'}
-                                            </td>
-                                            <td className="text-right">
-                                                {hasFile ? (
-                                                    <ViewDocumentButton doc={row.doc} />
-                                                ) : isEmployee ? (
-                                                    <button type="button" className="cm-link cm-link--attention text-sm font-semibold" onClick={goToEmployeeUpload}>
-                                                        Upload
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-xs text-[var(--cm-muted)]">—</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
 
-                <div className="flex flex-col gap-4">
-                    <div className="cm-card cm-compliance-score">
-                        <p className="text-sm font-semibold text-[var(--cm-on-variant)]">Overall Compliance Score</p>
-                        <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-4xl font-bold text-[var(--cm-inverted)]">{compliancePct}%</span>
-                            <span className="text-sm font-medium text-[var(--cm-muted)]">
-                                {compliancePct >= 80 ? 'Excellent' : compliancePct >= 50 ? 'On track' : 'Needs attention'}
-                            </span>
-                        </div>
-                        <div className="cm-progress mt-4" role="progressbar" aria-valuenow={compliancePct}>
-                            <div className="cm-progress__bar" style={{ width: `${compliancePct}%` }} />
-                        </div>
-                        <p className="mt-4 text-xs italic text-[var(--cm-muted)]">
-                            {isEmployee
-                                ? 'Upload files on the Documents & ID page. Return here to view status and open uploaded files.'
-                                : 'Review and verify files in the document hub. Uploaded files can be viewed on this tab.'}
+                {filteredDocs.length > 0 && (
+                    <div className="cm-dossier-docs__pager">
+                        <p className="cm-dossier-docs__pager-meta">
+                            Showing {(page - 1) * PAGE_SIZE + 1}
+                            –
+                            {Math.min(page * PAGE_SIZE, filteredDocs.length)}
+                            {' '}of {filteredDocs.length}
                         </p>
-                        {isEmployee && (
-                            <CmButton type="button" variant="primary" size="sm" className="mt-3 w-full" onClick={goToEmployeeUpload}>
-                                Go to Documents & ID
+                        <div className="cm-dossier-docs__pager-controls">
+                            <CmButton
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={page <= 1}
+                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            >
+                                Previous
                             </CmButton>
-                        )}
-                    </div>
-
-                    <div className="cm-card">
-                        <p className="text-sm font-semibold text-[var(--cm-on-surface)]">Checklist Summary</p>
-                        <div className="mt-4 space-y-3">
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                                <span className="text-[var(--cm-muted)]">Verified</span>
-                                <span className="font-semibold text-[var(--cm-primary-deep)]">{verifiedCount}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                                <span className="text-[var(--cm-muted)]">{isHr ? 'Awaiting review' : 'Pending status'}</span>
-                                <span className="font-semibold text-[var(--cm-tertiary-deep)]">{pendingCount}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                                <span className="text-[var(--cm-muted)]">{isHr ? 'Missing uploads' : 'Files to upload'}</span>
-                                <span className="font-semibold text-[var(--cm-on-surface)]">{missingCount}</span>
-                            </div>
+                            <span className="cm-dossier-docs__pager-page">
+                                Page {page} of {totalPages}
+                            </span>
+                            <CmButton
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                            >
+                                Next
+                            </CmButton>
                         </div>
-                    </div>
-
-                    {lastActivity && (
-                        <div className="cm-card">
-                            <div className="flex items-start gap-3">
-                                <FaHistory className="mt-0.5 shrink-0 text-[var(--cm-muted)]" />
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-[var(--cm-on-surface)]">Recent Activity</p>
-                                    <p className="mt-2 text-sm text-[var(--cm-on-variant)]">
-                                        <span className="font-semibold text-[var(--cm-on-surface)]">
-                                            {lastActivity.actor?.name || lastActivity.actorName || 'System'}
-                                        </span>
-                                        {' '}
-                                        {lastActivity.description || (lastActivity.action || '').replaceAll('_', ' ')}
-                                    </p>
-                                    {lastActivity.createdAt && (
-                                        <p className="mt-2 text-xs text-[var(--cm-muted)]">
-                                            {formatDistanceToNow(new Date(lastActivity.createdAt), { addSuffix: true })}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                </div>
-            </div>
-
-            <div className="cm-card">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-bold text-[var(--cm-on-surface)]">Uploaded Files</h3>
-                    <div className="flex items-center gap-2">
-                        {isEmployee && (
-                            <button type="button" className="cm-link text-sm font-semibold" onClick={goToEmployeeUpload}>
-                                Upload more
-                            </button>
-                        )}
-                        {isHr && (
-                            <button type="button" className="cm-link text-sm font-semibold" onClick={goToHrDocuments}>
-                                Manage in hub
-                            </button>
-                        )}
-                    </div>
-                </div>
-                {documents.length === 0 ? (
-                    <p className="text-sm text-[var(--cm-muted)]">
-                        {isEmployee ? 'No files synced yet. Upload from Documents & ID.' : 'No files synced yet.'}
-                    </p>
-                ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {documents.map((doc) => {
-                            const Icon = checkIcon(documentCheckLabel(doc));
-                            const dateLabel = doc.uploadedAt
-                                ? format(new Date(doc.uploadedAt), 'MMM dd, yyyy')
-                                : '—';
-                            const fullDoc = docByKey.get(doc._id || doc.documentType) || doc;
-                            return (
-                                <div key={doc._id || doc.documentType} className="cm-file-card">
-                                    <span className="cm-file-card__icon">
-                                        <Icon />
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-semibold">{doc.originalFileName || documentCheckLabel(doc)}</p>
-                                        <p className="text-xs text-[var(--cm-muted)]">{dateLabel}</p>
-                                    </div>
-                                    {docHasFile(fullDoc) ? (
-                                        <ViewDocumentButton doc={fullDoc} className="cm-doc-view-btn cm-doc-view-btn--icon" label="" />
-                                    ) : isEmployee ? (
-                                        <button type="button" className="cm-icon-btn shrink-0 text-[var(--cm-primary-deep)]" aria-label="Upload" onClick={goToEmployeeUpload}>
-                                            <FaUpload />
-                                        </button>
-                                    ) : null}
-                                </div>
-                            );
-                        })}
                     </div>
                 )}
             </div>
-
         </div>
     );
 }

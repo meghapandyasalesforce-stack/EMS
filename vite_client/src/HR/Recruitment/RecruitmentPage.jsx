@@ -1,19 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FaPlus, FaBriefcase, FaUsers, FaFileContract, FaColumns, FaHome, FaClipboardList, FaCalendarAlt, FaEnvelopeOpenText, FaCog, FaSearch, FaTimes, FaEdit } from 'react-icons/fa';
+import {
+    FaPlus, FaBriefcase, FaUsers, FaFileContract, FaColumns, FaClipboardList,
+    FaCalendarAlt, FaEnvelopeOpenText, FaCog, FaSearch, FaTimes, FaEdit,
+    FaTh, FaList, FaDownload, FaCheckCircle, FaBuilding,
+} from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import OfferTemplateManager from '../../components/recruitment/OfferTemplateManager';
-import { normalizeResumeScreening, getScreeningBadgeClasses, parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
-import { AtsPage, AtsPageHeader, AtsEmpty, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
-import { formatJobPostedLabel } from '../../utils/jobPostedDate';
+import { normalizeResumeScreening, parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
+import { AtsPage, AtsEmpty, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
 import DraftAwaitingBanner from '../../components/DraftAwaitingBanner';
 
-const jobExcerpt = (text = '', max = 120) => {
-    const t = String(text || '').replace(/\s+/g, ' ').trim();
-    if (!t) return 'No description yet — open to review full posting details.';
-    return t.length > max ? `${t.slice(0, max).trim()}…` : t;
+const formatSalaryRange = (salaryRange) => {
+    if (!salaryRange || (salaryRange.min == null && salaryRange.max == null)) return null;
+    const currency = salaryRange.currency === 'INR' || !salaryRange.currency ? '₹' : `${salaryRange.currency} `;
+    const fmt = (n) => {
+        const num = Number(n);
+        if (!Number.isFinite(num)) return null;
+        if (num >= 100000) return `${Math.round(num / 100000)}L`;
+        return num.toLocaleString('en-IN');
+    };
+    const min = fmt(salaryRange.min);
+    const max = fmt(salaryRange.max);
+    if (min && max) return `${currency}${min} - ${currency}${max}`;
+    if (min) return `From ${currency}${min}`;
+    if (max) return `Up to ${currency}${max}`;
+    return null;
+};
+
+const jobReqId = (job) => {
+    if (job?.requisitionId) return String(job.requisitionId);
+    if (job?.jobCode) return String(job.jobCode);
+    const id = String(job?._id || '').slice(-6).toUpperCase();
+    return id ? `REQ-${id}` : 'REQ—';
 };
 
 const RecruitmentPage = () => {
@@ -46,12 +67,44 @@ const RecruitmentPage = () => {
         isActive: true,
     });
     const [savingTemplate, setSavingTemplate] = useState(false);
+    const [jobSearch, setJobSearch] = useState('');
+    const [jobStatusFilter, setJobStatusFilter] = useState('');
+    const [jobDeptFilter, setJobDeptFilter] = useState('');
+    const [jobView, setJobView] = useState('grid');
+    const [candidateCount, setCandidateCount] = useState(0);
+    const [offerTemplateCount, setOfferTemplateCount] = useState(0);
 
     useEffect(() => {
         try {
             const stored = localStorage.getItem('organizationId');
             if (stored) setOrgId(stored);
         } catch { /* ignore */ }
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const response = await axios.get('/v1/admin/recruitment/candidates', {
+                    withCredentials: true,
+                    params: { limit: 1 },
+                });
+                const total = response.data?.total ?? response.data?.pagination?.total ?? (response.data?.data || []).length;
+                if (!cancelled) setCandidateCount(Number(total) || 0);
+            } catch { /* optional */ }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axios.get('/v1/admin/lifecycle/offers/templates', { withCredentials: true });
+                if (!cancelled && data?.success) setOfferTemplateCount((data.data || []).length);
+            } catch { /* optional */ }
+        })();
+        return () => { cancelled = true; };
     }, []);
 
     const loadScreeningTemplates = useCallback(async () => {
@@ -94,7 +147,10 @@ const RecruitmentPage = () => {
                 if (candFilter.matchMax !== '') params.matchMax = candFilter.matchMax;
                 if (candFilter.searchRejected) params.searchRejected = 'true';
                 const response = await axios.get('/v1/admin/recruitment/candidates', { withCredentials: true, params });
-                setCandidates(response.data?.data || []);
+                const list = response.data?.data || [];
+                setCandidates(list);
+                const total = response.data?.total ?? response.data?.pagination?.total ?? list.length;
+                setCandidateCount(Number(total) || list.length);
             }
         } catch (error) {
             // Error handled silently for production
@@ -102,6 +158,27 @@ const RecruitmentPage = () => {
             setLoading(false);
         }
     };
+
+    const filteredJobs = useMemo(() => {
+        const q = jobSearch.trim().toLowerCase();
+        return jobPostings.filter((job) => {
+            if (jobStatusFilter && String(job.status || '') !== jobStatusFilter) return false;
+            if (jobDeptFilter && String(job.department || '') !== jobDeptFilter) return false;
+            if (!q) return true;
+            const hay = `${job.jobTitle || ''} ${job.department || ''} ${job.location || ''} ${jobReqId(job)}`.toLowerCase();
+            return hay.includes(q);
+        });
+    }, [jobPostings, jobSearch, jobStatusFilter, jobDeptFilter]);
+
+    const jobDepartments = useMemo(() => {
+        const set = new Set(jobPostings.map((j) => j.department).filter(Boolean));
+        return Array.from(set).sort();
+    }, [jobPostings]);
+
+    const openJobsCount = useMemo(
+        () => jobPostings.filter((j) => String(j.status || '').toLowerCase() === 'open').length || jobPostings.length,
+        [jobPostings]
+    );
 
     const openScreeningSettings = async () => {
         try {
@@ -214,112 +291,147 @@ const RecruitmentPage = () => {
         }
     };
 
-    if (loading && activeTab !== 'offers') {
+    if (loading && activeTab !== 'offers' && jobPostings.length === 0 && candidates.length === 0) {
         return <LoadingSpinner message="Loading recruitment data..." />;
     }
 
-    return (
-        <AtsPage>
-            <AtsPageHeader
-                eyebrow="Recruitment"
-                title="Recruitment & ATS"
-                subtitle="Manage job postings and candidates"
-                actions={
-                    <div className="ats-toolbar-stack flex flex-wrap items-center justify-end gap-2">
-                        {orgId ? (
-                            <Link to={`/careers/${orgId}`} className="ats-module-nav__btn">
-                                Career Portal
-                            </Link>
-                        ) : (
-                            <button
-                                type="button"
-                                className="ats-module-nav__btn"
-                                onClick={() => toast.info('Organization ID not available yet — open a job posting first or refresh.')}
-                            >
-                                Career Portal
-                            </button>
-                        )}
-                        <Link to="/recruitment/create-job" className="ats-module-nav__btn ats-module-nav__btn--primary">
-                            <FaPlus className="h-3.5 w-3.5" /> Post New Job
-                        </Link>
-                    </div>
-                }
-            />
+    const pendingScreen = screeningDash?.pendingScreening ?? 0;
+    const approvedCand = screeningDash?.approvedCandidates ?? candidateCount;
+    const avgMatch = screeningDash?.averageMatchScore;
 
-            <div className="ats-module-nav">
-                <div className="ats-module-nav__links">
-                    <Link to="/recruitment/workspace" className="ats-module-nav__btn">
-                        <FaHome className="h-3.5 w-3.5" /> Workspace
-                    </Link>
-                    <Link to="/recruitment/pipeline" className="ats-module-nav__btn">
-                        <FaColumns className="h-3.5 w-3.5" /> Pipeline
-                    </Link>
-                    <Link to="/recruitment/requisitions" className="ats-module-nav__btn">
-                        <FaClipboardList className="h-3.5 w-3.5" /> Requisitions
-                    </Link>
-                    <Link to="/recruitment/calendar" className="ats-module-nav__btn">
-                        <FaCalendarAlt className="h-3.5 w-3.5" /> Calendar
-                    </Link>
-                    <Link to="/recruitment/inbox" className="ats-module-nav__btn">
-                        <FaEnvelopeOpenText className="h-3.5 w-3.5" /> Resume Inbox
-                    </Link>
-                    <button type="button" className="ats-module-nav__btn" onClick={openScreeningSettings}>
-                        <FaCog className="h-3.5 w-3.5" /> Screening Settings
-                    </button>
-                </div>
-                {screeningDash && (
-                    <div className="ats-module-nav__meta">
-                        <div className="ats-nav-chip">
-                            <span className="ats-nav-chip__label">Open jobs</span>
-                            <span className="ats-nav-chip__value">{jobPostings.length}</span>
-                        </div>
-                        <div className="ats-nav-chip">
-                            <span className="ats-nav-chip__label">Pending screen</span>
-                            <span className="ats-nav-chip__value">{screeningDash.pendingScreening ?? 0}</span>
-                        </div>
-                        <div className="ats-nav-chip">
-                            <span className="ats-nav-chip__label">Avg match</span>
-                            <span className="ats-nav-chip__value">
-                                {screeningDash.averageMatchScore != null ? `${screeningDash.averageMatchScore}%` : '—'}
+    return (
+        <AtsPage fullWidth className="rec-hub">
+            <div className="rec-hub__crumb">
+                <span>Dashboard</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span>Hire &amp; Lifecycle</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span className="rec-hub__crumb-current">Recruitment Hub</span>
+            </div>
+
+            <div className="rec-hub__header">
+                <div className="rec-hub__header-main">
+                    <div className="rec-hub__title-row">
+                        <h1 className="rec-hub__title">Recruitment &amp; Talent Acquisition Hub</h1>
+                        <div className="rec-hub__badges">
+                            <span className="rec-hub__badge rec-hub__badge--mint">
+                                <FaCheckCircle className="h-3 w-3" aria-hidden="true" />
+                                Active hiring
+                            </span>
+                            <span className="rec-hub__badge rec-hub__badge--soft">
+                                <FaBuilding className="h-3 w-3" aria-hidden="true" />
+                                Talent acquisition
                             </span>
                         </div>
                     </div>
-                )}
+                </div>
+                <div className="rec-hub__header-actions">
+                    <button type="button" className="rec-hub__btn" onClick={openScreeningSettings}>
+                        <FaCog className="h-3.5 w-3.5" /> Screening Settings
+                    </button>
+                    {orgId ? (
+                        <Link to={`/careers/${orgId}`} className="rec-hub__btn">Career Portal</Link>
+                    ) : null}
+                    <Link to="/recruitment/create-job" className="rec-hub__btn rec-hub__btn--primary">
+                        <FaPlus className="h-3.5 w-3.5" /> Post New Job
+                    </Link>
+                </div>
             </div>
 
-            {screeningDash && (
-                <div className="ats-kpi-strip">
-                    {[
-                        { label: 'Approved Candidates', value: screeningDash.approvedCandidates },
-                        { label: 'Rejected Candidates', value: screeningDash.rejectedCandidates, tone: 'attention' },
-                        { label: 'Pending Screening', value: screeningDash.pendingScreening, tone: 'attention' },
-                        { label: 'Avg Match Score', value: screeningDash.averageMatchScore != null ? `${screeningDash.averageMatchScore}%` : '—' },
-                        { label: 'Auto-Deleted', value: screeningDash.candidatesDeletedAutomatically },
-                    ].map((w) => (
-                        <div key={w.label} className="cm-stat">
-                            <p className="cm-stat__label">{w.label}</p>
-                            <p className={`cm-stat__value ${w.tone === 'attention' ? 'cm-stat__value--attention' : ''}`}>{w.value ?? 0}</p>
-                        </div>
-                    ))}
-                </div>
-            )}
+            <div className="rec-hub__quick">
+                <Link to="/recruitment/pipeline" className="rec-hub__pill">
+                    <FaColumns className="h-3.5 w-3.5 text-[var(--color-primary)]" /> Pipeline
+                </Link>
+                <Link to="/recruitment/requisitions" className="rec-hub__pill">
+                    <FaClipboardList className="h-3.5 w-3.5 text-[var(--color-primary)]" /> Requisitions
+                </Link>
+                <Link to="/recruitment/calendar" className="rec-hub__pill">
+                    <FaCalendarAlt className="h-3.5 w-3.5 text-[var(--color-primary)]" /> Interview Calendar
+                </Link>
+                <Link to="/recruitment/inbox" className="rec-hub__pill">
+                    <FaEnvelopeOpenText className="h-3.5 w-3.5 text-[var(--color-primary)]" /> Resume Inbox
+                    {pendingScreen > 0 ? <span className="rec-hub__pill-count">{pendingScreen}</span> : null}
+                </Link>
+            </div>
 
-            <nav className="ats-tabs" aria-label="Recruitment sections">
-                <button type="button" onClick={() => setActiveTab('jobs')} className={`ats-tab ${activeTab === 'jobs' ? 'ats-tab--active' : ''}`}>
-                    <FaBriefcase className="h-3.5 w-3.5 opacity-80" />
-                    Job Postings
-                    <span className="ats-tab-count">{jobPostings.length}</span>
+            <div className="rec-hub__kpi">
+                <button type="button" className="rec-hub__kpi-card" onClick={() => setActiveTab('jobs')}>
+                    <div className="rec-hub__kpi-top">
+                        <div>
+                            <p className="rec-hub__kpi-label">Open Jobs</p>
+                            <p className="rec-hub__kpi-value">{openJobsCount}</p>
+                            <p className="rec-hub__kpi-meta">{jobPostings.length} total postings</p>
+                        </div>
+                        <span className="rec-hub__kpi-icon rec-hub__kpi-icon--mint"><FaBriefcase /></span>
+                    </div>
+                    <p className="rec-hub__kpi-link">View open requisitions →</p>
                 </button>
-                <button type="button" onClick={() => setActiveTab('candidates')} className={`ats-tab ${activeTab === 'candidates' ? 'ats-tab--active' : ''}`}>
-                    <FaUsers className="h-3.5 w-3.5 opacity-80" />
-                    Candidates
-                    <span className="ats-tab-count">{candidates.length}</span>
+                <button type="button" className="rec-hub__kpi-card" onClick={() => setActiveTab('candidates')}>
+                    <div className="rec-hub__kpi-top">
+                        <div>
+                            <p className="rec-hub__kpi-label">Active Candidates</p>
+                            <p className="rec-hub__kpi-value">{approvedCand ?? candidateCount}</p>
+                            <p className="rec-hub__kpi-meta">
+                                {avgMatch != null ? `Avg match ${avgMatch}%` : `${pendingScreen} pending screen`}
+                            </p>
+                        </div>
+                        <span className="rec-hub__kpi-icon rec-hub__kpi-icon--blue"><FaUsers /></span>
+                    </div>
+                    <p className="rec-hub__kpi-link">Review candidate funnel →</p>
                 </button>
-                <button type="button" onClick={() => setActiveTab('offers')} className={`ats-tab ${activeTab === 'offers' ? 'ats-tab--active' : ''}`}>
-                    <FaFileContract className="h-3.5 w-3.5 opacity-80" />
-                    Offer Templates
+                <button type="button" className="rec-hub__kpi-card" onClick={() => navigate('/recruitment/calendar')}>
+                    <div className="rec-hub__kpi-top">
+                        <div>
+                            <p className="rec-hub__kpi-label">Interview Calendar</p>
+                            <p className="rec-hub__kpi-value">—</p>
+                            <p className="rec-hub__kpi-meta">Manage schedule &amp; rooms</p>
+                        </div>
+                        <span className="rec-hub__kpi-icon rec-hub__kpi-icon--mint"><FaCalendarAlt /></span>
+                    </div>
+                    <p className="rec-hub__kpi-link">Open calendar →</p>
                 </button>
-            </nav>
+                <button type="button" className="rec-hub__kpi-card" onClick={() => setActiveTab('offers')}>
+                    <div className="rec-hub__kpi-top">
+                        <div>
+                            <p className="rec-hub__kpi-label">Pending Screening</p>
+                            <p className="rec-hub__kpi-value">{pendingScreen}</p>
+                            <p className="rec-hub__kpi-meta">Resume inbox queue</p>
+                        </div>
+                        <span className="rec-hub__kpi-icon rec-hub__kpi-icon--blue"><FaFileContract /></span>
+                    </div>
+                    <p className="rec-hub__kpi-link">Review screening →</p>
+                </button>
+            </div>
+
+            <div className="rec-hub__board">
+                <div className="rec-hub__tabs-bar">
+                    <nav className="rec-hub__tabs" aria-label="Recruitment sections">
+                        <button type="button" onClick={() => setActiveTab('jobs')} className={`rec-hub__tab${activeTab === 'jobs' ? ' is-active' : ''}`}>
+                            <FaBriefcase className="h-3.5 w-3.5" />
+                            <span className="rec-hub__tab-label-full">Jobs</span>
+                            <span className="rec-hub__tab-label-short">Jobs</span>
+                            <span className="rec-hub__tab-count">{jobPostings.length}</span>
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('candidates')} className={`rec-hub__tab${activeTab === 'candidates' ? ' is-active' : ''}`}>
+                            <FaUsers className="h-3.5 w-3.5" />
+                            <span className="rec-hub__tab-label-full">Candidates</span>
+                            <span className="rec-hub__tab-label-short">Candidates</span>
+                            <span className="rec-hub__tab-count">{candidateCount || candidates.length}</span>
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('offers')} className={`rec-hub__tab${activeTab === 'offers' ? ' is-active' : ''}`}>
+                            <FaFileContract className="h-3.5 w-3.5" />
+                            <span className="rec-hub__tab-label-full">Offer Templates</span>
+                            <span className="rec-hub__tab-label-short">Offers</span>
+                            <span className="rec-hub__tab-count">{offerTemplateCount}</span>
+                        </button>
+                    </nav>
+                    <div className="rec-hub__tabs-meta">
+                        <span>Filtered by: <strong>All Entities</strong></span>
+                        <button type="button" className="rec-hub__icon-btn" title="Export" aria-label="Export">
+                            <FaDownload className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                </div>
 
             {activeTab === 'jobs' ? (
                 jobPostings.length === 0 ? (
@@ -330,137 +442,226 @@ const RecruitmentPage = () => {
                         count={jobPostings.filter((j) => j.status === 'Draft').length}
                         entityLabel="job posting"
                     />
-                    <div className="ats-job-grid">
-                        {jobPostings.map((job) => (
-                            <div
-                                key={job._id}
-                                role="button"
-                                tabIndex={0}
-                                className="ats-role-card"
-                                onClick={() => navigate(`/recruitment/jobs/${job._id}`)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        navigate(`/recruitment/jobs/${job._id}`);
-                                    }
-                                }}
+                    <div className="rec-hub__toolbar">
+                        <div className="rec-hub__search">
+                            <FaSearch className="rec-hub__search-icon" aria-hidden="true" />
+                            <input
+                                value={jobSearch}
+                                onChange={(e) => setJobSearch(e.target.value)}
+                                placeholder="Search job title, req ID..."
+                                aria-label="Search jobs"
+                            />
+                        </div>
+                        <select
+                            className="rec-hub__select"
+                            value={jobStatusFilter}
+                            onChange={(e) => setJobStatusFilter(e.target.value)}
+                            aria-label="Filter by status"
+                        >
+                            <option value="">All Statuses</option>
+                            {['Draft', 'Open', 'Closed', 'On Hold', 'Cancelled'].map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="rec-hub__select"
+                            value={jobDeptFilter}
+                            onChange={(e) => setJobDeptFilter(e.target.value)}
+                            aria-label="Filter by department"
+                        >
+                            <option value="">All Departments</option>
+                            {jobDepartments.map((d) => (
+                                <option key={d} value={d}>{d}</option>
+                            ))}
+                        </select>
+                        <div className="rec-hub__view-toggle" role="group" aria-label="Job view">
+                            <button
+                                type="button"
+                                className={jobView === 'grid' ? 'is-active' : ''}
+                                onClick={() => setJobView('grid')}
+                                aria-label="Grid view"
                             >
-                                <div className="ats-role-card__head">
-                                    <h4 className="ats-role-card__title">{job.jobTitle}</h4>
-                                </div>
-                                <div className="ats-role-card__tags">
-                                    {job.status && (
-                                        <span className="ats-role-card__tag" style={{ background: 'rgba(28,202,155,0.12)', color: '#006c51' }}>
-                                            {job.status}
-                                        </span>
-                                    )}
-                                    {job.department && <span className="ats-role-card__tag">{job.department}</span>}
-                                    {job.location && <span className="ats-role-card__tag">{job.location}</span>}
-                                </div>
-                                <p className="ats-role-card__desc">{jobExcerpt(job.jobDescription)}</p>
-                                <div className="ats-role-card__footer">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                        <AtsAvatar name={job.department || job.jobTitle || 'Job'} />
-                                        <span className="truncate text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                            {job.currentApplications || 0} applications
-                                        </span>
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-3">
-                                        <span className="ats-role-card__posted">
-                                            {formatJobPostedLabel(job) || '—'}
-                                        </span>
+                                <FaTh />
+                            </button>
+                            <button
+                                type="button"
+                                className={jobView === 'list' ? 'is-active' : ''}
+                                onClick={() => setJobView('list')}
+                                aria-label="List view"
+                            >
+                                <FaList />
+                            </button>
+                        </div>
+                        <Link to="/recruitment/create-job" className="rec-hub__btn rec-hub__btn--mint">
+                            <FaPlus className="h-3 w-3" /> Quick Requisition
+                        </Link>
+                    </div>
+                    <div className={jobView === 'list' ? 'rec-hub__job-list' : 'rec-hub__job-grid'}>
+                        {filteredJobs.map((job) => {
+                            const salary = formatSalaryRange(job.salaryRange);
+                            const apps = job.currentApplications || 0;
+                            return (
+                                <article
+                                    key={job._id}
+                                    className="rec-hub__job-card"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => navigate(`/recruitment/jobs/${job._id}`)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            navigate(`/recruitment/jobs/${job._id}`);
+                                        }
+                                    }}
+                                >
+                                    <div className="rec-hub__job-card-head">
+                                        <div>
+                                            <p className="rec-hub__job-req">{jobReqId(job)}</p>
+                                            <h3 className="rec-hub__job-title">{job.jobTitle}</h3>
+                                        </div>
                                         <button
                                             type="button"
-                                            className="ats-link inline-flex items-center gap-1"
+                                            className="rec-hub__job-edit"
+                                            title="Edit job"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 navigate(`/recruitment/jobs/${job._id}/edit`);
                                             }}
                                         >
-                                            <FaEdit className="h-3 w-3" /> Edit
+                                            <FaEdit />
                                         </button>
                                     </div>
-                                </div>
-                            </div>
-                        ))}
+                                    <div className="rec-hub__job-tags">
+                                        {job.department ? <span>{job.department}</span> : null}
+                                        {job.location ? <span>{job.location}</span> : null}
+                                        {salary ? <span className="is-salary">{salary}</span> : null}
+                                    </div>
+                                    <div className="rec-hub__job-pipeline">
+                                        <div className="rec-hub__job-pipeline-top">
+                                            <span>Active pipeline</span>
+                                            <span>{apps} candidate{apps === 1 ? '' : 's'}</span>
+                                        </div>
+                                        <div className="rec-hub__job-pipeline-pills">
+                                            <span>{job.employmentType || 'Role'}</span>
+                                            {job.priority ? <span>{job.priority} priority</span> : null}
+                                        </div>
+                                    </div>
+                                    <div className="rec-hub__job-footer">
+                                        <span className={`rec-hub__job-status is-${String(job.status || 'draft').toLowerCase().replace(/\s+/g, '-')}`}>
+                                            {job.status || 'Draft'}
+                                        </span>
+                                        <span className="rec-hub__job-view">View Requisition →</span>
+                                    </div>
+                                </article>
+                            );
+                        })}
                     </div>
+                    {filteredJobs.length === 0 ? (
+                        <p className="rec-hub__empty-filter">No jobs match your filters.</p>
+                    ) : null}
                     </>
                 )
             ) : activeTab === 'candidates' ? (
-                <div className="flex flex-col gap-4">
-                    <div className="ats-toolbar cm-card" style={{ padding: '1rem' }}>
-                        <label className="text-sm">
-                            <span className="ats-form-label">Screening</span>
+                <div className="rec-hub__cand">
+                    <div className="rec-hub__toolbar rec-hub__toolbar--cand">
+                        <div className="rec-hub__search rec-hub__search--grow">
+                            <FaSearch className="rec-hub__search-icon" aria-hidden="true" />
+                            <input
+                                value={candFilter.q}
+                                onChange={(e) => setCandFilter((p) => ({ ...p, q: e.target.value }))}
+                                onKeyDown={(e) => { if (e.key === 'Enter') fetchData(); }}
+                                placeholder="Search candidate name, email, or skill..."
+                                aria-label="Search candidates"
+                            />
+                        </div>
+                        <div className="rec-hub__cand-filters">
                             <select
-                                className="cm-select"
+                                className="rec-hub__select"
                                 value={candFilter.screeningStatus}
                                 onChange={(e) => setCandFilter((p) => ({ ...p, screeningStatus: e.target.value, searchRejected: false }))}
+                                aria-label="Filter by screening stage"
                             >
-                                <option value="">All</option>
+                                <option value="">All Stages</option>
                                 <option value="passed">Approved</option>
                                 <option value="failed">Rejected</option>
                                 <option value="pending">Pending / Not Screened</option>
                             </select>
-                        </label>
-                        <label className="text-sm flex-1" style={{ minWidth: 200 }}>
-                            <span className="ats-form-label">Search</span>
-                            <div className="cm-search">
-                                <FaSearch className="cm-search__icon h-3.5 w-3.5" />
+                            <label
+                                className={`rec-hub__toggle${candFilter.searchRejected ? ' is-on' : ''}`}
+                            >
                                 <input
-                                    className="cm-input"
-                                    placeholder="Name, email, phone"
-                                    value={candFilter.q}
-                                    onChange={(e) => setCandFilter((p) => ({ ...p, q: e.target.value }))}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') fetchData(); }}
+                                    type="checkbox"
+                                    checked={candFilter.searchRejected}
+                                    onChange={() => setCandFilter((p) => ({
+                                        ...p,
+                                        searchRejected: !p.searchRejected,
+                                        screeningStatus: '',
+                                    }))}
                                 />
-                            </div>
-                        </label>
-                        <CmButton
-                            variant={candFilter.searchRejected ? 'tertiary' : 'outline'}
-                            size="sm"
-                            onClick={() => setCandFilter((p) => ({ ...p, searchRejected: !p.searchRejected, screeningStatus: '' }))}
-                        >
-                            Rejected only
-                        </CmButton>
-                        <CmButton size="sm" onClick={fetchData}>Apply</CmButton>
+                                <span className="rec-hub__toggle-box" aria-hidden="true" />
+                                <span>Rejected only</span>
+                            </label>
+                            <button type="button" className="rec-hub__btn rec-hub__btn--primary rec-hub__cand-apply" onClick={fetchData}>
+                                Apply
+                            </button>
+                        </div>
                     </div>
                     {candidates.length === 0 ? (
                         <AtsEmpty icon={FaUsers} title="No candidates yet" hint="Candidates will appear here once they apply to your job postings." />
                     ) : (
-                        <div className="ats-table-wrap">
+                        <div className="ats-table-wrap rec-hub__table-wrap">
                             <div className="overflow-x-auto">
-                                <table className="ats-table">
+                                <table className="ats-table rec-hub__table">
                                     <thead>
                                         <tr>
-                                            <th>Name</th>
-                                            <th>Position</th>
-                                            <th>Status</th>
-                                            <th>Screening</th>
-                                            <th>Match</th>
-                                            <th>Applied</th>
+                                            <th>Candidate Profile</th>
+                                            <th>Applied Role &amp; Req</th>
+                                            <th>Current Stage</th>
+                                            <th>Match Score</th>
+                                            <th>Applied Date</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {candidates.map((candidate) => {
                                             const screening = normalizeResumeScreening(candidate.resumeScreening);
+                                            const roleTitle =
+                                                (candidate.tags || []).includes('Unassigned')
+                                                || (candidate.jobPostingId?.tags || []).includes('__resume_inbox_holding__')
+                                                || /unassigned/i.test(candidate.jobPostingId?.jobTitle || '')
+                                                    ? 'Unassigned'
+                                                    : (candidate.jobPostingId?.jobTitle || 'N/A');
+                                            const req = candidate.jobPostingId ? jobReqId(candidate.jobPostingId) : null;
                                             return (
                                             <tr key={candidate._id}>
-                                                <td className="font-semibold">{candidate.firstName} {candidate.lastName}</td>
                                                 <td>
-                                                    {(candidate.tags || []).includes('Unassigned')
-                                                        || (candidate.jobPostingId?.tags || []).includes('__resume_inbox_holding__')
-                                                        || /unassigned/i.test(candidate.jobPostingId?.jobTitle || '')
-                                                        ? 'Unassigned'
-                                                        : (candidate.jobPostingId?.jobTitle || 'N/A')}
+                                                    <div className="rec-hub__cand-profile">
+                                                        <AtsAvatar name={`${candidate.firstName || ''} ${candidate.lastName || ''}`} />
+                                                        <div>
+                                                            <p className="rec-hub__cand-name">{candidate.firstName} {candidate.lastName}</p>
+                                                            <p className="rec-hub__cand-meta">
+                                                                {[candidate.email, candidate.phone].filter(Boolean).join(' · ') || '—'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <p className="rec-hub__cand-role">{roleTitle}</p>
+                                                    {req ? <p className="rec-hub__cand-req">{req}</p> : null}
                                                 </td>
                                                 <td><AtsBadge status={candidate.status}>{candidate.status}</AtsBadge></td>
-                                                <td><AtsBadge status={screening.label}>{screening.label}</AtsBadge></td>
-                                                <td>{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</td>
-                                                <td>{new Date(candidate.applicationDate).toLocaleDateString()}</td>
                                                 <td>
-                                                    <button type="button" onClick={() => navigate(`/recruitment/candidates/${candidate._id}`)} className="ats-link">
-                                                        View
+                                                    <span className="rec-hub__match">
+                                                        {screening.matchScore != null ? `${screening.matchScore}%` : '—'}
+                                                    </span>
+                                                    {screening.label ? (
+                                                        <span className="rec-hub__match-label">{screening.label}</span>
+                                                    ) : null}
+                                                </td>
+                                                <td>{candidate.applicationDate ? new Date(candidate.applicationDate).toLocaleDateString() : '—'}</td>
+                                                <td>
+                                                    <button type="button" onClick={() => navigate(`/recruitment/candidates/${candidate._id}`)} className="rec-hub__profile-btn">
+                                                        Profile
                                                     </button>
                                                 </td>
                                             </tr>
@@ -470,14 +671,17 @@ const RecruitmentPage = () => {
                                 </table>
                             </div>
                             <div className="ats-table-footer">
-                                <span>Showing {candidates.length} of {candidates.length} candidates</span>
+                                <span>Showing {candidates.length} candidates</span>
                             </div>
                         </div>
                     )}
                 </div>
             ) : (
-                <OfferTemplateManager />
+                <div className="rec-hub__offers">
+                    <OfferTemplateManager onCountChange={setOfferTemplateCount} />
+                </div>
             )}
+            </div>
 
             {showScreeningSettings && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

@@ -122,6 +122,10 @@ export function classifyWfhForDate(wfhRows, dateKey, timezone) {
  */
 export function classifyHoliday(holiday) {
   if (!holiday) return 'none';
+  // Converted holiday → treat as a normal working day for attendance planning
+  if (holiday.workModeOverride === 'office' || holiday.workModeOverride === 'home') {
+    return 'none';
+  }
   if (holiday.isHalfDay === true || holiday.isHalfDay === 'true') {
     return normalizeHalf(holiday.halfDayType) || 'first_half';
   }

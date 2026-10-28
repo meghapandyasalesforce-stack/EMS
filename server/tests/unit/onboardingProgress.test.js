@@ -240,7 +240,7 @@ describe('onboarding progress', () => {
 
         expect(silenceCurrentOnboardingReminders(workflow, now)).toBe(true);
         expect(workflow.notificationHistory.map((entry) => entry.key))
-            .toEqual(['task:task-1:due-in-3-days']);
+            .toEqual(['digest:employee-1:due-in-3-days']);
 
         workflow.status = 'Scheduled';
         const before = workflow.notificationHistory.length;
@@ -248,8 +248,8 @@ describe('onboarding progress', () => {
         expect(workflow.notificationHistory).toHaveLength(before);
     });
 
-    it('schedules reminders three days, one day, on due date, and daily overdue', () => {
-        const now = new Date('2026-07-21T10:00:00.000Z');
+    it('schedules reminders three days, one day, on due date, and weekly overdue', () => {
+        const now = new Date('2026-07-21T10:00:00.000Z'); // Tuesday; week starts Monday 2026-07-20
 
         expect(getOnboardingReminderStage(new Date('2026-07-24T18:00:00.000Z'), now)?.key)
             .toBe('due-in-3-days');
@@ -258,9 +258,18 @@ describe('onboarding progress', () => {
         expect(getOnboardingReminderStage(new Date('2026-07-21T18:00:00.000Z'), now)?.key)
             .toBe('due-today');
         expect(getOnboardingReminderStage(new Date('2026-07-20T18:00:00.000Z'), now)?.key)
-            .toBe('overdue-2026-07-21');
+            .toBe('overdue-week-2026-07-20');
         expect(getOnboardingReminderStage(new Date('2026-07-23T18:00:00.000Z'), now))
             .toBeNull();
+
+        // Same overdue week key later the same week (Thursday)
+        const laterSameWeek = new Date('2026-07-23T10:00:00.000Z');
+        expect(getOnboardingReminderStage(new Date('2026-07-20T18:00:00.000Z'), laterSameWeek)?.key)
+            .toBe('overdue-week-2026-07-20');
+        // Next week gets a new key
+        const nextWeek = new Date('2026-07-27T10:00:00.000Z');
+        expect(getOnboardingReminderStage(new Date('2026-07-20T18:00:00.000Z'), nextWeek)?.key)
+            .toBe('overdue-week-2026-07-27');
     });
 
     it('registers every onboarding-only notification event', () => {

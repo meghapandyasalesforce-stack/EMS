@@ -20,7 +20,18 @@ import {
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useSelector, useDispatch } from 'react-redux';
-import { FiChevronRight, FiEdit, FiStar } from 'react-icons/fi';
+import {
+  FiArrowLeft,
+  FiBriefcase,
+  FiCalendar,
+  FiChevronRight,
+  FiClock,
+  FiDollarSign,
+  FiEdit,
+  FiFileText,
+  FiStar,
+  FiUser,
+} from 'react-icons/fi';
 import { isHR, isManager } from '../../utils/managerHelper';
 import { checkAuthSession } from '../../context/Auth/authSlice';
 import { ORG_POSITION_LEVELS } from '../../constants/orgPositionLevels';
@@ -40,14 +51,11 @@ import PersonalTab from './employeeDetails/tabs/PersonalTab';
 import JobDetailsTab from './employeeDetails/tabs/JobDetailsTab';
 import DocumentsTab from './employeeDetails/tabs/DocumentsTab';
 import LeaveTab from './employeeDetails/tabs/LeaveTab';
+import AttendanceTab from './employeeDetails/tabs/AttendanceTab';
 import PayrollTab from './employeeDetails/tabs/PayrollTab';
 import PerformanceTab from './employeeDetails/tabs/PerformanceTab';
-import TimelineTab from './employeeDetails/tabs/TimelineTab';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS } from '../../utils/permissions';
-import CareerTimelineWidget from './employeeDetails/widgets/CareerTimelineWidget';
-import ReportingHierarchyWidget from './employeeDetails/widgets/ReportingHierarchyWidget';
-import PayrollHighlightWidget from './employeeDetails/widgets/PayrollHighlightWidget';
 import {
   calculateYearsOfExperience,
   getAttendanceRate,
@@ -55,6 +63,17 @@ import {
 } from './employeeDetails/utils';
 import { promoteEmployeeToHrManager } from '../../utils/systemRoleApi';
 import { fetchOrganizationProfile } from '../../context/organizationSlice';
+import '../../styles/employeeDetailsUI.css';
+
+const TAB_ICONS = {
+  person: FiUser,
+  job: FiBriefcase,
+  docs: FiFileText,
+  leave: FiClock,
+  attendance: FiCalendar,
+  pay: FiDollarSign,
+  perf: FiStar,
+};
 
 const ALL_PROBATION_STATUSES = [
   'None',
@@ -192,6 +211,9 @@ const EmployeeDetailsPage = () => {
     }
     if (activeTab === 'payroll' && hidePayrollForHrExecutive) {
       setActiveTab('personal');
+    }
+    if (activeTab === 'timeline') {
+      setActiveTab('performance');
     }
   }, [activeTab, userIsHr, hidePayrollForHrExecutive]);
 
@@ -612,6 +634,7 @@ const EmployeeDetailsPage = () => {
         return (
           <PersonalTab
             employee={employee}
+            managerPreview={managerPreview}
             canEditName={canEditEmployeeName}
             onEditName={handleEditNameClick}
           />
@@ -620,6 +643,7 @@ const EmployeeDetailsPage = () => {
         return (
           <JobDetailsTab
             employee={employee}
+            managerPreview={managerPreview}
             isManagerReadOnly={isManagerReadOnly}
             onEditWork={handleEditWorkClick}
             canPromoteToHr={isAdminUser || canManageAccess}
@@ -640,6 +664,8 @@ const EmployeeDetailsPage = () => {
         );
       case 'leave':
         return <LeaveTab employeeId={employee._id} />;
+      case 'attendance':
+        return <AttendanceTab employeeId={employee._id} />;
       case 'payroll':
         return (
           <PayrollTab
@@ -649,21 +675,22 @@ const EmployeeDetailsPage = () => {
           />
         );
       case 'performance':
+      case 'timeline':
         return (
           <PerformanceTab
             employee={employee}
+            managerPreview={managerPreview}
             isManagerReadOnly={isManagerReadOnly}
             onEditPerformance={handleEditPerformanceClick}
             yearsExperience={calculateYearsOfExperience(employee.joiningDate)}
             attendanceRate={getAttendanceRate(employee)}
           />
         );
-      case 'timeline':
-        return <TimelineTab employee={employee} />;
       default:
         return (
           <PersonalTab
             employee={employee}
+            managerPreview={managerPreview}
             canEditName={canEditEmployeeName}
             onEditName={handleEditNameClick}
           />
@@ -673,21 +700,21 @@ const EmployeeDetailsPage = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center bg-[#F5F7FB]">
-        <div className="h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
+      <div className="emp-dossier flex min-h-[50vh] items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[var(--ed-primary)] border-r-[var(--ed-primary)]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-[#F5F7FB] p-8">
+      <div className="emp-dossier p-8">
         <div className="mx-auto max-w-lg rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800">
           <p>{error}</p>
           <button
             type="button"
             onClick={() => navigate('/employees')}
-            className="mt-4 text-sm font-semibold text-[#0d9488] hover:underline"
+            className="emp-dossier__back mt-4"
           >
             Back to employees
           </button>
@@ -698,9 +725,9 @@ const EmployeeDetailsPage = () => {
 
   if (!employee) {
     return (
-      <div className="bg-[#F5F7FB] p-8">
+      <div className="emp-dossier p-8">
         <p className="text-slate-600">Employee not found.</p>
-        <button type="button" onClick={() => navigate('/employees')} className="mt-2 text-[#0d9488]">
+        <button type="button" onClick={() => navigate('/employees')} className="emp-dossier__back mt-2">
           Go back
         </button>
       </div>
@@ -708,23 +735,23 @@ const EmployeeDetailsPage = () => {
   }
 
   return (
-    <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+    <div className="page-shell emp-dossier min-h-[calc(100vh-64px)]">
       <div className="page-shell-inner hrms-stack">
-        <nav className="flex flex-wrap items-center gap-3 text-base text-slate-500">
-          <Link to="/employees" className="font-semibold text-[#0d9488] hover:underline">
-            Employee Directory
-          </Link>
-          <FiChevronRight className="h-4 w-4 shrink-0" />
-          <span className="font-semibold text-slate-800">{getFullName(employee)}</span>
-        </nav>
-
-        <button
-          type="button"
-          onClick={() => navigate('/employees')}
-        className="inline-flex self-start h-10 shrink-0 items-center justify-center rounded-full border-2 border-[#20C997] px-4 text-sm font-semibold text-[#0d9488] transition hover:bg-[#20C997]/10"
-        >
-          Back to employees
-        </button>
+        <div className="emp-dossier__crumb-bar">
+          <nav className="emp-dossier__crumbs" aria-label="Breadcrumb">
+            <Link to="/employees">Employee Directory</Link>
+            <FiChevronRight className="h-3 w-3 shrink-0 opacity-50" aria-hidden="true" />
+            <span className="emp-dossier__crumbs-current">{getFullName(employee)}</span>
+          </nav>
+          <button
+            type="button"
+            onClick={() => navigate('/employees')}
+            className="emp-dossier__back"
+          >
+            <FiArrowLeft className="h-4 w-4" />
+            Back to employees
+          </button>
+        </div>
 
         {(statusUpdateError || workInfoError) && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -735,6 +762,7 @@ const EmployeeDetailsPage = () => {
         <EmployeeDetailsHeader
           employee={employee}
           canManageEmployeeActions={canManageEmployeeActions}
+          hidePayrollFields={hidePayrollForHrExecutive}
           updatingStatus={updatingStatus}
           terminatingEmployee={terminatingEmployee}
           onStatusClick={() => setOpenDialog(true)}
@@ -752,35 +780,30 @@ const EmployeeDetailsPage = () => {
           onDeleteClick={() => setOpenDeleteDialog(true)}
         />
 
-        <div className="hrms-main-rail">
-          <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-            <div className="border-b border-slate-100 max-lg:px-1">
-              <div className="flex w-full min-w-0 flex-nowrap gap-0.5 overflow-x-auto px-1" role="tablist" aria-label="Employee details">
-                {visibleTabs.map((tab) => (
+        <div className="hrms-main-rail hrms-main-rail--solo">
+          <div className="emp-dossier__panel min-w-0">
+            <div className="emp-dossier__tabs" role="tablist" aria-label="Employee details">
+              {visibleTabs.map((tab) => {
+                const TabIcon = TAB_ICONS[tab.icon] || FiUser;
+                return (
                   <button
                     key={tab.id}
                     type="button"
                     role="tab"
                     aria-selected={activeTab === tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`shrink-0 whitespace-nowrap border-b-2 px-2.5 py-3 text-xs font-medium transition lg:px-3 lg:text-sm ${
-                      activeTab === tab.id
-                        ? 'border-[#20C997] text-[#0d9488]'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
+                    className={`emp-dossier__tab${activeTab === tab.id ? ' is-active' : ''}`}
                   >
-                    {tab.label}
+                    <TabIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{tab.label}</span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-            <div className="employee-detail-body min-w-0">{renderTabContent()}</div>
+            <div className="emp-dossier__panel-body employee-detail-body min-w-0">
+              {renderTabContent()}
+            </div>
           </div>
-          <aside className="min-w-0 space-y-4">
-            {!hidePayrollForHrExecutive && <PayrollHighlightWidget employee={employee} />}
-            <CareerTimelineWidget employee={employee} />
-            <ReportingHierarchyWidget employee={employee} managerPreview={managerPreview} />
-          </aside>
         </div>
       </div>
 

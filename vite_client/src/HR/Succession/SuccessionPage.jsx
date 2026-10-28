@@ -220,7 +220,7 @@ const SuccessionPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+        <div className="page-shell min-h-screen bg-transparent transition-all duration-300">
             <div className="page-shell-inner hrms-stack">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>

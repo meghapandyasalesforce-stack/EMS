@@ -1,0 +1,64 @@
+/**
+ * Stitch hub chrome for modules 4–8 (Lifecycle, Engage, Time, Docs, Plan).
+ * UI only — wraps existing page-shell content under .kinetic-hrms.
+ */
+
+/* Keep previous stack spacing — do not inflate page gaps */
+
+/* KPI / stat grids */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .grid > .rounded-2xl.border,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .grid > .rounded-xl.border,
+.kinetic-hrms .hrms-lifecycle .cm-stat,
+.kinetic-hrms .engagement-page .rounded-2xl.border.bg-white {
+  border-radius: 1rem !important;
+  border-color: rgba(14, 43, 61, 0.08) !important;
+  box-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+}
+
+/* Primary CTAs on hubs */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell a.bg-\[\#0E9370\],
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell button.bg-\[\#0E9370\],
+.kinetic-hrms .hrms-lifecycle .cm-btn--primary,
+.kinetic-hrms .engagement-page button.bg-theme-primary {
+  border-radius: 0.5rem !important;
+}
+
+/* Segmented tabs on engage / lifecycle */
+.kinetic-hrms .engagement-page [role='tablist'],
+.kinetic-hrms .hrms-lifecycle [role='tablist'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid rgba(14, 43, 61, 0.06);
+}
+
+.kinetic-hrms .engagement-page [role='tab'][aria-selected='true'],
+.kinetic-hrms .hrms-lifecycle [role='tab'][aria-selected='true'] {
+  background: rgba(14, 147, 112, 0.12);
+  color: #07523e;
+  border-radius: 0.5rem;
+}
+
+/* Helpdesk / Learning / Docs search bars */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell input[type='search'],
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell input[type='text'].rounded-xl,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell input.h-11 {
+  border-radius: 0.5rem !important;
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell input.h-11:focus {
+  background: #ffffff !important;
+  border-color: #0e9370 !important;
+  box-shadow: 0 0 0 3px rgba(14, 147, 112, 0.15) !important;
+}
+
+/* Leave management (opened in HR portal) */
+.kinetic-hrms .main-scroll-area .min-h-screen:not(.org-chart-page) .rounded-2xl.border {
+  border-color: rgba(14, 43, 61, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+}

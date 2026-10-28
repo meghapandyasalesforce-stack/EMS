@@ -81,7 +81,7 @@ function classifyCommunication(c = {}) {
         return {
             kind: 'inbound',
             label: 'Inbound',
-            badge: 'bg-sky-100 text-sky-800',
+            badge: 'ats-comm-badge ats-comm-badge--inbound',
             hint: 'Received (e.g. resume via mailbox)',
         };
     }
@@ -90,7 +90,7 @@ function classifyCommunication(c = {}) {
         return {
             kind: 'outbound',
             label: 'Outbound',
-            badge: 'bg-emerald-100 text-emerald-800',
+            badge: 'ats-comm-badge ats-comm-badge--outbound',
             hint: 'Sent to candidate email',
         };
     }
@@ -98,7 +98,7 @@ function classifyCommunication(c = {}) {
     return {
         kind: 'internal',
         label: 'Internal',
-        badge: 'bg-amber-100 text-amber-800',
+        badge: 'ats-comm-badge ats-comm-badge--internal',
         hint: 'HR-only log (not sent to candidate)',
     };
 }
@@ -529,7 +529,15 @@ const CandidateDetailPage = () => {
     const fullName = [candidate.firstName, candidate.lastName].filter(Boolean).join(' ');
 
     return (
-        <AtsPage>
+        <AtsPage className="rec-hub ats-candidate-page">
+            <div className="rec-hub__crumb">
+                <span>Recruitment</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span>Candidates</span>
+                <span className="rec-hub__crumb-sep">/</span>
+                <span className="rec-hub__crumb-current">{fullName}</span>
+            </div>
+
             <button
                 type="button"
                 onClick={() => navigate('/recruitment')}
@@ -538,13 +546,13 @@ const CandidateDetailPage = () => {
                 <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
             </button>
 
-            <section className="cm-card">
+            <section className="ats-candidate-dossier">
                 <div className="ats-candidate-header flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
                         <AtsAvatar name={fullName} />
                         <div className="min-w-0">
-                            <h1 className="text-2xl font-bold" style={{ color: 'var(--ats-secondary)' }}>{fullName}</h1>
-                            <p className="mt-1 text-sm" style={{ color: 'rgba(15,45,38,0.6)' }}>{candidate.email}</p>
+                            <h1 className="ats-candidate-dossier__title">{fullName}</h1>
+                            <p className="ats-candidate-dossier__meta">{candidate.email}</p>
                             <div className="mt-3 flex flex-wrap gap-3 text-sm" style={{ color: 'rgba(15,45,38,0.6)' }}>
                                 <span className="inline-flex items-center gap-1.5"><FaBriefcase className="opacity-60" /> {candidate.jobPostingId?.jobTitle || 'No job linked'}</span>
                                 <span className="inline-flex items-center gap-1.5"><FaCalendarAlt className="opacity-60" /> Applied {candidate.applicationDate ? format(new Date(candidate.applicationDate), 'dd MMM yyyy') : '—'}</span>
@@ -1202,20 +1210,15 @@ const CandidateDetailPage = () => {
                         <section className="cm-card">
                             <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Communication timeline</h2>
                             <div className="mb-4 flex flex-wrap gap-2 text-xs">
-                                <span className="rounded-full px-2 py-0.5" style={{ background: 'rgba(56,161,255,0.12)', color: '#1a5aa8' }}>Inbound</span>
-                                <span className="rounded-full px-2 py-0.5" style={{ background: 'rgba(28,202,155,0.15)', color: '#006c51' }}>Outbound (emailed)</span>
-                                <span className="rounded-full px-2 py-0.5" style={{ background: 'rgba(255,127,80,0.15)', color: '#c45a2a' }}>Internal</span>
+                                <span className="ats-comm-badge ats-comm-badge--inbound">Inbound</span>
+                                <span className="ats-comm-badge ats-comm-badge--outbound">Outbound (emailed)</span>
+                                <span className="ats-comm-badge ats-comm-badge--internal">Internal</span>
                             </div>
                             {(candidate.communications || []).length ? (
                                 <div className="relative max-h-[32rem] space-y-0 overflow-y-auto border-l-2 pl-4" style={{ borderColor: 'rgba(15,45,38,0.1)' }}>
                                     {[...candidate.communications].reverse().map((c, i) => {
                                         const cls = classifyCommunication(c);
                                         const dotColor = cls.kind === 'inbound' ? '#38a1ff' : cls.kind === 'outbound' ? 'var(--ats-primary)' : 'var(--ats-tertiary)';
-                                        const badgeStyle = cls.kind === 'inbound'
-                                            ? { background: 'rgba(56,161,255,0.12)', color: '#1a5aa8' }
-                                            : cls.kind === 'outbound'
-                                                ? { background: 'rgba(28,202,155,0.15)', color: '#006c51' }
-                                                : { background: 'rgba(255,127,80,0.15)', color: '#c45a2a' };
                                         const typeLabel = c.emailType
                                             ? (EMAIL_TYPE_LABELS[c.emailType] || c.emailType)
                                             : null;
@@ -1223,7 +1226,7 @@ const CandidateDetailPage = () => {
                                             <div key={i} className="relative mb-4 pb-2">
                                                 <span className="absolute -left-[21px] top-1 h-3 w-3 rounded-full" style={{ background: dotColor }} />
                                                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                                                    <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={badgeStyle}>
+                                                    <span className={cls.badge}>
                                                         {cls.label}
                                                     </span>
                                                     {c.autoLogged && (

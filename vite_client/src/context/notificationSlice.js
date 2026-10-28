@@ -6,11 +6,24 @@ import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 // Create new notification (admin only)
 export const createNotification = createAsyncThunk(
   'notifications/create',
-  async (message, thunkAPI) => {
+  async (payload, thunkAPI) => {
     try {
+      const body = typeof payload === 'string'
+        ? { message: payload }
+        : {
+            message: payload?.message,
+            title: payload?.title || undefined,
+            draft: Boolean(payload?.draft),
+            draftId: payload?.draftId || undefined,
+            priority: payload?.priority,
+            scheduleAt: payload?.scheduleAt || undefined,
+            audience: payload?.audience || undefined,
+            important: Boolean(payload?.important),
+            attachments: Array.isArray(payload?.attachments) ? payload.attachments : undefined,
+          };
       const res = await axios.post(
         `${BOTH_NOTIFICATION_ENDPOINT}/create-notification`,
-        { message }
+        body
       );
       return res.data;
     } catch (error) {

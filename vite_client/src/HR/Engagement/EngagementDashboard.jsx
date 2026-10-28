@@ -26,7 +26,7 @@ import {
 } from 'recharts';
 import axios from '../../utils/axios';
 
-const MINT = '#20C997';
+const MINT = '#0E9370';
 const PRIVACY_MSG = 'Not enough responses to display analytics.';
 
 const RANGE_OPTIONS = [
@@ -51,7 +51,7 @@ const ClickableKpi = ({ label, value, subtext, icon: Icon, accent, onClick, mute
     <button
         type="button"
         onClick={onClick}
-        className="group w-full rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-[#20C997]/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#20C997]/30"
+        className="group w-full rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-[#0E9370]/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#0E9370]/30"
     >
         <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -72,7 +72,7 @@ const ClickableKpi = ({ label, value, subtext, icon: Icon, accent, onClick, mute
                 >
                     <Icon className="h-5 w-5" />
                 </div>
-                <FaChevronRight className="h-3 w-3 text-slate-300 transition group-hover:text-[#20C997]" />
+                <FaChevronRight className="h-3 w-3 text-slate-300 transition group-hover:text-[#0E9370]" />
             </div>
         </div>
     </button>
@@ -92,7 +92,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
                 <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
                 {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
                 <div className="mt-6 flex items-center justify-center py-8">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]" />
                 </div>
             </div>
         );
@@ -363,7 +363,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
     return (
         <div className="space-y-4">
             {!forceTeamScope && (
-                <div className="rounded-xl border border-[#20C997]/20 bg-[#20C997]/5 px-3 py-2 text-xs text-slate-600 sm:px-4 sm:py-2.5 sm:text-sm">
+                <div className="rounded-xl border border-[#0E9370]/20 bg-[#0E9370]/5 px-3 py-2 text-xs text-slate-600 sm:px-4 sm:py-2.5 sm:text-sm">
                     <span className="font-semibold text-slate-900">Organization dashboard</span>
                     <span className="hidden sm:inline"> — company-wide engagement health and trends.</span>
                 </div>
@@ -371,7 +371,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                     {analytics?.scope && (
-                        <span className="rounded-full bg-[#20C997]/10 px-3 py-1 text-xs font-semibold text-[#0d9488] ring-1 ring-[#20C997]/20">
+                        <span className="rounded-full bg-[#0E9370]/10 px-3 py-1 text-xs font-semibold text-[#0d9488] ring-1 ring-[#0E9370]/20">
                             Scope:{' '}
                             {analytics.scope === 'team' ? 'Team (direct reports)' : 'Organization'}
                         </span>
@@ -389,7 +389,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                             onClick={() => setRange(opt.id)}
                             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                                 range === opt.id
-                                    ? 'bg-[#20C997] text-white shadow-sm'
+                                    ? 'bg-[#0E9370] text-white shadow-sm'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
@@ -446,7 +446,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                     <button
                         type="button"
                         onClick={fetchDashboard}
-                        className="rounded-full bg-[#20C997] px-4 py-2 text-sm font-semibold text-white"
+                        className="rounded-full bg-[#0E9370] px-4 py-2 text-sm font-semibold text-white"
                     >
                         Apply
                     </button>
@@ -902,7 +902,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
 
             {analyticsState.loading && (
                 <div className="flex justify-center py-16">
-                    <div className="h-10 w-10 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
+                    <div className="h-10 w-10 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]" />
                 </div>
             )}
         </div>

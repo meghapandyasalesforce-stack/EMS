@@ -54,7 +54,7 @@ const DistributionBars = ({ rows }) => (
                 </div>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
-                        className="h-full rounded-full bg-[#20C997]"
+                        className="h-full rounded-full bg-[#0E9370]"
                         style={{ width: `${Math.min(100, Number(row.percentage) || 0)}%` }}
                     />
                 </div>
@@ -433,7 +433,7 @@ const SurveyDetailPage = () => {
                                 name={qid}
                                 checked={value === opt}
                                 onChange={() => setAnswer(qid, opt)}
-                                className="text-[#20C997]"
+                                className="text-[#0E9370]"
                             />
                             <span className="text-sm text-slate-700">{opt}</span>
                         </label>
@@ -452,7 +452,7 @@ const SurveyDetailPage = () => {
                             onClick={() => setAnswer(qid, opt)}
                             className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
                                 value === opt
-                                    ? 'border-[#20C997] bg-[#20C997]/10 text-[#0d9488]'
+                                    ? 'border-[#0E9370] bg-[#0E9370]/10 text-[#0d9488]'
                                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                             }`}
                         >
@@ -491,7 +491,7 @@ const SurveyDetailPage = () => {
                 value={value}
                 onChange={(e) => setAnswer(qid, e.target.value)}
                 rows={3}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E9370] focus:ring-2 focus:ring-[#0E9370]/20"
                 placeholder="Your answer..."
             />
         );
@@ -499,7 +499,7 @@ const SurveyDetailPage = () => {
 
     if (loading) {
         return (
-            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#F5F7FB]">
+            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent">
                 <LoadingSpinner message="Loading survey..." />
             </div>
         );
@@ -507,7 +507,7 @@ const SurveyDetailPage = () => {
 
     if (!survey) {
         return (
-            <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+            <div className="page-shell min-h-[calc(100vh-64px)] bg-transparent">
                 <div className="page-shell-inner">
                     <div className="rounded-[28px] border border-slate-100 bg-white p-8 text-center shadow-sm">
                         <p className="text-lg font-semibold text-slate-900">Survey not found</p>
@@ -528,7 +528,7 @@ const SurveyDetailPage = () => {
     const showAnalyticsDetail = overview?.available === true;
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F0F7F4]">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-transparent">
             <div className="page-shell-inner hrms-stack max-w-6xl">
                 <button
                     type="button"
@@ -747,7 +747,7 @@ const SurveyDetailPage = () => {
                                 Survey Analytics
                             </h2>
                             {analytics?.scope && (
-                                <span className="rounded-full bg-[#20C997]/10 px-3 py-1 text-xs font-semibold text-[#0d9488] ring-1 ring-[#20C997]/20">
+                                <span className="rounded-full bg-[#0E9370]/10 px-3 py-1 text-xs font-semibold text-[#0d9488] ring-1 ring-[#0E9370]/20">
                                     Scope:{' '}
                                     {analytics.scope === 'team'
                                         ? 'Team (direct reports)'
@@ -844,7 +844,7 @@ const SurveyDetailPage = () => {
                                                     onClick={() => setTrendRange(r.id)}
                                                     className={`rounded-full px-3 py-1 text-xs font-semibold ${
                                                         trendRange === r.id
-                                                            ? 'bg-[#20C997]/15 text-[#0d9488] ring-1 ring-[#20C997]/30'
+                                                            ? 'bg-[#0E9370]/15 text-[#0d9488] ring-1 ring-[#0E9370]/30'
                                                             : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                                                     }`}
                                                 >

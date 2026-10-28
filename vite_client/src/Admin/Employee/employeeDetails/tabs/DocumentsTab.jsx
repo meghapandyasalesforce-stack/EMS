@@ -45,7 +45,7 @@ const DocumentsTab = ({ employee, onDownload, onView }) => {
                   <button
                     type="button"
                     onClick={() => onView(doc)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#20C997] px-3 py-1.5 text-sm font-medium text-white hover:opacity-95"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#0E9370] px-3 py-1.5 text-sm font-medium text-white hover:opacity-95"
                   >
                     <FiEye className="h-4 w-4" />
                     View

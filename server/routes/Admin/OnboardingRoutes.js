@@ -30,6 +30,7 @@ import {
     updateOnboardingTemplate,
     updateOnboardingChecklistItem,
     addOnboardingNote,
+    sendOnboardingPing,
     getOnboardingDashboard,
     updateWorkflowStatus,
     performWorkflowAction,
@@ -79,6 +80,9 @@ router.route('/onboarding/:id/checklist/:itemId')
 
 router.route('/onboarding/:id/notes')
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, addOnboardingNote);
+
+router.route('/onboarding/:id/ping')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, sendOnboardingPing);
 
 router.route('/onboarding/:id/status')
     .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateWorkflowStatus);

@@ -190,7 +190,18 @@ const Notifications = () => {
                 tabIndex={deepLink ? 0 : undefined}
               >
                 <div className="min-w-0 flex-1 pr-2">
-                  <p className="text-sm font-medium text-gray-800 break-words">{n.message}</p>
+                  {(n.priority === 'high' || n.metadata?.important || n.metadata?.priority === 'high') ? (
+                    <span className="mb-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 border border-red-200">
+                      Important
+                    </span>
+                  ) : null}
+                  <p className="text-sm font-medium text-gray-800 break-words">
+                    {String(n.metadata?.title || '').trim() ||
+                      String(n.message || '')
+                        .replace(/<[^>]+>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()}
+                  </p>
                   <p className="text-xs text-gray-500 mt-1">
                     {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
                   </p>

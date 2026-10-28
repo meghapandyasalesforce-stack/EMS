@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from '../../utils/axios';
 
 const chipClass =
-    'inline-flex items-center gap-1 rounded-full bg-[#20C997]/10 px-2.5 py-1 text-xs font-medium text-[#0d9488]';
+    'inline-flex items-center gap-1 rounded-full bg-[#0E9370]/10 px-2.5 py-1 text-xs font-medium text-[#0d9488]';
 
 const SurveyAudienceFields = ({
     targetAudience,
@@ -175,8 +175,8 @@ const SurveyAudienceFields = ({
                                         onClick={() => toggleDepartment(dept)}
                                         className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                                             selected
-                                                ? 'bg-[#20C997] text-white'
-                                                : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-[#20C997]/40'
+                                                ? 'bg-[#0E9370] text-white'
+                                                : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-[#0E9370]/40'
                                         }`}
                                     >
                                         {dept}
@@ -241,7 +241,7 @@ const SurveyAudienceFields = ({
                         value={employeeSearch}
                         onChange={(e) => setEmployeeSearch(e.target.value)}
                         placeholder="Search employees by name, email, or ID..."
-                        className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20"
+                        className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E9370] focus:ring-2 focus:ring-[#0E9370]/20"
                     />
                     {filteredEmployees.length === 0 ? (
                         <p className="text-sm text-slate-500">No employees found.</p>

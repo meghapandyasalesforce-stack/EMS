@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
+import { FiEdit2, FiCopy, FiTrash2 } from 'react-icons/fi';
 
 /** Matches employee.position enum (not jobTitle). */
 const EMPLOYEE_POSITION_OPTIONS = [
@@ -349,6 +350,43 @@ const formatApplicabilitySummary = (policy) => {
     return applicableTo;
 };
 
+const leaveTypeBadgeClass = (type = '') => {
+    const t = String(type).toLowerCase();
+    if (t.includes('earn') || t.includes('annual') || t === 'el') {
+        return 'bg-emerald-50 text-emerald-800';
+    }
+    if (t.includes('casual') || t === 'cl') return 'bg-blue-50 text-blue-800';
+    if (t.includes('sick') || t.includes('medical') || t === 'sl') {
+        return 'bg-teal-50 text-teal-800';
+    }
+    if (t.includes('matern')) return 'bg-pink-50 text-pink-800';
+    if (t.includes('patern')) return 'bg-violet-50 text-violet-800';
+    return 'bg-slate-100 text-slate-700';
+};
+
+const formatCarryForward = (lt) => {
+    if (!lt?.carryForward?.enabled) {
+        return '—';
+    }
+    const max = lt.carryForward.maxDays;
+    if (max == null || max === '') return 'Enabled';
+    return `Max ${max} Days`;
+};
+
+const formatAnnualQuota = (lt) => {
+    const annual = Number(lt?.accrual?.maxAccrual) || 0;
+    if (lt?.type === 'maternity' || String(lt?.displayName || '').toLowerCase().includes('matern')) {
+        return annual > 0 ? `${annual} Days` : '—';
+    }
+    return annual > 0 ? `${annual} Days` : '—';
+};
+
+const policyCodeHint = (policy, index) => {
+    if (policy?.policyCode) return policy.policyCode;
+    const n = String(index + 1).padStart(2, '0');
+    return `POL-${n}`;
+};
+
 const monthlyEntitlementHelp = (leaveType) => {
     const annual = Number(leaveType.uiAnnualAmount ?? leaveType.accrual?.maxAccrual) || 0;
     const monthly = Number(leaveType.uiMonthlyEntitlement ?? leaveType.accrual?.amount) || 0;
@@ -630,6 +668,73 @@ const LeavePolicyManagement = () => {
         setCustomDepartment('');
     };
 
+    const policyRows = useMemo(() => {
+        const rows = [];
+        policies.forEach((policy, policyIndex) => {
+            const types = policy.leaveTypes?.length ? policy.leaveTypes : [null];
+            types.forEach((lt, ltIndex) => {
+                rows.push({
+                    key: `${policy._id}-${lt?._id || lt?.type || lt?.displayName || ltIndex}`,
+                    policy,
+                    lt,
+                    policyIndex,
+                });
+            });
+        });
+        return rows;
+    }, [policies]);
+
+    const openPolicyForm = (policy, { asDuplicate = false } = {}) => {
+        const mapped = mapPolicyToForm(policy);
+        if (asDuplicate) {
+            setEditingPolicy(null);
+            mapped.policyName = mapped.policyName
+                ? `${mapped.policyName} (Copy)`
+                : 'Copied Policy';
+        } else {
+            setEditingPolicy(policy);
+        }
+        setFormData(mapped);
+        const selectedPeople = (policy.applicableEmployees || [])
+            .filter((e) => e && typeof e === 'object' && e._id)
+            .map((e) => ({
+                _id: String(e._id),
+                name: e.name || 'Unnamed',
+                email: e.email || '',
+                employeeId: e.employeeId || '',
+                department: e.department || '',
+            }));
+        if (selectedPeople.length) {
+            setEmployeeOptions((prev) => {
+                const byId = new Map(prev.map((p) => [p._id, p]));
+                selectedPeople.forEach((p) => byId.set(p._id, p));
+                return [...byId.values()];
+            });
+        }
+        setShowForm(true);
+    };
+
+    const handleDeletePolicy = async (policy) => {
+        if (!policy?._id) return;
+        const ok = window.confirm(
+            `Delete policy "${policy.policyName}"? This cannot be undone. Prefer deactivating if employees already use it.`
+        );
+        if (!ok) return;
+        try {
+            setLoading(true);
+            await axios.delete(`/v1/admin/leave-policy/${policy._id}`);
+            toast.success('Policy deleted');
+            await fetchPolicies();
+        } catch (error) {
+            toast.error(
+                error.response?.data?.message ||
+                    'Failed to delete policy: ' + (error.message || 'Unknown error')
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const addLeaveType = () => {
         setFormData({
             ...formData,
@@ -702,12 +807,14 @@ const LeavePolicyManagement = () => {
     }
 
     return (
-        <div className="p-3 sm:p-4">
-            <div className="flex justify-between items-center mb-6">
+        <div className="p-3 sm:p-4 leave-policy-gov">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                    <h2 className="text-2xl font-bold">Leave Policy Management</h2>
-                    <p className="text-sm text-gray-600 mt-1">
-                        Configure leave types and accrual rules. This is a one-time setup that applies to all years.
+                    <h2 className="text-lg font-bold tracking-tight text-[#0e2b3d] sm:text-xl">
+                        Leave Policy Governance
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[#476175] sm:text-sm">
+                        Accrual rules, quotas, and carry-forward by leave type.
                     </p>
                 </div>
                 <button
@@ -718,19 +825,19 @@ const LeavePolicyManagement = () => {
                             resetForm();
                         }
                     }}
-                    className="bg-theme-primary text-white px-4 py-2 rounded-lg hover:opacity-90"
+                    className="rounded-lg bg-[#0e9370] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#00694f]"
                 >
                     {showForm ? 'Cancel' : (policies.length > 0 ? 'Update Policy' : 'Create Policy')}
                 </button>
             </div>
 
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow mb-6">
-                    <h3 className="text-xl font-semibold mb-4">
+                <form onSubmit={handleSubmit} className="mb-4 rounded-lg bg-white p-4 shadow sm:mb-6 sm:p-6">
+                    <h3 className="mb-4 text-lg font-semibold sm:text-xl">
                         {editingPolicy ? 'Edit Policy' : 'Create New Policy'}
                     </h3>
                     
-                    <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 gap-4 mb-4 sm:grid-cols-2">
                         <div>
                             <label className="block text-sm font-medium mb-1">Policy Name *</label>
                             <input
@@ -1100,7 +1207,7 @@ const LeavePolicyManagement = () => {
                                         </button>
                                     )}
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 mb-2">
+                                <div className="mb-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Type *</label>
                                         <select
@@ -1534,7 +1641,7 @@ const LeavePolicyManagement = () => {
                                         Remove
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                                     <div>
                                         <label className="block text-xs text-gray-600 mb-1">Start Date</label>
                                         <input
@@ -1593,10 +1700,10 @@ const LeavePolicyManagement = () => {
                         ))}
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
                         <button
                             type="submit"
-                            className="bg-theme-primary text-white px-6 py-2 rounded-lg hover:opacity-90"
+                            className="rounded-lg bg-theme-primary px-6 py-2.5 text-white hover:opacity-90"
                             disabled={loading}
                         >
                             {loading ? 'Saving...' : 'Save Policy'}
@@ -1608,7 +1715,7 @@ const LeavePolicyManagement = () => {
                                 setEditingPolicy(null);
                                 resetForm();
                             }}
-                            className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
+                            className="rounded-lg bg-gray-300 px-6 py-2.5 text-gray-700 hover:bg-gray-400"
                         >
                             Cancel
                         </button>
@@ -1616,95 +1723,237 @@ const LeavePolicyManagement = () => {
                 </form>
             )}
 
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="overflow-x-auto">
-                <table className="min-w-[640px] w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Policy Name</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Leave Types</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Applicable To</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {policies.map((policy) => (
-                            <tr key={policy._id}>
-                                <td className="px-6 py-4 whitespace-nowrap">{policy.policyName}</td>
-                                <td className="px-6 py-4">
-                                    {policy.leaveTypes?.map(lt => lt.displayName).join(', ')}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-slate-700 max-w-xs">
-                                    {formatApplicabilitySummary(policy)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center gap-3">
-                                        <span
-                                            className={`px-2 py-1 rounded ${
-                                                policy.isActive
-                                                    ? 'bg-theme-primary/10 text-theme-primary'
-                                                    : 'bg-red-100 text-red-800'
-                                            }`}
-                                        >
-                                            {policy.isActive ? 'Active' : 'Inactive'}
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTogglePolicy(policy)}
-                                            disabled={togglingPolicyId === policy._id}
-                                            className={`text-xs font-semibold px-3 py-1 rounded ${
-                                                policy.isActive
-                                                    ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                                                    : 'bg-green-50 text-green-700 hover:bg-green-100'
-                                            } ${togglingPolicyId === policy._id ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                        >
-                                            {togglingPolicyId === policy._id
-                                                ? 'Updating...'
-                                                : policy.isActive
-                                                    ? 'Deactivate'
-                                                    : 'Activate'}
-                                        </button>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <button
-                                        onClick={() => {
-                                            setEditingPolicy(policy);
-                                            const mapped = mapPolicyToForm(policy);
-                                            setFormData(mapped);
-                                            // Seed picker with already-selected people (may be outside first page / search).
-                                            const selectedPeople = (policy.applicableEmployees || [])
-                                                .filter((e) => e && typeof e === 'object' && e._id)
-                                                .map((e) => ({
-                                                    _id: String(e._id),
-                                                    name: e.name || 'Unnamed',
-                                                    email: e.email || '',
-                                                    employeeId: e.employeeId || '',
-                                                    department: e.department || '',
-                                                }));
-                                            if (selectedPeople.length) {
-                                                setEmployeeOptions((prev) => {
-                                                    const byId = new Map(prev.map((p) => [p._id, p]));
-                                                    selectedPeople.forEach((p) => byId.set(p._id, p));
-                                                    return [...byId.values()];
-                                                });
-                                            }
-                                            setShowForm(true);
-                                        }}
-                                        className="text-theme-secondary hover:text-theme-secondary mr-3"
-                                    >
-                                        Edit
-                                    </button>
-                                </td>
+            <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-sm">
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto md:block">
+                    <table className="min-w-[900px] w-full border-collapse text-sm">
+                        <thead>
+                            <tr className="bg-[#ebe6f5] text-left text-[11px] font-semibold uppercase tracking-wider text-[#5b4b7a]">
+                                <th className="px-4 py-2.5">Policy Name &amp; Code</th>
+                                <th className="px-4 py-2.5">Leave Type</th>
+                                <th className="px-4 py-2.5">Annual Quota</th>
+                                <th className="px-4 py-2.5">Carry-Forward</th>
+                                <th className="px-4 py-2.5 text-center">Status</th>
+                                <th className="px-4 py-2.5 text-right">Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-[#eef2f6]">
+                            {policyRows.map(({ key, policy, lt, policyIndex }) => {
+                                const leaveLabel =
+                                    lt?.displayName ||
+                                    (lt?.type
+                                        ? String(lt.type).replace(/_/g, ' ')
+                                        : '—');
+                                const toggling = togglingPolicyId === policy._id;
+                                return (
+                                    <tr key={key} className="hover:bg-[#f8fafb]">
+                                        <td className="px-4 py-3 align-middle">
+                                            <div className="font-semibold text-[#0e2b3d]">
+                                                {policy.policyName}
+                                                {lt?.displayName ? (
+                                                    <span className="font-normal text-[#64748b]">
+                                                        {' '}
+                                                        ({lt.displayName})
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#64748b]">
+                                                <span className="font-mono text-[#94a3b8]">
+                                                    {policyCodeHint(policy, policyIndex)}
+                                                </span>
+                                                <span className="text-[#cbd5e1]">·</span>
+                                                <span>{formatApplicabilitySummary(policy)}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 align-middle">
+                                            <span
+                                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${leaveTypeBadgeClass(
+                                                    `${lt?.type || ''} ${leaveLabel}`
+                                                )}`}
+                                            >
+                                                {leaveLabel}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 align-middle font-semibold text-[#0e2b3d]">
+                                            {formatAnnualQuota(lt)}
+                                        </td>
+                                        <td className="px-4 py-3 align-middle font-medium text-[#334155]">
+                                            {formatCarryForward(lt)}
+                                        </td>
+                                        <td className="px-4 py-3 align-middle">
+                                            <div className="flex justify-center">
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    aria-checked={!!policy.isActive}
+                                                    aria-label={
+                                                        policy.isActive
+                                                            ? 'Deactivate policy'
+                                                            : 'Activate policy'
+                                                    }
+                                                    disabled={toggling}
+                                                    onClick={() => handleTogglePolicy(policy)}
+                                                    className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                                                        policy.isActive
+                                                            ? 'bg-[#0e9370]'
+                                                            : 'bg-slate-300'
+                                                    } ${toggling ? 'opacity-60' : ''}`}
+                                                >
+                                                    <span
+                                                        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
+                                                            policy.isActive
+                                                                ? 'translate-x-5'
+                                                                : 'translate-x-0'
+                                                        }`}
+                                                    />
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 align-middle">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button
+                                                    type="button"
+                                                    title="Edit"
+                                                    onClick={() => openPolicyForm(policy)}
+                                                    className="rounded-md p-1.5 text-[#476175] hover:bg-[#e8faf4] hover:text-[#0e9370]"
+                                                >
+                                                    <FiEdit2 className="h-4 w-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    title="Duplicate"
+                                                    onClick={() =>
+                                                        openPolicyForm(policy, {
+                                                            asDuplicate: true,
+                                                        })
+                                                    }
+                                                    className="rounded-md p-1.5 text-[#476175] hover:bg-[#e8faf4] hover:text-[#0e9370]"
+                                                >
+                                                    <FiCopy className="h-4 w-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    title="Delete"
+                                                    onClick={() => handleDeletePolicy(policy)}
+                                                    className="rounded-md p-1.5 text-red-500 hover:bg-red-50"
+                                                >
+                                                    <FiTrash2 className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
-                {policies.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
+
+                {/* Mobile cards */}
+                <div className="divide-y divide-[#eef2f6] md:hidden">
+                    {policyRows.map(({ key, policy, lt, policyIndex }) => {
+                        const leaveLabel =
+                            lt?.displayName ||
+                            (lt?.type ? String(lt.type).replace(/_/g, ' ') : '—');
+                        const toggling = togglingPolicyId === policy._id;
+                        return (
+                            <article key={key} className="space-y-2.5 p-3.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-[#0e2b3d]">
+                                            {policy.policyName}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] text-[#64748b]">
+                                            <span className="font-mono text-[#94a3b8]">
+                                                {policyCodeHint(policy, policyIndex)}
+                                            </span>
+                                            {' · '}
+                                            {formatApplicabilitySummary(policy)}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={!!policy.isActive}
+                                        aria-label={
+                                            policy.isActive
+                                                ? 'Deactivate policy'
+                                                : 'Activate policy'
+                                        }
+                                        disabled={toggling}
+                                        onClick={() => handleTogglePolicy(policy)}
+                                        className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                                            policy.isActive ? 'bg-[#0e9370]' : 'bg-slate-300'
+                                        } ${toggling ? 'opacity-60' : ''}`}
+                                    >
+                                        <span
+                                            className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
+                                                policy.isActive ? 'translate-x-5' : 'translate-x-0'
+                                            }`}
+                                        />
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${leaveTypeBadgeClass(
+                                            `${lt?.type || ''} ${leaveLabel}`
+                                        )}`}
+                                    >
+                                        {leaveLabel}
+                                    </span>
+                                    <span className="text-xs font-semibold text-[#0e2b3d]">
+                                        Quota {formatAnnualQuota(lt)}
+                                    </span>
+                                    <span className="text-xs text-[#476175]">
+                                        CF {formatCarryForward(lt)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-1 border-t border-[#eef2f6] pt-2">
+                                    <button
+                                        type="button"
+                                        title="Edit"
+                                        onClick={() => openPolicyForm(policy)}
+                                        className="rounded-md p-2 text-[#476175] hover:bg-[#e8faf4] hover:text-[#0e9370]"
+                                    >
+                                        <FiEdit2 className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        title="Duplicate"
+                                        onClick={() =>
+                                            openPolicyForm(policy, { asDuplicate: true })
+                                        }
+                                        className="rounded-md p-2 text-[#476175] hover:bg-[#e8faf4] hover:text-[#0e9370]"
+                                    >
+                                        <FiCopy className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        title="Delete"
+                                        onClick={() => handleDeletePolicy(policy)}
+                                        className="rounded-md p-2 text-red-500 hover:bg-red-50"
+                                    >
+                                        <FiTrash2 className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+
+                {policies.length === 0 ? (
+                    <div className="px-4 py-10 text-center text-sm text-[#64748b]">
                         No leave policies found. Create one to get started.
+                    </div>
+                ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#eef2f6] bg-[#fafbfc] px-4 py-2.5 text-xs text-[#64748b]">
+                        <span>
+                            Showing {policyRows.length} leave-type row
+                            {policyRows.length === 1 ? '' : 's'} across {policies.length}{' '}
+                            {policies.length === 1 ? 'policy' : 'policies'}
+                            {policies.filter((p) => p.isActive).length > 0
+                                ? ` · ${policies.filter((p) => p.isActive).length} active`
+                                : ''}
+                        </span>
                     </div>
                 )}
             </div>

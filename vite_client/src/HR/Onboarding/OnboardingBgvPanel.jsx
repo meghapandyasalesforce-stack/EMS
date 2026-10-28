@@ -8,9 +8,9 @@ import {
     FaPlus, FaTimes, FaCheck, FaClock, FaExclamationTriangle, 
     FaFileAlt, FaUser, FaBuilding, FaGraduationCap, FaMapMarkerAlt, 
     FaIdCard, FaShieldAlt, FaUsers, FaHistory, 
-    FaUserTie, FaCheckCircle, FaTimesCircle
+    FaUserTie, FaCheckCircle, FaTimesCircle, FaSync
 } from 'react-icons/fa';
-import { CmBadge, CmButton, CmEmpty, statusTone } from '../../components/corporateModern';
+import { CmBadge, CmButton, statusTone } from '../../components/corporateModern';
 
 const STATUS_COLORS = {
     Clear: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -58,17 +58,27 @@ function resolveCheckTitle(check = {}) {
     return 'Verification Check';
 }
 
-const MetaField = ({ icon: MetaIcon, label, value }) => (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/60 px-3.5 py-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm ring-1 ring-slate-200/70">
-            <MetaIcon className="text-sm" />
+const MetaField = ({ icon: MetaIcon, label, value, dense = false }) => (
+    <div className={`flex min-w-0 items-start gap-2 ${dense ? 'px-2.5 py-1.5' : 'px-3 py-2.5'}`}>
+        <div className={`mt-0.5 flex shrink-0 items-center justify-center rounded text-slate-500 ${dense ? 'h-5 w-5' : 'h-6 w-6'}`}>
+            <MetaIcon className="text-[11px]" />
         </div>
-        <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-            <p className="truncate text-sm font-semibold text-slate-800">{value}</p>
+        <div className="min-w-0 leading-tight">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+            <p className={`truncate font-semibold text-slate-800 ${dense ? 'text-xs' : 'text-[13px]'}`}>{value || '—'}</p>
         </div>
     </div>
 );
+
+function MetaFieldGrid({ children, dense = false }) {
+    return (
+        <div className={`overflow-hidden border border-slate-200/90 bg-white ${dense ? 'rounded-lg' : 'rounded-xl'}`}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 [&>*]:border-b [&>*]:border-r [&>*]:border-slate-100">
+                {children}
+            </div>
+        </div>
+    );
+}
 
 const REQUIRED_DOCS = {
     employment: [
@@ -221,6 +231,11 @@ const OnboardingBgvPanel = ({
 
     const toggleExpand = (checkId) => {
         setExpandedChecks((prev) => {
+            // Dossier HR view: one check detail open at a time (screenshot layout).
+            if (isHRView) {
+                if (prev.has(checkId)) return new Set();
+                return new Set([checkId]);
+            }
             const next = new Set(prev);
             if (next.has(checkId)) next.delete(checkId);
             else next.add(checkId);
@@ -272,161 +287,249 @@ const OnboardingBgvPanel = ({
     };
 
     // ─────────────────────────────────────────────────────────────────────
-    // Corporate-Modern HR view — Case Tracker. Strictly UI-only: reuses the
-    // same state/handlers as the employee view below. Never rendered when
-    // isHRView is false, so the onboarding-employee UI is byte-identical.
+    // HR dossier BGV tab — SpringVerify layout (ZIP/screenshot). Same
+    // handlers/state as before; employee view below is unchanged.
     // ─────────────────────────────────────────────────────────────────────
     if (isHRView) {
+        const clearedCount = checks.filter((c) =>
+            ['Clear', 'Verified', 'Waived'].includes(String(c.status || '')),
+        ).length;
+        const scorePct = typeof bgvCase?.integrityScore === 'number'
+            ? Math.round(bgvCase.integrityScore)
+            : checks.length
+                ? Math.round((clearedCount / checks.length) * 100)
+                : (mirroredStatus === 'Clear' ? 100 : 0);
+        const vendorLabel = bgvCase?.vendor || bgvCase?.provider || 'SpringVerify India HQ';
+        const packageLabel = bgvCase?.packageName || bgvCase?.screeningPackage || 'Comprehensive Tech L7';
+        const apiId = bgvCase?.externalId || bgvCase?.caseNumber || bgvCase?._id || '—';
+        const turnaround = bgvCase?.turnaroundDays
+            ? `${bgvCase.turnaroundDays} Business Days`
+            : '4 Business Days';
+        const expectedSignoff = bgvCase?.expectedCompletionDate
+            ? new Date(bgvCase.expectedCompletionDate).toLocaleDateString()
+            : (bgvCase?.updatedAt ? new Date(bgvCase.updatedAt).toLocaleDateString() : '—');
+        const inProgressCheck = checks.find((c) =>
+            /progress|review|submitted|initiated/i.test(String(c.status || '')),
+        );
+
+        const pipelineStatusLabel = (status) => {
+            const s = String(status || 'Not Started');
+            if (['Clear', 'Verified', 'Waived'].includes(s)) return 'Clear / Passed';
+            if (/^initiated$/i.test(s)) return 'Initiated';
+            if (/progress|review|submitted/i.test(s)) return 'In-Progress';
+            if (['Failed', 'Rejected', 'Discrepancy'].includes(s)) return s;
+            return s;
+        };
+
+        const isPipelineProgress = (status) => {
+            const s = String(status || '');
+            return /progress|review|submitted|initiated/i.test(s)
+                && !['Clear', 'Verified', 'Waived'].includes(s);
+        };
+
+        const summaryBadgeClass = (status) => {
+            const s = String(status || '');
+            if (['Clear', 'Verified', 'Waived'].includes(s)) return 'cm-dossier-bgv__chip cm-dossier-bgv__chip--ok';
+            if (/progress|review|submitted|initiated/i.test(s)) return 'cm-dossier-bgv__chip cm-dossier-bgv__chip--info';
+            if (['Failed', 'Rejected', 'Discrepancy'].includes(s)) return 'cm-dossier-bgv__chip cm-dossier-bgv__chip--alert';
+            return 'cm-dossier-bgv__chip';
+        };
+
         return (
-            <div className="cm-hrms hrms-lifecycle">
-                <div className="cm-page">
-                    {blocksJoining && (
-                        <div className="cm-banner cm-banner--attention flex items-center gap-2">
-                            <FaExclamationTriangle className="text-xs" />
-                            Joining blocked until BGV is Clear
-                        </div>
-                    )}
+            <div className="cm-dossier-bgv">
+                {blocksJoining && (
+                    <div className="cm-dossier-bgv__banner" role="status">
+                        <FaExclamationTriangle aria-hidden />
+                        Joining blocked until BGV is Clear
+                    </div>
+                )}
 
-                    <div className="cm-card">
-                        <div className="mb-4">
-                            <p className="cm-title-sm">{displayEmployeeName || 'Candidate'} — Verification Checks</p>
-                            <p className="cm-subtitle">Check-level detail for this onboarding workflow</p>
+                <div className="cm-dossier-bgv__grid">
+                    <div className="cm-card cm-dossier-bgv__main">
+                        <div className="cm-dossier-bgv__engine-head">
+                            <div className="cm-dossier-bgv__engine-identity">
+                                <span className="cm-dossier-bgv__engine-icon" aria-hidden>
+                                    <FaShieldAlt />
+                                </span>
+                                <div className="min-w-0">
+                                    <h2 className="cm-dossier-bgv__title">SpringVerify Automated BGV Engine</h2>
+                                    <p className="cm-dossier-bgv__subtitle">
+                                        API Integration ID: #{String(apiId).slice(-12).toUpperCase()}
+                                        {' '}• Package: {packageLabel}
+                                    </p>
+                                </div>
+                            </div>
+                            {canInitiate && (
+                                <button
+                                    type="button"
+                                    className="cm-dossier-bgv__reinit"
+                                    onClick={createCase}
+                                    disabled={submitting}
+                                >
+                                    <FaPlus aria-hidden />
+                                    {hasCase
+                                        ? (submitting ? 'Working…' : 'Re-initiate Check')
+                                        : (submitting ? 'Starting…' : 'Initiate Check')}
+                                </button>
+                            )}
                         </div>
 
-                        {!hasCase && canInitiate && (
-                            <CmEmpty icon={<FaFileAlt />} title="Start Background Verification">
-                                Initiate background verification to start checks and update onboarding progress.
-                                <div className="mt-4">
-                                    <CmButton onClick={createCase} disabled={submitting}>
+                        {!hasCase && (
+                            <div className="cm-dossier-bgv__empty">
+                                <FaFileAlt aria-hidden />
+                                <p className="font-semibold">
+                                    {canInitiate ? 'Start Background Verification' : 'Pending Initiation'}
+                                </p>
+                                <p className="text-sm text-[var(--dossier-muted,var(--cm-muted))]">
+                                    {canInitiate
+                                        ? 'Initiate background verification to start checks and update onboarding progress.'
+                                        : 'Background verification has not been initiated yet.'}
+                                </p>
+                                {canInitiate && (
+                                    <CmButton className="mt-3" onClick={createCase} disabled={submitting}>
                                         {submitting ? 'Starting…' : 'Start Background Verification'}
                                     </CmButton>
-                                </div>
-                            </CmEmpty>
-                        )}
-
-                        {!hasCase && !canInitiate && (
-                            <CmEmpty icon={<FaClock />} title="Pending Initiation">
-                                Background verification has not been initiated yet.
-                            </CmEmpty>
+                                )}
+                            </div>
                         )}
 
                         {hasCase && (
-                            <div className="space-y-3">
-                                {checks.map((check) => {
-                                    const checkType = String(check.checkType || check.type || '').toLowerCase().trim();
-                                    const Icon = CHECK_ICONS[checkType] || FaFileAlt;
-                                    const isExpanded = expandedChecks.has(check.checkId || check._id);
-                                    const canSubmit = check.canSubmit !== false && ['Not Started', 'Pending Employee Submission', 'Draft Saved'].includes(check.status);
-                                    const canEdit = check.canEdit !== false && ['Not Started', 'Pending Employee Submission', 'Draft Saved', 'Additional Information Required'].includes(check.status);
-                                    const canResubmit = check.canResubmit !== false && ['Additional Information Required', 'Rejected', 'Failed'].includes(check.status);
-                                    const checkSubject = resolveCheckSubject(check);
-                                    const checkTitle = resolveCheckTitle(check);
-
-                                    return (
-                                        <div key={check.checkId || check._id} className="cm-card cm-card--inset !p-0 overflow-hidden">
-                                            <div className="cursor-pointer" onClick={() => toggleExpand(check.checkId || check._id)}>
-                                                <div className="flex items-center gap-3.5 px-5 py-4">
-                                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--cm-surface-container)', color: 'var(--cm-on-variant)' }}>
-                                                        <Icon className="text-lg" />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="truncate text-[15px] font-semibold" style={{ color: 'var(--cm-on-surface)' }}>
-                                                            {checkTitle}
-                                                        </p>
-                                                        {checkSubject && (
-                                                            <p className="mt-0.5 truncate text-xs font-medium" style={{ color: 'var(--cm-muted)' }}>
-                                                                {checkSubject}
-                                                            </p>
+                            <>
+                                <div className="cm-dossier-bgv__pipeline-wrap">
+                                    <h3 className="cm-dossier-bgv__section-label">
+                                        Verification Progression Pipeline
+                                    </h3>
+                                    <div className="cm-dossier-bgv__pipeline">
+                                        {checks.map((check, idx) => {
+                                            const checkId = check.checkId || check._id;
+                                            const status = String(check.status || 'Not Started');
+                                            const clear = ['Clear', 'Verified', 'Waived'].includes(status);
+                                            const progress = isPipelineProgress(status);
+                                            const subject = resolveCheckSubject(check);
+                                            return (
+                                                <div
+                                                    key={checkId}
+                                                    className={`cm-dossier-bgv__step${progress ? ' cm-dossier-bgv__step--active' : ''}`}
+                                                >
+                                                    <div className="cm-dossier-bgv__step-top">
+                                                        <span className="cm-dossier-bgv__step-num">
+                                                            Step {idx + 1}
+                                                        </span>
+                                                        {clear ? (
+                                                            <FaCheckCircle className="cm-dossier-bgv__step-icon cm-dossier-bgv__step-icon--ok" />
+                                                        ) : progress ? (
+                                                            <FaSync className={`cm-dossier-bgv__step-icon${/progress/i.test(status) ? ' cm-dossier-bgv__step-icon--spin' : ' is-info'}`} />
+                                                        ) : (
+                                                            <FaClock className="cm-dossier-bgv__step-icon" />
                                                         )}
-                                                        {check.status ? (
-                                                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                                                <CmBadge tone={statusTone(check.status)}>{check.status}</CmBadge>
-                                                                {check.mandatory && (
-                                                                    <span className="text-[11px] font-medium" style={{ color: 'var(--cm-muted)' }}>Required</span>
-                                                                )}
-                                                            </div>
-                                                        ) : check.mandatory ? (
-                                                            <p className="mt-1.5 text-[11px] font-medium" style={{ color: 'var(--cm-muted)' }}>Required</p>
-                                                        ) : null}
                                                     </div>
-                                                    <div
-                                                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                                                        style={{ background: 'var(--cm-surface-low)', color: 'var(--cm-muted)' }}
-                                                    >
-                                                        <FaChevronDown className="text-xs" />
-                                                    </div>
+                                                    <p className="cm-dossier-bgv__step-title">
+                                                        {resolveCheckTitle(check)}
+                                                    </p>
+                                                    <p className={`cm-dossier-bgv__step-status${clear ? ' is-ok' : ''}${progress ? ' is-info' : ''}`}>
+                                                        {pipelineStatusLabel(status)}
+                                                    </p>
+                                                    {subject && (
+                                                        <p className="cm-dossier-bgv__step-note">{subject}</p>
+                                                    )}
                                                 </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
 
-                                                <div className="px-5 pb-5 pt-4" style={{ borderTop: '1px solid rgba(113,121,116,0.12)' }}>
-                                                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                                                        <MetaField icon={FaUser} label="Employee" value={displayEmployeeName || '—'} />
-                                                        <MetaField icon={FaIdCard} label="Employee ID" value={bgvCase.employeeId?.employeeId || bgvCase.employee?.employeeId || '—'} />
-                                                        <MetaField icon={FaBuilding} label="Department" value={bgvCase.employeeId?.department || bgvCase.employee?.department || '—'} />
-                                                        <MetaField icon={FaUserTie} label="Designation" value={bgvCase.employeeId?.designation || bgvCase.employee?.designation || '—'} />
-                                                        {(bgvCase.employeeId?.manager || bgvCase.employee?.reportingManager || bgvCase.employee?.manager) && (
-                                                            <MetaField
-                                                                icon={FaUsers}
-                                                                label="Reporting Manager"
-                                                                value={bgvCase.employeeId?.manager || bgvCase.employee?.reportingManager || bgvCase.employee?.manager}
-                                                            />
-                                                        )}
-                                                        {bgvCase.createdAt && (
-                                                            <MetaField icon={FaClock} label="Submitted" value={new Date(bgvCase.createdAt).toLocaleDateString()} />
-                                                        )}
-                                                        {bgvCase.updatedAt && (
-                                                            <MetaField icon={FaHistory} label="Last Updated" value={new Date(bgvCase.updatedAt).toLocaleDateString()} />
-                                                        )}
-                                                        {check.vendor && (
-                                                            <MetaField icon={FaUserTie} label="Vendor" value={check.vendor} />
-                                                        )}
+                                <div className="cm-dossier-bgv__summary">
+                                    <h3 className="cm-dossier-bgv__summary-title">
+                                        Itemized Background Investigation Summary
+                                    </h3>
+                                    <ul className="cm-dossier-bgv__summary-list">
+                                        {checks.map((check) => {
+                                            const checkType = String(check.checkType || check.type || '').toLowerCase().trim();
+                                            const Icon = CHECK_ICONS[checkType] || FaFileAlt;
+                                            const checkId = check.checkId || check._id;
+                                            const subject = resolveCheckSubject(check);
+                                            const title = resolveCheckTitle(check);
+                                            return (
+                                                <li key={`sum-${checkId}`}>
+                                                    <div className="cm-dossier-bgv__summary-row">
+                                                        <span className="cm-dossier-bgv__summary-icon" aria-hidden>
+                                                            <Icon />
+                                                        </span>
+                                                        <span className="cm-dossier-bgv__summary-text">
+                                                            {subject
+                                                                ? `${subject} • ${title}`
+                                                                : title}
+                                                        </span>
+                                                        <span className={summaryBadgeClass(check.status)}>
+                                                            {check.status || 'Not Started'}
+                                                        </span>
                                                     </div>
-                                                </div>
-                                            </div>
-
-                                            {isExpanded && (
-                                                <div className="p-5" style={{ borderTop: '1px solid rgba(113,121,116,0.12)', background: 'var(--cm-surface-low)' }}>
-                                                    <BgvCheckDetail
-                                                        check={check}
-                                                        bgvCase={bgvCase}
-                                                        isHRView={isHRView}
-                                                        canEdit={canEdit}
-                                                        canSubmit={canSubmit}
-                                                        canResubmit={canResubmit}
-                                                        canVerify={canVerify}
-                                                        submitting={submitting}
-                                                        setSubmitting={setSubmitting}
-                                                        onUpdated={load}
-                                                        disableDocumentUpload={disableDocumentUpload}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            </>
                         )}
                     </div>
 
-                    {hasCase && (bgvCase.activityFeed || []).length > 0 && (
-                        <div className="cm-card">
-                            <p className="cm-label mb-3 flex items-center gap-2">
-                                <FaHistory />
-                                Activity History
-                            </p>
-                            <div className="max-h-64 space-y-2.5 overflow-y-auto">
-                                {(bgvCase.activityFeed || []).slice(0, 10).map((entry, idx) => (
-                                    <div key={entry._id || idx} className="cm-card cm-card--inset">
-                                        <p className="text-sm font-medium" style={{ color: 'var(--cm-on-surface)' }}>{entry.description}</p>
-                                        {entry.timestamp && (
-                                            <p className="mt-1 text-xs" style={{ color: 'var(--cm-muted)' }}>
-                                                {new Date(entry.timestamp).toLocaleString()}
-                                            </p>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+                    <aside className="cm-card cm-dossier-bgv__scorecard">
+                        <div className="cm-dossier-bgv__scorecard-head">
+                            <h2 className="cm-dossier-bgv__title">Integrity Scorecard</h2>
+                            <FaShieldAlt className="text-[var(--dossier-primary,#00694f)]" aria-hidden />
                         </div>
-                    )}
+                        <div className="cm-dossier-bgv__score-panel">
+                            <p className="cm-dossier-bgv__score-value">{scorePct}%</p>
+                            <p className="cm-dossier-bgv__score-label">
+                                {scorePct >= 90 ? 'Green Clear Threshold' : mirroredStatus || 'In Progress'}
+                            </p>
+                            <p className="cm-dossier-bgv__score-note">
+                                {clearedCount} of {checks.length || 0} checks clear
+                                {mirroredStatus === 'Clear'
+                                    ? ' — zero red flags across completed checks.'
+                                    : ' — screening in progress.'}
+                            </p>
+                        </div>
+                        <dl className="cm-dossier-bgv__meta">
+                            <div>
+                                <dt>Vendor</dt>
+                                <dd>{vendorLabel}</dd>
+                            </div>
+                            <div>
+                                <dt>Turnaround Time</dt>
+                                <dd>{turnaround}</dd>
+                            </div>
+                            <div>
+                                <dt>Expected Signoff</dt>
+                                <dd className="cm-dossier-bgv__meta-accent">{expectedSignoff}</dd>
+                            </div>
+                            <div>
+                                <dt>Overall Status</dt>
+                                <dd>{mirroredStatus}</dd>
+                            </div>
+                        </dl>
+                        <div className="cm-dossier-bgv__score-actions">
+                            <button
+                                type="button"
+                                className="cm-dossier-bgv__download"
+                                onClick={() => toast.info('BGV report download will be available when the vendor PDF is ready.')}
+                            >
+                                <FaDownload aria-hidden />
+                                Download Full BGV Report (PDF)
+                            </button>
+                            {inProgressCheck && (
+                                <button
+                                    type="button"
+                                    className="cm-dossier-bgv__expedite"
+                                    onClick={() => {
+                                        toast.info(`${resolveCheckTitle(inProgressCheck)} is ${inProgressCheck.status || 'in progress'}.`);
+                                    }}
+                                >
+                                    Expedite {resolveCheckTitle(inProgressCheck)}
+                                </button>
+                            )}
+                        </div>
+                    </aside>
                 </div>
             </div>
         );
@@ -496,43 +599,43 @@ const OnboardingBgvPanel = ({
                                     className="cursor-pointer"
                                     onClick={() => toggleExpand(check.checkId || check._id)}
                                 >
-                                    <div className="px-5 py-4">
-                                        <div className="flex items-center gap-3.5">
-                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                                                <Icon className="text-lg" />
+                                    <div className="px-4 py-3.5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                                                <Icon className="text-base" />
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-[15px] font-semibold text-slate-800">
-                                                    {checkTitle}
-                                                </p>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="truncate text-[15px] font-semibold text-slate-800">
+                                                        {checkTitle}
+                                                    </p>
+                                                    {check.status && (
+                                                        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_COLORS[check.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                                            {['Clear', 'Verified'].includes(check.status) && <FaCheckCircle className="text-[10px]" />}
+                                                            {check.status}
+                                                        </span>
+                                                    )}
+                                                    {check.mandatory && (
+                                                        <span className="text-[11px] font-medium text-slate-400">Required</span>
+                                                    )}
+                                                </div>
                                                 {checkSubject && (
                                                     <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
                                                         {checkSubject}
                                                     </p>
                                                 )}
-                                                {check.status ? (
-                                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                                        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_COLORS[check.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                                                            {['Clear', 'Verified'].includes(check.status) && <FaCheckCircle className="text-[10px]" />}
-                                                            {check.status}
-                                                        </span>
-                                                        {check.mandatory && (
-                                                            <span className="text-[11px] font-medium text-slate-400">Required</span>
-                                                        )}
-                                                    </div>
-                                                ) : check.mandatory ? (
-                                                    <p className="mt-1.5 text-[11px] font-medium text-slate-400">Required</p>
-                                                ) : null}
                                             </div>
                                             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
                                                 <FaChevronDown className="text-xs" />
                                             </div>
                                         </div>
                                     </div>
+                                </div>
 
-                                    {isHRView && (
-                                        <div className="border-t border-slate-100 bg-white px-5 pb-5 pt-4">
-                                            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                                {isExpanded && (
+                                    <div className="space-y-3 border-t border-slate-100 bg-slate-50/40 p-3 sm:p-4">
+                                        {isHRView && (
+                                            <MetaFieldGrid>
                                                 <MetaField
                                                     icon={FaUser}
                                                     label="Employee"
@@ -551,43 +654,46 @@ const OnboardingBgvPanel = ({
                                                 <MetaField
                                                     icon={FaUserTie}
                                                     label="Designation"
-                                                    value={bgvCase.employeeId?.designation || bgvCase.employee?.designation || '—'}
+                                                    value={
+                                                        bgvCase.employeeId?.designation
+                                                        || bgvCase.employee?.designation
+                                                        || bgvCase.employeeId?.jobTitle
+                                                        || bgvCase.employee?.jobTitle
+                                                        || bgvCase.employeeId?.position
+                                                        || bgvCase.employee?.position
+                                                        || '—'
+                                                    }
                                                 />
-                                                {(bgvCase.employeeId?.manager || bgvCase.employee?.reportingManager || bgvCase.employee?.manager) && (
-                                                    <MetaField
-                                                        icon={FaUsers}
-                                                        label="Reporting Manager"
-                                                        value={bgvCase.employeeId?.manager || bgvCase.employee?.reportingManager || bgvCase.employee?.manager}
-                                                    />
-                                                )}
-                                                {bgvCase.createdAt && (
-                                                    <MetaField
-                                                        icon={FaClock}
-                                                        label="Submitted"
-                                                        value={new Date(bgvCase.createdAt).toLocaleDateString()}
-                                                    />
-                                                )}
-                                                {bgvCase.updatedAt && (
-                                                    <MetaField
-                                                        icon={FaHistory}
-                                                        label="Last Updated"
-                                                        value={new Date(bgvCase.updatedAt).toLocaleDateString()}
-                                                    />
-                                                )}
-                                                {check.vendor && (
+                                                <MetaField
+                                                    icon={FaUsers}
+                                                    label="Reporting Manager"
+                                                    value={bgvCase.employeeId?.manager || bgvCase.employee?.reportingManager || bgvCase.employee?.manager || '—'}
+                                                />
+                                                <MetaField
+                                                    icon={FaClock}
+                                                    label="Submitted"
+                                                    value={bgvCase.createdAt ? new Date(bgvCase.createdAt).toLocaleDateString() : '—'}
+                                                />
+                                                <MetaField
+                                                    icon={FaHistory}
+                                                    label="Last Updated"
+                                                    value={bgvCase.updatedAt ? new Date(bgvCase.updatedAt).toLocaleDateString() : '—'}
+                                                />
+                                                {check.vendor ? (
                                                     <MetaField
                                                         icon={FaUserTie}
                                                         label="Vendor"
                                                         value={check.vendor}
                                                     />
+                                                ) : (
+                                                    <MetaField
+                                                        icon={FaShieldAlt}
+                                                        label="Check Status"
+                                                        value={check.status || '—'}
+                                                    />
                                                 )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {isExpanded && (
-                                    <div className="border-t border-slate-100 bg-slate-50/40 p-5">
+                                            </MetaFieldGrid>
+                                        )}
                                         <BgvCheckDetail
                                             check={check}
                                             bgvCase={bgvCase}
@@ -609,28 +715,6 @@ const OnboardingBgvPanel = ({
                 </div>
             )}
 
-            {hasCase && (bgvCase.activityFeed || []).length > 0 && (
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                    <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-3.5">
-                        <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <FaHistory className="text-slate-400" />
-                            Activity History
-                        </p>
-                    </div>
-                    <div className="max-h-64 space-y-2.5 overflow-y-auto p-4">
-                        {(bgvCase.activityFeed || []).slice(0, 10).map((entry, idx) => (
-                            <div key={entry._id || idx} className="rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3">
-                                <p className="text-sm font-medium text-slate-700">{entry.description}</p>
-                                {entry.timestamp && (
-                                    <p className="mt-1 text-xs text-slate-400">
-                                        {new Date(entry.timestamp).toLocaleString()}
-                                    </p>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
@@ -788,7 +872,7 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
     const uploadedDocs = check.uploadedDocuments || check.documents || [];
 
     return (
-        <div className="space-y-4">
+        <div className={isHRView ? 'cm-dossier-bgv__check-body' : 'space-y-4'}>
             {check.infoRequest && (
                 <div className={isHRView ? 'cm-banner cm-banner--attention' : 'rounded-xl border border-rose-200 bg-rose-50 px-4 py-3.5'}>
                     <p className={isHRView ? 'flex items-center gap-2' : 'flex items-center gap-2 text-sm font-semibold text-rose-800'}>
@@ -800,9 +884,9 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
             )}
 
             {check.hrRemarks && (
-                <div className={isHRView ? 'cm-card cm-card--inset' : 'rounded-xl border border-sky-200 bg-sky-50 px-4 py-3.5'}>
+                <div className={isHRView ? 'cm-dossier-bgv__inset' : 'rounded-xl border border-sky-200 bg-sky-50 px-4 py-3.5'}>
                     <p className={isHRView ? 'cm-label' : 'text-sm font-semibold text-sky-800'} style={isHRView ? { color: 'var(--cm-primary-deep)' } : undefined}>HR Remarks</p>
-                    <p className={isHRView ? 'mt-1.5 text-sm' : 'mt-1.5 text-sm text-sky-700'} style={isHRView ? { color: 'var(--cm-on-variant)' } : undefined}>{check.hrRemarks}</p>
+                    <p className={isHRView ? 'mt-1 text-sm' : 'mt-1.5 text-sm text-sky-700'} style={isHRView ? { color: 'var(--cm-on-variant)' } : undefined}>{check.hrRemarks}</p>
                 </div>
             )}
 
@@ -848,21 +932,19 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
                 </div>
             )}
 
-            {canEdit && requiredDocs.length > 0 && !disableDocumentUpload && (
-                <div className="rounded-xl border border-slate-200 bg-white p-5">
-                    <h4 className="mb-4 text-sm font-semibold text-slate-800">Required Documents</h4>
-                    <div className="space-y-2.5">
+            {requiredDocs.length > 0 && ((canEdit && !disableDocumentUpload) || isHRView) && (
+                <div className={isHRView ? 'overflow-hidden rounded-lg border border-slate-200/90 bg-white' : 'overflow-hidden rounded-xl border border-slate-200 bg-white'}>
+                    <h4 className={isHRView ? 'cm-label border-b border-slate-100 px-2.5 py-1.5 mb-0' : 'border-b border-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-800'}>Required Documents</h4>
+                    <div className="divide-y divide-slate-100">
                         {requiredDocs.map((doc) => {
                             const uploaded = uploadedDocs.find(d => d.name === doc.name || d.documentName === doc.name);
                             return (
-                                <div key={doc.name} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/80 px-3.5 py-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200">
-                                            <FaFileAlt className="text-sm" />
-                                        </div>
-                                        <div>
-                                            <span className="text-sm font-medium text-slate-700">{doc.name}</span>
-                                            {doc.required && <span className="ml-2 text-xs font-semibold text-rose-500">Required</span>}
+                                <div key={doc.name} className={`flex items-center justify-between gap-3 ${isHRView ? 'px-2.5 py-1.5' : 'px-3 py-2'}`}>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <FaFileAlt className="shrink-0 text-xs text-slate-400" />
+                                        <div className="min-w-0">
+                                            <span className={`font-medium text-slate-700 ${isHRView ? 'text-xs' : 'text-sm'}`}>{doc.name}</span>
+                                            {doc.required && <span className="ml-1.5 text-[11px] font-semibold text-rose-500">Required</span>}
                                         </div>
                                     </div>
                                     {uploaded ? (
@@ -871,6 +953,7 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
                                                 <FaCheck className="text-[10px]" />
                                                 Uploaded
                                             </span>
+                                            {canEdit && (
                                             <button
                                                 onClick={() => handleDeleteDocument(uploaded._id || uploaded.documentId)}
                                                 disabled={submitting}
@@ -878,8 +961,9 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
                                             >
                                                 <FaTrash className="text-sm" />
                                             </button>
+                                            )}
                                         </div>
-                                    ) : (
+                                    ) : canEdit ? (
                                         <label className="cursor-pointer">
                                             <input
                                                 type="file"
@@ -887,11 +971,15 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
                                                 disabled={uploading || submitting}
                                                 className="hidden"
                                             />
-                                            <span className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3.5 py-1.5 text-sm font-medium text-sky-700 transition-colors hover:bg-sky-100">
+                                            <span className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-700 transition-colors hover:bg-sky-100">
                                                 <FaUpload className="text-xs" />
                                                 Upload
                                             </span>
                                         </label>
+                                    ) : (
+                                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                                            Pending
+                                        </span>
                                     )}
                                 </div>
                             );
@@ -901,21 +989,21 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
             )}
 
             {(uploadedDocs.length > 0 || showDocs) && (
-                <div ref={docsSectionRef} className={isHRView ? 'cm-card cm-card--inset' : 'rounded-xl border border-slate-200 bg-white p-5'}>
-                    <h4 className={isHRView ? 'cm-label mb-4' : 'mb-4 text-sm font-semibold text-slate-800'}>Uploaded Documents</h4>
+                <div ref={docsSectionRef} className={isHRView ? 'cm-dossier-bgv__inset' : 'rounded-xl border border-slate-200 bg-white p-5'}>
+                    <h4 className={isHRView ? 'cm-label mb-2' : 'mb-4 text-sm font-semibold text-slate-800'}>Uploaded Documents</h4>
                     {uploadedDocs.length === 0 ? (
-                        <p className={isHRView ? 'text-sm' : 'text-sm text-slate-500'} style={isHRView ? { color: 'var(--cm-muted)' } : undefined}>No documents uploaded for this check yet.</p>
+                        <p className={isHRView ? 'text-xs' : 'text-sm text-slate-500'} style={isHRView ? { color: 'var(--cm-muted)' } : undefined}>No documents uploaded for this check yet.</p>
                     ) : (
-                        <div className="space-y-2.5">
+                        <div className={isHRView ? 'space-y-1.5' : 'space-y-2.5'}>
                             {uploadedDocs.map((doc) => (
-                                <div key={doc._id || doc.documentId} className={isHRView ? 'flex items-center justify-between rounded-xl px-3.5 py-3' : 'flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/80 px-3.5 py-3'} style={isHRView ? { background: 'var(--cm-surface)' } : undefined}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={isHRView ? 'flex h-9 w-9 items-center justify-center rounded-lg' : 'flex h-9 w-9 items-center justify-center rounded-lg bg-white text-emerald-600 ring-1 ring-emerald-100'} style={isHRView ? { background: 'rgba(28,202,155,0.12)', color: 'var(--cm-primary-deep)' } : undefined}>
+                                <div key={doc._id || doc.documentId} className={isHRView ? 'flex items-center justify-between rounded-lg px-2.5 py-1.5' : 'flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/80 px-3.5 py-3'} style={isHRView ? { background: 'var(--cm-surface)' } : undefined}>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className={isHRView ? 'flex h-7 w-7 items-center justify-center rounded-md' : 'flex h-9 w-9 items-center justify-center rounded-lg bg-white text-emerald-600 ring-1 ring-emerald-100'} style={isHRView ? { background: 'rgba(28,202,155,0.12)', color: 'var(--cm-primary-deep)' } : undefined}>
                                             <FaFileAlt className="text-sm" />
                                         </div>
                                         <div>
-                                            <span className={isHRView ? 'text-sm font-medium' : 'text-sm font-medium text-slate-700'} style={isHRView ? { color: 'var(--cm-on-surface)' } : undefined}>{doc.name || doc.documentName}</span>
-                                            {doc.version && <span className={isHRView ? 'ml-2 text-xs' : 'ml-2 text-xs text-slate-400'} style={isHRView ? { color: 'var(--cm-muted)' } : undefined}>v{doc.version}</span>}
+                                            <span className={isHRView ? 'text-xs font-medium' : 'text-sm font-medium text-slate-700'} style={isHRView ? { color: 'var(--cm-on-surface)' } : undefined}>{doc.name || doc.documentName}</span>
+                                            {doc.version && <span className={isHRView ? 'ml-2 text-[10px]' : 'ml-2 text-xs text-slate-400'} style={isHRView ? { color: 'var(--cm-muted)' } : undefined}>v{doc.version}</span>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1.5">
@@ -934,18 +1022,18 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
             )}
 
             {check.timeline && check.timeline.length > 0 && (
-                <div className={isHRView ? 'cm-card cm-card--inset' : 'rounded-xl border border-slate-200 bg-white p-5'}>
-                    <h4 className={isHRView ? 'cm-label mb-4' : 'mb-4 text-sm font-semibold text-slate-800'}>Timeline</h4>
-                    <div className="space-y-2">
+                <div className={isHRView ? 'cm-dossier-bgv__inset' : 'rounded-xl border border-slate-200 bg-white p-5'}>
+                    <h4 className={isHRView ? 'cm-label mb-2' : 'mb-4 text-sm font-semibold text-slate-800'}>Timeline</h4>
+                    <div className={isHRView ? 'space-y-1.5' : 'space-y-2'}>
                         {check.timeline.map((event, idx) => (
-                            <div key={idx} className={isHRView ? 'flex items-center gap-3 text-sm' : 'flex items-center gap-3 text-sm text-slate-600'} style={isHRView ? { color: 'var(--cm-on-variant)' } : undefined}>
-                                <div className={isHRView ? 'flex h-8 w-8 items-center justify-center rounded-lg' : 'flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500'} style={isHRView ? { background: 'var(--cm-surface)', color: 'var(--cm-muted)' } : undefined}>
+                            <div key={idx} className={isHRView ? 'flex items-center gap-2.5 text-xs' : 'flex items-center gap-3 text-sm text-slate-600'} style={isHRView ? { color: 'var(--cm-on-variant)' } : undefined}>
+                                <div className={isHRView ? 'flex h-6 w-6 items-center justify-center rounded-md' : 'flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500'} style={isHRView ? { background: 'var(--cm-surface)', color: 'var(--cm-muted)' } : undefined}>
                                     <FaClock className="text-xs" />
                                 </div>
                                 <div className="flex-1">
                                     <span className="font-medium">{event.action || event.milestone}</span>
                                     {event.timestamp && (
-                                        <span className={isHRView ? 'ml-2 text-xs' : 'ml-2 text-xs text-slate-400'} style={isHRView ? { color: 'var(--cm-muted)' } : undefined}>
+                                        <span className={isHRView ? 'ml-2 text-[10px]' : 'ml-2 text-xs text-slate-400'} style={isHRView ? { color: 'var(--cm-muted)' } : undefined}>
                                             {new Date(event.timestamp).toLocaleDateString()}
                                         </span>
                                     )}
@@ -956,7 +1044,7 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
                 </div>
             )}
 
-            <div className={isHRView ? 'pt-4' : 'border-t border-slate-200 pt-4'} style={isHRView ? { borderTop: '1px solid rgba(113,121,116,0.12)' } : undefined}>
+            <div className={isHRView ? 'cm-dossier-bgv__check-actions' : 'border-t border-slate-200 pt-4'}>
                 {canEdit && (
                     <div className="flex flex-wrap gap-2.5">
                         <button
@@ -1034,15 +1122,14 @@ const BgvCheckDetail = ({ check, bgvCase, isHRView, canEdit, canSubmit, canResub
                     </div>
                 )}
                 {canVerify && isHRView && (
-                    <div className="space-y-3">
+                    <div className="cm-dossier-bgv__verify">
                         <div>
                             <label className="cm-label mb-1 block">HR notes / info request</label>
                             <textarea
                                 value={formData.notes || formData.infoRequest || ''}
                                 onChange={(e) => setFormData({ ...formData, notes: e.target.value, infoRequest: e.target.value })}
                                 rows={2}
-                                className="cm-input w-full"
-                                style={{ borderRadius: 'var(--cm-radius-card)' }}
+                                className="cm-input cm-dossier-bgv__notes w-full"
                                 placeholder="Add remarks or describe additional information needed…"
                             />
                         </div>

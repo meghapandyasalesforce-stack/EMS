@@ -1,9 +1,9 @@
 import React from 'react';
 
-const ReportKpiCard = ({ title, value, subtitle, trend, trendUp, icon: Icon, iconBg = 'bg-[#20C997]/10', iconColor = 'text-[#20C997]', highlight }) => (
+const ReportKpiCard = ({ title, value, subtitle, trend, trendUp, icon: Icon, iconBg = 'bg-[#0E9370]/10', iconColor = 'text-[#0E9370]', highlight }) => (
     <div
-        className={`rounded-xl border bg-white p-5 shadow-sm ${
-            highlight ? 'border-[#20C997] ring-1 ring-[#20C997]/20' : 'border-slate-100'
+        className={`rounded-2xl border bg-white p-5 shadow-[0_4px_20px_-2px_rgba(14,43,61,0.06)] ${
+            highlight ? 'border-[#0E9370] ring-1 ring-[#0E9370]/20' : 'border-[rgba(14,43,61,0.08)]'
         }`}
     >
         <div className="flex items-start justify-between gap-3">
@@ -12,7 +12,7 @@ const ReportKpiCard = ({ title, value, subtitle, trend, trendUp, icon: Icon, ico
                 <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
                 {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
                 {trend && (
-                    <p className={`mt-1 text-xs font-medium ${trendUp === false ? 'text-red-500' : 'text-[#20C997]'}`}>
+                    <p className={`mt-1 text-xs font-medium ${trendUp === false ? 'text-red-500' : 'text-[#0E9370]'}`}>
                         {trend}
                     </p>
                 )}

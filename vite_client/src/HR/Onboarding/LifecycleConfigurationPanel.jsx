@@ -302,7 +302,7 @@ const LifecycleConfigurationPanel = () => {
 
     if (loading) {
         return (
-            <div className="page-shell bg-gray-50">
+            <div className="page-shell bg-transparent">
                 <LoadingSpinner message="Loading configuration..." />
             </div>
         );
@@ -364,7 +364,7 @@ const LifecycleConfigurationPanel = () => {
     );
 
     return (
-        <div className="page-shell bg-gray-50 pb-8">
+        <div className="page-shell bg-transparent pb-8">
             <div className="page-shell-inner space-y-4">
                 <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -1,0 +1,406 @@
+/**
+ * Stitch / Kinetic Enterprise — modules 2–8 page chrome (UI only).
+ * Source: stitch_ems_hrms_design_system (DESIGN.md + HTML mocks).
+ * Scope: .kinetic-hrms · never restyles .org-chart-page.
+ */
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) {
+  --sm-canvas: #e8faf4;
+  --sm-surface: #ffffff;
+  --sm-surface-low: #f0f3ff;
+  --sm-surface-mid: #e7eeff;
+  --sm-on: #111c2d;
+  --sm-heading: #1e293b;
+  --sm-muted: #666666;
+  --sm-outline: #e2e8f0;
+  --sm-outline-strong: #cbd5e1;
+  --sm-primary: #0e9370;
+  --sm-primary-hover: #0b7458;
+  --sm-primary-pressed: #07523e;
+  --sm-primary-deep: #00694f;
+  --sm-primary-soft: #d1f5ea;
+  --sm-primary-softer: #e8faf4;
+  --sm-accent: #1cca9b;
+  --sm-navy: #0e2b3d;
+  --sm-row-hover: #f0faf6;
+  --sm-thead: #f8fafc;
+  --sm-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+  --sm-shadow-md: 0 10px 30px -4px rgba(14, 43, 61, 0.12);
+  --sm-radius-card: 1rem;
+  --sm-radius-control: 0.5rem;
+  font-family: 'Inter', 'Manrope', system-ui, sans-serif;
+}
+
+/* ——— Shared work surfaces (People → Plan) ——— */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell,
+.kinetic-hrms .engagement-page,
+.kinetic-hrms .hrms-lifecycle,
+.kinetic-hrms .cm-hrms,
+.kinetic-hrms .ats-ui {
+  font-family: 'Inter', 'Manrope', system-ui, sans-serif;
+  color: var(--sm-on, #111c2d);
+}
+
+/* Restore prior page density — no extra shell padding / stack inflation */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell-inner.hrms-stack {
+  gap: 0.75rem;
+}
+
+.kinetic-hrms .ats-ui .ats-page {
+  padding: 0.75rem !important;
+}
+
+@media (min-width: 640px) {
+  .kinetic-hrms .ats-ui .ats-page {
+    padding: 1rem 1.25rem !important;
+  }
+}
+
+.kinetic-hrms .ats-ui .ats-page-inner {
+  gap: 0.75rem;
+}
+
+/* Page titles */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell h1,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .cm-title,
+.kinetic-hrms .engagement-page h1,
+.kinetic-hrms .hrms-lifecycle .cm-title,
+.kinetic-hrms .ats-ui h1 {
+  color: var(--sm-heading, #1e293b);
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell h2,
+.kinetic-hrms .engagement-page h2,
+.kinetic-hrms .hrms-lifecycle h2 {
+  color: var(--sm-heading, #1e293b);
+  letter-spacing: -0.015em;
+  font-weight: 600;
+}
+
+/* White cards / panels */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .bg-white,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .rounded-2xl.bg-white,
+.kinetic-hrms .hrms-lifecycle .bg-white,
+.kinetic-hrms .engagement-page .bg-white,
+.kinetic-hrms .cm-hrms .cm-card,
+.kinetic-hrms .ats-ui .cm-card {
+  background: var(--sm-surface, #fff) !important;
+  border-color: rgba(14, 43, 61, 0.08) !important;
+  border-radius: var(--sm-radius-card, 1rem) !important;
+  box-shadow: var(--sm-shadow, 0 4px 20px -2px rgba(14, 43, 61, 0.06));
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .rounded-xl.border,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .rounded-2xl.border,
+.kinetic-hrms .hrms-lifecycle .rounded-xl.border,
+.kinetic-hrms .hrms-lifecycle .rounded-2xl.border,
+.kinetic-hrms .engagement-page .rounded-xl.border,
+.kinetic-hrms .engagement-page .rounded-2xl.border {
+  border-color: rgba(14, 43, 61, 0.08);
+  border-radius: var(--sm-radius-card, 1rem);
+  box-shadow: var(--sm-shadow, 0 4px 20px -2px rgba(14, 43, 61, 0.06));
+  background-color: #ffffff;
+}
+
+/* Tables */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell thead,
+.kinetic-hrms .hrms-lifecycle thead,
+.kinetic-hrms .ats-ui thead,
+.kinetic-hrms .engagement-page thead {
+  background: var(--sm-thead, #f8fafc);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell thead th,
+.kinetic-hrms .hrms-lifecycle thead th,
+.kinetic-hrms .ats-ui thead th,
+.kinetic-hrms .engagement-page thead th {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sm-muted, #666);
+  border-bottom: 1px solid var(--sm-outline, #e2e8f0);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell tbody tr:hover,
+.kinetic-hrms .hrms-lifecycle tbody tr:hover,
+.kinetic-hrms .engagement-page tbody tr:hover,
+.kinetic-hrms .ats-ui tbody tr:hover {
+  background: var(--sm-row-hover, #f0faf6);
+}
+
+/* Primary / secondary buttons (Tailwind + theme) */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-theme-primary,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-emerald-600,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-emerald-500,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-\[\#0E9370\],
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-\[\#00694F\],
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-\[\#00694f\],
+.kinetic-hrms .cm-hrms .cm-btn--primary,
+.kinetic-hrms .ats-ui .cm-btn--primary {
+  background-color: var(--sm-primary, #0e9370) !important;
+  color: #ffffff !important;
+  border-radius: var(--sm-radius-control, 0.5rem);
+  font-weight: 500;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .hover\:bg-theme-primary:hover,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .hover\:bg-emerald-600:hover,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .hover\:bg-emerald-700:hover,
+.kinetic-hrms .cm-hrms .cm-btn--primary:hover,
+.kinetic-hrms .ats-ui .cm-btn--primary:hover {
+  background-color: var(--sm-primary-hover, #0b7458) !important;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-theme-primary,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-emerald-600,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-emerald-700,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-\[\#0E9370\],
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .text-\[\#00694F\] {
+  color: var(--sm-primary, #0e9370) !important;
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .border-theme-primary,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .border-emerald-500,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .border-emerald-600 {
+  border-color: var(--sm-primary, #0e9370) !important;
+}
+
+/* Inputs */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell select,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell textarea,
+.kinetic-hrms .engagement-page input:not([type='checkbox']):not([type='radio']),
+.kinetic-hrms .engagement-page select,
+.kinetic-hrms .engagement-page textarea,
+.kinetic-hrms .hrms-lifecycle input:not([type='checkbox']):not([type='radio']),
+.kinetic-hrms .hrms-lifecycle select,
+.kinetic-hrms .hrms-lifecycle textarea,
+.kinetic-hrms .ats-ui input:not([type='checkbox']):not([type='radio']),
+.kinetic-hrms .ats-ui select,
+.kinetic-hrms .ats-ui textarea {
+  border-radius: var(--sm-radius-control, 0.5rem);
+  border-color: var(--sm-outline-strong, #cbd5e1);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell input:focus,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell select:focus,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell textarea:focus,
+.kinetic-hrms .engagement-page input:focus,
+.kinetic-hrms .engagement-page select:focus,
+.kinetic-hrms .engagement-page textarea:focus,
+.kinetic-hrms .hrms-lifecycle input:focus,
+.kinetic-hrms .hrms-lifecycle select:focus,
+.kinetic-hrms .hrms-lifecycle textarea:focus,
+.kinetic-hrms .ats-ui input:focus,
+.kinetic-hrms .ats-ui select:focus,
+.kinetic-hrms .ats-ui textarea:focus {
+  border-color: var(--sm-primary, #0e9370) !important;
+  box-shadow: 0 0 0 3px rgba(14, 147, 112, 0.15);
+  outline: none;
+}
+
+/* Status pills */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .rounded-full.bg-emerald-50,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .rounded-full.bg-green-50,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .bg-emerald-100 {
+  background: var(--sm-primary-soft, #d1f5ea) !important;
+  color: var(--sm-primary-pressed, #07523e) !important;
+}
+
+/* Tabs / chips active */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) [role='tab'][aria-selected='true'],
+.kinetic-hrms .engagement-page [role='tab'][aria-selected='true'] {
+  color: var(--sm-primary, #0e9370);
+}
+
+/* Muted copy */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-slate-500,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-gray-500,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-slate-400 {
+  color: var(--sm-muted, #666);
+}
+
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-slate-900,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .text-gray-900 {
+  color: var(--sm-heading, #1e293b);
+}
+
+/* Reports sidebar / analytics shells */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) aside.border,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .reports-sidebar {
+  background: var(--sm-surface, #fff);
+  border-color: rgba(14, 43, 61, 0.08);
+  box-shadow: var(--sm-shadow, 0 4px 20px -2px rgba(14, 43, 61, 0.06));
+  border-radius: var(--sm-radius-card, 1rem);
+}
+
+/* KPI / metric cards */
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .shadow-sm,
+.kinetic-hrms .hrms-page-canvas:not(:has(> .org-chart-page)) .page-shell .shadow {
+  box-shadow: var(--sm-shadow, 0 4px 20px -2px rgba(14, 43, 61, 0.06));
+}
+
+/* Leave / attendance / payroll when opened from HR portal */
+.kinetic-hrms .main-scroll-area > .min-h-screen:not(.org-chart-page) {
+  background: transparent;
+}
+
+/* Directory / Add / Dossier — zip mint canvas + interactive primary */
+.kinetic-hrms .emp-directory,
+.kinetic-hrms .emp-add {
+  --dir-bg: transparent;
+  --dir-surface: #ffffff;
+  --dir-surface-low: #f0faf6;
+  --dir-surface-mid: #e8faf4;
+  --dir-surface-high: #d1f5ea;
+  --dir-on: #111c2d;
+  --dir-on-variant: #3d4944;
+  --dir-outline: #6d7a73;
+  --dir-primary: #0e9370;
+  --dir-primary-hover: #0b7458;
+  --dir-primary-soft: rgba(14, 147, 112, 0.12);
+  --dir-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+  --dir-radius: 0.5rem;
+  --dir-radius-xl: 1rem;
+  background: transparent;
+  font-family: 'Inter', 'Manrope', system-ui, sans-serif;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.kinetic-hrms .emp-dossier {
+  --ed-bg: transparent;
+  --ed-surface: #ffffff;
+  --ed-surface-low: #f0faf6;
+  --ed-surface-mid: #e8faf4;
+  --ed-on: #111c2d;
+  --ed-on-variant: #3d4944;
+  --ed-outline: #6d7a73;
+  --ed-primary: #0e9370;
+  --ed-primary-hover: #0b7458;
+  --ed-primary-soft: rgba(14, 147, 112, 0.12);
+  --ed-mint: #1cca9b;
+  --ed-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+  --ed-radius: 1rem;
+  background: transparent;
+  font-family: 'Inter', 'Manrope', system-ui, sans-serif;
+}
+
+/* Directory: unify stats (less mini-card clutter) */
+.kinetic-hrms .emp-directory__stat {
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid rgba(14, 43, 61, 0.1);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+}
+
+.kinetic-hrms .emp-directory__filters {
+  border: 1px solid rgba(14, 43, 61, 0.08);
+  box-shadow: var(--sm-shadow, 0 4px 20px -2px rgba(14, 43, 61, 0.06));
+}
+
+.kinetic-hrms .emp-directory__table-card {
+  border: 1px solid rgba(14, 43, 61, 0.08);
+  box-shadow: var(--sm-shadow, 0 4px 20px -2px rgba(14, 43, 61, 0.06));
+  border-radius: 1rem;
+}
+
+.kinetic-hrms .emp-directory__btn-primary,
+.kinetic-hrms .emp-add .emp-add-btn-primary,
+.kinetic-hrms .emp-directory__export-btn {
+  background: #0e9370;
+  color: #fff;
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.kinetic-hrms .emp-directory__btn-primary:hover,
+.kinetic-hrms .emp-directory__export-btn:hover {
+  background: #0b7458;
+}
+
+.kinetic-hrms .emp-directory__export-btn {
+  background: #ffffff;
+  color: #111c2d;
+  border: 1px solid rgba(14, 43, 61, 0.1);
+}
+
+.kinetic-hrms .emp-directory__export-btn:hover {
+  background: #f0faf6;
+  color: #0e9370;
+}
+
+.kinetic-hrms .emp-directory__pill.is-active {
+  background: #0e9370;
+  color: #fff;
+}
+
+.kinetic-hrms .emp-directory__search input {
+  background: #f0faf6;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.kinetic-hrms .emp-directory__search input:focus {
+  border-color: #0e9370;
+  box-shadow: 0 0 0 3px rgba(14, 147, 112, 0.15);
+  background: #fff;
+}
+
+/* Dossier hero / sections */
+.kinetic-hrms .emp-dossier__hero,
+.kinetic-hrms .emp-dossier .ed-section,
+.kinetic-hrms .emp-dossier [class*='SectionCard'],
+.kinetic-hrms .emp-dossier .rounded-2xl {
+  border-color: rgba(14, 43, 61, 0.08);
+  box-shadow: var(--sm-shadow, 0 4px 20px -2px rgba(14, 43, 61, 0.06));
+}
+
+/* ATS / Recruitment suite */
+.kinetic-hrms .ats-ui,
+.kinetic-hrms .cm-hrms {
+  --cm-surface: transparent;
+  --cm-surface-low: #f0faf6;
+  --cm-surface-container: #e8faf4;
+  --cm-white: #ffffff;
+  --cm-on-surface: #111c2d;
+  --cm-on-variant: #3d4944;
+  --cm-muted: #666666;
+  --cm-outline: #6d7a73;
+  --cm-primary: #0e9370;
+  --cm-primary-deep: #00694f;
+  --cm-primary-container: #1cca9b;
+  --cm-on-primary-container: #07523e;
+  --cm-inverted: #0e2b3d;
+  --cm-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+  --cm-shadow-md: 0 10px 30px -4px rgba(14, 43, 61, 0.12);
+  --cm-radius-card: 1rem;
+  --cm-font: 'Inter', 'Manrope', system-ui, sans-serif;
+  --ats-primary: #0e9370;
+  --ats-secondary: #0e2b3d;
+  --ats-neutral: transparent;
+  --ats-search-bg: #e8f1ef;
+  background: transparent !important;
+}
+
+.kinetic-hrms .cm-hrms.page-shell,
+.kinetic-hrms .cm-hrms .page-shell {
+  background: transparent !important;
+}
+
+/* Lifecycle / Engage / Docs / Plan shells breathe on mint canvas */
+.kinetic-hrms .hrms-lifecycle,
+.kinetic-hrms .engagement-page {
+  --cm-surface: transparent;
+  --cm-primary: #0e9370;
+  --cm-primary-deep: #00694f;
+  --cm-inverted: #0e2b3d;
+  background: transparent !important;
+}

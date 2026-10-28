@@ -20,6 +20,8 @@ export default async function csrfProtection(req, res, next) {
         '/api/v1/admin/auth/login',
         '/api/v1/both/auth/login', // Unified login (must work even when stale session cookies exist)
         '/api/v1/platform/auth/login',
+        '/api/v1/platform/auth/forgot-password',
+        '/api/v1/platform/auth/reset-password',
         '/api/v1/employee/auth/register',
         '/api/v1/admin/auth/register',
         '/api/v1/organization/auth/register',

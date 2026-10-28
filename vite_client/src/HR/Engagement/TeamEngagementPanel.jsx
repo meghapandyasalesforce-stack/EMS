@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FaUsers, FaPoll, FaChartBar, FaComments, FaAward, FaShieldAlt } from 'react-icons/fa';
 import axios from '../../utils/axios';
 
-const MINT = '#20C997';
+const MINT = '#0E9370';
 
 /**
  * Manager-only team summary — intentionally simpler than the org Dashboard.

@@ -153,10 +153,8 @@ const organizationSlice = createSlice({
             .addCase(fetchOrganizationProfile.fulfilled, (state, action) => {
                 state.loading = false;
                 state.profile = action.payload;
-                // Apply organization branding/theme when profile is loaded
-                if (action.payload?.branding) {
-                    applyBranding(action.payload.branding);
-                }
+                // Apply organization branding (falls back to Stitch Kinetic defaults)
+                applyBranding(action.payload?.branding || {});
             })
             .addCase(fetchOrganizationProfile.rejected, (state, action) => {
                 state.loading = false;

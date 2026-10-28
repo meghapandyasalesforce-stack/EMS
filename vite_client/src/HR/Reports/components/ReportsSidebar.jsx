@@ -6,8 +6,8 @@ import { REPORT_NAV, MINT_GRADIENT } from '../constants';
 const navLinkClass = ({ isActive }) =>
     `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition whitespace-nowrap ${
         isActive
-            ? 'border-l-[3px] border-[#20C997] bg-[#20C997]/10 text-[#0d9488]'
-            : 'border-l-[3px] border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            ? 'border-l-[3px] border-[#1CCA9B] bg-[#0E9370]/10 text-[#07523E]'
+            : 'border-l-[3px] border-transparent text-slate-600 hover:bg-[#F0FAF6] hover:text-slate-900'
     }`;
 
 const ReportsSidebar = () => {
@@ -53,8 +53,8 @@ const ReportsSidebar = () => {
                                 className={({ isActive }) =>
                                     `flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap ${
                                         isActive
-                                            ? 'bg-[#20C997]/10 text-[#0d9488]'
-                                            : 'text-slate-600 hover:bg-slate-50'
+                                            ? 'bg-[#0E9370]/10 text-[#07523E]'
+                                            : 'text-slate-600 hover:bg-[#F0FAF6]'
                                     }`
                                 }
                             >

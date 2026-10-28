@@ -23,6 +23,7 @@ import { scheduleCelebrationNotificationJobs } from './celebrationNotificationJo
 import { scheduleOneOnOneReminderJobs } from './oneOnOneReminderJob.js';
 import { scheduleSubscriptionLifecycleJobs } from './subscriptionLifecycleJob.js';
 import { scheduleMissedPunchReminderJobs } from './missedPunchReminderJob.js';
+import { scheduleAnnouncementJobs } from './announcementScheduleJob.js';
 
 /**
  * Initialize all job workers
@@ -133,6 +134,13 @@ export const initializeWorkers = async () => {
                 logger.info('Missed punch reminder jobs registered (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule missed punch reminder jobs', { error: error.message });
+            }
+
+            try {
+                scheduleAnnouncementJobs();
+                logger.info('Announcement schedule jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule announcement jobs', { error: error.message });
             }
 
             return;
@@ -269,6 +277,13 @@ export const initializeWorkers = async () => {
             logger.info('Missed punch reminder jobs scheduled');
         } catch (error) {
             logger.error('Failed to schedule missed punch reminder jobs', { error: error.message });
+        }
+
+        try {
+            scheduleAnnouncementJobs();
+            logger.info('Announcement schedule jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule announcement jobs', { error: error.message });
         }
 
         if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker && approvalTimeoutWorker) {

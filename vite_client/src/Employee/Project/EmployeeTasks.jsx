@@ -269,7 +269,7 @@ const EmployeeTasks = () => {
           }`}
         >
           <FiMessageSquare size={16} />
-          Today&apos;s log
+          Today's log
         </button>
       </div>
 
@@ -312,7 +312,7 @@ const EmployeeTasks = () => {
           </div>
           <div>
             <h2 className="text-base font-semibold text-gray-900 mb-0.5">
-              {editingTaskId ? 'Update log' : 'Today&apos;s work log'}
+              {editingTaskId ? 'Update log' : "Today's work log"}
             </h2>
             <p className="text-gray-600 text-xs">
               {editingTaskId

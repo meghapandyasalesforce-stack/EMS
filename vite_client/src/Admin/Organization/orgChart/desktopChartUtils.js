@@ -5,8 +5,24 @@ export const DESKTOP_NODE_HEIGHT = 144;
 export const REPORT_BATCH = 6;
 export const MIN_DESKTOP_ZOOM = 0.55;
 export const READABLE_FIT_ZOOM = 0.85;
-const GAP = 32;
-const BRANCH_GAP = 68;
+
+/**
+ * Choose sibling columns.
+ * Classic org mock: siblings stay on ONE horizontal row for normal teams
+ * (REPORT_BATCH + one “show more”). Grid-wrap only for huge full-expand fans.
+ */
+export function chooseSiblingColumns(blockCount, leafOnly, orgSize = 0) {
+  if (blockCount <= 1) return 1;
+
+  // One row through a double batch — never stack peers into a fake hierarchy.
+  if (blockCount <= REPORT_BATCH * 2) return blockCount;
+
+  // Huge fans (full expand): pack wide; connectors use per-row buses + spine.
+  const maxCols = leafOnly
+    ? (orgSize > 150 ? 8 : 10)
+    : (orgSize > 150 ? 6 : 8);
+  return Math.min(maxCols, Math.max(6, Math.ceil(Math.sqrt(blockCount))));
+}
 
 /** Index the API's actual reporting links. Never infer managers from departments. */
 export function indexHierarchy(employees) {
@@ -18,7 +34,6 @@ export function indexHierarchy(employees) {
     if (parent && children.has(parent) && parent !== String(employee.id)) children.get(parent).push(employee);
     else roots.push(employee);
   }
-  // Keep malformed cyclic components accessible without rewriting the API links.
   const reachable = new Set();
   const visit = employee => {
     const id = String(employee.id);
@@ -55,10 +70,15 @@ export function initialDesktopExpansion(index, filtered = false) {
   return expanded;
 }
 
-/** Pack sibling subtrees into bounded rows, reserving gutters for real reporting edges. */
+/** Pack sibling subtrees into bounded rows, reserving gutters for reporting edges. */
 export function buildDesktopLayout(index, expanded, limits = new Map(), revealed = new Set()) {
   const positions = new Map();
   const measured = new Map();
+  const orgSize = index.byId.size;
+  // Tighter gaps for large orgs so 200+ charts stay navigable; airier for small trees.
+  const gap = orgSize > 100 ? 28 : 36;
+  const branchGap = orgSize > 100 ? 64 : 80;
+
   const childrenFor = employee => {
     const id = String(employee.id);
     if (!expanded.has(id)) return [];
@@ -66,6 +86,7 @@ export function buildDesktopLayout(index, expanded, limits = new Map(), revealed
     const limit = limits.get(id) ?? Infinity;
     return children.filter((child, offset) => offset < limit || revealed.has(String(child.id)));
   };
+
   const measure = (employee, ancestry = new Set()) => {
     const id = String(employee.id);
     if (measured.has(id)) return measured.get(id);
@@ -73,7 +94,7 @@ export function buildDesktopLayout(index, expanded, limits = new Map(), revealed
     const children = childrenFor(employee).filter(child => !next.has(String(child.id)));
     const blocks = children.map(child => ({ employee: child, ...measure(child, next) }));
     const leafOnly = blocks.every(block => !block.blocks.length);
-    const columns = Math.max(1, Math.min(leafOnly ? 12 : 4, Math.ceil(Math.sqrt(blocks.length || 1))));
+    const columns = chooseSiblingColumns(blocks.length, leafOnly, orgSize);
     const columnWidths = Array(columns).fill(DESKTOP_NODE_WIDTH);
     const rowHeights = [];
     blocks.forEach((block, i) => {
@@ -81,37 +102,55 @@ export function buildDesktopLayout(index, expanded, limits = new Map(), revealed
       const row = Math.floor(i / columns);
       rowHeights[row] = Math.max(rowHeights[row] || 0, block.height);
     });
-    const width = Math.max(DESKTOP_NODE_WIDTH, columnWidths.reduce((sum, value) => sum + value, 0) + (columns - 1) * GAP);
-    const height = DESKTOP_NODE_HEIGHT + (blocks.length ? BRANCH_GAP + rowHeights.reduce((sum, value) => sum + value, 0) + (rowHeights.length - 1) * GAP : 0);
-    const result = { width, height, blocks, columns, columnWidths, rowHeights };
+    const width = Math.max(DESKTOP_NODE_WIDTH, columnWidths.reduce((sum, value) => sum + value, 0) + (columns - 1) * gap);
+    const height = DESKTOP_NODE_HEIGHT + (blocks.length ? branchGap + rowHeights.reduce((sum, value) => sum + value, 0) + (rowHeights.length - 1) * gap : 0);
+    const result = { width, height, blocks, columns, columnWidths, rowHeights, gap, branchGap };
     measured.set(id, result);
     return result;
   };
+
   const place = (employee, left, top, parentRoute = null) => {
     const id = String(employee.id);
     if (positions.has(id)) return;
     const block = measured.get(id);
-    const position = { x: left + (block.width - DESKTOP_NODE_WIDTH) / 2, y: top, width: DESKTOP_NODE_WIDTH, height: DESKTOP_NODE_HEIGHT, parentRoute };
+    const position = {
+      x: left + (block.width - DESKTOP_NODE_WIDTH) / 2,
+      y: top,
+      width: DESKTOP_NODE_WIDTH,
+      height: DESKTOP_NODE_HEIGHT,
+      parentRoute,
+    };
     positions.set(id, position);
     block.blocks.forEach((child, i) => {
       const column = i % block.columns;
       const row = Math.floor(i / block.columns);
-      const childLeft = left + block.columnWidths.slice(0, column).reduce((sum, value) => sum + value + GAP, 0);
-      const childTop = top + DESKTOP_NODE_HEIGHT + BRANCH_GAP + block.rowHeights.slice(0, row).reduce((sum, value) => sum + value + GAP, 0);
-      place(child.employee, childLeft, childTop, { parentId: id, lane: childLeft - GAP / 2, row });
+      const childLeft = left + block.columnWidths.slice(0, column).reduce((sum, value) => sum + value + block.gap, 0);
+      const childTop = top + DESKTOP_NODE_HEIGHT + block.branchGap + block.rowHeights.slice(0, row).reduce((sum, value) => sum + value + block.gap, 0);
+      // Lane sits in the gutter left of this child's column — used for wrapped-row routing.
+      place(child.employee, childLeft, childTop, {
+        parentId: id,
+        lane: childLeft - block.gap / 2,
+        row,
+      });
     });
   };
-  let left = GAP;
+
+  let left = gap;
   let height = 0;
   for (const root of index.roots) {
     const block = measure(root);
-    place(root, left, GAP);
-    left += block.width + GAP;
-    height = Math.max(height, block.height + GAP * 2);
+    place(root, left, gap);
+    left += block.width + gap;
+    height = Math.max(height, block.height + gap * 2);
   }
-  return { positions, dimensions: { width: Math.max(left, DESKTOP_NODE_WIDTH + GAP * 2), height: Math.max(height, DESKTOP_NODE_HEIGHT + GAP * 2) } };
+  return {
+    positions,
+    dimensions: {
+      width: Math.max(left, DESKTOP_NODE_WIDTH + gap * 2),
+      height: Math.max(height, DESKTOP_NODE_HEIGHT + gap * 2),
+    },
+  };
 }
-
 
 export function hiddenDescendantCounts(index, positions) {
   const visibleCounts = new Map();

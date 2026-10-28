@@ -487,7 +487,7 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
   return (
     <div className={embedded ? 'min-w-0' : 'page-shell min-h-screen bg-[#f4f7f6]'}>
       <div className={embedded ? 'hrms-stack' : 'page-shell-inner hrms-stack'}>
-        <header className="flex flex-col gap-4">
+        <header className={`flex flex-col ${embedded ? 'gap-2' : 'gap-3'}`}>
           {!embedded && (
           <div>
             <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">
@@ -499,9 +499,9 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
           </div>
           )}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div
-              className="flex w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex sm:w-fit"
+              className="flex w-full max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm sm:inline-flex sm:w-fit"
               role="tablist"
               aria-label="Request type"
             >
@@ -518,12 +518,18 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
                     aria-selected={active}
                     title={key === 'wfh' ? 'Work From Home' : 'Regularization'}
                     onClick={() => setActiveSection(key)}
-                    className={`inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-4 ${
-                      active ? 'bg-[#0a8f6c] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                    className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold transition sm:flex-none sm:px-3 sm:text-sm ${
+                      active
+                        ? 'bg-[#0a8f6c] shadow-sm'
+                        : 'bg-transparent text-slate-700 hover:bg-slate-50'
                     }`}
+                    style={active ? { color: '#ffffff' } : undefined}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {label}
+                    <Icon
+                      className="h-3.5 w-3.5 shrink-0"
+                      style={{ color: active ? '#ffffff' : 'currentColor' }}
+                    />
+                    <span style={{ color: active ? '#ffffff' : undefined }}>{label}</span>
                   </button>
                 );
               })}
@@ -587,81 +593,78 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
         </header>
 
         <div className={activeSection === 'regularization' ? 'block' : 'hidden'}>
-        <section className="mb-8 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5 lg:p-6">
-          <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Search requests
+        <section className="mb-3 rounded-xl border border-slate-100 bg-white p-2.5 shadow-sm sm:mb-4 sm:p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="min-w-0 flex-1 sm:min-w-[180px]">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Search
               </label>
               <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <FiSearch className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"
-                  placeholder="Search by name, email or reason..."
+                  placeholder="Name, email or reason…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-4 text-sm focus:border-[#0a8f6c] focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/25"
+                  className="w-full rounded-lg border border-slate-200 py-1.5 pl-8 pr-2.5 text-xs focus:border-[#0a8f6c] focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/20 sm:text-sm"
                 />
               </div>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-3 text-xs font-semibold hover:underline"
-                style={{ color: TEAL }}
+            </div>
+            <div className="w-full sm:w-[8.5rem]">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Status
+              </label>
+              <select
+                value={statusDropdown}
+                onChange={(e) => {
+                  setPage(1);
+                  setStatusDropdown(e.target.value);
+                }}
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm"
               >
-                Clear filters
-              </button>
+                <option value="all">All</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status
-                </label>
-                <select
-                  value={statusDropdown}
-                  onChange={(e) => {
-                    setPage(1);
-                    setStatusDropdown(e.target.value);
-                  }}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"
-                >
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-              <div />
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Date from
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setPage(1);
-                    setStartDate(e.target.value);
-                  }}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Date to
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    setPage(1);
-                    setEndDate(e.target.value);
-                  }}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                />
-              </div>
+            <div className="w-full sm:w-[9.5rem]">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                From
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setPage(1);
+                  setStartDate(e.target.value);
+                }}
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm"
+              />
             </div>
+            <div className="w-full sm:w-[9.5rem]">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                To
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setPage(1);
+                  setEndDate(e.target.value);
+                }}
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="shrink-0 self-start rounded-lg px-2.5 py-1.5 text-xs font-semibold hover:bg-[#0a8f6c]/5 sm:self-end"
+              style={{ color: TEAL }}
+            >
+              Clear
+            </button>
           </div>
         </section>
 
@@ -709,8 +712,112 @@ const RegularizationRequests = ({ embedded = false } = {}) => {
               </div>
             </div>
           ) : null}
-          <div className="max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
-            <table className="min-w-[1050px] text-sm md:min-w-full">
+          {/* Mobile cards */}
+          <div className="divide-y divide-slate-100 md:hidden">
+            {filteredRequests.map((req) => {
+              const emp = req.employeeId;
+              const name = [emp?.name, emp?.lastName].filter(Boolean).join(' ').trim() || 'Unknown';
+              const dept = emp?.department || '—';
+              const managerObj = req.managerId;
+              const managerName = managerObj && typeof managerObj === 'object'
+                ? [managerObj.name, managerObj.lastName].filter(Boolean).join(' ').trim() || '—'
+                : (typeof managerObj === 'string' && managerObj.trim() ? managerObj : '—');
+              const isPending = req.status === 'pending';
+              const canAct = isPending && isMyTurn(req, actorRoles);
+              const inFmt = req.requestedClockIn
+                ? format(new Date(req.requestedClockIn), 'hh:mm a')
+                : null;
+              const outFmt = req.requestedClockOut
+                ? format(new Date(req.requestedClockOut), 'hh:mm a')
+                : null;
+              return (
+                <article key={`m-${req._id}`} className="space-y-2.5 p-3.5">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 accent-[#0a8f6c]"
+                      disabled={!isPending || !isMyTurn(req, actorRoles)}
+                      checked={selectedIds.has(String(req._id))}
+                      onChange={() => toggleRow(req._id, req.status, req)}
+                      aria-label={`Select ${name}`}
+                    />
+                    <RowAvatar employee={emp} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900">{name}</p>
+                      <p className="text-xs text-slate-500">{dept}</p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        {format(new Date(req.attendanceDate), 'MMM d, yyyy')}
+                        {' · '}
+                        <span style={{ color: TEAL }} className="font-medium">
+                          {inFmt ?? '—'}
+                        </span>
+                        {' / '}
+                        {outFmt ?? '—'}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-400">{getTypeLabel(req.regularizationType)}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-600">{req.reason || '—'}</p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <StatusPill status={req.status} workflowSummary={req.workflowSummary} />
+                        <WorkflowStepPill req={req} />
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Manager: {managerName}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-2">
+                    {isPending ? (
+                      <>
+                        <button
+                          type="button"
+                          title={
+                            !canAct
+                              ? `Waiting for ${req.workflowSummary?.pendingStep?.approverType || 'next approver'}`
+                              : isAdmin ? 'Approve and complete all steps' : 'Approve current step'
+                          }
+                          disabled={!!actionBusy || !canAct}
+                          onClick={() => canAct && handleApproveIds([req._id], { adminBypass: isAdmin })}
+                          className="rounded-lg p-2 text-white disabled:opacity-40"
+                          style={{ background: canAct ? TEAL : '#94a3b8' }}
+                        >
+                          {actionBusy === `${req._id}` ? (
+                            <FiLoader className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FiCheck className="h-4 w-4" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          title={!canAct ? `Waiting for ${req.workflowSummary?.pendingStep?.approverType || 'next approver'}` : 'Reject'}
+                          disabled={!!actionBusy || !canAct}
+                          onClick={() => canAct && openRejectModal([req._id])}
+                          className={`rounded-lg border p-2 disabled:opacity-40 ${
+                            canAct
+                              ? 'border-red-200 bg-red-50 text-red-600'
+                              : 'border-slate-200 bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          <FiX className="h-4 w-4" />
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      title="View"
+                      onClick={() => {
+                        setRejectReason('');
+                        setDrawerReq(req);
+                      }}
+                      className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                    >
+                      <FiEye className="h-4 w-4" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden max-w-full overflow-x-auto overscroll-x-contain md:block [-webkit-overflow-scrolling:touch]">
+            <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <th className="whitespace-nowrap px-4 py-3 pl-5">

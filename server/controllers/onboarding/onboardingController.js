@@ -953,6 +953,100 @@ export const addOnboardingNote = asyncHandler(async (req, res) => {
     res.json({ success: true, message: 'Note added', data: populated });
 });
 
+/**
+ * Instant ping — notify the onboarding employee about pending docs / checklist action.
+ * POST /onboarding/:id/ping
+ */
+export const sendOnboardingPing = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const customMessage = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+
+    const workflow = await OnboardingWorkflow.findOne({ _id: id, organizationId });
+    if (!workflow) return res.status(404).json({ success: false, message: 'Workflow not found' });
+
+    const employeeId = workflow.employeeId?._id || workflow.employeeId;
+    if (!employeeId) {
+        return res.status(400).json({ success: false, message: 'No employee linked to this workflow' });
+    }
+
+    const PING_PREFIX = 'instant-ping';
+    const COOLDOWN_MS = 5 * 60 * 1000;
+    if (!workflow.notificationHistory) workflow.notificationHistory = [];
+    const lastPing = [...workflow.notificationHistory]
+        .filter((entry) => String(entry.key || '').startsWith(PING_PREFIX))
+        .sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0))[0];
+    if (lastPing?.sentAt && Date.now() - new Date(lastPing.sentAt).getTime() < COOLDOWN_MS) {
+        return res.status(429).json({
+            success: false,
+            message: 'A ping was already sent recently. Please wait a few minutes before sending another.',
+        });
+    }
+
+    const pendingDocs = (workflow.documents || []).filter(
+        (doc) => !['Verified', 'Rejected'].includes(doc.status),
+    );
+    const firstPending = pendingDocs[0];
+    const firstLabel = firstPending?.name
+        || String(firstPending?.documentType || '').replace(/_/g, ' ')
+        || 'required document';
+    const defaultMessage = pendingDocs.length === 1
+        ? `Action needed on your onboarding: please complete "${firstLabel}" (upload or digital signature).`
+        : pendingDocs.length > 1
+            ? `Action needed on your onboarding: ${pendingDocs.length} documents still need upload or signature (next: "${firstLabel}").`
+            : 'Reminder: please continue your onboarding checklist and complete any open tasks.';
+
+    const message = customMessage || defaultMessage;
+    const senderId = req.employee?._id || req.user?._id;
+
+    const result = await notify({
+        type: 'onboarding_reminder',
+        organizationId,
+        title: 'Onboarding action needed',
+        message,
+        priority: 'high',
+        data: {
+            recipient: employeeId,
+            workflow,
+            reminderType: 'instant_ping',
+        },
+        senderId,
+        senderType: req.employee ? 'Employee' : 'User',
+    });
+
+    if (result?.skipped) {
+        return res.status(400).json({
+            success: false,
+            message: 'Reminders are disabled for this organization in Lifecycle Configure.',
+        });
+    }
+    if (!result?.notified || result.notified === 0) {
+        return res.status(400).json({
+            success: false,
+            message: result?.message || 'Could not deliver notification to this employee',
+        });
+    }
+
+    const sentAt = new Date();
+    workflow.notificationHistory.push({
+        key: `${PING_PREFIX}:${sentAt.getTime()}`,
+        eventType: 'onboarding_reminder',
+        sentAt,
+    });
+    addActivity(workflow, {
+        action: 'instant_ping_sent',
+        description: `Instant ping sent to employee: ${message}`,
+        actor: senderId,
+    });
+    await workflow.save();
+
+    res.json({
+        success: true,
+        message: 'Notification sent to the employee',
+        data: { notified: result?.notified ?? 1 },
+    });
+});
+
 // ─── Templates ───────────────────────────────────────────────────────────────
 
 export const getOnboardingTemplates = asyncHandler(async (req, res) => {

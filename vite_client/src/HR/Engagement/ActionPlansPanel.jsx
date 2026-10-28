@@ -5,11 +5,11 @@ import axios from '../../utils/axios';
 import { MINT_GRADIENT } from '../Reports/constants';
 
 const inputClass =
-    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20';
+    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E9370] focus:ring-2 focus:ring-[#0E9370]/20';
 
 const statusStyle = (s) => {
     if (s === 'Completed') return 'bg-emerald-100 text-emerald-700';
-    if (s === 'In Progress') return 'bg-[#20C997]/10 text-[#0d9488]';
+    if (s === 'In Progress') return 'bg-[#0E9370]/10 text-[#0d9488]';
     if (s === 'Cancelled') return 'bg-slate-100 text-slate-500';
     return 'bg-amber-100 text-amber-700';
 };

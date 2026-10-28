@@ -172,8 +172,8 @@ export const getJobPostings = asyncHandler(async (req, res) => {
     // Optimized query with lean() and parallel count
     const [jobPostings, total] = await Promise.all([
         Recruitment.find(query)
-            .populate('hiringManager', 'name email')
-            .populate('recruiter', 'name email')
+            .populate('hiringManager', 'name lastName email department')
+            .populate('recruiter', 'name lastName email')
             .sort(sort)
             .skip(skip)
             .limit(limit)
@@ -199,8 +199,8 @@ export const getJobPostingById = asyncHandler(async (req, res) => {
         _id: id,
         organizationId
     })
-        .populate('hiringManager', 'name email')
-        .populate('recruiter', 'name email')
+        .populate('hiringManager', 'name lastName email department')
+        .populate('recruiter', 'name lastName email')
         .populate('createdBy', 'name email')
         .lean(); // Use lean() for better performance
 

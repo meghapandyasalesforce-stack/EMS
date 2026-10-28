@@ -1,0 +1,194 @@
+/**
+ * Scoped styles for Super Admin Organizations Directory only.
+ * Import only from Platform/OrganizationsList.jsx.
+ */
+.platform-orgs {
+  --po-forest: #0f2d26;
+  --po-pine: #2a6b52;
+  --po-pine-hover: #1f523e;
+  --po-mint: #1cca9b;
+  --po-coral: #ff7f50;
+  --po-coral-text: #9b4122;
+  --po-danger: #c62828;
+  --po-canvas: #f5faf9;
+  --po-card: #ecf0ee;
+  --po-white: #ffffff;
+  --po-muted: #5a7a70;
+  --po-outline: #788882;
+  --po-border: #d1dcd8;
+  --po-font: 'Manrope', 'Inter', system-ui, sans-serif;
+
+  font-family: var(--po-font);
+  color: var(--po-forest);
+}
+
+.platform-orgs .po-card {
+  background: var(--po-card);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(15, 45, 38, 0.04);
+}
+
+.platform-orgs .po-surface {
+  background: var(--po-white);
+  border: 1px solid var(--po-border);
+  border-radius: 1rem;
+}
+
+.platform-orgs .po-input,
+.platform-orgs .po-select {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--po-white);
+  color: var(--po-forest);
+  font-size: 0.875rem;
+  box-shadow: 0 1px 2px rgba(15, 45, 38, 0.04);
+  outline: none;
+}
+
+.platform-orgs .po-input:focus,
+.platform-orgs .po-select:focus {
+  box-shadow: 0 0 0 1.5px var(--po-pine);
+}
+
+.platform-orgs .po-input-search {
+  padding-left: 2.5rem;
+}
+
+.platform-orgs .po-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.platform-orgs .po-chip {
+  border-radius: 9999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--po-border);
+  background: var(--po-white);
+  color: var(--po-forest);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.platform-orgs .po-chip:hover {
+  background: var(--po-card);
+}
+
+.platform-orgs .po-chip.is-active {
+  background: var(--po-pine);
+  border-color: var(--po-pine);
+  color: #fff;
+}
+
+.platform-orgs .po-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 2.5rem;
+  padding: 0 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.platform-orgs .po-btn-primary {
+  background: var(--po-pine);
+  color: #fff;
+}
+
+.platform-orgs .po-btn-primary:hover {
+  background: var(--po-pine-hover);
+}
+
+.platform-orgs .po-btn-secondary {
+  background: var(--po-card);
+  color: var(--po-forest);
+}
+
+.platform-orgs .po-btn-secondary:hover {
+  background: #d9dedc;
+}
+
+.platform-orgs .po-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.platform-orgs table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.platform-orgs thead th {
+  height: 2.5rem;
+  padding: 0 1rem;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--po-muted);
+  background: var(--po-canvas);
+  border-bottom: 1px solid var(--po-border);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.platform-orgs tbody td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #ecf0ee;
+  vertical-align: middle;
+}
+
+.platform-orgs tbody tr {
+  transition: background 0.12s ease;
+}
+
+.platform-orgs tbody tr:hover {
+  background: rgba(245, 250, 249, 0.85);
+}
+
+.platform-orgs .po-bar-track {
+  width: 100%;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: #d9dedc;
+  overflow: hidden;
+}
+
+.platform-orgs .po-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--po-pine);
+}
+
+@media (max-width: 640px) {
+  .platform-orgs .po-btn {
+    height: 2.35rem;
+    padding: 0 0.85rem;
+    font-size: 0.8125rem;
+  }
+
+  .platform-orgs table {
+    min-width: 720px;
+  }
+
+  .platform-orgs thead th,
+  .platform-orgs tbody td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}

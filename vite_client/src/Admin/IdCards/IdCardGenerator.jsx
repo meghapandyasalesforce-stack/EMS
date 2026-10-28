@@ -4,7 +4,6 @@ import { useSelector } from 'react-redux';
 import { canAccessHrDocuments } from '../../utils/managerHelper';
 import {
   FiCreditCard,
-  FiPlus,
   FiDownload,
   FiEye,
   FiTrash2,
@@ -14,16 +13,19 @@ import {
   FiUsers,
 
   FiRotateCcw,
+  FiShield,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { downloadPdfBlob } from '../../utils/downloadPdfBlob';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import PaarsivIdCard, { PAARSIV_ID } from '../../components/PaarsivIdCard';
+import '../../styles/idCardsStudioUI.css';
 
-const MINT = '#20C997';
-const MINT_DARK = '#0d9488';
-const MINT_GRADIENT = `linear-gradient(135deg, ${MINT} 0%, ${MINT_DARK} 100%)`;
+const MINT = '#0e9370';
+const MINT_DARK = '#00694f';
+const MINT_GRADIENT = `linear-gradient(165deg, #0e2b3d 0%, #134056 100%)`;
+const PRIMARY_GRADIENT = `linear-gradient(135deg, ${MINT} 0%, ${MINT_DARK} 100%)`;
 
 /** Single brand template — physical Paarsiv badge look */
 const themePresets = {
@@ -56,34 +58,15 @@ const getCardStatusLabel = (status) => {
   return labels[status] || status;
 };
 
-const statusStyles = {
-  active: 'bg-emerald-100 text-emerald-700 ring-emerald-600/20',
-  expired: 'bg-red-100 text-red-700 ring-red-600/20',
-  suspended: 'bg-amber-100 text-amber-700 ring-amber-600/20',
-  cancelled: 'bg-slate-100 text-slate-600 ring-slate-500/20',
-};
-
-const typeStyles = {
-  employee: 'bg-teal-50 text-teal-700',
-  visitor: 'bg-violet-50 text-violet-700',
-  contractor: 'bg-orange-50 text-orange-700',
-  temporary: 'bg-pink-50 text-pink-700',
-};
-
-const KpiStat = ({ label, value, icon: Icon, accent }) => (
-  <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
-      </div>
-      <div
-        className="flex h-11 w-11 items-center justify-center rounded-xl"
-        style={{ backgroundColor: `${accent}18`, color: accent }}
-      >
-        <Icon className="h-5 w-5" />
-      </div>
+const KpiStat = ({ label, value, icon: Icon }) => (
+  <div className="idc-studio__kpi">
+    <div>
+      <p className="idc-studio__kpi-label">{label}</p>
+      <p className="idc-studio__kpi-value">{value}</p>
     </div>
+    <span className="idc-studio__kpi-icon" aria-hidden>
+      <Icon className="h-5 w-5" />
+    </span>
   </div>
 );
 
@@ -366,80 +349,44 @@ const IdCardGenerator = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#F5F7FB]">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
-          <p className="text-sm font-medium text-slate-600">Loading ID cards...</p>
-        </div>
+      <div className="idc-studio__loading">
+        <div className="idc-studio__spinner" aria-hidden />
+        <p className="text-sm font-medium">Loading ID cards…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
-      <div className="page-shell">
-      <div className="page-shell-inner">
-      <div className="hrms-stack">
-        {/* Header */}
-        <header className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <div
-                className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-md"
-                style={{ background: MINT_GRADIENT }}
-              >
-                <FiCreditCard className="h-7 w-7" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">HR Workspace</p>
-                <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">ID Card Management</h1>
-                <p className="mt-0.5 text-sm text-slate-500">Generate and manage employee ID cards</p>
-              </div>
+    <div className="idc-studio">
+      <div className="idc-studio__inner">
+        <header className="idc-studio__header">
+          <div>
+            <div className="idc-studio__badges">
+              <span className="idc-studio__pill idc-studio__pill--mint">Security domain</span>
+              <span className="idc-studio__pill idc-studio__pill--ghost">
+                <FiShield size={12} /> ISO 27001 Certified Access Suite
+              </span>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center w-full lg:w-auto">
-              <label className="relative block min-w-0 w-full sm:min-w-[240px] flex-1 sm:max-w-sm">
-                <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search cards, employees..."
-                  className="h-11 w-full rounded-full border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none transition focus:border-[#20C997] focus:bg-white focus:ring-2 focus:ring-[#20C997]/20"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowGenerateModal(true)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold text-white shadow-md transition hover:opacity-95"
-                style={{ background: MINT_GRADIENT }}
-              >
-                <FiPlus className="h-5 w-5" />
-                Generate ID Card
-              </button>
-            </div>
+            <h1 className="idc-studio__title">ID Cards Studio &amp; Badge Issuance</h1>
+            <p className="idc-studio__sub">
+              Issue and manage employee credentials on the official Paarsiv badge template.
+            </p>
           </div>
-        </header>
-
-        {/* KPIs */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiStat label="Total Cards" value={stats.total} icon={FiCreditCard} accent={MINT} />
-          <KpiStat label="Active" value={stats.active} icon={FiCheckCircle} accent="#10b981" />
-          <KpiStat label="Deactivated" value={stats.deactivated} icon={FiXCircle} accent="#64748b" />
-          <KpiStat label="Employees" value={stats.employees} icon={FiUsers} accent={MINT_DARK} />
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          {/* <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-            <FiFilter className="h-4 w-4 text-[#20C997]" />
-            Filters
-          </div> */}
-          <div className="min-w-0 w-full sm:min-w-[160px] flex-1">
-            <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
+          <div className="idc-studio__actions">
+            <label className="idc-studio__search">
+              <FiSearch size={16} />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, EMP ID, or card…"
+              />
+            </label>
             <select
+              className="idc-studio__filter-sm"
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20"
+              aria-label="Status"
             >
               <option value="">All Statuses</option>
               <option value="active">Active</option>
@@ -447,13 +394,11 @@ const IdCardGenerator = () => {
               <option value="expired">Expired</option>
               <option value="suspended">Suspended</option>
             </select>
-          </div>
-          <div className="min-w-0 w-full sm:min-w-[160px] flex-1">
-            <label className="mb-1 block text-xs font-medium text-slate-500">Card Type</label>
             <select
+              className="idc-studio__filter-sm"
               value={filters.cardType}
               onChange={(e) => setFilters({ ...filters, cardType: e.target.value })}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20"
+              aria-label="Card type"
             >
               <option value="">All Types</option>
               <option value="employee">Employee</option>
@@ -462,123 +407,106 @@ const IdCardGenerator = () => {
               <option value="temporary">Temporary</option>
             </select>
           </div>
+        </header>
+
+        <div className="idc-studio__kpis">
+          <KpiStat label="Total Cards" value={stats.total} icon={FiCreditCard} />
+          <KpiStat label="Active" value={stats.active} icon={FiCheckCircle} />
+          <KpiStat label="Deactivated" value={stats.deactivated} icon={FiXCircle} />
+          <KpiStat label="Employees" value={stats.employees} icon={FiUsers} />
         </div>
 
-        {/* Grid */}
-        <section className="rounded-[28px] border border-slate-100 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 md:px-6">
-            <h2 className="text-lg font-semibold text-slate-900">
-              ID Cards ({filteredCards.length})
-            </h2>
-            <p className="text-sm text-slate-500">Manage and preview all generated cards</p>
+        <section className="idc-studio__panel">
+          <div className="idc-studio__panel-head">
+            <h2 className="idc-studio__panel-title">Issued badges ({filteredCards.length})</h2>
+            <p className="idc-studio__panel-sub">Preview, download, or deactivate generated cards</p>
           </div>
 
-          <div className="p-5 md:p-6">
+          <div className="idc-studio__panel-body">
             {filteredCards.length === 0 ? (
-              <div className="py-8 sm:py-10 text-center">
-                <div
-                  className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
-                  style={{ background: `${MINT}20` }}
-                >
-                  <FiCreditCard className="h-8 w-8" style={{ color: MINT }} />
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900">No ID cards found</h3>
-                <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+              <div className="idc-studio__empty">
+                <span className="idc-studio__empty-icon" aria-hidden>
+                  <FiCreditCard />
+                </span>
+                <h3>No ID cards found</h3>
+                <p>
                   {searchQuery || filters.status || filters.cardType
                     ? 'Try adjusting your search or filters.'
-                    : 'Generate your first employee ID card to get started.'}
+                    : 'No employee ID cards have been issued yet.'}
                 </p>
-                {!searchQuery && !filters.status && !filters.cardType && (
-                  <button
-                    type="button"
-                    onClick={() => setShowGenerateModal(true)}
-                    className="mt-6 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white"
-                    style={{ background: MINT_GRADIENT }}
-                  >
-                    <FiPlus className="h-4 w-4" />
-                    Generate your first card
-                  </button>
-                )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div className="idc-studio__grid">
                 {filteredCards.map((card) => {
                   const emp = card.employeeId || {};
                   const cardStatus = getCardStatus(card);
                   return (
-                    <article
-                      key={card._id}
-                      className="group overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/50 transition hover:border-[#20C997]/30 hover:shadow-lg"
-                    >
-                      <div className="bg-gradient-to-b from-white to-slate-50 px-4 pb-2 pt-6">
+                    <article key={card._id} className="idc-studio__card">
+                      <div className="idc-studio__card-preview">
                         <IdCardMiniPreview card={card} />
                       </div>
 
-                      <div className="space-y-3 border-t border-slate-100 bg-white p-4">
-                        <div className="flex items-center gap-3">
+                      <div className="idc-studio__card-meta">
+                        <div className="idc-studio__card-person">
                           <ProfilePicture user={emp} size="sm" />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-semibold text-slate-900">
+                            <p className="idc-studio__card-person-name">
                               {emp.name} {emp.lastName}
                             </p>
-                            <p className="truncate text-xs text-slate-500">{emp.employeeId || '—'}</p>
+                            <p className="idc-studio__card-person-id">{emp.employeeId || '—'}</p>
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <span
-                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${statusStyles[cardStatus] || statusStyles.cancelled}`}
-                          >
+                        <div className="idc-studio__tags">
+                          <span className={`idc-studio__tag idc-studio__tag--${cardStatus}`}>
                             {getCardStatusLabel(cardStatus)}
                           </span>
-                          <span
-                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${typeStyles[card.cardType] || 'bg-slate-100 text-slate-600'}`}
-                          >
+                          <span className="idc-studio__tag idc-studio__tag--type">
                             {card.cardType}
                           </span>
                         </div>
 
-                        <p className="font-mono text-xs text-slate-500">{card.cardNumber}</p>
+                        <p className="idc-studio__card-number">{card.cardNumber}</p>
 
-                        <div className="flex items-center justify-end gap-1 border-t border-slate-50 pt-3">
+                        <div className="idc-studio__card-actions">
                           <button
                             type="button"
+                            className="idc-studio__icon-btn"
                             onClick={() => {
                               setSelectedCard(card);
                               setShowPreviewModal(true);
                             }}
-                            className="rounded-lg p-2.5 text-slate-400 transition hover:bg-[#20C997]/10 hover:text-[#0d9488] sm:p-2"
                             title="Preview"
                             aria-label="Preview ID card"
                           >
-                            <FiEye className="h-5 w-5 sm:h-4 sm:w-4" />
+                            <FiEye size={16} />
                           </button>
                           <button
                             type="button"
+                            className="idc-studio__icon-btn"
                             onClick={() => handleDownloadCard(card._id)}
-                            className="rounded-lg p-2.5 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600 sm:p-2"
                             title="Download"
                             aria-label="Download ID card PDF"
                           >
-                            <FiDownload className="h-5 w-5 sm:h-4 sm:w-4" />
+                            <FiDownload size={16} />
                           </button>
                           {cardStatus === 'active' ? (
                             <button
                               type="button"
+                              className="idc-studio__icon-btn idc-studio__icon-btn--danger"
                               onClick={() => handleDeactivateCard(card._id)}
-                              className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
                               title="Deactivate"
                             >
-                              <FiTrash2 className="h-4 w-4" />
+                              <FiTrash2 size={16} />
                             </button>
                           ) : cardStatus === 'cancelled' ? (
                             <button
                               type="button"
+                              className="idc-studio__icon-btn"
                               onClick={() => handleReactivateCard(card._id)}
-                              className="rounded-lg p-2 text-slate-400 transition hover:bg-[#20C997]/10 hover:text-[#0d9488]"
                               title="Reactivate"
                             >
-                              <FiRotateCcw className="h-4 w-4" />
+                              <FiRotateCcw size={16} />
                             </button>
                           ) : null}
                         </div>
@@ -590,8 +518,6 @@ const IdCardGenerator = () => {
             )}
           </div>
         </section>
-      </div>
-      </div>
       </div>
 
       {showGenerateModal && (
@@ -648,7 +574,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, em
           <select
             value={formData.employeeId}
             onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-[#0e9370] focus:ring-2 focus:ring-[#0e9370]/20"
             required
           >
             <option value="">Choose an employee...</option>
@@ -668,7 +594,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, em
 
         <div>
           <label className="mb-3 block text-sm font-semibold text-slate-700">Card Design</label>
-          <div className="rounded-2xl border-2 border-[#20C997] bg-[#20C997]/5 p-4 shadow-md">
+          <div className="rounded-2xl border-2 border-[#0e9370] bg-[#e8faf4] p-4 shadow-md">
             <div className="mb-3 flex justify-center">
               <PaarsivIdCard
                 size="mini"
@@ -680,7 +606,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, em
             </div>
             <p className="text-center text-sm font-medium text-slate-800">Paarsiv Official Badge</p>
             <p className="mt-1 text-center text-xs text-slate-500">
-              Sage green · charcoal · portrait layout
+              Official template — layout unchanged
             </p>
           </div>
         </div>
@@ -689,14 +615,14 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, em
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full px-6 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+            className="rounded-xl border border-slate-200 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="rounded-full px-6 py-2.5 text-sm font-semibold text-white shadow-md"
-            style={{ background: MINT_GRADIENT }}
+            className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-md"
+            style={{ background: PRIMARY_GRADIENT }}
           >
             Generate ID Card
           </button>
@@ -737,7 +663,7 @@ const PreviewModal = ({ card, onClose, onDownload }) => {
         </div>
 
         <div className="p-5">
-          <div className="mb-4 flex justify-center rounded-xl bg-slate-50 py-4">
+          <div className="mb-4 flex justify-center rounded-xl bg-[#e8faf4] py-4">
             <PaarsivIdCard
               size="preview"
               name={emp.name}
@@ -768,15 +694,15 @@ const PreviewModal = ({ card, onClose, onDownload }) => {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               Close
             </button>
             <button
               type="button"
               onClick={onDownload}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white"
-              style={{ background: MINT_GRADIENT }}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white"
+              style={{ background: PRIMARY_GRADIENT }}
             >
               <FiDownload className="h-4 w-4" />
               Download PDF

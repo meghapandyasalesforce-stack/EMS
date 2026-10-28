@@ -50,6 +50,7 @@ function App() {
     const permissions = useSelector((state) => state.auth.permissions) || [];
     const roleBuckets = useSelector((state) => state.auth.roleBuckets) || [];
     const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+    const activePortal = useSelector((state) => state.auth.activePortal);
     const isPlatformRoute = location.pathname.startsWith('/platform');
     const hideHeaderRoutes = ['/', '/login', '/register', '/organization/register', '/organization/login', '/forgot-password', '/platform/login'];
     const isCareerRoute = location.pathname.startsWith('/careers/');
@@ -68,6 +69,8 @@ function App() {
         || location.pathname.startsWith('/application/')
         || isPlatformRoute;
     const useHrmsShell = !shouldHideLayout && (!isCareerRoute || isHrmsUser);
+    /* Stitch/Kinetic HR chrome — HR portal only; Org Chart page styles guarded in CSS */
+    const useKineticHrms = useHrmsShell && activePortal === 'hr_manager';
     const pushKeepAliveUserId = authUser?._id || employee?._id || null;
     const sessionBootstrapped = useRef(false);
     const platformBootstrapped = useRef(false);
@@ -159,13 +162,16 @@ function App() {
     return (
         <div
             className={
-                useHrmsShell
-                    ? 'app-shell flex h-dvh max-w-[100vw] flex-col overflow-hidden bg-[var(--color-bg-soft)] text-[var(--color-text)]'
-                    : (isCareerPublicMode && isCareerJobApply
-                        ? 'flex h-dvh max-h-dvh w-full flex-col overflow-hidden bg-[var(--color-bg-soft)] text-[var(--color-text)]'
-                        : isCareerPublicMode
-                            ? 'flex min-h-screen w-full flex-col bg-[var(--color-bg-soft)] text-[var(--color-text)]'
-                            : 'min-h-screen w-full bg-[var(--color-bg-soft)] text-[var(--color-text)]')
+                [
+                    useHrmsShell
+                        ? 'app-shell flex h-dvh max-w-[100vw] flex-col overflow-hidden bg-[var(--color-bg-soft)] text-[var(--color-text)]'
+                        : (isCareerPublicMode && isCareerJobApply
+                            ? 'flex h-dvh max-h-dvh w-full flex-col overflow-hidden bg-[var(--color-bg-soft)] text-[var(--color-text)]'
+                            : isCareerPublicMode
+                                ? 'flex min-h-screen w-full flex-col bg-[var(--color-bg-soft)] text-[var(--color-text)]'
+                                : 'min-h-screen w-full bg-[var(--color-bg-soft)] text-[var(--color-text)]'),
+                    useKineticHrms ? 'kinetic-hrms' : '',
+                ].filter(Boolean).join(' ')
             }
         >
             {(useHrmsShell || isCareerPublicMode) && <Header />}
@@ -173,7 +179,7 @@ function App() {
             <ReleaseNotesPopup />
             <HrmsPopupDismissListener />
             {useHrmsShell ? (
-                <div className="app-main-column flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:ml-64 lg:w-[calc(100%-16rem)] lg:max-w-[calc(100vw-16rem)]">
+                <div className="app-main-column flex min-h-0 w-full flex-1 flex-col overflow-hidden">
                     <div
                         className={
                             isCareerJobApply

@@ -71,7 +71,28 @@ describe('navigationConfig — Me portal', () => {
     expect(items.some((item) => item.path === '/dashboard-manager')).toBe(false);
   });
 
-  it.each(['employee', 'payroll_admin', 'project_manager'])(
+  it('shows Me portal 7-section nav for employee portal (Time covers regularization)', () => {
+    const items = getNavigationItems(
+      { role: 'employee', _id: '1', employeeProfileId: 'e1' },
+      { _id: 'e1' },
+      [],
+      {},
+      'employee'
+    );
+
+    expect(items.map((i) => i.path)).toEqual([
+      '/dashboard-employee',
+      '/employee/leave-attendance',
+      '/employee-payroll',
+      '/employee/projects',
+      '/employee/engagement',
+      '/employee/documents-id',
+      '/profile-details',
+    ]);
+    expect(items.some((item) => item.path === '/my-attendance-regularization')).toBe(false);
+  });
+
+  it.each(['payroll_admin', 'project_manager'])(
     'shows personal regularization in the %s portal sidebar',
     (portalId) => {
       const items = getNavigationItems(
@@ -103,5 +124,68 @@ describe('navigationConfig — Me portal', () => {
     expect(
       items.some((item) => item.path === '/my-attendance-regularization')
     ).toBe(false);
+  });
+
+  it('hides paid-plan modules from HR nav on Free plan features', () => {
+    const freeFeatures = {
+      employees: true,
+      leave: true,
+      attendance: true,
+      recruitment: false,
+      payroll: false,
+      performance: false,
+      workforcePlanning: false,
+      lifecycle: true,
+      engagement: false,
+      documents: true,
+      analytics: false,
+      projects: false,
+    };
+    const items = getNavigationItems(
+      { role: 'employee', _id: '1', employeeProfileId: 'e1' },
+      { _id: 'e1', department: 'hr', position: 'hr manager' },
+      ['employee.view.all', 'leave.view.all', 'attendance.view.all'],
+      { isHrManager: true },
+      'hr_manager',
+      freeFeatures
+    );
+
+    expect(items.some((item) => item.path === '/employees')).toBe(true);
+    expect(items.some((item) => item.path === '/leave-management')).toBe(true);
+    expect(items.some((item) => item.path === '/admin-payroll')).toBe(false);
+    expect(items.some((item) => item.path === '/employee-payroll')).toBe(false);
+    expect(items.some((item) => item.path === '/recruitment')).toBe(false);
+    expect(items.some((item) => item.path === '/workforce')).toBe(false);
+    expect(items.some((item) => item.path === '/engagement')).toBe(false);
+    expect(items.some((item) => item.path === '/admin/reports')).toBe(false);
+  });
+
+  it('shows payroll and recruitment on Premium plan features', () => {
+    const premiumFeatures = {
+      employees: true,
+      leave: true,
+      attendance: true,
+      recruitment: true,
+      payroll: true,
+      performance: true,
+      workforcePlanning: true,
+      lifecycle: true,
+      engagement: true,
+      documents: true,
+      analytics: true,
+      projects: true,
+    };
+    const items = getNavigationItems(
+      { role: 'employee', _id: '1', employeeProfileId: 'e1' },
+      { _id: 'e1', department: 'hr', position: 'hr manager' },
+      ['employee.view.all'],
+      { isHrManager: true },
+      'hr_manager',
+      premiumFeatures
+    );
+
+    expect(items.some((item) => item.path === '/admin-payroll')).toBe(true);
+    expect(items.some((item) => item.path === '/recruitment')).toBe(true);
+    expect(items.some((item) => item.path === '/workforce')).toBe(true);
   });
 });
