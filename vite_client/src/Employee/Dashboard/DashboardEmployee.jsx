@@ -26,8 +26,6 @@ import {
     FaProjectDiagram,
     FaCheckCircle,
     FaArrowRight,
-    FaChevronLeft,
-    FaChevronRight,
 } from 'react-icons/fa';
 import { HiOutlineBell } from 'react-icons/hi2';
 import { FiHeadphones } from 'react-icons/fi';
@@ -47,7 +45,7 @@ import { persistor } from '../../context/store';
 import { mergeSessionProfile, getProfileDisplayName } from '../../utils/profileUtils';
 import { clearOrgAdminCredentials } from '../../utils/orgAdminCredentials';
 import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday } from 'date-fns';
+import { format } from 'date-fns';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 import { Dialog, Transition } from '@headlessui/react';
@@ -74,64 +72,6 @@ const WS = {
     card: '#FFFFFF',
     border: 'rgba(14, 43, 61, 0.08)',
 };
-
-function MiniCalendar({ viewDate, onPrevMonth, onNextMonth }) {
-    const monthStart = startOfMonth(viewDate);
-    const monthEnd = endOfMonth(viewDate);
-    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-    const pad = (getDay(monthStart) + 6) % 7;
-
-    return (
-        <div className="role-dashboard__card rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-                <button
-                    type="button"
-                    onClick={onPrevMonth}
-                    className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100"
-                    aria-label="Previous month"
-                >
-                    <FaChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <span className="text-sm font-semibold text-slate-800">{format(viewDate, 'MMMM yyyy')}</span>
-                <button
-                    type="button"
-                    onClick={onNextMonth}
-                    className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100"
-                    aria-label="Next month"
-                >
-                    <FaChevronRight className="h-3.5 w-3.5" />
-                </button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => (
-                    <div key={d} className="py-1">
-                        {d}
-                    </div>
-                ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs">
-                {Array.from({ length: pad }).map((_, i) => (
-                    <div key={`pad-${i}`} />
-                ))}
-                {days.map((day) => {
-                    const today = isToday(day);
-                    return (
-                        <div
-                            key={day.toISOString()}
-                            className={`flex h-8 items-center justify-center rounded-lg ${
-                                today
-                                    ? 'bg-[#0E9370] font-semibold text-white'
-                                    : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                        >
-                            {format(day, 'd')}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
 
 const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
 
@@ -288,7 +228,6 @@ function DashboardEmployee() {
     const [loading, setLoading] = useState(true);
     const [showResetPopup, setShowResetPopup] = useState(false);
     const [hasFetched, setHasFetched] = useState(false);
-    const [calendarViewDate, setCalendarViewDate] = useState(() => new Date());
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [logoutModalOpen, setLogoutModalOpen] = useState(false);
     const profileDropdownRef = useRef(null);
@@ -1385,8 +1324,8 @@ function DashboardEmployee() {
                             </div>
                         </div>
 
-                        {/* Compact links: manager + HR */}
-                        <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
+                        {/* Personal shortcuts */}
+                        <div className="employee-dash__shortcuts role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Shortcuts</p>
                             <div className="mt-3 grid grid-cols-1 gap-2">
                                 <button
@@ -1412,11 +1351,6 @@ function DashboardEmployee() {
                                 </button>
                             </div>
                         </div>
-                        <MiniCalendar
-                            viewDate={calendarViewDate}
-                            onPrevMonth={() => setCalendarViewDate((d) => subMonths(d, 1))}
-                            onNextMonth={() => setCalendarViewDate((d) => addMonths(d, 1))}
-                        />
                     </aside>
                 </div>
             </div>

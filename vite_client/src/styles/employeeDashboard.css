@@ -152,6 +152,8 @@
 .role-dashboard--employee .employee-dash__tasks > section > div { padding: 0.75rem 1.1rem; }
 .role-dashboard--employee button, .role-dashboard--employee a { transition: background-color 160ms, border-color 160ms, box-shadow 160ms; }
 .role-dashboard--employee button:focus-visible, .role-dashboard--employee a:focus-visible { outline: 2px solid #009f7c; outline-offset: 3px; }
+.role-dashboard--employee .employee-dash__shortcuts > div { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.role-dashboard--employee .employee-dash__shortcuts button { justify-content: center; flex-wrap: wrap; gap: 0.35rem; padding: 0.65rem 0.35rem; font-size: 0.72rem; }
 /* Restyle the existing attendance/task buttons only inside Employee home. */
 .employee-dash__attendance > div:first-child { border-radius: 11px; border-color: var(--rd-border); box-shadow: var(--rd-shadow); }
 .employee-dash__attendance > div:first-child > .relative { padding: 1rem 1.5rem; }
