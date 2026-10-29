@@ -83,6 +83,23 @@ describe('Admin dashboard reference layout and overlays', () => {
     await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('/sent-announcements'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+  it('renders the announcements popup with the reference header, badges and New actions', async () => {
+    const get = axios.get.getMockImplementation();
+    axios.get.mockImplementation(url => url.includes('sent-announcements') ? Promise.resolve({ data: { announcements: [{ _id: 'notice1', metadata: { title: 'Popup notice', category: 'Update' }, message: 'Details', createdAt: '2026-10-29' }] } }) : get(url));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: /Popup notice/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Announcements' });
+    expect(within(dialog).getByText('Communications')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Update', { exact: true })).toBeInTheDocument();
+    expect(within(dialog).getByText('Popup notice', { exact: true })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'New Announcement', exact: true })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'New', exact: true })).toBeInTheDocument();
+    expect(document.body).toHaveClass('admin-announcements-overlay');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body).not.toHaveClass('admin-announcements-overlay');
+    expect(screen.getByTestId('route')).toHaveTextContent('/dashboard-admin');
+  });
   it('opens the selected new hire and closes on backdrop click', async () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: /Megha Pandya.*Joined/ }));

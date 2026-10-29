@@ -2,10 +2,11 @@ import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from '../../utils/axios';
+import { FiPlus, FiChevronRight } from 'react-icons/fi';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import {
   ModalShell, LeaveDrawer, ApprovalsDrawer, EmployeeQuickViewModal,
-  CelebrationsDrawer, AnnouncementsListModal,
+  CelebrationsDrawer,
 } from '../../HR/Dashboard/DashboardOverlays';
 
 const Attendance = lazy(() => import('../Attendance/TodayStatusComponent'));
@@ -52,6 +53,7 @@ export default function AdminDashboardOverlays({ overlay, onClose, onChanged, em
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.body.classList.add('admin-dashboard-overlay');
+    if (kind === 'announcements') document.body.classList.add('admin-announcements-overlay');
     const timer = setTimeout(() => document.querySelector('.hr-ov-modal button, .hr-ov-drawer button')?.focus(), 0);
     const onInput = event => {
       if (['addEmployee', 'payroll', 'helpdesk', 'leave', 'approvals'].includes(kind) && event.target.closest('[role="dialog"]')) dirty.current = true;
@@ -74,7 +76,7 @@ export default function AdminDashboardOverlays({ overlay, onClose, onChanged, em
     return () => {
       clearTimeout(timer);
       document.body.style.overflow = previousOverflow;
-      document.body.classList.remove('admin-dashboard-overlay');
+      document.body.classList.remove('admin-dashboard-overlay', 'admin-announcements-overlay');
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('input', onInput);
       activeElement?.focus?.();
@@ -102,7 +104,24 @@ export default function AdminDashboardOverlays({ overlay, onClose, onChanged, em
   if (kind === 'approvals' && !loading && !error) return <ApprovalsDrawer open escalatedOnly approvals={approvals} onClose={requestClose} onChanged={refresh} />;
   if (kind === 'employee') return <EmployeeQuickViewModal open employee={overlay.employee} onClose={requestClose} onEditFull={() => onFullEmployee(overlay.employee)} />;
   if (kind === 'celebrations') return <CelebrationsDrawer open items={celebrations} focusItem={overlay.item} eventsByKey={celebrationEvents} reacting={reacting} onReact={onReact} onEnsureEvent={onEnsureEvent} onClose={requestClose} />;
-  if (kind === 'announcements' && !loading && !error) return <AnnouncementsListModal open items={announcementItems} onClose={requestClose} onNew={onNewAnnouncement} />;
+  if (kind === 'announcements') return (
+    <ModalShell wide eyebrow="Communications" title="Announcements" onClose={requestClose} footer={
+      <><button type="button" className="hr-ov-btn hr-ov-btn--ghost" onClick={requestClose}>Cancel</button>{onNewAnnouncement && <button type="button" className="hr-ov-btn hr-ov-btn--primary" onClick={onNewAnnouncement}>New</button>}</>
+    }>
+      <div className="admin-announcements-popup">
+        {onNewAnnouncement && <div className="admin-announcements-popup__toolbar"><button type="button" className="hr-ov-btn hr-ov-btn--primary" onClick={onNewAnnouncement}><FiPlus aria-hidden />New Announcement</button></div>}
+        {loading ? <p role="status" className="hr-ov-empty">Loading announcements…</p> : error ? <div role="alert"><p>{error}</p><button type="button" className="hr-ov-btn hr-ov-btn--primary" onClick={() => setAttempt(value => value + 1)}>Retry</button></div> : announcementItems.length === 0 ? <div className="hr-ov-empty">No announcements yet.</div> : <div className="admin-announcements-popup__list">
+          {announcementItems.map(item => {
+            const important = item.priority === 'high' || item.metadata?.important === true || item.metadata?.priority === 'high';
+            const category = important ? 'Important' : String(item.metadata?.category || item.category || 'General');
+            const tone = ['important', 'update', 'general', 'event'].includes(category.toLowerCase()) ? category.toLowerCase() : 'general';
+            const title = String(item.metadata?.title || item.message || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            return <article key={item._id} className="admin-announcements-popup__item"><div><div className="admin-announcements-popup__meta"><time>{item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</time><span className="admin-announcements-popup__badge" data-tone={tone}>{category}</span></div><p>{title}</p></div><FiChevronRight aria-hidden /></article>;
+          })}
+        </div>}
+      </div>
+    </ModalShell>
+  );
   const Workflow = { attendance: Attendance, payroll: Payroll, addEmployee: AddEmployee, helpdesk: Helpdesk, calendar: Calendar }[kind];
   return (
     <ModalShell wide title={TITLES[kind] || 'Dashboard details'} eyebrow="Admin workspace" onClose={requestClose}>

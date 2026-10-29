@@ -172,3 +172,34 @@ body.admin-dashboard-overlay .hr-ov-modal--wide { width:min(76rem,calc(100vw - 2
 @media(prefers-reduced-motion:reduce) {
   .admin-dash .admin-dash__announcements .admin-dash__list-row { transition:none; }
 }
+
+/* Announcements list popup — Admin only; shared HR popup styling stays unchanged. */
+body.admin-announcements-overlay .hr-ov-modal--wide { width:min(72rem,calc(100vw - 3rem)); border-radius:1rem; }
+body.admin-announcements-overlay .hr-ov-modal__head { padding:1.1rem 1.3rem; background:#0e2b3d; }
+body.admin-announcements-overlay .hr-ov-drawer__eyebrow { color:#00c49a; letter-spacing:.04em; }
+body.admin-announcements-overlay .hr-ov-drawer__title { font-size:1.3rem; font-weight:600; }
+body.admin-announcements-overlay .hr-ov-modal__body { padding:1rem 1.3rem 1.3rem; background:#fff; }
+body.admin-announcements-overlay .hr-ov-modal__foot { justify-content:flex-end; gap:.8rem; padding:1rem 1.3rem; background:#f0f4f8; border-top:1px solid #e7edf2; }
+body.admin-announcements-overlay .hr-ov-btn { border-radius:.65rem; }
+body.admin-announcements-overlay .hr-ov-btn--primary { background:#009978; border-color:#009978; }
+body.admin-announcements-overlay .hr-ov-btn--primary:hover { background:#00846a; }
+.admin-announcements-popup__toolbar { display:flex; justify-content:flex-end; margin-bottom:1rem; }
+.admin-announcements-popup__toolbar .hr-ov-btn { display:inline-flex; align-items:center; gap:.65rem; }
+.admin-announcements-popup__list { display:flex; flex-direction:column; gap:.6rem; }
+.admin-announcements-popup__item { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-width:0; padding:.95rem 1.6rem; border:1px solid #e1e7ef; border-radius:.85rem; background:#fff; }
+.admin-announcements-popup__item > div { min-width:0; }
+.admin-announcements-popup__meta { display:flex; flex-wrap:wrap; align-items:center; gap:.65rem; }
+.admin-announcements-popup__meta time { color:#788395; font-size:.85rem; }
+.admin-announcements-popup__badge { display:inline-flex; padding:.12rem .6rem; border:1px solid #c9eadd; border-radius:999px; color:#008268; background:#e6f7ef; font-size:.7rem; line-height:1.4; font-weight:700; text-transform:uppercase; }
+.admin-announcements-popup__badge[data-tone="important"] { color:#d62333; background:#fff0f0; border-color:#ffcfd4; }
+.admin-announcements-popup__badge[data-tone="update"] { color:#2466db; background:#eef3ff; border-color:#d2dfff; }
+.admin-announcements-popup__badge[data-tone="event"] { color:#8436cc; background:#f6edff; border-color:#e9d5ff; }
+.admin-announcements-popup__item p { margin:.3rem 0 0; color:#25374b; font-size:.95rem; font-weight:500; line-height:1.45; overflow-wrap:anywhere; }
+.admin-announcements-popup__item > svg { flex-shrink:0; color:#617085; width:1.2rem; height:1.2rem; }
+@media(max-width:639.98px) {
+  body.admin-announcements-overlay .hr-ov-modal--wide { width:calc(100vw - 1rem); }
+  body.admin-announcements-overlay .hr-ov-modal__head,
+  body.admin-announcements-overlay .hr-ov-modal__body,
+  body.admin-announcements-overlay .hr-ov-modal__foot { padding:1rem; }
+  .admin-announcements-popup__item { padding:.85rem; }
+}
