@@ -1,8 +1,10 @@
 import "../../styles/roleDashboards.css";
+import "../../styles/employeeDashboard.css";
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
+    FaSun,
     FaCalendarAlt,
     FaBirthdayCake,
     FaTasks,
@@ -253,7 +255,7 @@ function AnniversaryRailCard({ item, isSelf, event, reacting, onReact, onWishes 
 
             {isTodayAnniversary ? (
                 <div className="mt-3 flex flex-wrap gap-2.5">
-                    {BIRTHDAY_REACTIONS.map((emoji) => {
+                    {CELEBRATION_REACTIONS.map((emoji) => {
                         const count = counts[emoji] || 0;
                         return (
                             <button
@@ -840,7 +842,7 @@ function DashboardEmployee() {
 
     const kpiCard = (label, value, sub, icon) => (
         <div
-            className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-5"
+            className="employee-dash__kpi role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-5"
             style={{ borderColor: WS.border }}
         >
             <div className="flex items-start justify-between gap-3">
@@ -887,7 +889,8 @@ function DashboardEmployee() {
                             style={{ borderColor: WS.border }}
                         >
                             <div className="flex min-w-0 items-center gap-4">
-                                <div className="relative shrink-0" ref={profileDropdownRef}>
+                                <FaSun className="employee-dash__sun" aria-hidden="true" />
+                                <div className="employee-dash__profile relative shrink-0" ref={profileDropdownRef}>
                                     <button
                                         type="button"
                                         onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
@@ -909,10 +912,10 @@ function DashboardEmployee() {
                                 </div>
                                 <div className="min-w-0">
                                     <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl md:text-2xl">
-                                        Welcome back{displayName ? `, ${displayName}` : ''}!
+                                        Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}{displayName ? `, ${displayName}` : ''}!
                                     </h1>
                                     <p className="mt-0.5 text-sm text-slate-600 hidden sm:block">
-                                        {[profile?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
+                                        {format(new Date(), 'dd MMM yyyy')} · {[profile?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
                                     </p>
                                 </div>
                             </div>
@@ -949,7 +952,7 @@ function DashboardEmployee() {
                         <div className="rounded-xl border bg-white shadow-sm lg:hidden" style={{ borderColor: WS.border }}>
                             <div
                                 className="rounded-t-xl px-3 py-2"
-                                style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
+                                style={{ background: '#0e2b3d' }}
                             >
                                 <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
                                     <FaBirthdayCake className="h-3 w-3" />
@@ -1012,21 +1015,6 @@ function DashboardEmployee() {
                             )}
                         </div>
 
-                        {/* Quick actions */}
-                        <div>
-                            <h2 className="mb-3 text-sm font-semibold text-slate-800">Quick actions</h2>
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                {quickAction('Apply leave', <FaCalendarAlt className="h-6 w-6" />, () =>
-                                    navigate('/employee/leave-attendance')
-                                )}
-                                {quickAction('Regularization', <FaClock className="h-6 w-6" />, () =>
-                                    navigate('/my-attendance-regularization')
-                                )}
-                                {quickAction('View payslip', <FaFileAlt className="h-6 w-6" />, () => navigate('/employee-payroll'))}
-                                {quickAction('Daily report', <FaChartBar className="h-6 w-6" />, () => navigate('/daily-report'))}
-                            </div>
-                        </div>
-
                         {/* Attendance summary */}
                         <section
                             className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5 md:p-6"
@@ -1034,9 +1022,9 @@ function DashboardEmployee() {
                         >
                             <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900 sm:mb-4">
                                 <FaChartLine className="text-[#0E9370]" />
-                                Attendance summary
+                                Attendance Health
                             </h2>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div className="employee-dash__health grid grid-cols-1 gap-4 md:grid-cols-3">
                                 {[
                                     {
                                         title: 'On-time score',
@@ -1051,6 +1039,11 @@ function DashboardEmployee() {
                                               ? `${dashboardStats.avgDayHours.toFixed(1)}h`
                                               : '—',
                                         hint: 'Days with completed punch',
+                                    },
+                                    {
+                                        title: 'Hours this month',
+                                        val: statsLoading ? '…' : `${dashboardStats.monthHours.toFixed(1)}h`,
+                                        hint: 'Recorded attendance hours',
                                     },
                                     {
                                         title: 'Overtime (est.)',
@@ -1080,57 +1073,23 @@ function DashboardEmployee() {
                             </div>
                         </section>
 
+                        {/* Quick actions */}
+                        <div className="employee-dash__quick-actions">
+                            <h2 className="mb-3 text-sm font-semibold text-slate-800">Quick actions</h2>
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                {quickAction('Apply leave', <FaCalendarAlt className="h-6 w-6" />, () =>
+                                    navigate('/employee/leave-attendance')
+                                )}
+                                {quickAction('Regularization', <FaClock className="h-6 w-6" />, () =>
+                                    navigate('/my-attendance-regularization')
+                                )}
+                                {quickAction('View payslip', <FaFileAlt className="h-6 w-6" />, () => navigate('/employee-payroll'))}
+                                {quickAction('Daily report', <FaChartBar className="h-6 w-6" />, () => navigate('/daily-report'))}
+                            </div>
+                        </div>
+
                         {/* Projects + Tasks */}
-                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                            <section
-                                className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
-                                style={{ borderColor: WS.border }}
-                            >
-                                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
-                                    <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                                        <FaProjectDiagram className="text-[#0E9370]" />
-                                        Projects
-                                    </h3>
-                                    <Link
-                                        to="/employee/projects"
-                                        className="text-xs font-semibold text-[#0E9370] hover:text-[#00694F]"
-                                    >
-                                        View all
-                                    </Link>
-                                </div>
-                                <div className="p-3 sm:p-5">
-                                    {statsLoading ? (
-                                        <div className="flex justify-center py-10">
-                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370]" />
-                                        </div>
-                                    ) : dashboardStats.projects?.length > 0 ? (
-                                        <ul className="space-y-3">
-                                            {dashboardStats.projects.map((project) => (
-                                                <li key={project._id}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate(`/employee/projects/${project._id}`)}
-                                                        className="w-full rounded-xl border border-slate-100 p-3 text-left transition hover:border-[#0E9370]/30 hover:bg-[#F8F9FB]"
-                                                    >
-                                                        <span className="font-medium text-slate-800">{project.name}</span>
-                                                        <FaArrowRight className="float-right mt-1 h-3 w-3 text-slate-400" />
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <div className="rounded-xl border border-dashed border-slate-200 bg-[#F8F9FB] py-10 text-center">
-                                            <FaProjectDiagram className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-                                            <p className="text-sm text-slate-500">No projects assigned yet</p>
-                                            <Link to="/employee/projects">
-                                                <span className="mt-3 inline-block rounded-full bg-[#0E9370] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0b7458]">
-                                                    View all projects
-                                                </span>
-                                            </Link>
-                                        </div>
-                                    )}
-                                </div>
-                            </section>
+                        <div className="grid grid-cols-1 gap-6">
 
                             <section
                                 className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
@@ -1171,7 +1130,7 @@ function DashboardEmployee() {
                         <div className="hidden rounded-xl border bg-white shadow-sm lg:block" style={{ borderColor: WS.border }}>
                             <div
                                 className="rounded-t-xl px-3 py-2"
-                                style={{ background: `linear-gradient(90deg, ${WS.mint} 0%, #17a67d 100%)` }}
+                                style={{ background: '#0e2b3d' }}
                             >
                                 <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
                                     <FaBirthdayCake className="h-3 w-3" />
@@ -1235,11 +1194,7 @@ function DashboardEmployee() {
                             </div>
                         ) : null}
 
-                        <MiniCalendar
-                            viewDate={calendarViewDate}
-                            onPrevMonth={() => setCalendarViewDate((d) => subMonths(d, 1))}
-                            onNextMonth={() => setCalendarViewDate((d) => addMonths(d, 1))}
-                        />
+
 
                         <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Leave balance</h3>
@@ -1353,8 +1308,58 @@ function DashboardEmployee() {
                             </div>
                         </div>
 
+                            <section
+                                className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
+                                style={{ borderColor: WS.border }}
+                            >
+                                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
+                                    <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                                        <FaProjectDiagram className="text-[#0E9370]" />
+                                        Active projects
+                                    </h3>
+                                    <Link
+                                        to="/employee/projects"
+                                        className="text-xs font-semibold text-[#0E9370] hover:text-[#00694F]"
+                                    >
+                                        View all
+                                    </Link>
+                                </div>
+                                <div className="p-3 sm:p-5">
+                                    {statsLoading ? (
+                                        <div className="flex justify-center py-10">
+                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370]" />
+                                        </div>
+                                    ) : dashboardStats.projects?.length > 0 ? (
+                                        <ul className="space-y-3">
+                                            {dashboardStats.projects.map((project) => (
+                                                <li key={project._id}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate(`/employee/projects/${project._id}`)}
+                                                        className="w-full rounded-xl border border-slate-100 p-3 text-left transition hover:border-[#0E9370]/30 hover:bg-[#F8F9FB]"
+                                                    >
+                                                        <span className="font-medium text-slate-800">{project.name}</span>
+                                                        <FaArrowRight className="float-right mt-1 h-3 w-3 text-slate-400" />
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <div className="rounded-xl border border-dashed border-slate-200 bg-[#F8F9FB] py-10 text-center">
+                                            <FaProjectDiagram className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+                                            <p className="text-sm text-slate-500">No projects assigned yet</p>
+                                            <Link to="/employee/projects">
+                                                <span className="mt-3 inline-block rounded-full bg-[#0E9370] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0b7458]">
+                                                    View all projects
+                                                </span>
+                                            </Link>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+
                         <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
-                            <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
+                            <h3 className="text-sm font-semibold text-slate-900">Quick Links</h3>
                             <div className="mt-3 flex flex-col gap-2 text-sm">
                                 <button
                                     type="button"
@@ -1407,6 +1412,11 @@ function DashboardEmployee() {
                                 </button>
                             </div>
                         </div>
+                        <MiniCalendar
+                            viewDate={calendarViewDate}
+                            onPrevMonth={() => setCalendarViewDate((d) => subMonths(d, 1))}
+                            onNextMonth={() => setCalendarViewDate((d) => addMonths(d, 1))}
+                        />
                     </aside>
                 </div>
             </div>
