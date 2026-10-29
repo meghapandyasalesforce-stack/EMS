@@ -553,15 +553,24 @@ html.me-portal .me-more-sheet__item.is-active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  min-width: 44px;
-  min-height: 44px;
+  width: 2.125rem;
+  height: 2.125rem;
+  flex-shrink: 0;
   border-radius: 9999px;
   border: 1px solid rgba(30, 41, 59, 0.1);
   background: #fff;
   color: var(--me-secondary);
   cursor: pointer;
+}
+
+.me-topbar-help svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.me-topbar-help:hover {
+  background: var(--me-tertiary);
+  color: var(--me-primary);
 }
 
 .me-topbar-help:focus-visible {

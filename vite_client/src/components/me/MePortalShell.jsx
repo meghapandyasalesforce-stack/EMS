@@ -5,13 +5,13 @@ import {
   FaFolderOpen,
   FaHome,
   FaMoneyBill,
-  FaQuestion,
   FaSeedling,
   FaSignOutAlt,
   FaTimes,
   FaBars,
   FaClock,
 } from 'react-icons/fa';
+import { FiHeadphones } from 'react-icons/fi';
 import { VscProject } from 'react-icons/vsc';
 import NotificationDropdown from '../NotificationDropdown';
 import PortalSwitcher from '../PortalSwitcher';
@@ -98,7 +98,7 @@ const MePortalShell = ({
         title="Helpdesk"
         onClick={() => go('/helpdesk')}
       >
-        <FaQuestion aria-hidden />
+        <FiHeadphones aria-hidden />
       </button>
       <div className="relative" ref={profileDropdownRef}>
         <button
@@ -253,7 +253,7 @@ const MePortalShell = ({
                 title="Helpdesk"
                 onClick={() => onNavigate('/helpdesk')}
               >
-                <FaQuestion aria-hidden />
+                <FiHeadphones aria-hidden />
               </button>
               <div className="relative" ref={profileDropdownRef}>
                 <button
@@ -354,7 +354,7 @@ const MePortalShell = ({
               <li>
                 <button type="button" className="me-more-sheet__item" onClick={() => go('/helpdesk')}>
                   <span className="me-more-sheet__icon" aria-hidden>
-                    <FaQuestion />
+                    <FiHeadphones />
                   </span>
                   Helpdesk
                 </button>
