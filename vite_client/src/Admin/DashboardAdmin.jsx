@@ -500,11 +500,11 @@ function DashboardAdmin() {
             </Card>
 
             <Card className="admin-dash__announcements">
-              <div className="admin-dash__announcement-head"><h2>Announcements</h2><Button type="button" variant="outlined" aria-label="New announcement" onClick={() => { setOverlay(null); setShowAnnouncementModal(true); }}><FiPlus aria-hidden />New</Button></div>
+              <div className="admin-dash__announcement-head"><h2><span className="admin-dash__announcement-heading-icon"><FiFileText aria-hidden /></span>Announcements</h2><Button type="button" variant="outlined" aria-label="New announcement" onClick={() => { setOverlay(null); setShowAnnouncementModal(true); }}><FiPlus aria-hidden />New</Button></div>
               <div className="admin-dash__announcement-body">
-              {announcements.length ? <div className="admin-dash__announcement-grid">{announcements.map(item => <button key={item._id} type="button" className="admin-dash__list-row" onClick={() => openOverlay('announcements')}><time className="admin-dash__announcement-date">{formatDate(item.createdAt)}</time><strong className="admin-dash__grow">{String(item.metadata?.title || item.message || '').replace(/<[^>]+>/g, ' ').trim()}</strong></button>)}</div> : <EmptyState title="No announcements yet" />}
+              {announcements.length ? <div className="admin-dash__announcement-grid">{announcements.map(item => <button key={item._id} type="button" className="admin-dash__list-row" onClick={() => openOverlay('announcements')}><span className="admin-dash__announcement-item-icon"><FiFileText aria-hidden /></span><span className="admin-dash__announcement-content"><span className="admin-dash__announcement-meta"><time className="admin-dash__announcement-date">{formatDate(item.createdAt)}</time>{(item.priority === 'high' || item.metadata?.important) && <span className="admin-dash__announcement-important">Important</span>}</span><strong>{String(item.metadata?.title || item.message || '').replace(/<[^>]+>/g, ' ').trim()}</strong></span><FiArrowRight className="admin-dash__announcement-arrow" aria-hidden /></button>)}</div> : <EmptyState title="No announcements yet" />}
 
-              <div className="admin-dash__footer-actions"><Button type="button" variant="outlined" className="admin-dash__view-announcements" onClick={() => navigate('/sent-announcements')}>View All Announcements</Button></div>
+              <div className="admin-dash__footer-actions"><Button type="button" variant="outlined" className="admin-dash__view-announcements" onClick={() => navigate('/sent-announcements')}>View All Announcements<FiArrowRight aria-hidden /></Button></div>
               </div>
             </Card>
 

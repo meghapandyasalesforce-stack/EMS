@@ -113,20 +113,29 @@ body.admin-dashboard-overlay .hr-ov-modal--wide { width:min(76rem,calc(100vw - 2
 .admin-dash__panel-head { border-bottom:1px solid #edf0f4; padding-bottom:.45rem; }
 .admin-dash__celebration-head { border-radius:.8rem .8rem 0 0; }
 .admin-dash__celebration-body { padding:.75rem 1rem; }
-/* Announcement card: white heading, muted stacked messages, simple full-width action. */
-.admin-dash__announcement-head { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:1.1rem 1.25rem .75rem; border-radius:1rem 1rem 0 0; background:#fff; color:#111c2d; }
-.admin-dash__announcement-head h2 { margin:0; font-size:1.15rem; font-weight:600; }
-.admin-dash__announcement-head .ui-btn { min-height:2rem; padding:.2rem 0; border:0; background:transparent; color:#00bd92; font-size:.9rem; box-shadow:none; }
-.admin-dash__announcement-head .ui-btn:hover { color:#00866a; background:transparent; }
-.admin-dash__announcement-body { padding:0 1.25rem 1.1rem; }
-.admin-dash__announcements .admin-dash__announcement-grid { gap:.7rem; }
-.admin-dash .admin-dash__announcements .admin-dash__list-row { display:flex; flex-direction:column; align-items:flex-start; gap:.35rem; min-height:4.5rem; padding:.9rem; border:1px solid #dce4ee; border-radius:.9rem; background:#f7f9fb; }
-.admin-dash__announcements .admin-dash__list-row:hover { background:#f0f5f8; border-color:#cbd8e5; }
-.admin-dash__announcement-date { display:block; color:#627c9e; font-size:.75rem; }
-.admin-dash__announcements .admin-dash__list-row strong { flex:0 1 auto; font-size:.95rem; font-weight:500; line-height:1.4; color:#111c2d; }
+/* Announcement preview: compact update cards with clear visual hierarchy. */
+.admin-dash.role-dashboard .admin-dash__announcements { display:flex; flex-direction:column; }
+.admin-dash__announcement-head { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:1rem 1.15rem .8rem; border-bottom:1px solid #eef2f5; border-radius:1rem 1rem 0 0; background:#fff; color:#111c2d; }
+.admin-dash__announcement-head h2 { display:flex; align-items:center; gap:.65rem; margin:0; font-size:1.05rem; font-weight:600; }
+.admin-dash__announcement-heading-icon { display:grid; place-items:center; width:2.15rem; height:2.15rem; flex-shrink:0; border-radius:.65rem; color:#00876b; background:#e7f7f1; }
+.admin-dash__announcement-head .ui-btn { min-height:2.1rem; padding:.35rem .7rem; border:1px solid #cce9df; border-radius:.6rem; background:#f1fbf7; color:#007c60; font-size:.8rem; font-weight:600; box-shadow:none; }
+.admin-dash__announcement-head .ui-btn:hover { color:#00694f; background:#e0f5ec; border-color:#a8d8c7; }
+.admin-dash__announcement-body { display:flex; flex:1; flex-direction:column; gap:.8rem; padding:.9rem 1.15rem 1rem; }
+.admin-dash__announcements .admin-dash__announcement-grid { gap:.6rem; }
+.admin-dash .admin-dash__announcements .admin-dash__list-row { display:flex; flex-direction:row; align-items:center; gap:.8rem; min-height:5rem; padding:.85rem; border:1px solid #e3eaf0; border-radius:.8rem; background:#fff; transition:background-color .15s,border-color .15s,box-shadow .15s; }
+.admin-dash .admin-dash__announcements .admin-dash__list-row:hover { background:#f7fcfa; border-color:#b9dfd0; box-shadow:0 3px 10px rgba(14,43,61,.04); }
+.admin-dash__announcement-item-icon { display:grid; place-items:center; width:2.5rem; height:2.5rem; flex-shrink:0; border-radius:.7rem; color:#0e9370; background:#edf8f3; font-size:1.15rem; }
+.admin-dash__announcement-content { display:flex; flex:1; min-width:0; flex-direction:column; gap:.3rem; }
+.admin-dash__announcement-meta { display:flex; flex-wrap:wrap; align-items:center; gap:.55rem; }
+.admin-dash__announcement-date { color:#718096; font-size:.73rem; letter-spacing:.015em; }
+.admin-dash__announcement-important { padding:.1rem .4rem; border-radius:.3rem; background:#fff0e4; color:#a45b19; font-size:.65rem; font-weight:600; }
+.admin-dash__announcements .admin-dash__list-row strong { font-size:.92rem; font-weight:600; line-height:1.45; color:#182b3e; overflow-wrap:anywhere; }
+.admin-dash__announcement-arrow { width:1rem; flex-shrink:0; color:#8b9bab; }
+.admin-dash .admin-dash__announcements .admin-dash__list-row:hover .admin-dash__announcement-arrow { color:#0e9370; }
 .admin-dash__announcements .ui-empty-state { padding:1rem; }
-.admin-dash__announcements .admin-dash__footer-actions { margin-top:.8rem; }
-.admin-dash__announcements .admin-dash__view-announcements { width:100%; min-height:2.7rem; padding:.5rem; border:1px solid #dce4ee; border-radius:.9rem; background:#fff; font-size:.95rem; font-weight:500; }
+.admin-dash__announcements .admin-dash__footer-actions { margin-top:auto; }
+.admin-dash__announcements .admin-dash__view-announcements { width:100%; min-height:2.45rem; gap:.5rem; padding:.5rem; border:0; border-radius:.6rem; background:#f0f9f5; color:#08775c; font-size:.8rem; font-weight:600; }
+.admin-dash__announcements .admin-dash__view-announcements:hover { background:#e4f4ed; }
 .admin-dash__payroll-legend { display:flex; flex-direction:column; justify-content:center; gap:.45rem; min-width:0; padding:.5rem; border:1px solid #e2e8f0; border-radius:.5rem; font-size:.8rem; }
 .admin-dash__payroll-legend li { display:flex; align-items:center; gap:.4rem; min-width:0; }
 .admin-dash__payroll-legend li > span:first-child { width:.6rem; height:.6rem; flex-shrink:0; border-radius:50%; }
@@ -154,3 +163,12 @@ body.admin-dashboard-overlay .hr-ov-modal--wide { width:min(76rem,calc(100vw - 2
 .admin-dash .admin-dash__announcement-head { min-height:2.5rem; }
 
 .admin-dash.role-dashboard .admin-dash__announcements { border-radius:1.1rem; border-color:#dce4ee; box-shadow:0 1px 3px rgba(14,43,61,.08); }
+
+@media(max-width:639.98px) {
+  .admin-dash__announcement-head h2 { gap:.45rem; font-size:1rem; }
+  .admin-dash .admin-dash__announcements .admin-dash__list-row { gap:.6rem; padding:.75rem; }
+  .admin-dash__announcement-item-icon { width:2rem; height:2rem; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .admin-dash .admin-dash__announcements .admin-dash__list-row { transition:none; }
+}
