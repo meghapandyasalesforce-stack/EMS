@@ -1,6 +1,6 @@
 import React from 'react';
 import '../../styles/surveyUI.css';
-import { FaArrowLeft, FaChartLine } from 'react-icons/fa';
+import { FaArrowLeft, FaClipboardList } from 'react-icons/fa';
 import { MINT_GRADIENT } from '../Reports/constants';
 
 const EngagementFormShell = ({
@@ -19,11 +19,11 @@ const EngagementFormShell = ({
                             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-md"
                             style={{ background: MINT_GRADIENT }}
                         >
-                            <FaChartLine className="h-6 w-6" />
+                            <FaClipboardList className="h-6 w-6" />
                         </div>
                         <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                                HR Workspace
+                                Survey Workspace
                             </p>
                             <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
                             {subtitle ? <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p> : null}
