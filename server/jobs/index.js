@@ -22,6 +22,7 @@ import { scheduleEngagementSurveyJobs } from './engagementSurveyJob.js';
 import { scheduleCelebrationNotificationJobs } from './celebrationNotificationJob.js';
 import { scheduleOneOnOneReminderJobs } from './oneOnOneReminderJob.js';
 import { scheduleSubscriptionLifecycleJobs } from './subscriptionLifecycleJob.js';
+import { scheduleMissedPunchReminderJobs } from './missedPunchReminderJob.js';
 import { scheduleAnnouncementJobs } from './announcementScheduleJob.js';
 
 /**
@@ -126,6 +127,13 @@ export const initializeWorkers = async () => {
                 logger.info('Subscription lifecycle jobs registered (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule subscription lifecycle jobs', { error: error.message });
+            }
+
+            try {
+                scheduleMissedPunchReminderJobs();
+                logger.info('Missed punch reminder jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule missed punch reminder jobs', { error: error.message });
             }
 
             try {
@@ -262,6 +270,13 @@ export const initializeWorkers = async () => {
             logger.info('Subscription lifecycle jobs scheduled');
         } catch (error) {
             logger.error('Failed to schedule subscription lifecycle jobs', { error: error.message });
+        }
+
+        try {
+            scheduleMissedPunchReminderJobs();
+            logger.info('Missed punch reminder jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule missed punch reminder jobs', { error: error.message });
         }
 
         try {

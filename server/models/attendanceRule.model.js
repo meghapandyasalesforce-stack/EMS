@@ -94,15 +94,17 @@ const attendanceRuleSchema = new mongoose.Schema({
             }
         }
     },
-    // Comp Off settings
+    // Comp Off settings. Limits are days, not the number of requests. 0 means no cap.
     compOffRules: {
         allowedPerMonth: {
             type: Number,
-            default: 2
+            default: 2,
+            min: 0
         },
         maxAccumulation: {
             type: Number,
-            default: 5
+            default: 5,
+            min: 0
         },
         validity: {
             type: Number,

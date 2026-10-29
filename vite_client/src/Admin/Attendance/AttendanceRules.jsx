@@ -51,6 +51,11 @@ const AttendanceRules = () => {
         regularizationRules: {
             enabled: true,
             allowedPerMonth: 5
+        },
+        compOffRules: {
+            allowedPerMonth: 2,
+            maxAccumulation: 5,
+            validity: 90
         }
     });
 
@@ -111,6 +116,11 @@ const AttendanceRules = () => {
                     regularizationRules: rule.regularizationRules || {
                         enabled: true,
                         allowedPerMonth: 5
+                    },
+                    compOffRules: {
+                        allowedPerMonth: rule.compOffRules?.allowedPerMonth ?? 2,
+                        maxAccumulation: rule.compOffRules?.maxAccumulation ?? 5,
+                        validity: rule.compOffRules?.validity ?? 90
                     }
                 };
                 
@@ -182,6 +192,18 @@ const AttendanceRules = () => {
             [section]: {
                 ...prev[section],
                 [field]: value
+            }
+        }));
+    };
+
+    const handleDayLimitChange = (field, value) => {
+        const parsed = value === '' ? 0 : Number(value);
+        const numValue = Number.isFinite(parsed) ? Math.max(0, Math.round(parsed * 100) / 100) : 0;
+        setFormData(prev => ({
+            ...prev,
+            compOffRules: {
+                ...(prev.compOffRules || {}),
+                [field]: numValue
             }
         }));
     };
@@ -678,24 +700,60 @@ const AttendanceRules = () => {
                             </div>
 
                             {formData.enableCompOff && (
-                                <div className="ml-8 flex items-center justify-between p-4 bg-theme-secondary/10 rounded-lg">
-                                    <div>
-                                        <h4 className="font-medium text-gray-900">Auto Approve</h4>
-                                        <p className="text-sm text-gray-600">Automatically approve comp off requests</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleFeature('autoApprove')}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                            formData.autoApprove ? 'bg-theme-primary' : 'bg-gray-300'
-                                        }`}
-                                    >
-                                        <span
-                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                                                formData.autoApprove ? 'translate-x-6' : 'translate-x-1'
+                                <div className="ml-8 space-y-4">
+                                    <div className="flex items-center justify-between p-4 bg-theme-secondary/10 rounded-lg">
+                                        <div>
+                                            <h4 className="font-medium text-gray-900">Auto Approve</h4>
+                                            <p className="text-sm text-gray-600">Automatically approve comp off requests</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleFeature('autoApprove')}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                                formData.autoApprove ? 'bg-theme-primary' : 'bg-gray-300'
                                             }`}
-                                        />
-                                    </button>
+                                        >
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                                    formData.autoApprove ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                    <div className="grid gap-4 p-4 bg-theme-secondary/10 rounded-lg sm:grid-cols-2">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Comp-off days an employee can request per month
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.5"
+                                                value={formData.compOffRules?.allowedPerMonth ?? 2}
+                                                onChange={(e) => handleDayLimitChange('allowedPerMonth', e.target.value)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Counts days, not forms. 8 hours is 1 day, 4 hours is half a day. Set 0 for no monthly cap.
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Unused comp-off days an employee can hold
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.5"
+                                                value={formData.compOffRules?.maxAccumulation ?? 5}
+                                                onChange={(e) => handleDayLimitChange('maxAccumulation', e.target.value)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Pending and unused approved days count. Set 0 for no holding cap.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

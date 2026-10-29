@@ -30,6 +30,7 @@ import { handleApiError } from '../../utils/errorHandler';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { sanitizeMeetingLink } from '../../utils/meetingLink';
 import { formatStatusLabel, UI_BADGE_TEXT_CLASS, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
+import { getTimeGreeting } from '../../utils/timeGreeting';
 import { 
     BOTH_ATTENDANCE_ENDPOINT, 
     BOTH_TASK_ENDPOINT,
@@ -835,7 +836,7 @@ const DashboardManager = () => {
                             <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
                                 <div className="min-w-0">
                                     <h1 className="truncate text-xl font-semibold text-slate-900 sm:text-2xl">
-                                        Good morning, {user?.name || user?.username || 'Manager'} 👋
+                                        {getTimeGreeting()}, {user?.name || user?.username || 'Manager'} 👋
                                     </h1>
                                     <p className="text-sm text-slate-500">{format(new Date(), 'dd MMM yyyy')}</p>
                                 </div>

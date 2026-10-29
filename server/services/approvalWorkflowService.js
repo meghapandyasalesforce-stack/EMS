@@ -1069,6 +1069,18 @@ const updateEntityStatus = async (instance) => {
                     }
                 }
 
+                if (leave.leaveType === 'compensatory' && (instance.status === 'Approved' || instance.status === 'Rejected')) {
+                    try {
+                        const { syncCompOffUsageForLeave } = await import('../helpers/compOffCreditHelper.js');
+                        await syncCompOffUsageForLeave(leave);
+                    } catch (compOffError) {
+                        logger.warn('Error syncing comp-off usage after workflow leave update', {
+                            error: compOffError.message,
+                            leaveId: leave._id,
+                        });
+                    }
+                }
+
                 if (instance.status === 'Rejected') {
                     await notify({
                         type: 'leave_rejected',

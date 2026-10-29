@@ -28,7 +28,7 @@ export const getMyPermissions = asyncHandler(async (req, res) => {
 
   const authContext = req.authContext || (await resolveAuthContext(decoded, req));
 
-  let saasFeatures = {};
+  let saasFeatures = null;
   let planId = null;
   let planName = null;
   let subscriptionStatus = null;

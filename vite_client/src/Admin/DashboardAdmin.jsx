@@ -27,6 +27,7 @@ import useAuthPermissions from "../Hooks/useAuthPermissions";
 import { PERMISSIONS, hasAnyPermission } from "../utils/permissions";
 import PermissionGate from "../components/PermissionGate";
 import { BOTH_CELEBRATION_ENDPOINT } from "../utils/constant";
+import { getTimeGreeting } from "../utils/timeGreeting";
 import {
   Button,
   Card,
@@ -385,8 +386,28 @@ function DashboardAdmin() {
     .slice(0, 4);
 
   const greetingName = user?.name || user?.email?.split("@")?.[0] || "Admin";
+<<<<<<< HEAD
   const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const getInitials = (name = '') => String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join('') || 'EM';
+=======
+  const greeting = getTimeGreeting();
+  const todayLabel = new Date().toLocaleDateString([], {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+
+  const getInitials = (name = "") => {
+    const parts = name.trim().split(" ").filter(Boolean);
+    if (!parts.length) return "EM";
+    return parts
+      .slice(0, 2)
+      .map((p) => p[0].toUpperCase())
+      .join("");
+  };
+
+>>>>>>> origin/department_structured
   const getCelebrationItemKey = (item) => `${item?.type || "birthday"}_${item?.employeeId}`;
 
   const openTodayCelebrationEvent = async (item) => {
@@ -478,6 +499,7 @@ function DashboardAdmin() {
 
   return (
     <>
+<<<<<<< HEAD
       {showAnnouncementModal && <AnnouncementModal onClose={closeAnnouncementModal} onSent={handleAnnouncementSent} />}
       <div className="admin-dash role-dashboard role-dashboard--admin page-shell">
         <div className="page-shell-inner role-dashboard__stack">
@@ -489,6 +511,66 @@ function DashboardAdmin() {
             {metric('Present Today', extrasLoading ? '…' : todayAttendanceStats.present, `of ${todayAttendanceStats.total || employeeCount} employees`, FiCalendar, 'attendance', 'green')}
             {metric('Pending Leave', pendingLeaves, 'needs review', FiClock, 'leave', 'amber')}
             {metric('Overdue Approvals', extrasLoading ? '…' : escalatedApprovalsCount, escalatedApprovalsCount ? 'needs attention' : 'clear', FiFileText, 'approvals', 'red')}
+=======
+      {showAnnouncementModal && (
+        <AnnouncementModal onClose={closeAnnouncementModal} onSent={handleAnnouncementSent} />
+      )}
+    <div className="page-shell min-h-screen bg-[var(--ui-neutral)]" style={{ fontFamily: 'var(--ui-font)' }}>
+      <div className="page-shell-inner space-y-3 sm:space-y-5">
+        <PageHeader
+          title={
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Admin Dashboard
+              <StatusPill tone={escalatedApprovalsCount > 0 ? 'urgent' : 'success'}>
+                {escalatedApprovalsCount > 0 ? 'Needs attention' : 'All clear'}
+              </StatusPill>
+            </span>
+          }
+          subtitle={`${greeting}, ${greetingName} · ${todayLabel}`}
+          actions={<div className="hidden flex-wrap justify-end gap-2 sm:flex">{headerActions}</div>}
+        />
+
+        {/* Mobile header actions — same handlers as desktop */}
+        <div className="flex flex-col gap-2 sm:hidden">
+          {permissionFlags.isOrgOwner ? (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => navigate("/add-employee")}
+              className="!h-11 w-full !rounded-2xl"
+            >
+              <FiPlus className="h-4 w-4" aria-hidden />
+              Add employee
+            </Button>
+          ) : null}
+          <div className="flex overflow-hidden rounded-2xl border border-[var(--ui-outline-subtle)] bg-white">
+            <button
+              type="button"
+              onClick={() => navigate("/helpdesk")}
+              className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-2 text-[13px] font-medium text-[var(--ui-on-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] active:bg-[var(--ui-neutral)]"
+            >
+              <FiHeadphones className="h-4 w-4 shrink-0 text-[var(--ui-muted)]" aria-hidden />
+              Helpdesk
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/today-attendance")}
+              className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 border-l border-[var(--ui-outline-subtle)] px-2 text-[13px] font-medium text-[var(--ui-on-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] active:bg-[var(--ui-neutral)]"
+            >
+              <FiCheckCircle className="h-4 w-4 shrink-0 text-[var(--color-primary)]" aria-hidden />
+              Attendance
+            </button>
+            <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
+              <button
+                type="button"
+                onClick={() => navigate("/admin-payroll")}
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 border-l border-[var(--ui-outline-subtle)] px-2 text-[13px] font-medium text-[var(--ui-on-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] active:bg-[var(--ui-neutral)]"
+              >
+                <FiDollarSign className="h-4 w-4 shrink-0 text-[var(--ui-muted)]" aria-hidden />
+                Payroll
+              </button>
+            </PermissionGate>
+>>>>>>> origin/department_structured
           </div>
 
           <div className="admin-dash__grid">

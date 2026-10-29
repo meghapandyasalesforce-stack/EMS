@@ -3261,6 +3261,8 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
           enableSimplePunches: true, // Default to true if no rule
           locationRequired: false,
           enforceOfficeRadius: false,
+          enableCompOff: true,
+          compOffValidityDays: 90,
           ...workingDayFields,
         }
       });
@@ -3305,6 +3307,8 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
         enforceOfficeRadius,
         applicableToDepartment: appliesToDept,
         isExempt: isExempt,
+        enableCompOff: activeRule.enableCompOff !== false,
+        compOffValidityDays: activeRule.compOffRules?.validity || 90,
         ...workingDayFields,
       }
     });
