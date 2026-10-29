@@ -171,6 +171,11 @@ export const getRecruitmentCalendar = asyncHandler(async (req, res) => {
     })
         .select('firstName lastName email interviewSchedule expectedJoiningDate jobPostingId joiningStatus')
         .populate('jobPostingId', 'jobTitle')
+        .populate({
+            path: 'interviewSchedule.interviewer',
+            select: 'name lastName email position designationId',
+            populate: { path: 'designationId', select: 'name title' },
+        })
         .lean();
 
     const events = [];
@@ -180,16 +185,30 @@ export const getRecruitmentCalendar = asyncHandler(async (req, res) => {
             if (!iv.scheduledDate) continue;
             const d = new Date(iv.scheduledDate);
             if (d < from || d > to) continue;
+            const interviewer = iv.interviewer;
+            const interviewerName = interviewer
+                ? `${interviewer.name || ''} ${interviewer.lastName || ''}`.trim() || interviewer.email
+                : null;
+            const designation = interviewer?.designationId;
+            const interviewerRole = (typeof designation === 'object' && designation
+                ? (designation.name || designation.title)
+                : null) || interviewer?.position || null;
             events.push({
                 id: `iv-${c._id}-${iv._id}`,
                 type: 'interview',
                 title: `${iv.interviewType || 'Interview'} — ${name}`,
+                candidateName: name,
+                interviewType: iv.interviewType || 'Interview',
                 date: iv.scheduledDate,
                 time: iv.scheduledTime,
                 status: iv.status,
                 candidateId: c._id,
                 jobTitle: c.jobPostingId?.jobTitle,
                 meetingLink: iv.meetingLink,
+                location: iv.location,
+                interviewerId: interviewer?._id || interviewer || null,
+                interviewerName,
+                interviewerRole,
             });
         }
         if (c.expectedJoiningDate) {
@@ -199,6 +218,7 @@ export const getRecruitmentCalendar = asyncHandler(async (req, res) => {
                     id: `join-${c._id}`,
                     type: 'joining',
                     title: `Joining — ${name}`,
+                    candidateName: name,
                     date: c.expectedJoiningDate,
                     status: c.joiningStatus,
                     candidateId: c._id,
