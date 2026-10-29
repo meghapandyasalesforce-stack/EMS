@@ -3,6 +3,7 @@ import {
   resolveMePortalSystemRole,
   getMePortalHomePath,
   getNavigationItems,
+  isMeSectionActive,
 } from './navigationConfig';
 import { SYSTEM_ROLE_IDS } from './systemRoles';
 
@@ -71,7 +72,7 @@ describe('navigationConfig — Me portal', () => {
     expect(items.some((item) => item.path === '/dashboard-manager')).toBe(false);
   });
 
-  it('shows Me portal 7-section nav for employee portal (Time covers regularization)', () => {
+  it('shows the individual Employee destinations in reference order', () => {
     const items = getNavigationItems(
       { role: 'employee', _id: '1', employeeProfileId: 'e1' },
       { _id: 'e1' },
@@ -83,13 +84,22 @@ describe('navigationConfig — Me portal', () => {
     expect(items.map((i) => i.path)).toEqual([
       '/dashboard-employee',
       '/employee/leave-attendance',
-      '/employee-payroll',
+      '/my-attendance-regularization',
       '/employee/projects',
       '/employee/engagement',
+      '/one-on-one',
+      '/employee/benefits-learning',
+      '/employee/internal-jobs',
+      '/onboarding',
       '/employee/documents-id',
+      '/employee/calendar',
+      '/employee-payroll',
       '/profile-details',
     ]);
-    expect(items.some((item) => item.path === '/my-attendance-regularization')).toBe(false);
+    for (const destination of items) {
+      expect(items.filter(item => isMeSectionActive(item.path, destination.path)))
+        .toEqual([destination]);
+    }
   });
 
   it.each(['payroll_admin', 'project_manager'])(

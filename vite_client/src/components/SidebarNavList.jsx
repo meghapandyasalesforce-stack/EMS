@@ -11,8 +11,12 @@ const SidebarNavList = ({
   isActive,
   onNavigate,
   lightTheme = false,
+  flat = false,
 }) => {
-  const tree = useMemo(() => buildSidebarNavTree(items), [items]);
+  const tree = useMemo(
+    () => flat ? items.map((item) => ({ type: 'link', item })) : buildSidebarNavTree(items),
+    [items, flat]
+  );
 
   const routeActiveGroupId = useMemo(
     () => findActiveNavGroupId(tree, isActive),
@@ -54,6 +58,7 @@ const SidebarNavList = ({
               <button
                 type="button"
                 title={item.name}
+                aria-current={active ? 'page' : undefined}
                 onClick={() => onNavigate(item.path)}
                 className={`hrms-sidebar-nav__link ${active ? 'is-active' : linkBase}`}
                 style={

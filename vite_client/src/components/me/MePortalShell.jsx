@@ -27,12 +27,6 @@ const BOTTOM_DEFS = [
   { path: '/employee/documents-id', name: 'Docs', icon: <FaFolderOpen /> },
 ];
 
-const MORE_SECTION_PATHS = [
-  '/employee/projects',
-  '/employee/engagement',
-  '/profile-details',
-];
-
 /**
  * Me-portal-only chrome: phone bottom bar, tablet icon rail, desktop sidebar.
  * Reuses existing navigate / logout / profile handlers — no auth logic.
@@ -64,10 +58,8 @@ const MePortalShell = ({
   );
 
   const moreNavItems = useMemo(() => {
-    const fromNav = MORE_SECTION_PATHS.map((path) =>
-      desktopNavItems.find((n) => n.path === path) || navItems.find((n) => n.path === path)
-    ).filter(Boolean);
-    return fromNav;
+    const items = desktopNavItems.length ? desktopNavItems : navItems;
+    return items.filter((item) => !BOTTOM_DEFS.some((def) => def.path === item.path));
   }, [desktopNavItems, navItems]);
 
   useEffect(() => {
@@ -162,8 +154,8 @@ const MePortalShell = ({
           <div className="shrink-0 px-2 py-2">
             <PortalSwitcher compact lightTheme />
           </div>
-          <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2 pb-4" data-hrms-sidebar-nav>
-            <SidebarNavList items={items} isActive={isActive} onNavigate={go} lightTheme />
+          <nav className="me-employee-navigation min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2 pb-4" data-hrms-sidebar-nav>
+            <SidebarNavList flat items={items} isActive={isActive} onNavigate={go} lightTheme />
           </nav>
         </div>
       </>
@@ -196,13 +188,14 @@ const MePortalShell = ({
             </div>
             <nav
               data-hrms-sidebar-nav
-              className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1 py-2"
+              className="me-employee-navigation scrollbar-thin min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1 py-2"
             >
               <SidebarNavList
                 items={desktopNavItems}
                 isActive={isActive}
                 onNavigate={onNavigate}
                 lightTheme
+                flat
               />
             </nav>
             <div className="flex justify-center border-t border-gray-200 p-2">
@@ -238,13 +231,14 @@ const MePortalShell = ({
             </div>
             <nav
               data-hrms-sidebar-nav
-              className="scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-2"
+              className="me-employee-navigation scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-2"
             >
               <SidebarNavList
                 items={desktopNavItems}
                 isActive={isActive}
                 onNavigate={onNavigate}
                 lightTheme
+                flat
               />
             </nav>
           </div>
@@ -304,7 +298,7 @@ const MePortalShell = ({
           })}
           <button
             type="button"
-            className={`me-bottom-nav__item${moreOpen ? ' is-active' : ''}`}
+            className={`me-bottom-nav__item${moreOpen || moreNavItems.some((item) => isActive(item.path)) ? ' is-active' : ''}`}
             aria-expanded={moreOpen}
             aria-label="More"
             onClick={() => setMoreOpen(true)}
@@ -341,7 +335,7 @@ const MePortalShell = ({
             <ul className="me-more-sheet__list">
               {moreNavItems.map((item) => (
                 <li key={item.path}>
-                  <button type="button" className="me-more-sheet__item" onClick={() => go(item.path)}>
+                  <button type="button" className={`me-more-sheet__item${isActive(item.path) ? ' is-active' : ''}`} aria-current={isActive(item.path) ? 'page' : undefined} onClick={() => go(item.path)}>
                     <span className="me-more-sheet__icon" aria-hidden>
                       {item.icon || <FaSeedling />}
                     </span>

@@ -8,7 +8,7 @@ import {
     FaCog, FaShieldAlt, FaCreditCard, FaDollarSign, FaFileAlt,
     FaChartLine, FaBuilding, FaTasks, FaUserCheck, FaBell,
     FaGraduationCap, FaHandshake, FaFolderOpen, FaGift, FaUserTie,
-    FaChartBar, FaClock, FaSeedling
+    FaChartBar, FaClock
 } from 'react-icons/fa';
 import { FaCrown } from 'react-icons/fa6';
 import { IoBookmarks } from 'react-icons/io5';
@@ -492,20 +492,20 @@ const getTechNavigation = () => [
 
 ];
 
-/**
- * Employee (Me) navigation — 7 section roots (labels/icons/grouping only).
- * Old deep URLs remain valid; hub tab shells land in later UI steps.
- * Growth has no engagement-only permission gate so Learning / Internal jobs
- * stay reachable from nav (same as those items today). Engagement tab gating
- * belongs in the Growth hub (later step).
- */
+/** Employee-only navigation, ordered to match the sidebar reference. */
 const getEmployeeNavigation = () => [
-    { path: "/dashboard-employee", name: "Home", icon: <FaHome /> },
-    { path: "/employee/leave-attendance", name: "Time", icon: <FaClock /> },
-    { path: "/employee-payroll", name: "Pay & Benefits", icon: <FaMoneyBill /> },
-    { path: "/employee/projects", name: "Work", icon: <VscProject /> },
-    { path: "/employee/engagement", name: "Growth", icon: <FaSeedling /> },
-    { path: "/employee/documents-id", name: "Documents", icon: <FaFolderOpen /> },
+    { path: "/dashboard-employee", name: "Dashboard", icon: <FaHome /> },
+    { path: "/employee/leave-attendance", name: "Leave & attendance", icon: <IoBookmarks /> },
+    { path: "/my-attendance-regularization", name: "Regularization", icon: <FaClock /> },
+    { path: "/employee/projects", name: "Projects", icon: <VscProject /> },
+    { path: "/employee/engagement", name: "Engagement", icon: <FaBell /> },
+    { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
+    { path: "/employee/benefits-learning", name: "Benefits & learning", icon: <FaGift /> },
+    { path: "/employee/internal-jobs", name: "Internal jobs", icon: <FaHandshake /> },
+    { path: "/onboarding", name: "My lifecycle", icon: <FaUserCheck /> },
+    { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
+    { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
+    { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
 ];
 
@@ -516,17 +516,19 @@ export const ME_SECTION_ACTIVE_PREFIXES = Object.freeze({
         '/employee/leave-attendance',
         '/my-leave',
         '/attendance-stats',
-        '/my-attendance-regularization',
-        '/employee/calendar',
         '/leave',
         '/attendance',
     ],
-    '/employee-payroll': ['/employee-payroll', '/employee/benefits-learning', '/benefits'],
-    '/employee/projects': ['/employee/projects', '/daily-report', '/1-on-1', '/one-on-one'],
+    '/employee-payroll': ['/employee-payroll'],
+    '/employee/benefits-learning': ['/employee/benefits-learning', '/benefits', '/learning'],
+    '/my-attendance-regularization': ['/my-attendance-regularization'],
+    '/employee/calendar': ['/employee/calendar'],
+    '/one-on-one': ['/one-on-one', '/1-on-1'],
+    '/employee/internal-jobs': ['/employee/internal-jobs'],
+    '/onboarding': ['/onboarding'],
+    '/employee/projects': ['/employee/projects', '/daily-report'],
     '/employee/engagement': [
         '/employee/engagement',
-        '/employee/internal-jobs',
-        '/learning',
         '/engagement/surveys',
     ],
     '/employee/documents-id': [
@@ -535,7 +537,6 @@ export const ME_SECTION_ACTIVE_PREFIXES = Object.freeze({
         '/employee/my-documents',
         '/employee/document-requests',
         '/employee/policies',
-        '/onboarding',
     ],
     '/profile-details': [
         '/profile-details',

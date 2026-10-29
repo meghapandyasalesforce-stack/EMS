@@ -10,7 +10,6 @@ vi.mock('../context/store', () => ({ persistor: { purge: vi.fn() } }));
 vi.mock('../components/NotificationDropdown', () => ({ default: () => null }));
 vi.mock('../components/PortalSwitcher', () => ({ default: () => null }));
 vi.mock('../Hooks/useDocumentModeSettings', () => ({ default: () => ({ ready: true, enableDocumentRequests: true, enableSelfServiceDocuments: true }) }));
-vi.mock('../utils/navigationConfig', async (importOriginal) => ({ ...(await importOriginal()), getNavigationItems: () => [{ path: '/dashboard-employee', name: 'Dashboard', icon: null }, { path: '/employee-payroll', name: 'Payroll', icon: null }, { path: '/projects', name: 'Projects', icon: null }] }));
 
 function Location() {
   return <output data-testid="location">{useLocation().pathname}</output>;
@@ -84,5 +83,48 @@ describe('desktop Profile navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Profile menu' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Megha' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/profile-details');
+  });
+});
+
+
+describe('Employee reference navigation', () => {
+  const destinations = [
+    ['Dashboard', '/dashboard-employee'],
+    ['Leave & attendance', '/employee/leave-attendance'],
+    ['Regularization', '/my-attendance-regularization'],
+    ['Projects', '/employee/projects'],
+    ['Engagement', '/employee/engagement'],
+    ['One-on-One', '/one-on-one'],
+    ['Benefits & learning', '/employee/benefits-learning'],
+    ['Internal jobs', '/employee/internal-jobs'],
+    ['My lifecycle', '/onboarding'],
+    ['Documents & ID', '/employee/documents-id'],
+    ['Calendar', '/employee/calendar'],
+    ['Payroll', '/employee-payroll'],
+    ['Profile', '/profile-details'],
+  ];
+
+  it.each(destinations)('navigates to %s with only one active item', (label, path) => {
+    renderHeader('employee');
+    const nav = document.querySelector('[data-hrms-sidebar-nav]');
+    fireEvent.click(within(nav).getByRole('button', { name: label, exact: true }));
+    expect(screen.getByTestId('location')).toHaveTextContent(path);
+    expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(within(nav).getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).queryByRole('button', { expanded: false })).not.toBeInTheDocument();
+  });
+
+  it.each([375, 768])('exposes every destination at %spx and closes the menu after navigation', width => {
+    renderHeader('employee', width);
+    fireEvent.click(screen.getByRole('button', { name: width < 768 ? 'More' : 'Open menu', exact: true }));
+    const menu = screen.getByRole('dialog', { name: width < 768 ? 'More' : 'Navigation menu' });
+    const bottomPaths = ['/dashboard-employee', '/employee/leave-attendance', '/employee-payroll', '/employee/documents-id'];
+    for (const [label, path] of destinations) {
+      if (width < 768 && bottomPaths.includes(path)) continue;
+      expect(within(menu).getByRole('button', { name: label, exact: true })).toBeInTheDocument();
+    }
+    fireEvent.click(within(menu).getByRole('button', { name: 'Calendar', exact: true }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/employee/calendar');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

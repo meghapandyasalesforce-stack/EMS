@@ -19,7 +19,7 @@ html.me-portal {
   --me-info: #3b82f6;
   --me-font: 'Inter', 'Manrope', system-ui, sans-serif;
   --me-focus: #0e9370;
-  --me-sidebar-width: 260px;
+  --me-sidebar-width: 284px;
   --me-rail-width: 72px;
   --me-bottom-nav-height: 4.25rem;
 
@@ -29,8 +29,8 @@ html.me-portal {
 
 @media (min-width: 1920px) {
   html.me-portal {
-    --me-sidebar-width: 280px;
-    --ui-sidebar-width: 280px;
+    --me-sidebar-width: 284px;
+    --ui-sidebar-width: 284px;
   }
 }
 
@@ -300,29 +300,69 @@ html.me-portal .hrms-page-canvas {
   }
 }
 
-/* ── Me shell: sidebar active pill ── */
-html.me-portal .me-portal-sidebar .hrms-sidebar-nav__link.is-active {
-  background: var(--me-primary) !important;
-  color: #fff !important;
-  border-radius: 9999px;
-  box-shadow: 0 8px 16px -6px rgba(14, 147, 112, 0.45);
-  position: relative;
+/* Employee navigation only; other workspace sidebars keep their styles. */
+html.me-portal .me-employee-navigation {
+  padding: 20px 22px;
+  scrollbar-width: thin;
+  scrollbar-color: #909090 #f4f4f4;
+  scrollbar-gutter: stable;
 }
-
-html.me-portal .me-portal-sidebar .hrms-sidebar-nav__link.is-active::before {
+html.me-portal .me-employee-navigation .hrms-sidebar-nav { gap: 6px; }
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__link {
+  position: relative;
+  min-height: 58px;
+  padding: 12px 14px;
+  gap: 14px;
+  border-radius: 15px;
+  color: #4b576b;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  box-shadow: none;
+}
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__icon {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+}
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__label {
+  min-width: 0;
+  white-space: nowrap;
+}
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__link:hover:not(.is-active) {
+  background: #f3f4f6;
+  color: #111827;
+}
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__link.is-active {
+  background: #1bc69a !important;
+  color: #fff !important;
+  box-shadow: 0 9px 18px -8px rgba(14, 43, 61, 0.24) !important;
+  padding-right: 30px;
+  font-weight: 600;
+}
+/* Reserve the status-dot space without truncating longer active labels. */
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__link.is-active .hrms-sidebar-nav__label {
+  white-space: normal;
+}
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__link.is-active::after {
   content: '';
   position: absolute;
-  left: 0.55rem;
+  right: 16px;
   top: 50%;
   transform: translateY(-50%);
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 9999px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   background: #fff;
 }
-
-html.me-portal .me-portal-sidebar .hrms-sidebar-nav__link.is-active .hrms-sidebar-nav__icon {
-  margin-left: 0.55rem;
+html.me-portal .me-employee-navigation .hrms-sidebar-nav__link:focus-visible {
+  outline: 2px solid #0a6f55;
+  outline-offset: -2px;
+}
+html.me-portal .me-more-sheet__item.is-active { color: #08765a; background: #e8faf4; }
+@media (prefers-reduced-motion: reduce) {
+  html.me-portal .me-employee-navigation .hrms-sidebar-nav__link { transition: none; }
 }
 
 /* Tablet icon rail */
@@ -346,20 +386,19 @@ html.me-portal .me-portal-sidebar .hrms-sidebar-nav__link.is-active .hrms-sideba
     border: 0;
   }
 
+  html.me-portal .me-portal-sidebar--rail .me-employee-navigation {
+    padding: 8px 6px;
+    scrollbar-gutter: auto;
+  }
   html.me-portal .me-portal-sidebar--rail .hrms-sidebar-nav__link {
     justify-content: center;
-    padding-inline: 0.5rem;
+    padding: 10px;
+    min-height: 52px;
   }
-
-  html.me-portal .me-portal-sidebar--rail .hrms-sidebar-nav__link.is-active::before {
-    left: 50%;
-    top: auto;
-    bottom: 0.35rem;
-    transform: translateX(-50%);
-  }
-
-  html.me-portal .me-portal-sidebar--rail .hrms-sidebar-nav__link.is-active .hrms-sidebar-nav__icon {
-    margin-left: 0;
+  html.me-portal .me-portal-sidebar--rail .hrms-sidebar-nav__link.is-active::after {
+    right: 5px;
+    width: 5px;
+    height: 5px;
   }
 
   html.me-portal .ui-shell-topbar {
