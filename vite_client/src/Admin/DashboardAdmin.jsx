@@ -1,3 +1,4 @@
+import "../styles/roleDashboards.css";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
@@ -483,10 +484,10 @@ function DashboardAdmin() {
 
   if (isLoading) {
     return (
-      <div className="page-shell min-h-screen bg-[var(--ui-neutral)]" style={{ fontFamily: 'var(--ui-font)' }}>
+      <div className="role-dashboard role-dashboard--admin page-shell min-h-full" style={{ fontFamily: 'var(--ui-font)' }}>
         <div className="page-shell-inner space-y-4 sm:space-y-5">
           <Skeleton variant="title" className="!w-64" />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <Skeleton variant="card" />
             <Skeleton variant="card" />
             <Skeleton variant="card" />
@@ -506,9 +507,10 @@ function DashboardAdmin() {
       {showAnnouncementModal && (
         <AnnouncementModal onClose={closeAnnouncementModal} onSent={handleAnnouncementSent} />
       )}
-    <div className="page-shell min-h-screen bg-[var(--ui-neutral)]" style={{ fontFamily: 'var(--ui-font)' }}>
-      <div className="page-shell-inner space-y-3 sm:space-y-5">
+    <div className="role-dashboard role-dashboard--admin page-shell min-h-full" style={{ fontFamily: 'var(--ui-font)' }}>
+      <div className="page-shell-inner role-dashboard__stack">
         <PageHeader
+          className="role-dashboard__header"
           title={
             <span className="inline-flex flex-wrap items-center gap-2">
               Admin Dashboard
@@ -583,7 +585,7 @@ function DashboardAdmin() {
         ) : null}
 
         {/* Stat row — only Overdue Approvals is clickable */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <StatCard
             label="Total Employees"
             value={employeeCount.toLocaleString("en-IN")}

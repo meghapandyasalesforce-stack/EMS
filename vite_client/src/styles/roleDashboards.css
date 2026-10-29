@@ -1,0 +1,132 @@
+/* Admin and Employee dashboard presentation only. HR keeps its own stylesheet. */
+.role-dashboard {
+  --rd-bg: #e8faf4;
+  --rd-surface: #ffffff;
+  --rd-on: #111c2d;
+  --rd-muted: #666666;
+  --rd-border: rgba(14, 43, 61, 0.08);
+  --rd-primary: #0e9370;
+  --rd-shadow: 0 4px 20px -2px rgba(14, 43, 61, 0.06);
+  --rd-gap: 0.85rem;
+  --ui-on-surface: var(--rd-on);
+  --ui-muted: var(--rd-muted);
+  --ui-outline-subtle: var(--rd-border);
+  --ui-card-surface: var(--rd-surface);
+  --ui-primary-btn: var(--rd-primary);
+  --ui-primary-btn-hover: #0b7458;
+  --ui-primary-deep: #00694f;
+  --ui-tertiary: #e8faf4;
+  --color-primary: var(--rd-primary);
+  --color-primary-deep: #00694f;
+  --color-primary-hover: #0b7458;
+  min-width: 0;
+  min-height: 100%;
+  color: var(--rd-on);
+  font-family: 'Inter', 'Manrope', system-ui, sans-serif;
+}
+
+/* The shell already reserves space for the navbar; avoid a second viewport height. */
+#root .main-scroll-area.hrms-page-canvas .role-dashboard.page-shell,
+.role-dashboard.page-shell {
+  background: var(--rd-bg) !important;
+}
+.role-dashboard > .page-shell-inner {
+  max-width: 1600px;
+}
+.role-dashboard__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rd-gap);
+  min-width: 0;
+}
+.role-dashboard .role-dashboard__stack > * {
+  margin-block: 0;
+  min-width: 0;
+}
+.role-dashboard .role-dashboard__header {
+  background: var(--rd-surface);
+  border: 1px solid var(--rd-border);
+  border-radius: 1rem;
+  box-shadow: var(--rd-shadow);
+  padding: 1.25rem 1.5rem;
+}
+.role-dashboard .role-dashboard__header h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--rd-on);
+}
+.role-dashboard .role-dashboard__header .ui-page-header__subtitle {
+  margin-top: 0.25rem;
+  color: var(--rd-muted);
+}
+.role-dashboard .ui-card,
+.role-dashboard .ui-stat-card,
+.role-dashboard .role-dashboard__card {
+  min-width: 0;
+  background: var(--rd-surface);
+  border: 1px solid var(--rd-border);
+  border-radius: 1rem;
+  box-shadow: var(--rd-shadow);
+}
+.role-dashboard .ui-card,
+.role-dashboard .role-dashboard__card:not(.role-dashboard__card--flush) {
+  padding: 1.25rem;
+}
+.role-dashboard .ui-stat-card {
+  padding: 1.15rem 1.25rem;
+}
+.role-dashboard .ui-stat-card__label {
+  color: var(--rd-muted);
+}
+.role-dashboard .ui-stat-card__value {
+  color: var(--rd-on);
+}
+.role-dashboard .role-dashboard__layout {
+  gap: var(--rd-gap);
+  align-items: start;
+}
+.role-dashboard .role-dashboard__quick-action {
+  min-width: 0;
+  min-height: 76px;
+  padding: 0.85rem 0.65rem;
+  border-radius: 1rem;
+  border-color: var(--rd-border);
+  box-shadow: var(--rd-shadow);
+}
+.role-dashboard .role-dashboard__quick-action:hover {
+  background: #e8faf4;
+}
+.role-dashboard--admin .page-shell-inner > .grid,
+.role-dashboard--admin .page-shell-inner > .grid > .flex,
+.role-dashboard--employee .role-dashboard__stack > .grid {
+  gap: var(--rd-gap);
+}
+.role-dashboard--employee .role-dashboard__layout > aside {
+  position: static;
+}
+
+@media (max-width: 639.98px) {
+  .role-dashboard .role-dashboard__header,
+  .role-dashboard .ui-card,
+  .role-dashboard .ui-stat-card,
+  .role-dashboard .role-dashboard__card:not(.role-dashboard__card--flush) {
+    padding: 1rem;
+  }
+  .role-dashboard .role-dashboard__header h1 {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+.role-dashboard .role-dashboard__card--flush > :first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+@media (max-width: 639.98px) {
+  .role-dashboard__kpis > :last-child {
+    grid-column: 1 / -1;
+  }
+}

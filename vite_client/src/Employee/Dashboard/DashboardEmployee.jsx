@@ -1,3 +1,4 @@
+import "../../styles/roleDashboards.css";
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -62,12 +63,12 @@ import {
 
 /** Workspace-style mint / forest palette (scoped to this dashboard) */
 const WS = {
-    bg: '#F8F9FB',
-    mint: '#20C997',
-    mintHover: '#1ab589',
-    forest: '#006D4E',
+    bg: '#e8faf4',
+    mint: '#0e9370',
+    mintHover: '#0b7458',
+    forest: '#00694f',
     card: '#FFFFFF',
-    border: 'rgba(15, 23, 42, 0.08)',
+    border: 'rgba(14, 43, 61, 0.08)',
 };
 
 function MiniCalendar({ viewDate, onPrevMonth, onNextMonth }) {
@@ -77,7 +78,7 @@ function MiniCalendar({ viewDate, onPrevMonth, onNextMonth }) {
     const pad = (getDay(monthStart) + 6) % 7;
 
     return (
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="role-dashboard__card rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
                 <button
                     type="button"
@@ -115,7 +116,7 @@ function MiniCalendar({ viewDate, onPrevMonth, onNextMonth }) {
                             key={day.toISOString()}
                             className={`flex h-8 items-center justify-center rounded-lg ${
                                 today
-                                    ? 'bg-[#20C997] font-semibold text-white'
+                                    ? 'bg-[#0E9370] font-semibold text-white'
                                     : 'text-slate-600 hover:bg-slate-50'
                             }`}
                         >
@@ -175,7 +176,7 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                 <button
                     type="button"
                     onClick={() => onWishes(item)}
-                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
+                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#0E9370] px-3 text-xs font-semibold text-white hover:bg-[#0b7458]"
                 >
                     {isToday ? (isSelf ? 'View' : 'Wishes') : 'Upcoming'}
                 </button>
@@ -244,7 +245,7 @@ function AnniversaryRailCard({ item, isSelf, event, reacting, onReact, onWishes 
                 <button
                     type="button"
                     onClick={() => onWishes(item)}
-                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#20C997] px-3 text-xs font-semibold text-white hover:bg-[#1ab589]"
+                    className="inline-flex h-8 min-w-[4.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#0E9370] px-3 text-xs font-semibold text-white hover:bg-[#0b7458]"
                 >
                     {isTodayAnniversary ? (isSelf ? 'View' : 'Wishes') : 'Upcoming'}
                 </button>
@@ -775,7 +776,7 @@ function DashboardEmployee() {
         }
     }, [user]);
 
-    const shellClass = 'min-h-screen transition-all duration-300';
+    const shellClass = 'role-dashboard role-dashboard--employee min-h-full transition-all duration-300';
     const shellStyle = { backgroundColor: WS.bg };
 
     if (user?.mustResetPassword) {
@@ -791,7 +792,7 @@ function DashboardEmployee() {
             <div className={`${shellClass} flex items-center justify-center p-6`} style={shellStyle}>
                 <div className="text-center">
                     <div
-                        className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]"
+                        className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]"
                     />
                     <p className="text-sm text-slate-600">Loading dashboard…</p>
                 </div>
@@ -811,7 +812,7 @@ function DashboardEmployee() {
                             setHasFetched(false);
                             setLoading(true);
                         }}
-                        className="rounded-full bg-[#20C997] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ab589]"
+                        className="rounded-full bg-[#0E9370] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b7458]"
                     >
                         Retry
                     </button>
@@ -828,7 +829,7 @@ function DashboardEmployee() {
                     <button
                         type="button"
                         onClick={() => navigate('/login')}
-                        className="rounded-full bg-[#20C997] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ab589]"
+                        className="rounded-full bg-[#0E9370] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b7458]"
                     >
                         Go to Login
                     </button>
@@ -839,7 +840,7 @@ function DashboardEmployee() {
 
     const kpiCard = (label, value, sub, icon) => (
         <div
-            className="rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-5"
+            className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-5"
             style={{ borderColor: WS.border }}
         >
             <div className="flex items-start justify-between gap-3">
@@ -850,7 +851,7 @@ function DashboardEmployee() {
                 </div>
                 <div
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: 'rgba(32, 201, 151, 0.12)', color: WS.mint }}
+                    style={{ backgroundColor: 'rgba(14, 147, 112, 0.10)', color: WS.mint }}
                 >
                     {icon}
                 </div>
@@ -862,10 +863,10 @@ function DashboardEmployee() {
         <button
             type="button"
             onClick={onClick}
-            className="flex flex-col items-center justify-center gap-2 rounded-2xl border bg-white p-4 text-center shadow-sm transition hover:border-[#20C997]/35 hover:shadow-md"
+            className="role-dashboard__quick-action flex flex-col items-center justify-center gap-2 border bg-white text-center transition hover:border-[#0E9370]/35"
             style={{ borderColor: WS.border }}
         >
-            <span className="text-[#20C997]" style={{ color: WS.mint }}>
+            <span className="text-[#0E9370]" style={{ color: WS.mint }}>
                 {icon}
             </span>
             <span className="text-xs font-semibold text-slate-700">{title}</span>
@@ -876,13 +877,13 @@ function DashboardEmployee() {
         <div className={`page-shell ${shellClass}`} style={shellStyle}>
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
-            <div className="page-shell-inner hrms-stack">
-                <div className="hrms-main-rail">
+            <div className="page-shell-inner role-dashboard__stack">
+                <div className="hrms-main-rail role-dashboard__layout">
                     {/* Main column */}
-                    <div className="min-w-0 space-y-4 sm:space-y-6">
+                    <div className="min-w-0 role-dashboard__stack">
                         {/* Top bar */}
                         <header
-                            className="flex flex-col gap-3 rounded-2xl border bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5 md:p-6"
+                            className="role-dashboard__header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                             style={{ borderColor: WS.border }}
                         >
                             <div className="flex min-w-0 items-center gap-4">
@@ -890,7 +891,7 @@ function DashboardEmployee() {
                                     <button
                                         type="button"
                                         onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                                        className="shrink-0 rounded-full transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#20C997] focus:ring-offset-2"
+                                        className="shrink-0 rounded-full transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#0E9370] focus:ring-offset-2"
                                         aria-label="Profile menu"
                                         aria-expanded={profileDropdownOpen}
                                         data-hrms-popup-trigger
@@ -918,7 +919,7 @@ function DashboardEmployee() {
                             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
                                 <Link
                                     to="/notifications"
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-[#20C997]/40 hover:text-[#20C997]"
+                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-[#0E9370]/40 hover:text-[#0E9370]"
                                     aria-label="Notifications"
                                 >
                                     <HiOutlineBell className="h-5 w-5" />
@@ -926,7 +927,7 @@ function DashboardEmployee() {
                                 <button
                                     type="button"
                                     onClick={() => navigate('/helpdesk')}
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-[#20C997]/40 hover:text-[#20C997]"
+                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-[#0E9370]/40 hover:text-[#0E9370]"
                                     aria-label="Help"
                                 >
                                     <HiOutlineQuestionMarkCircle className="h-5 w-5" />
@@ -934,7 +935,7 @@ function DashboardEmployee() {
                                 <button
                                     type="button"
                                     onClick={handleEditProfile}
-                                    className="hidden items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#20C997]/40 sm:flex"
+                                    className="hidden items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0E9370]/40 sm:flex"
                                 >
                                     <FaEdit className="h-3.5 w-3.5" />
                                     Profile
@@ -958,7 +959,7 @@ function DashboardEmployee() {
                             <div className="p-3">
                                 {dashboardStats.celebrations == null ? (
                                     <div className="flex justify-center py-4">
-                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370]" />
                                     </div>
                                 ) : dashboardStats.celebrations.length === 0 ? (
                                     <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations</p>
@@ -984,7 +985,7 @@ function DashboardEmployee() {
                         </div>
 
                         {/* KPI row */}
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        <div className="role-dashboard__kpis grid grid-cols-2 gap-4 sm:grid-cols-3">
                             {kpiCard(
                                 'Days present',
                                 statsLoading ? '…' : String(dashboardStats.daysPresent),
@@ -1028,11 +1029,11 @@ function DashboardEmployee() {
 
                         {/* Attendance summary */}
                         <section
-                            className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5 md:p-6"
+                            className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5 md:p-6"
                             style={{ borderColor: WS.border }}
                         >
                             <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900 sm:mb-4">
-                                <FaChartLine className="text-[#20C997]" />
+                                <FaChartLine className="text-[#0E9370]" />
                                 Attendance summary
                             </h2>
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1064,7 +1065,7 @@ function DashboardEmployee() {
                                         className="rounded-xl border border-slate-100 bg-[#F8F9FB] p-4 text-center"
                                     >
                                         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{cell.title}</p>
-                                        <p className="mt-2 text-2xl font-bold text-[#006D4E]">{cell.val}</p>
+                                        <p className="mt-2 text-2xl font-bold text-[#00694F]">{cell.val}</p>
                                         <p className="mt-1 text-xs text-slate-500">{cell.hint}</p>
                                     </div>
                                 ))}
@@ -1072,7 +1073,7 @@ function DashboardEmployee() {
                             <div className="mt-4 border-t border-slate-100 pt-4">
                                 <Link
                                     to="/employee/leave-attendance"
-                                    className="inline-flex items-center gap-2 text-sm font-semibold text-[#20C997] transition hover:text-[#006D4E]"
+                                    className="inline-flex items-center gap-2 text-sm font-semibold text-[#0E9370] transition hover:text-[#00694F]"
                                 >
                                     View detailed stats <FaArrowRight className="h-3 w-3" />
                                 </Link>
@@ -1082,17 +1083,17 @@ function DashboardEmployee() {
                         {/* Projects + Tasks */}
                         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                             <section
-                                className="rounded-2xl border bg-white shadow-sm"
+                                className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
                             >
                                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
                                     <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                                        <FaProjectDiagram className="text-[#20C997]" />
+                                        <FaProjectDiagram className="text-[#0E9370]" />
                                         Projects
                                     </h3>
                                     <Link
                                         to="/employee/projects"
-                                        className="text-xs font-semibold text-[#20C997] hover:text-[#006D4E]"
+                                        className="text-xs font-semibold text-[#0E9370] hover:text-[#00694F]"
                                     >
                                         View all
                                     </Link>
@@ -1100,7 +1101,7 @@ function DashboardEmployee() {
                                 <div className="p-3 sm:p-5">
                                     {statsLoading ? (
                                         <div className="flex justify-center py-10">
-                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
+                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370]" />
                                         </div>
                                     ) : dashboardStats.projects?.length > 0 ? (
                                         <ul className="space-y-3">
@@ -1109,7 +1110,7 @@ function DashboardEmployee() {
                                                     <button
                                                         type="button"
                                                         onClick={() => navigate(`/employee/projects/${project._id}`)}
-                                                        className="w-full rounded-xl border border-slate-100 p-3 text-left transition hover:border-[#20C997]/30 hover:bg-[#F8F9FB]"
+                                                        className="w-full rounded-xl border border-slate-100 p-3 text-left transition hover:border-[#0E9370]/30 hover:bg-[#F8F9FB]"
                                                     >
                                                         <span className="font-medium text-slate-800">{project.name}</span>
                                                         <FaArrowRight className="float-right mt-1 h-3 w-3 text-slate-400" />
@@ -1122,7 +1123,7 @@ function DashboardEmployee() {
                                             <FaProjectDiagram className="mx-auto mb-3 h-10 w-10 text-slate-300" />
                                             <p className="text-sm text-slate-500">No projects assigned yet</p>
                                             <Link to="/employee/projects">
-                                                <span className="mt-3 inline-block rounded-full bg-[#20C997] px-4 py-2 text-xs font-semibold text-white hover:bg-[#1ab589]">
+                                                <span className="mt-3 inline-block rounded-full bg-[#0E9370] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0b7458]">
                                                     View all projects
                                                 </span>
                                             </Link>
@@ -1132,12 +1133,12 @@ function DashboardEmployee() {
                             </section>
 
                             <section
-                                className="rounded-2xl border bg-white shadow-sm"
+                                className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
                             >
                                 <div className="border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
                                     <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                                        <FaTasks className="text-[#20C997]" />
+                                        <FaTasks className="text-[#0E9370]" />
                                         My tasks
                                     </h3>
                                 </div>
@@ -1149,7 +1150,7 @@ function DashboardEmployee() {
 
                         {/* Announcements */}
                         <section
-                            className="rounded-2xl border bg-white shadow-sm"
+                            className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
                             style={{ borderColor: WS.border }}
                         >
                             <div
@@ -1166,7 +1167,7 @@ function DashboardEmployee() {
                     </div>
 
                     {/* Right rail — celebrations first so they stay above the fold */}
-                    <aside className="w-full min-w-0 space-y-5 lg:sticky lg:top-4 lg:self-start">
+                    <aside className="w-full min-w-0 role-dashboard__stack lg:self-start">
                         <div className="hidden rounded-xl border bg-white shadow-sm lg:block" style={{ borderColor: WS.border }}>
                             <div
                                 className="rounded-t-xl px-3 py-2"
@@ -1180,7 +1181,7 @@ function DashboardEmployee() {
                             <div className="p-3">
                                 {dashboardStats.celebrations == null ? (
                                     <div className="flex justify-center py-4">
-                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#20C997]" />
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370]" />
                                     </div>
                                 ) : dashboardStats.celebrations.length === 0 ? (
                                     <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations</p>
@@ -1206,7 +1207,7 @@ function DashboardEmployee() {
                         </div>
 
                         {dashboardStats.anniversaries && dashboardStats.anniversaries.length > 0 ? (
-                            <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
+                            <div className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
                                 <div
                                     className="rounded-t-2xl px-3 py-2 sm:px-5 sm:py-3"
                                     style={{ background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)' }}
@@ -1240,10 +1241,10 @@ function DashboardEmployee() {
                             onNextMonth={() => setCalendarViewDate((d) => addMonths(d, 1))}
                         />
 
-                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
+                        <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Leave balance</h3>
                             {statsLoading ? (
-                                <p className="mt-3 text-3xl font-bold text-[#006D4E]">…</p>
+                                <p className="mt-3 text-3xl font-bold text-[#00694F]">…</p>
                             ) : dashboardStats.monthlyCapSummary ? (
                                 <>
                                     <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -1278,7 +1279,7 @@ function DashboardEmployee() {
                                                         ) : null}
                                                     </span>
                                                     <span className="shrink-0 text-right text-slate-700">
-                                                        <span className="font-semibold text-[#006D4E]">
+                                                        <span className="font-semibold text-[#00694F]">
                                                             {takeable}
                                                         </span>
                                                         <span className="text-slate-500"> {LEAVE_UI.youCanTakeThisMonth.toLowerCase()}</span>
@@ -1326,7 +1327,7 @@ function DashboardEmployee() {
                                 </>
                             ) : (
                                 <>
-                                    <p className="mt-3 text-3xl font-bold text-[#006D4E]">
+                                    <p className="mt-3 text-3xl font-bold text-[#00694F]">
                                         {dashboardStats.leaveDaysRemaining}
                                     </p>
                                     <p className="text-xs text-slate-500">{LEAVE_UI.daysRemaining.toLowerCase()}</p>
@@ -1336,7 +1337,7 @@ function DashboardEmployee() {
                                 <button
                                     type="button"
                                     onClick={() => navigate('/employee/leave-attendance')}
-                                    className="w-full rounded-full bg-[#20C997] py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ab589]"
+                                    className="w-full rounded-full bg-[#0E9370] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b7458]"
                                 >
                                     <FaPlus className="mr-2 inline h-3 w-3" />
                                     Apply for leave
@@ -1344,7 +1345,7 @@ function DashboardEmployee() {
                                 <button
                                     type="button"
                                     onClick={() => navigate('/my-leave')}
-                                    className="w-full rounded-full border-2 border-[#20C997] py-2.5 text-sm font-semibold text-[#20C997] transition hover:bg-[#20C997]/10"
+                                    className="w-full rounded-full border-2 border-[#0E9370] py-2.5 text-sm font-semibold text-[#0E9370] transition hover:bg-[#0E9370]/10"
                                 >
                                     <FaEye className="mr-2 inline h-3 w-3" />
                                     View my leaves
@@ -1352,20 +1353,20 @@ function DashboardEmployee() {
                             </div>
                         </div>
 
-                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
+                        <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
                             <div className="mt-3 flex flex-col gap-2 text-sm">
                                 <button
                                     type="button"
                                     onClick={() => navigate('/employee/policies')}
-                                    className="text-left font-medium text-[#20C997] hover:text-[#006D4E]"
+                                    className="text-left font-medium text-[#0E9370] hover:text-[#00694F]"
                                 >
                                     Company policies
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/helpdesk')}
-                                    className="text-left font-medium text-[#20C997] hover:text-[#006D4E]"
+                                    className="text-left font-medium text-[#0E9370] hover:text-[#00694F]"
                                 >
                                     Support desk
                                 </button>
@@ -1373,36 +1374,36 @@ function DashboardEmployee() {
                         </div>
 
                         {/* Compact links: manager + HR */}
-                        <div className="rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
+                        <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Shortcuts</p>
                             <div className="mt-3 grid grid-cols-1 gap-2">
                                 <button
                                     type="button"
                                     onClick={() => navigate('/1-on-1')}
-                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#20C997]/30"
+                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#0E9370]/30"
                                 >
-                                    <FaUserTie className="text-[#20C997]" /> 1:1
+                                    <FaUserTie className="text-[#0E9370]" /> 1:1
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/benefits')}
-                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#20C997]/30"
+                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#0E9370]/30"
                                 >
-                                    <FaGift className="text-[#20C997]" /> Benefits
+                                    <FaGift className="text-[#0E9370]" /> Benefits
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/employee/documents-id')}
-                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#20C997]/30"
+                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#0E9370]/30"
                                 >
-                                    <FaFolderOpen className="text-[#20C997]" /> Documents &amp; ID
+                                    <FaFolderOpen className="text-[#0E9370]" /> Documents &amp; ID
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/learning')}
-                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#20C997]/30"
+                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#0E9370]/30"
                                 >
-                                    <FaGraduationCap className="text-[#20C997]" /> Learning
+                                    <FaGraduationCap className="text-[#0E9370]" /> Learning
                                 </button>
                             </div>
                         </div>
@@ -1451,7 +1452,7 @@ function DashboardEmployee() {
                                     <div className="mt-4 flex justify-end space-x-3">
                                         <button
                                             type="button"
-                                            className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#20C997] focus:ring-offset-2"
+                                            className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#0E9370] focus:ring-offset-2"
                                             onClick={() => {
                                                 setLogoutModalOpen(false);
                                                 setProfileDropdownOpen(false);
