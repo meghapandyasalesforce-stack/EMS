@@ -1564,7 +1564,8 @@ export const listPublicJobs = asyncHandler(async (req, res) => {
     const jobs = await Recruitment.find({
         organizationId,
         status: 'Open',
-        isActive: true,
+        isActive: { $ne: false },
+        archivedAt: null,
         externalVisible: { $ne: false },
     })
         .select('jobTitle department position location employmentType salaryRange postedDate closingDate jobDescription requirements responsibilities priority')
@@ -1584,7 +1585,8 @@ export const getPublicJobById = asyncHandler(async (req, res) => {
         _id: id,
         organizationId,
         status: 'Open',
-        isActive: true,
+        isActive: { $ne: false },
+        archivedAt: null,
         externalVisible: { $ne: false },
     })
         .select('-createdBy -recruiter -hiringManager -primaryRecruiterId -backupRecruiterId -coordinatorId')
@@ -1615,7 +1617,8 @@ export const publicApplyForJob = asyncHandler(async (req, res) => {
         _id: jobPostingId,
         organizationId,
         status: 'Open',
-        isActive: true,
+        isActive: { $ne: false },
+        archivedAt: null,
         externalVisible: { $ne: false },
     });
     if (!jobPosting) {
