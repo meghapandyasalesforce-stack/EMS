@@ -1,3 +1,4 @@
+import '../../styles/surveyUI.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     FaPoll,
@@ -85,10 +86,10 @@ const PrivacyBanner = ({ message = PRIVACY_MSG }) => (
     </div>
 );
 
-const SectionShell = ({ title, description, children, error, loading, emptyMessage }) => {
+const SectionShell = ({ title, description, children, error, loading, emptyMessage, className = '' }) => {
     if (loading) {
         return (
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <div className={`rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
                 <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
                 {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
                 <div className="mt-6 flex items-center justify-center py-8">
@@ -99,7 +100,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
     }
     if (error) {
         return (
-            <div className="rounded-2xl border border-red-100 bg-red-50/50 p-6 shadow-sm">
+            <div className={`rounded-2xl border border-red-100 bg-red-50/50 p-6 shadow-sm ${className}`}>
                 <div className="flex items-start gap-2 text-sm text-red-800">
                     <FaExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
@@ -112,7 +113,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
     }
     if (emptyMessage) {
         return (
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <div className={`rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
                 <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
                 {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
                 <p className="mt-6 py-8 text-center text-sm text-slate-500">{emptyMessage}</p>
@@ -120,7 +121,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
         );
     }
     return (
-        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div className={`rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
             <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
             {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
             <div className="mt-4">{children}</div>
@@ -615,6 +616,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
 
                     <div className="grid gap-6 lg:grid-cols-2">
                         <SectionShell
+                            className="survey-ui survey-ui--analytics"
                             title="Survey insights"
                             description="Current survey status and response activity"
                             loading={analyticsState.loading}
@@ -659,6 +661,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                         </SectionShell>
 
                         <SectionShell
+                            className="survey-ui survey-ui--analytics"
                             title="eNPS insights"
                             description="Employee Net Promoter Score"
                             loading={analyticsState.loading}

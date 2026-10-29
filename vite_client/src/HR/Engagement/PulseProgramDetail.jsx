@@ -90,7 +90,7 @@ const PulseProgramDetail = () => {
         }
     };
 
-    if (loading) return <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent"><LoadingSpinner /></div>;
+    if (loading) return <div className="survey-ui survey-ui--loading flex items-center justify-center bg-transparent"><LoadingSpinner /></div>;
     if (!program) return null;
 
     const tabs = [

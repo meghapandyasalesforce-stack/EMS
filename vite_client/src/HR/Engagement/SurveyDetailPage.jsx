@@ -1,3 +1,4 @@
+import '../../styles/surveyUI.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -46,7 +47,7 @@ const DistributionBars = ({ rows }) => (
     <ul className="mt-3 space-y-2">
         {(rows || []).map((row) => (
             <li key={`${row.option ?? row.value}-${row.count}`}>
-                <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                <div className="survey-distribution-label flex items-center justify-between gap-2 text-xs text-slate-600">
                     <span className="font-medium text-slate-800">{row.option ?? row.value}</span>
                     <span>
                         {row.count} · {row.percentage}%
@@ -426,11 +427,12 @@ const SurveyDetailPage = () => {
                     {question.options.filter(Boolean).map((opt, i) => (
                         <label
                             key={`${qid}-opt-${i}`}
-                            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
+                            className="survey-answer-option flex cursor-pointer items-start gap-2 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
                         >
                             <input
                                 type="radio"
                                 name={qid}
+                                aria-label={opt}
                                 checked={value === opt}
                                 onChange={() => setAnswer(qid, opt)}
                                 className="text-[#0E9370]"
@@ -450,6 +452,7 @@ const SurveyDetailPage = () => {
                             key={opt}
                             type="button"
                             onClick={() => setAnswer(qid, opt)}
+                            aria-pressed={value === opt}
                             className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
                                 value === opt
                                     ? 'border-[#0E9370] bg-[#0E9370]/10 text-[#0d9488]'
@@ -479,6 +482,7 @@ const SurveyDetailPage = () => {
                         min={min}
                         max={max}
                         value={value}
+                        aria-label={question.question}
                         onChange={(e) => setAnswer(qid, Number(e.target.value))}
                         className="w-full max-w-[120px] rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     />
@@ -489,6 +493,7 @@ const SurveyDetailPage = () => {
         return (
             <textarea
                 value={value}
+                aria-label={question.question}
                 onChange={(e) => setAnswer(qid, e.target.value)}
                 rows={3}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E9370] focus:ring-2 focus:ring-[#0E9370]/20"
@@ -499,7 +504,7 @@ const SurveyDetailPage = () => {
 
     if (loading) {
         return (
-            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent">
+            <div className="survey-ui survey-ui--loading flex items-center justify-center bg-transparent">
                 <LoadingSpinner message="Loading survey..." />
             </div>
         );
@@ -507,7 +512,7 @@ const SurveyDetailPage = () => {
 
     if (!survey) {
         return (
-            <div className="page-shell min-h-[calc(100vh-64px)] bg-transparent">
+            <div className="survey-ui survey-ui--page survey-ui--detail page-shell bg-transparent">
                 <div className="page-shell-inner">
                     <div className="rounded-[28px] border border-slate-100 bg-white p-8 text-center shadow-sm">
                         <p className="text-lg font-semibold text-slate-900">Survey not found</p>
@@ -528,7 +533,7 @@ const SurveyDetailPage = () => {
     const showAnalyticsDetail = overview?.available === true;
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-transparent">
+        <div className="survey-ui survey-ui--page survey-ui--detail page-shell bg-transparent">
             <div className="page-shell-inner hrms-stack max-w-6xl">
                 <button
                     type="button"
@@ -631,10 +636,10 @@ const SurveyDetailPage = () => {
 
                                 <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:p-3.5">
                                     <div className="min-w-0 flex-1">
-                                        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                        <label htmlFor="surveydetailpage-field-1" className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                                             Status
                                         </label>
-                                        <select
+                                        <select id="surveydetailpage-field-1"
                                             value={statusDraft}
                                             onChange={(e) => setStatusDraft(e.target.value)}
                                             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 sm:max-w-xs"
@@ -689,7 +694,7 @@ const SurveyDetailPage = () => {
                                     </span>
                                 )}
                             </p>
-                            <input
+                            <label className="block text-sm font-medium text-slate-700"><span className="mb-1 block">Title</span><input
                                 type="text"
                                 value={metadataForm.title}
                                 onChange={(e) =>
@@ -697,8 +702,8 @@ const SurveyDetailPage = () => {
                                 }
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                                 placeholder="Title"
-                            />
-                            <textarea
+                            /></label>
+                            <label className="block text-sm font-medium text-slate-700"><span className="mb-1 block">Description</span><textarea
                                 value={metadataForm.description}
                                 onChange={(e) =>
                                     setMetadataForm((p) => ({ ...p, description: e.target.value }))
@@ -706,24 +711,24 @@ const SurveyDetailPage = () => {
                                 rows={2}
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                                 placeholder="Description"
-                            />
+                            /></label>
                             <div className="grid gap-3 sm:grid-cols-2">
-                                <input
+                                <label className="block text-sm font-medium text-slate-700"><span className="mb-1 block">Start date</span><input
                                     type="datetime-local"
                                     value={metadataForm.startDate}
                                     onChange={(e) =>
                                         setMetadataForm((p) => ({ ...p, startDate: e.target.value }))
                                     }
                                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                                />
-                                <input
+                                /></label>
+                                <label className="block text-sm font-medium text-slate-700"><span className="mb-1 block">End date</span><input
                                     type="datetime-local"
                                     value={metadataForm.endDate}
                                     onChange={(e) =>
                                         setMetadataForm((p) => ({ ...p, endDate: e.target.value }))
                                     }
                                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                                />
+                                /></label>
                             </div>
                             <button
                                 type="button"
@@ -1005,7 +1010,8 @@ const SurveyDetailPage = () => {
                                                         isExpanded ? null : row._id
                                                     )
                                                 }
-                                                className="flex w-full items-center justify-between gap-3 bg-slate-50/80 px-4 py-3 text-left text-sm hover:bg-slate-50"
+                                                aria-expanded={isExpanded}
+                                                className="flex w-full flex-wrap items-center justify-between gap-3 bg-slate-50/80 px-4 py-3 text-left text-sm hover:bg-slate-50"
                                             >
                                                 <span className="font-semibold text-slate-900">
                                                     {label}
