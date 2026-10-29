@@ -1,3 +1,4 @@
+import './attendanceSuite.css';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -67,7 +68,7 @@ function formatShiftLabel(empRow) {
   return name;
 }
 
-const TodayStatusComponent = () => {
+const TodayStatusComponent = ({ embedded = false, onHistory }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { todayStatus, loading, error } = useSelector((state) => state.attendance);
@@ -149,14 +150,18 @@ const TodayStatusComponent = () => {
     );
 
   return (
-    <div className="page-shell min-h-screen bg-[#f4f7f6]">
-      <div className="page-shell-inner hrms-stack">
+    <div className={`attendance-suite ${embedded ? 'attendance-suite__today' : 'page-shell min-h-screen'}`}>
+      <div className={embedded ? 'hrms-stack' : 'page-shell-inner hrms-stack'}>
         <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-1 text-sm font-medium text-slate-500">{headerDate}</p>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Today's live roster</h1>
-            <p className="mt-1 text-sm text-slate-600">Who's in, on break, or absent right now</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            {embedded ? null : (
+              <>
+                <p className="mb-1 text-sm font-medium text-slate-500">{headerDate}</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Today's live roster</h1>
+                <p className="mt-1 text-sm text-slate-600">Who's in, on break, or absent right now</p>
+              </>
+            )}
+            <div className={`${embedded ? '' : 'mt-3 '}flex flex-wrap gap-2`}>
               {[
                 { id: 'all', label: 'All shifts' },
                 { id: 'shift1', label: 'Shift 1' },
@@ -178,10 +183,11 @@ const TodayStatusComponent = () => {
               ))}
             </div>
           </div>
+          {embedded ? null : (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate('/all-attendance-history')}
+              onClick={() => onHistory ? onHistory() : navigate('/all-attendance-history')}
               className="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
               style={{ background: TEAL }}
             >
@@ -198,9 +204,10 @@ const TodayStatusComponent = () => {
               Regularization
             </button>
           </div>
+          )}
         </header>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="attendance-suite__stats grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             {
               title: 'Present now',
@@ -229,20 +236,20 @@ const TodayStatusComponent = () => {
           ].map((card) => (
             <div
               key={card.title}
-              className="relative overflow-hidden rounded-2xl bg-white border border-slate-100 p-5 shadow-sm"
+              className="rounded-2xl border border-slate-200 p-5 shadow-sm"
+              style={{ backgroundColor: '#ffffff' }}
             >
-              <div
-                className="absolute -right-6 -bottom-6 h-24 w-24 rounded-full opacity-10 pointer-events-none"
-                style={{ background: card.accent }}
-              />
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{card.title}</p>
-                  <p className="text-3xl font-bold text-slate-900">{card.value}</p>
-                  <p className="text-sm text-slate-500 mt-1">{card.sub}</p>
-                </div>
-                <FiUsers className="h-8 w-8 text-slate-200 shrink-0" />
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-500">{card.title}</p>
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-full"
+                  style={{ backgroundColor: `${card.accent}18`, color: card.accent }}
+                >
+                  <FiUsers className="h-4 w-4" />
+                </span>
               </div>
+              <p className="text-3xl font-bold tracking-tight text-[#0E2B3D]">{card.value}</p>
+              <p className="mt-2 text-xs font-medium" style={{ color: card.accent }}>{card.sub}</p>
             </div>
           ))}
         </div>

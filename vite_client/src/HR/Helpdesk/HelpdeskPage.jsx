@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { createPortal } from 'react-dom';
 import {
     FaCheckCircle,
     FaCommentDots,
-    FaHeadset,
-    FaInbox,
+    FaExclamationTriangle,
+    FaHourglassHalf,
     FaPaperPlane,
     FaPlus,
     FaSearch,
@@ -19,6 +20,7 @@ import { formatStatusLabel } from '../../utils/textFormat.js';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { isHR, isManager } from '../../utils/managerHelper';
 import { isExecutive } from '../../utils/navigationConfig';
+import './helpdesk.css';
 
 const FILTERS = [
     { label: 'All', value: 'all' },
@@ -119,39 +121,47 @@ const PriorityPill = ({ priority }) => (
     </span>
 );
 
-const StatCard = ({ label, value, icon, tint }) => (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${tint}`}>
-            {icon}
+const StatCard = ({ label, value, icon, accent }) => (
+    <div className="helpdesk-stat" style={{ backgroundColor: '#ffffff' }}>
+        <div className="helpdesk-stat__top">
+            <p>{label}</p>
+            <span style={{ backgroundColor: `${accent}18`, color: accent }}>{icon}</span>
         </div>
-        <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-            <p className="text-2xl font-bold leading-tight text-slate-900">{value}</p>
-        </div>
+        <strong>{value}</strong>
     </div>
 );
 
-const ModalShell = ({ title, subtitle, onClose, children, maxWidth = 'max-w-2xl' }) => (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-        <div className={`max-h-[94vh] w-full ${maxWidth} overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-2xl`}>
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-6 sm:py-5">
-                <div className="min-w-0">
-                    <h2 className="truncate text-lg font-bold text-slate-900 sm:text-xl">{title}</h2>
-                    {subtitle && <p className="mt-0.5 truncate text-sm text-slate-500">{subtitle}</p>}
-                </div>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                    aria-label="Close"
-                >
-                    <FaTimes />
-                </button>
-            </div>
+const ModalShell = ({ title, subtitle, onClose, children, drawer = false }) => {
+    const dialogRef = useRef(null);
+    const closeRef = useRef(onClose);
+    useEffect(() => { closeRef.current = onClose; }, [onClose]);
+    useEffect(() => {
+        const previous = document.activeElement;
+        const overflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const controls = () => [...dialogRef.current.querySelectorAll('button, input, select, textarea, [tabindex="0"]')].filter((item) => !item.disabled);
+        controls()[0]?.focus();
+        const handleKey = (event) => {
+            if (event.key === 'Escape') closeRef.current();
+            if (event.key !== 'Tab') return;
+            const items = controls();
+            const first = items[0], last = items[items.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        };
+        document.addEventListener('keydown', handleKey);
+        return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', handleKey); previous?.focus(); };
+    }, []);
+    return createPortal(
+    <div className={`helpdesk-overlay ${drawer ? 'helpdesk-overlay--drawer' : ''}`}>
+        <section ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} className={`helpdesk-dialog ${drawer ? 'helpdesk-dialog--drawer' : ''}`}>
+            <div className="helpdesk-dialog__header"><div className="min-w-0"><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button type="button" onClick={onClose} aria-label="Close" className="helpdesk-close"><FaTimes /></button></div>
             {children}
-        </div>
-    </div>
-);
+        </section>
+    </div>,
+    document.body
+    );
+};
 
 const fieldClass =
     'w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-theme-secondary focus:ring-2 focus:ring-theme-secondary/20';
@@ -179,6 +189,9 @@ const HelpdeskPage = () => {
     const [refreshing, setRefreshing] = useState(false);
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
+    const [priorityFilter, setPriorityFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [page, setPage] = useState(1);
     const [createOpen, setCreateOpen] = useState(false);
     const [ticketForm, setTicketForm] = useState(emptyTicketForm);
     const [submitting, setSubmitting] = useState(false);
@@ -238,6 +251,8 @@ const HelpdeskPage = () => {
         const term = search.trim().toLowerCase();
         return tickets.filter((ticket) => {
             if (filter !== 'all' && ticket.status !== filter) return false;
+            if (priorityFilter !== 'all' && ticket.priority !== priorityFilter) return false;
+            if (categoryFilter !== 'all' && ticket.category !== categoryFilter) return false;
             if (!term) return true;
             return [
                 ticket.ticketNumber,
@@ -249,7 +264,11 @@ const HelpdeskPage = () => {
                 .filter(Boolean)
                 .some((value) => String(value).toLowerCase().includes(term));
         });
-    }, [tickets, filter, search]);
+    }, [tickets, filter, search, priorityFilter, categoryFilter]);
+    const totalPages = Math.max(1, Math.ceil(visibleTickets.length / 10));
+    const currentPage = Math.min(page, totalPages);
+    const pageTickets = visibleTickets.slice((currentPage - 1) * 10, currentPage * 10);
+    useEffect(() => { setPage(1); }, [search, filter, priorityFilter, categoryFilter]);
 
     const submitTicket = async (event) => {
         event.preventDefault();
@@ -407,34 +426,29 @@ const HelpdeskPage = () => {
     const showRequester = canManageTickets || managerView;
 
     return (
-        <div className="min-h-screen bg-transparent p-3 sm:p-5">
-            <div className="mx-auto w-full max-w-7xl space-y-5">
+        <div className="helpdesk-page min-h-screen p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-[1600px] space-y-6">
                 {/* Header */}
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-theme-secondary/10 text-xl text-theme-secondary">
-                                <FaHeadset />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
-                                    {canManageTickets ? 'HR Helpdesk' : 'Help & Support'}
-                                </h1>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    {canManageTickets
-                                        ? 'Track, assign and resolve employee tickets'
-                                        : managerView
-                                          ? 'Your tickets and requests raised by your team'
-                                          : 'Raise a request and follow its progress'}
-                                </p>
-                            </div>
+                <div className="helpdesk-heading">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight text-[#0E2B3D] sm:text-3xl">
+                                {canManageTickets ? 'Helpdesk & Support Suite' : 'Help & Support'}
+                            </h1>
+                            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                                {canManageTickets
+                                    ? 'Manage internal employee grievances, IT requests, and payroll inquiries with full lifecycle tracking.'
+                                    : managerView
+                                      ? 'Your tickets and requests raised by your team'
+                                      : 'Raise a request and follow its progress'}
+                            </p>
                         </div>
                         <div className="flex items-center gap-2">
                             <button
                                 type="button"
                                 onClick={() => fetchTickets({ silent: true })}
                                 disabled={refreshing}
-                                className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-60"
+                                className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-60"
                                 title="Refresh"
                             >
                                 <FaSyncAlt className={refreshing ? 'animate-spin' : ''} />
@@ -442,10 +456,11 @@ const HelpdeskPage = () => {
                             <button
                                 type="button"
                                 onClick={() => setCreateOpen(true)}
-                                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-secondary px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-theme-primary sm:flex-none"
+                                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 sm:flex-none"
+                                style={{ backgroundColor: '#0a8f6c' }}
                             >
                                 <FaPlus className="h-3.5 w-3.5" />
-                                New Ticket
+                                Create Ticket
                             </button>
                         </div>
                     </div>
@@ -454,70 +469,41 @@ const HelpdeskPage = () => {
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                     <StatCard
-                        label="Total"
-                        value={counts.all}
-                        tint="bg-slate-100 text-slate-600"
-                        icon={<FaTicketAlt />}
-                    />
-                    <StatCard
-                        label="Open"
+                        label="Open tickets"
                         value={counts.Open || 0}
-                        tint="bg-amber-50 text-amber-600"
-                        icon={<FaInbox />}
+                        accent="#d97706"
+                        icon={<FaExclamationTriangle />}
                     />
                     <StatCard
-                        label="In Progress"
+                        label="In progress"
                         value={counts.inFlight}
-                        tint="bg-blue-50 text-blue-600"
-                        icon={<FaSpinner />}
+                        accent="#0a8f6c"
+                        icon={<FaHourglassHalf />}
                     />
                     <StatCard
                         label="Resolved"
                         value={counts.Resolved || 0}
-                        tint="bg-emerald-50 text-emerald-600"
+                        accent="#0a8f6c"
                         icon={<FaCheckCircle />}
+                    />
+                    <StatCard
+                        label="All tickets"
+                        value={counts.all}
+                        accent="#64748b"
+                        icon={<FaTicketAlt />}
                     />
                 </div>
 
                 {/* Toolbar */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="flex flex-wrap gap-2">
-                            {FILTERS.map((status) => {
-                                const active = filter === status.value;
-                                const count = counts[status.value] ?? 0;
-                                return (
-                                    <button
-                                        key={status.value}
-                                        type="button"
-                                        onClick={() => setFilter(status.value)}
-                                        className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
-                                            active
-                                                ? 'bg-theme-secondary text-white shadow-sm'
-                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                        }`}
-                                    >
-                                        {status.label}
-                                        <span
-                                            className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                                                active ? 'bg-white/25 text-white' : 'bg-white text-slate-500'
-                                            }`}
-                                        >
-                                            {count}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <div className="relative lg:w-72">
-                            <FaSearch className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                            <input
-                                value={search}
-                                onChange={(event) => setSearch(event.target.value)}
-                                placeholder="Search tickets..."
-                                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-theme-secondary focus:bg-white focus:ring-2 focus:ring-theme-secondary/20"
-                            />
-                        </div>
+                <div className="helpdesk-toolbar">
+                    <div className="relative w-full lg:max-w-sm">
+                        <FaSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input aria-label="Search tickets" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tickets by ID, subject, or employee..." className="helpdesk-search" />
+                    </div>
+                    <div className="helpdesk-filters">
+                        <select aria-label="Filter status" value={filter} onChange={(event) => setFilter(event.target.value)}>{FILTERS.map((status) => <option key={status.value} value={status.value}>{status.value === 'all' ? 'Status: All Statuses' : status.label}</option>)}</select>
+                        <select aria-label="Filter priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="all">Priority: All Priorities</option>{PRIORITIES.map((priority) => <option key={priority}>{priority}</option>)}</select>
+                        <select aria-label="Filter category" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">Category: All Categories</option>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select>
                     </div>
                 </div>
 
@@ -548,38 +534,38 @@ const HelpdeskPage = () => {
                                 className="mt-5 inline-flex items-center gap-2 rounded-xl bg-theme-secondary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-theme-primary"
                             >
                                 <FaPlus className="h-3.5 w-3.5" />
-                                New Ticket
+                                Create Ticket
                             </button>
                         )}
                     </div>
                 ) : (
                     <>
                         {/* Desktop table */}
-                        <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
+                        <div className="helpdesk-table hidden overflow-x-auto rounded-2xl bg-white lg:block">
                             <table className="w-full">
                                 <thead className="bg-slate-50">
                                     <tr className="border-b border-slate-200">
-                                        <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Ticket</th>
+                                        <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Ticket ID</th>
                                         {showRequester && (
-                                            <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Requested By</th>
+                                            <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Employee</th>
                                         )}
+                                        <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Subject</th>
                                         <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Category</th>
                                         <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Priority</th>
                                         <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</th>
-                                        <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Created</th>
-                                        <th className="px-5 py-3.5 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">Action</th>
+                                        <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Assigned To</th>
+                                        <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Updated</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {visibleTickets.map((ticket) => (
+                                    {pageTickets.map((ticket) => (
                                         <tr
                                             key={ticket._id}
                                             onClick={() => openTicket(ticket._id)}
                                             className="cursor-pointer transition hover:bg-slate-50"
                                         >
                                             <td className="px-5 py-4">
-                                                <p className="font-semibold text-slate-900">{ticket.subject}</p>
-                                                <p className="mt-0.5 font-mono text-xs text-slate-400">{ticket.ticketNumber}</p>
+                                                <button type="button" className="helpdesk-ticket-id" onClick={(event) => { event.stopPropagation(); openTicket(ticket._id); }}>{ticket.ticketNumber}</button>
                                             </td>
                                             {showRequester && (
                                                 <td className="px-5 py-4">
@@ -600,26 +586,16 @@ const HelpdeskPage = () => {
                                                     </div>
                                                 </td>
                                             )}
+                                            <td className="px-5 py-4 text-sm font-semibold text-slate-800">{ticket.subject}</td>
                                             <td className="px-5 py-4">
-                                                <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                                                <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
                                                     {ticket.category}
                                                 </span>
                                             </td>
                                             <td className="px-5 py-4"><PriorityPill priority={ticket.priority} /></td>
                                             <td className="px-5 py-4"><StatusPill status={ticket.status} /></td>
-                                            <td className="px-5 py-4 text-sm text-slate-500">{formatRelative(ticket.createdAt)}</td>
-                                            <td className="px-5 py-4 text-right">
-                                                <button
-                                                    type="button"
-                                                    onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        openTicket(ticket._id);
-                                                    }}
-                                                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-theme-secondary hover:text-theme-secondary"
-                                                >
-                                                    View
-                                                </button>
-                                            </td>
+                                            <td className="px-5 py-4 text-sm text-slate-600">{ticket.assignedTo ? fullName(ticket.assignedTo) : 'Unassigned'}</td>
+                                            <td className="px-5 py-4 text-sm text-slate-500">{formatRelative(ticket.updatedAt || ticket.createdAt)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -628,7 +604,7 @@ const HelpdeskPage = () => {
 
                         {/* Mobile cards */}
                         <div className="space-y-3 lg:hidden">
-                            {visibleTickets.map((ticket) => (
+                            {pageTickets.map((ticket) => (
                                 <button
                                     key={ticket._id}
                                     type="button"
@@ -647,7 +623,7 @@ const HelpdeskPage = () => {
                                             {ticket.category}
                                         </span>
                                         <PriorityPill priority={ticket.priority} />
-                                        <span className="text-xs text-slate-400">{formatRelative(ticket.createdAt)}</span>
+                                        <span className="text-xs text-slate-400">{formatRelative(ticket.updatedAt || ticket.createdAt)}</span>
                                     </div>
                                     {showRequester && (
                                         <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
@@ -665,11 +641,13 @@ const HelpdeskPage = () => {
                     </>
                 )}
 
+                {!loading && visibleTickets.length > 0 && <div className="helpdesk-pagination"><p>Showing {(currentPage - 1) * 10 + 1} - {Math.min(currentPage * 10, visibleTickets.length)} of {visibleTickets.length} tickets</p><div className="flex items-center gap-2"><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button><span>{currentPage} of {totalPages}</span><button disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>}
+
                 {/* Create modal */}
                 {createOpen && (
                     <ModalShell
-                        title="New Helpdesk Ticket"
-                        subtitle="Describe the support you need"
+                        title="Create Support Ticket"
+                        subtitle="Submit a query or grievance directly to the HR & IT operations team."
                         onClose={() => setCreateOpen(false)}
                     >
                         <form onSubmit={submitTicket} className="space-y-5 p-5 sm:p-6">
@@ -768,12 +746,13 @@ const HelpdeskPage = () => {
                 {/* Detail modal */}
                 {selectedTicket && (
                     <ModalShell
-                        title={selectedTicket.subject}
+                        title={selectedTicket.ticketNumber}
                         subtitle={`${selectedTicket.ticketNumber} • ${formatDate(selectedTicket.createdAt)}`}
                         onClose={closeDetail}
-                        maxWidth="max-w-4xl"
+                        drawer
                     >
                         <div className="space-y-6 p-5 sm:p-6">
+                            <h2 className="text-2xl font-bold text-slate-900">{selectedTicket.subject}</h2>
                             <div className="flex flex-wrap items-center gap-2">
                                 <StatusPill status={selectedTicket.status} />
                                 <PriorityPill priority={selectedTicket.priority} />
@@ -862,7 +841,7 @@ const HelpdeskPage = () => {
                                         className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
                                     >
                                         {submitting && <FaSpinner className="animate-spin" />}
-                                        Save Workflow
+                                        Update Ticket
                                     </button>
                                 </div>
                             )}
@@ -870,7 +849,7 @@ const HelpdeskPage = () => {
                             <div>
                                 <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                     <FaCommentDots className="text-theme-secondary" />
-                                    Conversation
+                                    Activity & Timeline
                                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">
                                         {(selectedTicket.comments || []).length}
                                     </span>

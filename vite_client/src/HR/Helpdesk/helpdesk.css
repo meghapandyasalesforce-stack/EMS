@@ -1,0 +1,63 @@
+.helpdesk-page {
+  color: #172b3a;
+  background: transparent;
+  --helpdesk-primary: #0a8f6c;
+}
+.helpdesk-heading h1 { letter-spacing: -.035em; }
+.helpdesk-stat {
+  padding: 22px 24px;
+  background: #ffffff;
+  border: 1px solid #e9eef1;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px -2px rgb(14 43 61 / 6%);
+}
+.helpdesk-stat__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.helpdesk-stat__top p { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: #788592; }
+.helpdesk-stat__top > span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; flex-shrink: 0; }
+.helpdesk-stat strong { display: block; margin-top: 14px; font-size: 34px; line-height: 1.1; letter-spacing: -.04em; color: #0e2b3d; }
+.helpdesk-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; background: #ffffff; border: 1px solid #e9eef1; border-radius: 16px; box-shadow: 0 4px 20px -2px rgb(14 43 61 / 6%); }
+.helpdesk-search { width: 100%; padding: 12px 12px 12px 42px; border: 1px solid #e6ebf0; border-radius: 12px; background: #ffffff; font-size: 13px; }
+.helpdesk-filters { display: flex; gap: 8px; }
+.helpdesk-filters select { min-width: 168px; padding: 12px 14px; border: 1px solid #e6ebf0; border-radius: 12px; background: #ffffff; font-size: 12px; font-weight: 600; color: #526171; }
+.helpdesk-page input:focus-visible, .helpdesk-page select:focus-visible, .helpdesk-page button:focus-visible, .helpdesk-overlay button:focus-visible { outline: 2px solid #0e9370; outline-offset: 3px; }
+.helpdesk-table { box-shadow: 0 4px 20px -2px rgb(14 43 61 / 6%); }
+.helpdesk-table table { min-width: 1050px; }
+.helpdesk-table thead { background: #f0f4f8; }
+.helpdesk-table tbody td { padding-top: 24px; padding-bottom: 24px; }
+.helpdesk-ticket-id { color: var(--helpdesk-primary); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.helpdesk-pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 24px; border-radius: 12px; background: white; font-size: 12px; color: #74808c; }
+.helpdesk-pagination button { padding: 8px 12px; border: 1px solid #dde4e9; border-radius: 8px; color: #435363; }
+.helpdesk-pagination button:disabled { opacity: .4; }
+.helpdesk-pagination span { padding: 8px 12px; background: var(--helpdesk-primary); color: white; border-radius: 8px; }
+.helpdesk-overlay { position: fixed; inset: 0; z-index: 12000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgb(14 43 61 / 40%); backdrop-filter: blur(4px); --color-primary: #00694f; --color-secondary: #00694f; font-family: 'Inter', 'Manrope', system-ui, sans-serif; }
+.helpdesk-dialog { width: 100%; max-width: 672px; max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; background: white; border-radius: 24px; box-shadow: 0 20px 70px rgb(14 43 61 / 20%); color: #172b3a; }
+.helpdesk-dialog > form { padding: 24px; }
+.helpdesk-dialog > form textarea { min-height: 120px; max-height: 240px; }
+.helpdesk-dialog button[type=submit] { background: #00694f; color: white; }
+.helpdesk-dialog button[type=submit]:hover { background: #07523e; }
+.helpdesk-dialog__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 24px; position: sticky; top: 0; z-index: 1; background: #fff; border-bottom: 1px solid #e9eef1; }
+.helpdesk-dialog__header h2 { font-size: 22px; font-weight: 750; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.helpdesk-dialog__header p { font-size: 12px; color: #7a8793; margin-top: 6px; }
+.helpdesk-close { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 12px; color: #7a8793; }
+.helpdesk-close:hover { background: #edf2f6; }
+.helpdesk-overlay--drawer { justify-content: flex-end; padding: 0; }
+.helpdesk-dialog--drawer { height: 100dvh; max-height: 100dvh; border-radius: 0; }
+.helpdesk-dialog--drawer .helpdesk-dialog__header { background: #f0f4f8; }
+.helpdesk-dialog input:not([type=checkbox]), .helpdesk-dialog select, .helpdesk-dialog textarea { background: #f3f6fa; }
+@media (max-width: 1100px) {
+  .helpdesk-toolbar { flex-direction: column; align-items: stretch; }
+  .helpdesk-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .helpdesk-stat { padding: 16px; }
+  .helpdesk-stat__top { gap: 6px; }
+  .helpdesk-stat__top > span { width: 30px; height: 30px; }
+  .helpdesk-stat strong { font-size: 28px; }
+  .helpdesk-filters { grid-template-columns: 1fr; }
+  .helpdesk-overlay { padding: 10px; }
+  .helpdesk-dialog { max-height: calc(100dvh - 20px); border-radius: 18px; }
+  .helpdesk-dialog > form { padding: 20px; }
+  .helpdesk-overlay--drawer { padding: 0; }
+  .helpdesk-dialog--drawer { max-height: 100dvh; border-radius: 0; }
+  .helpdesk-dialog__header { padding: 20px; }
+}
