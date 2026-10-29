@@ -113,19 +113,20 @@ body.admin-dashboard-overlay .hr-ov-modal--wide { width:min(76rem,calc(100vw - 2
 .admin-dash__panel-head { border-bottom:1px solid #edf0f4; padding-bottom:.45rem; }
 .admin-dash__celebration-head { border-radius:.8rem .8rem 0 0; }
 .admin-dash__celebration-body { padding:.75rem 1rem; }
-.admin-dash__announcement-head { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.5rem 1rem; border-radius:.8rem .8rem 0 0; background:#0e2b3d; color:#fff; }
-.admin-dash__announcement-head h2 { display:flex; align-items:center; gap:.6rem; font-size:1rem; font-weight:600; }
-.admin-dash__announcement-head h2 svg { color:#1cca9b; }
-.admin-dash__announcement-head .ui-btn { min-height:1.8rem; padding:.2rem .6rem; background:transparent; border-color:#009978; color:#fff; font-size:.75rem; }
-.admin-dash__announcement-body { padding:.6rem 1rem; }
-.admin-dash__announcement-date { flex-shrink:0; color:#62748d; font-size:.75rem; }
-.admin-dash__announcement-badge { min-width:4.25rem; padding:.15rem .4rem; border-radius:.35rem; background:#def6ed; color:#00866a; text-align:center; font-size:.7rem; }
-.admin-dash__announcement-badge.is-important { background:#ffe3e8; color:#d91f40; }
-.admin-dash__announcements .admin-dash__list-row strong { font-size:.8rem; font-weight:500; }
+/* Announcement card: white heading, muted stacked messages, simple full-width action. */
+.admin-dash__announcement-head { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:1.1rem 1.25rem .75rem; border-radius:1rem 1rem 0 0; background:#fff; color:#111c2d; }
+.admin-dash__announcement-head h2 { margin:0; font-size:1.15rem; font-weight:600; }
+.admin-dash__announcement-head .ui-btn { min-height:2rem; padding:.2rem 0; border:0; background:transparent; color:#00bd92; font-size:.9rem; box-shadow:none; }
+.admin-dash__announcement-head .ui-btn:hover { color:#00866a; background:transparent; }
+.admin-dash__announcement-body { padding:0 1.25rem 1.1rem; }
+.admin-dash__announcements .admin-dash__announcement-grid { gap:.7rem; }
+.admin-dash .admin-dash__announcements .admin-dash__list-row { display:flex; flex-direction:column; align-items:flex-start; gap:.35rem; min-height:4.5rem; padding:.9rem; border:1px solid #dce4ee; border-radius:.9rem; background:#f7f9fb; }
+.admin-dash__announcements .admin-dash__list-row:hover { background:#f0f5f8; border-color:#cbd8e5; }
+.admin-dash__announcement-date { display:block; color:#627c9e; font-size:.75rem; }
+.admin-dash__announcements .admin-dash__list-row strong { flex:0 1 auto; font-size:.95rem; font-weight:500; line-height:1.4; color:#111c2d; }
 .admin-dash__announcements .ui-empty-state { padding:1rem; }
-.admin-dash__footer-actions { gap:.35rem; margin-top:.4rem; }
-.admin-dash__footer-actions .admin-dash__view-announcements { flex-basis:100%; min-height:1.9rem; padding:.25rem; font-size:.75rem; }
-.admin-dash__footer-actions > .ui-btn:not(.admin-dash__view-announcements) { min-height:1.5rem; padding:.1rem .4rem; border:0; font-size:.7rem; }
+.admin-dash__announcements .admin-dash__footer-actions { margin-top:.8rem; }
+.admin-dash__announcements .admin-dash__view-announcements { width:100%; min-height:2.7rem; padding:.5rem; border:1px solid #dce4ee; border-radius:.9rem; background:#fff; font-size:.95rem; font-weight:500; }
 .admin-dash__payroll-legend { display:flex; flex-direction:column; justify-content:center; gap:.45rem; min-width:0; padding:.5rem; border:1px solid #e2e8f0; border-radius:.5rem; font-size:.8rem; }
 .admin-dash__payroll-legend li { display:flex; align-items:center; gap:.4rem; min-width:0; }
 .admin-dash__payroll-legend li > span:first-child { width:.6rem; height:.6rem; flex-shrink:0; border-radius:50%; }
@@ -137,9 +138,6 @@ body.admin-dashboard-overlay .hr-ov-modal--wide { width:min(76rem,calc(100vw - 2
 @media(max-width:639.98px) {
   .admin-dash__grid > * { grid-column:1; }
   .admin-dash__announcement-date { font-size:.65rem; }
-  .admin-dash__announcement-badge { min-width:3rem; font-size:.65rem; }
-  .admin-dash__announcements .admin-dash__list-row { flex-wrap:wrap; }
-  .admin-dash__announcements .admin-dash__list-row strong { flex-basis:100%; order:1; }
   .admin-dash__announcement-head { gap:.4rem; padding:.6rem .75rem; }
   .admin-dash__announcement-body { padding:.6rem .75rem; }
   .admin-dash__payroll-content { gap:.5rem; }
@@ -154,3 +152,5 @@ body.admin-dashboard-overlay .hr-ov-modal--wide { width:min(76rem,calc(100vw - 2
 .admin-dash .admin-dash__celebration-empty { min-height:8.5rem; }
 .admin-dash .admin-dash__celebration-head,
 .admin-dash .admin-dash__announcement-head { min-height:2.5rem; }
+
+.admin-dash.role-dashboard .admin-dash__announcements { border-radius:1.1rem; border-color:#dce4ee; box-shadow:0 1px 3px rgba(14,43,61,.08); }
