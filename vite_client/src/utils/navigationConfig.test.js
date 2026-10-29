@@ -85,6 +85,7 @@ describe('navigationConfig — Me portal', () => {
       '/dashboard-employee',
       '/employee/leave-attendance',
       '/my-attendance-regularization',
+      '/my-comp-off',
       '/employee/projects',
       '/employee/engagement',
       '/one-on-one',
@@ -134,6 +135,8 @@ describe('navigationConfig — Me portal', () => {
     expect(
       items.some((item) => item.path === '/my-attendance-regularization')
     ).toBe(false);
+    expect(items.some((item) => item.path === '/comp-off-requests')).toBe(true);
+    expect(items.some((item) => item.path === '/my-comp-off')).toBe(false);
   });
 
   it('hides paid-plan modules from HR nav on Free plan features', () => {

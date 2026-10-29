@@ -83,6 +83,8 @@ export const NAV_GROUP_DEFS = [
       '/attendance-regularization',
       '/manager/attendance-regularization',
       '/my-attendance-regularization',
+      '/my-comp-off',
+      '/comp-off-requests',
       '/admin/pending-approvals',
     ],
   },

@@ -92,6 +92,7 @@ describe('Employee reference navigation', () => {
     ['Dashboard', '/dashboard-employee'],
     ['Leave & attendance', '/employee/leave-attendance'],
     ['Regularization', '/my-attendance-regularization'],
+    ['Comp-Off', '/my-comp-off'],
     ['Projects', '/employee/projects'],
     ['Engagement', '/employee/engagement'],
     ['One-on-One', '/one-on-one'],
