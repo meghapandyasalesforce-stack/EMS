@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Dialog } from '@headlessui/react';
 import axios from '../utils/axios';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 import { toast } from 'react-toastify';
@@ -78,7 +79,7 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
   const [busyId, setBusyId] = useState(null);
   const [menuId, setMenuId] = useState(null);
   const [readModal, setReadModal] = useState(null); // { row, loading }
-  const menuRef = useRef(null);
+  const actionRow = items.find(row => row._id === menuId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,14 +117,6 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
     }, 280);
     return () => clearTimeout(t);
   }, [search]);
-
-  useEffect(() => {
-    const onDoc = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuId(null);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, []);
 
   // Prefetch read summaries for sent rows on the current page
   useEffect(() => {
@@ -443,37 +436,19 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
                       <span className={`ann-ui__badge ${badge.cls}`}>{badge.label}</span>
                     </td>
                     <td className="ann-ui__td-actions">
-                      <div className="ann-ui__menu-wrap" ref={menuId === row._id ? menuRef : null}>
+                      <div className="ann-ui__menu-wrap">
                         <button
                           type="button"
                           className="ann-ui__icon-btn"
                           aria-label="Row actions"
+                          aria-haspopup="dialog"
+                          aria-expanded={menuId === row._id}
                           disabled={busyId === row._id}
                           onClick={() => setMenuId((id) => (id === row._id ? null : row._id))}
                         >
                           <FiMoreVertical />
                         </button>
-                        {menuId === row._id ? (
-                          <div className="ann-ui__menu" role="menu">
-                            {!isPending ? (
-                              <button type="button" role="menuitem" onClick={() => { setMenuId(null); openReadStatus(row); }}>
-                                <FiEye /> Read status
-                              </button>
-                            ) : (
-                              <>
-                                <button type="button" role="menuitem" onClick={() => { setMenuId(null); onEditDraft?.(row); }}>
-                                  <FiEdit2 /> Edit
-                                </button>
-                                <button type="button" role="menuitem" onClick={() => handlePublish(row)}>
-                                  <FiSend /> Send now
-                                </button>
-                              </>
-                            )}
-                            <button type="button" role="menuitem" className="is-danger" onClick={() => handleDelete(row)}>
-                              <FiTrash2 /> Delete
-                            </button>
-                          </div>
-                        ) : null}
+
                       </div>
                     </td>
                   </tr>
@@ -507,6 +482,28 @@ const SentAnnouncements = ({ refreshKey = 0, onCountsChange, onEditDraft, onNew 
         </div>
       </div>
       ) : null}
+
+      <Dialog open={Boolean(actionRow)} onClose={() => setMenuId(null)} className="ann-ui__actions-dialog">
+        <div className="ann-ui__actions-scrim" aria-hidden="true" />
+        <div className="ann-ui__actions-positioner">
+          <Dialog.Panel className="ann-ui__menu ann-ui__actions-panel">
+            <div className="ann-ui__actions-heading">
+              <Dialog.Title className="ann-ui__card-title">Announcement actions</Dialog.Title>
+              <button type="button" className="ann-ui__icon-btn" aria-label="Close actions" onClick={() => setMenuId(null)}><FiX /></button>
+            </div>
+            <Dialog.Description className="ann-ui__actions-description">{actionRow ? titleFromRow(actionRow) : ''}</Dialog.Description>
+            {actionRow && <div className="ann-ui__actions-list">
+              {actionRow.broadcastStatus !== 'draft' && actionRow.broadcastStatus !== 'scheduled' ? (
+                <button type="button" onClick={() => { setMenuId(null); openReadStatus(actionRow); }}><FiEye />Read status</button>
+              ) : <>
+                <button type="button" onClick={() => { setMenuId(null); onEditDraft?.(actionRow); }}><FiEdit2 />Edit</button>
+                <button type="button" onClick={() => handlePublish(actionRow)}><FiSend />Send now</button>
+              </>}
+              <button type="button" className="is-danger" onClick={() => handleDelete(actionRow)}><FiTrash2 />Delete</button>
+            </div>}
+          </Dialog.Panel>
+        </div>
+      </Dialog>
 
       {readModal ? (
         <div className="ann-ui__modal-backdrop" onClick={() => setReadModal(null)}>
