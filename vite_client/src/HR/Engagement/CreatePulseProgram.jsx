@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlus, FaTrash, FaSave, FaTimes, FaGripVertical } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSave, FaTimes, FaGripVertical, FaSpinner } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
-import LoadingSpinner from '../../components/LoadingSpinner';
 import EngagementFormShell from './EngagementFormShell';
 import SurveyAudienceFields from './SurveyAudienceFields';
 
@@ -132,16 +131,16 @@ const CreatePulseProgram = () => {
                 <div className="space-y-4">
                     <h2 className="text-xl font-semibold text-gray-800">Basic Details</h2>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="createpulseprogram-field-1" className="block text-sm font-medium text-gray-700 mb-1">
                             Program Name <span className="text-red-500">*</span>
                         </label>
-                        <input name="name" value={form.name} onChange={handleChange} required
+                        <input id="createpulseprogram-field-1" name="name" value={form.name} onChange={handleChange} required
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]"
                             placeholder="e.g. Monthly Employee Pulse" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea name="description" value={form.description} onChange={handleChange} rows="2"
+                        <label htmlFor="createpulseprogram-field-2" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea id="createpulseprogram-field-2" name="description" value={form.description} onChange={handleChange} rows="2"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]"
                             placeholder="Optional description" />
                     </div>
@@ -171,13 +170,13 @@ const CreatePulseProgram = () => {
                     <h2 className="text-xl font-semibold text-gray-800">Schedule</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date <span className="text-red-500">*</span></label>
-                            <input type="date" name="startDate" value={form.startDate} onChange={handleChange} required
+                            <label htmlFor="createpulseprogram-field-3" className="block text-sm font-medium text-gray-700 mb-1">Start Date <span className="text-red-500">*</span></label>
+                            <input id="createpulseprogram-field-3" type="date" name="startDate" value={form.startDate} onChange={handleChange} required
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">End Condition</label>
-                            <select value={endMode} onChange={(e) => setEndMode(e.target.value)}
+                            <label htmlFor="createpulseprogram-field-4" className="block text-sm font-medium text-gray-700 mb-1">End Condition</label>
+                            <select id="createpulseprogram-field-4" value={endMode} onChange={(e) => setEndMode(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]">
                                 <option value="endDate">End Date</option>
                                 <option value="maxOccurrences">Max Occurrences</option>
@@ -187,22 +186,22 @@ const CreatePulseProgram = () => {
                     </div>
                     {endMode === 'endDate' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                            <input type="date" name="endDate" value={form.endDate} onChange={handleChange}
+                            <label htmlFor="createpulseprogram-field-5" className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                            <input id="createpulseprogram-field-5" type="date" name="endDate" value={form.endDate} onChange={handleChange}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                         </div>
                     )}
                     {endMode === 'maxOccurrences' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Maximum Occurrences</label>
-                            <input type="number" name="maxOccurrences" value={form.maxOccurrences} onChange={handleChange}
+                            <label htmlFor="createpulseprogram-field-6" className="block text-sm font-medium text-gray-700 mb-1">Maximum Occurrences</label>
+                            <input id="createpulseprogram-field-6" type="number" name="maxOccurrences" value={form.maxOccurrences} onChange={handleChange}
                                 min="1" max="200"
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                         </div>
                     )}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Survey open duration (days)</label>
-                        <input type="number" name="openDurationDays" value={form.openDurationDays} onChange={handleChange}
+                        <label htmlFor="createpulseprogram-field-7" className="block text-sm font-medium text-gray-700 mb-1">Survey open duration (days)</label>
+                        <input id="createpulseprogram-field-7" type="number" name="openDurationDays" value={form.openDurationDays} onChange={handleChange}
                             min="1" max="90"
                             className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                     </div>
@@ -212,8 +211,8 @@ const CreatePulseProgram = () => {
                 <div className="space-y-4">
                     <h2 className="text-xl font-semibold text-gray-800">Audience</h2>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
-                        <select name="targetAudience" value={form.targetAudience} onChange={handleChange}
+                        <label htmlFor="createpulseprogram-field-8" className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
+                        <select id="createpulseprogram-field-8" name="targetAudience" value={form.targetAudience} onChange={handleChange}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]">
                             <option value="All Employees">All Employees</option>
                             <option value="Department">Department</option>
@@ -247,15 +246,15 @@ const CreatePulseProgram = () => {
                         Enable reminders & closing notices
                     </label>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Reminder days before end</label>
-                        <input type="number" name="reminderDaysBefore" min={0} max={30} value={form.reminderDaysBefore} onChange={handleChange}
+                        <label htmlFor="createpulseprogram-field-9" className="block text-sm font-medium text-gray-700 mb-1">Reminder days before end</label>
+                        <input id="createpulseprogram-field-9" type="number" name="reminderDaysBefore" min={0} max={30} value={form.reminderDaysBefore} onChange={handleChange}
                             className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                     </div>
                 </div>
 
                 {/* E. Questions */}
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center">
+                    <div className="survey-questions-heading flex justify-between items-center">
                         <h2 className="text-xl font-semibold text-gray-800">
                             Questions ({form.questions.length})
                         </h2>
@@ -269,15 +268,15 @@ const CreatePulseProgram = () => {
                     {showQForm && (
                         <div className="bg-gray-50 p-4 rounded-lg space-y-4 border-2 border-[#0E9370]">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Question <span className="text-red-500">*</span></label>
-                                <textarea name="question" value={newQ.question} onChange={handleQChange} rows="2"
+                                <label htmlFor="createpulseprogram-field-10" className="block text-sm font-medium text-gray-700 mb-1">Question <span className="text-red-500">*</span></label>
+                                <textarea id="createpulseprogram-field-10" name="question" value={newQ.question} onChange={handleQChange} rows="2"
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]"
                                     placeholder="Enter your question" />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
-                                    <select name="type" value={newQ.type} onChange={(e) => {
+                                    <label htmlFor="createpulseprogram-field-11" className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
+                                    <select id="createpulseprogram-field-11" name="type" value={newQ.type} onChange={(e) => {
                                         handleQChange(e);
                                         if (['Text', 'Yes/No', 'eNPS'].includes(e.target.value)) setNewQ((p) => ({ ...p, options: [''] }));
                                         else if (['Rating', 'Scale'].includes(e.target.value)) setNewQ((p) => ({ ...p, options: ['1', '2', '3', '4', '5'] }));
@@ -295,11 +294,11 @@ const CreatePulseProgram = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Options <span className="text-red-500">*</span></label>
                                     {newQ.options.map((o, i) => (
-                                        <div key={i} className="flex gap-2 mb-2">
+                                        <div key={i} className="survey-option-row flex gap-2 mb-2">
                                             <input value={o} onChange={(e) => handleOptChange(i, e.target.value)} placeholder={`Option ${i + 1}`}
                                                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                                             {newQ.options.length > 1 && (
-                                                <button type="button" onClick={() => removeOpt(i)} className="px-3 py-2 text-red-500 hover:text-red-700"><FaTrash className="w-4 h-4" /></button>
+                                                <button aria-label={`Remove option ${i + 1}`} type="button" onClick={() => removeOpt(i)} className="px-3 py-2 text-red-500 hover:text-red-700"><FaTrash className="w-4 h-4" /></button>
                                             )}
                                         </div>
                                     ))}
@@ -322,9 +321,9 @@ const CreatePulseProgram = () => {
                         <div className="space-y-3">
                             {form.questions.map((q, idx) => (
                                 <div key={idx} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                    <div className="flex justify-between items-start">
+                                    <div className="survey-question-row flex justify-between items-start">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-2">
+                                            <div className="survey-question-meta flex items-center gap-2 mb-2">
                                                 <FaGripVertical className="text-gray-400" />
                                                 <span className="text-sm font-medium text-gray-500">Q{idx + 1}</span>
                                                 {q.required && <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Required</span>}
@@ -338,10 +337,10 @@ const CreatePulseProgram = () => {
                                             )}
                                         </div>
                                         <div className="flex gap-2">
-                                            {idx > 0 && <button type="button" onClick={() => moveQuestion(idx, 'up')} className="px-2 py-1 text-[#0d9488]">↑</button>}
-                                            {idx < form.questions.length - 1 && <button type="button" onClick={() => moveQuestion(idx, 'down')} className="px-2 py-1 text-[#0d9488]">↓</button>}
+                                            {idx > 0 && <button type="button" aria-label={`Move question ${idx + 1} up`} onClick={() => moveQuestion(idx, 'up')} className="px-2 py-1 text-[#0d9488]">↑</button>}
+                                            {idx < form.questions.length - 1 && <button type="button" aria-label={`Move question ${idx + 1} down`} onClick={() => moveQuestion(idx, 'down')} className="px-2 py-1 text-[#0d9488]">↓</button>}
                                             <button type="button" onClick={() => editQuestion(idx)} className="px-2 py-1 text-green-500 hover:text-green-700">Edit</button>
-                                            <button type="button" onClick={() => removeQuestion(idx)} className="px-2 py-1 text-red-500 hover:text-red-700"><FaTrash className="w-4 h-4" /></button>
+                                            <button type="button" aria-label={`Delete question ${idx + 1}`} onClick={() => removeQuestion(idx)} className="px-2 py-1 text-red-500 hover:text-red-700"><FaTrash className="w-4 h-4" /></button>
                                         </div>
                                     </div>
                                 </div>
@@ -368,11 +367,11 @@ const CreatePulseProgram = () => {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-2">
+                <div className="survey-form__actions flex gap-3 pt-2">
                     <button type="submit" disabled={saving}
                         className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                         style={{ background: '#0E9370' }}>
-                        {saving ? <LoadingSpinner small /> : <FaSave className="h-4 w-4" />}
+                        {saving ? <FaSpinner className="h-4 w-4 animate-spin" aria-label="Saving" /> : <FaSave className="h-4 w-4" />}
                         Save as Draft
                     </button>
                     <button type="button" onClick={() => navigate('/engagement')}

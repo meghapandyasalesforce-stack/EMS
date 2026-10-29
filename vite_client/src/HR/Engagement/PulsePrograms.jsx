@@ -58,7 +58,7 @@ const PulsePrograms = () => {
         }
     };
 
-    if (loading) return <LoadingSpinner />;
+    if (loading) return <div className="survey-ui survey-ui--loading"><LoadingSpinner /></div>;
 
     const active = programs.filter((p) => p.status === 'Active');
     const other = programs.filter((p) => p.status !== 'Active');
@@ -164,8 +164,8 @@ const PulsePrograms = () => {
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
+        <div className="survey-ui survey-ui--pulse-list space-y-4">
+            <div className="survey-pulse-heading flex items-center justify-between">
                 <div>
                     <h2 className="text-lg font-semibold text-slate-900">Pulse Programs</h2>
                     <p className="text-sm text-slate-500">Recurring pulse surveys that generate automatically</p>

@@ -144,7 +144,7 @@ const SurveyAudienceFields = ({
     if (targetAudience === 'All Employees') return null;
 
     return (
-        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
+        <div className="survey-ui survey-audience mt-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
             <p className="mb-2 text-sm font-medium text-gray-700">
                 {targetAudience === 'Department' && 'Select departments'}
                 {targetAudience === 'Role' && 'Select roles'}
@@ -173,6 +173,7 @@ const SurveyAudienceFields = ({
                                         key={dept}
                                         type="button"
                                         onClick={() => toggleDepartment(dept)}
+                                        aria-pressed={selected}
                                         className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                                             selected
                                                 ? 'bg-[#0E9370] text-white'
@@ -241,6 +242,7 @@ const SurveyAudienceFields = ({
                         value={employeeSearch}
                         onChange={(e) => setEmployeeSearch(e.target.value)}
                         placeholder="Search employees by name, email, or ID..."
+                        aria-label="Search survey audience"
                         className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E9370] focus:ring-2 focus:ring-[#0E9370]/20"
                     />
                     {filteredEmployees.length === 0 ? (
@@ -262,7 +264,7 @@ const SurveyAudienceFields = ({
                                             checked={selected}
                                             onChange={() => toggleEmployee(emp._id)}
                                         />
-                                        <span className="min-w-0 flex-1 truncate">
+                                        <span className="min-w-0 flex-1 break-words">
                                             {label || emp.email}
                                             {emp.department ? (
                                                 <span className="ml-1 text-xs text-slate-400">

@@ -1,3 +1,4 @@
+import '../../styles/surveyUI.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -612,7 +613,7 @@ const EmployeeEngagementPage = () => {
                     </div>
                 </nav>
 
-                <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                <section className={`min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6 ${activeTab === 'surveys' ? 'survey-ui survey-ui--list' : ''}`}>
                     <div className="mb-4 flex flex-col gap-2 sm:mb-5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
                             {activeTab === 'surveys' && 'Surveys'}

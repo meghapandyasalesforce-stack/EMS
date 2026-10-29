@@ -1,3 +1,4 @@
+import '../../styles/surveyUI.css';
 import React, { useCallback, useEffect, useState } from 'react';
 import { FaUserClock, FaDoorOpen, FaPoll } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -53,7 +54,7 @@ const LifecycleEngagementPanel = () => {
     const byTrigger = analytics?.lifecycle?.byTrigger || [];
 
     return (
-        <div className="space-y-6">
+        <div className="survey-ui survey-ui--lifecycle space-y-6">
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -149,6 +150,7 @@ const LifecycleEngagementPanel = () => {
                 <h3 className="text-sm font-semibold text-slate-800">Generated lifecycle surveys</h3>
                 <select
                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    aria-label="Lifecycle survey trigger"
                     value={triggerFilter}
                     onChange={(e) => setTriggerFilter(e.target.value)}
                 >

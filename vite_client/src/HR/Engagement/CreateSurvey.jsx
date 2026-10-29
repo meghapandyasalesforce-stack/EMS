@@ -226,7 +226,7 @@ const CreateSurvey = () => {
     };
 
     if (loading) {
-        return <LoadingSpinner message="Creating survey..." />;
+        return <div className="survey-ui survey-ui--loading"><LoadingSpinner message="Creating survey..." /></div>;
     }
 
     return (
@@ -241,10 +241,10 @@ const CreateSurvey = () => {
                         <h2 className="text-xl font-semibold text-gray-800">Survey Information</h2>
                         
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="createsurvey-field-1" className="block text-sm font-medium text-gray-700 mb-1">
                                 Survey Title <span className="text-red-500">*</span>
                             </label>
-                            <input
+                            <input id="createsurvey-field-1"
                                 type="text"
                                 name="title"
                                 value={formData.title}
@@ -255,10 +255,10 @@ const CreateSurvey = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="createsurvey-field-2" className="block text-sm font-medium text-gray-700 mb-1">
                                 Description
                             </label>
-                            <textarea
+                            <textarea id="createsurvey-field-2"
                                 name="description"
                                 value={formData.description}
                                 onChange={handleInputChange}
@@ -269,10 +269,10 @@ const CreateSurvey = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="createsurvey-field-3" className="block text-sm font-medium text-gray-700 mb-1">
                                     Survey Type <span className="text-red-500">*</span>
                                 </label>
-                                <select
+                                <select id="createsurvey-field-3"
                                     name="type"
                                     value={formData.type}
                                     onChange={handleInputChange}
@@ -289,10 +289,10 @@ const CreateSurvey = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="createsurvey-field-4" className="block text-sm font-medium text-gray-700 mb-1">
                                     Status
                                 </label>
-                                <select
+                                <select id="createsurvey-field-4"
                                     name="status"
                                     value={formData.status}
                                     onChange={handleInputChange}
@@ -311,10 +311,10 @@ const CreateSurvey = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="createsurvey-field-5" className="block text-sm font-medium text-gray-700 mb-1">
                                     Start Date <span className="text-red-500">*</span>
                                 </label>
-                                <input
+                                <input id="createsurvey-field-5"
                                     type="datetime-local"
                                     name="startDate"
                                     value={formData.startDate}
@@ -325,10 +325,10 @@ const CreateSurvey = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="createsurvey-field-6" className="block text-sm font-medium text-gray-700 mb-1">
                                     End Date <span className="text-red-500">*</span>
                                 </label>
-                                <input
+                                <input id="createsurvey-field-6"
                                     type="datetime-local"
                                     name="endDate"
                                     value={formData.endDate}
@@ -340,10 +340,10 @@ const CreateSurvey = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="createsurvey-field-7" className="block text-sm font-medium text-gray-700 mb-1">
                                 Target Audience
                             </label>
-                            <select
+                            <select id="createsurvey-field-7"
                                 name="targetAudience"
                                 value={formData.targetAudience}
                                 onChange={handleInputChange}
@@ -365,14 +365,14 @@ const CreateSurvey = () => {
                         />
 
                         <div className="flex items-center gap-2">
-                            <input
+                            <input id="createsurvey-field-8"
                                 type="checkbox"
                                 name="anonymous"
                                 checked={formData.anonymous}
                                 onChange={handleInputChange}
                                 className="w-4 h-4"
                             />
-                            <label className="text-sm text-gray-700">Anonymous Survey</label>
+                            <label htmlFor="createsurvey-field-8" className="text-sm text-gray-700">Anonymous Survey</label>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
@@ -387,10 +387,10 @@ const CreateSurvey = () => {
                                 Enable reminders / closing notices
                             </label>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="createsurvey-field-9" className="block text-sm font-medium text-gray-700 mb-1">
                                     Reminder days before end
                                 </label>
-                                <input
+                                <input id="createsurvey-field-9"
                                     type="number"
                                     name="reminderDaysBefore"
                                     min={0}
@@ -405,7 +405,7 @@ const CreateSurvey = () => {
 
                     {/* Questions */}
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center">
+                        <div className="survey-questions-heading flex justify-between items-center">
                             <h2 className="text-xl font-semibold text-gray-800">
                                 Questions ({formData.questions.length})
                             </h2>
@@ -455,10 +455,10 @@ const CreateSurvey = () => {
                         {showQuestionForm && (
                             <div className="bg-gray-50 p-4 rounded-lg space-y-4 border-2 border-theme-secondary">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label htmlFor="createsurvey-field-10" className="block text-sm font-medium text-gray-700 mb-1">
                                         Question <span className="text-red-500">*</span>
                                     </label>
-                                    <textarea
+                                    <textarea id="createsurvey-field-10"
                                         name="question"
                                         value={newQuestion.question}
                                         onChange={handleQuestionInputChange}
@@ -471,10 +471,10 @@ const CreateSurvey = () => {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label htmlFor="createsurvey-field-11" className="block text-sm font-medium text-gray-700 mb-1">
                                             Question Type <span className="text-red-500">*</span>
                                         </label>
-                                        <select
+                                        <select id="createsurvey-field-11"
                                             name="type"
                                             value={newQuestion.type}
                                             onChange={(e) => {
@@ -497,14 +497,14 @@ const CreateSurvey = () => {
                                     </div>
 
                                     <div className="flex items-center gap-2 pt-6">
-                                        <input
+                                        <input id="createsurvey-field-12"
                                             type="checkbox"
                                             name="required"
                                             checked={newQuestion.required}
                                             onChange={handleQuestionInputChange}
                                             className="w-4 h-4"
                                         />
-                                        <label className="text-sm text-gray-700">Required Question</label>
+                                        <label htmlFor="createsurvey-field-12" className="text-sm text-gray-700">Required Question</label>
                                     </div>
                                 </div>
 
@@ -514,7 +514,7 @@ const CreateSurvey = () => {
                                             Options <span className="text-red-500">*</span>
                                         </label>
                                         {newQuestion.options.map((option, index) => (
-                                            <div key={index} className="flex gap-2 mb-2">
+                                            <div key={index} className="survey-option-row flex gap-2 mb-2">
                                                 <input
                                                     type="text"
                                                     value={option}
@@ -523,7 +523,7 @@ const CreateSurvey = () => {
                                                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                                 />
                                                 {newQuestion.options.length > 1 && (
-                                                    <button
+                                                    <button aria-label={`Remove option ${index + 1}`}
                                                         type="button"
                                                         onClick={() => removeOption(index)}
                                                         className="px-3 py-2 text-red-500 hover:text-red-700"
@@ -577,9 +577,9 @@ const CreateSurvey = () => {
                             <div className="space-y-3">
                                 {formData.questions.map((question, index) => (
                                     <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                        <div className="flex justify-between items-start">
+                                        <div className="survey-question-row flex justify-between items-start">
                                             <div className="flex-1">
-                                                <div className="flex items-center gap-2 mb-2">
+                                                <div className="survey-question-meta flex items-center gap-2 mb-2">
                                                     <FaGripVertical className="text-gray-400" />
                                                     <span className="text-sm font-medium text-gray-500">
                                                         Question {index + 1}
@@ -648,7 +648,7 @@ const CreateSurvey = () => {
                     </div>
 
                     {/* Submit Buttons */}
-                    <div className="flex flex-wrap justify-end gap-3 pt-4 border-t">
+                    <div className="survey-form__actions flex flex-wrap justify-end gap-3 pt-4 border-t">
                         <button
                             type="button"
                             onClick={() => navigate('/engagement')}

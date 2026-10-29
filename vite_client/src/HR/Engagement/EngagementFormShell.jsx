@@ -1,4 +1,5 @@
 import React from 'react';
+import '../../styles/surveyUI.css';
 import { FaArrowLeft, FaChartLine } from 'react-icons/fa';
 import { MINT_GRADIENT } from '../Reports/constants';
 
@@ -9,13 +10,13 @@ const EngagementFormShell = ({
     backLabel = 'Back to Engagement',
     children,
 }) => (
-    <div className="min-h-[calc(100vh-64px)] bg-transparent p-3 sm:p-4 lg:p-6">
+    <div className="survey-ui survey-ui--page survey-ui--form bg-transparent p-3 sm:p-4 lg:p-6">
         <div className="w-full space-y-6">
             <header className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-4">
+                    <div className="survey-form__heading flex min-w-0 items-center gap-4">
                         <div
-                            className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md"
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-md"
                             style={{ background: MINT_GRADIENT }}
                         >
                             <FaChartLine className="h-6 w-6" />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaPlus, FaTrash, FaSave, FaTimes, FaGripVertical } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSave, FaTimes, FaGripVertical, FaSpinner } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -118,7 +118,7 @@ const EditPulseProgram = () => {
         }
     };
 
-    if (loading) return <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent"><LoadingSpinner /></div>;
+    if (loading) return <div className="survey-ui survey-ui--loading flex items-center justify-center bg-transparent"><LoadingSpinner /></div>;
 
     return (
         <EngagementFormShell title="Edit Pulse Program" subtitle={isDraft ? 'Full editing available' : 'Some fields are locked for active programs'} onBack={() => navigate(`/engagement/pulse/${id}`)}>
@@ -133,12 +133,12 @@ const EditPulseProgram = () => {
                 <div className="space-y-4">
                     <h2 className="text-xl font-semibold text-gray-800">Basic Details</h2>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Program Name <span className="text-red-500">*</span></label>
-                        <input name="name" value={form.name} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
+                        <label htmlFor="editpulseprogram-field-1" className="block text-sm font-medium text-gray-700 mb-1">Program Name <span className="text-red-500">*</span></label>
+                        <input id="editpulseprogram-field-1" name="name" value={form.name} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea name="description" value={form.description} onChange={handleChange} rows="2" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
+                        <label htmlFor="editpulseprogram-field-2" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea id="editpulseprogram-field-2" name="description" value={form.description} onChange={handleChange} rows="2" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                     </div>
                 </div>
 
@@ -162,22 +162,22 @@ const EditPulseProgram = () => {
                     <h2 className="text-xl font-semibold text-gray-800">Schedule</h2>
                     {isDraft && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date <span className="text-red-500">*</span></label>
-                            <input type="date" name="startDate" value={form.startDate} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
+                            <label htmlFor="editpulseprogram-field-3" className="block text-sm font-medium text-gray-700 mb-1">Start Date <span className="text-red-500">*</span></label>
+                            <input id="editpulseprogram-field-3" type="date" name="startDate" value={form.startDate} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                         </div>
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">End Condition</label>
-                            <select value={endMode} onChange={(e) => setEndMode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]">
+                            <label htmlFor="editpulseprogram-field-4" className="block text-sm font-medium text-gray-700 mb-1">End Condition</label>
+                            <select id="editpulseprogram-field-4" value={endMode} onChange={(e) => setEndMode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]">
                                 <option value="endDate">End Date</option>
                                 <option value="maxOccurrences">Max Occurrences</option>
                                 <option value="none">No Limit</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Survey open duration (days)</label>
-                            <input type="number" name="openDurationDays" value={form.openDurationDays} onChange={handleChange} min="1" max="90" className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
+                            <label htmlFor="editpulseprogram-field-5" className="block text-sm font-medium text-gray-700 mb-1">Survey open duration (days)</label>
+                            <input id="editpulseprogram-field-5" type="number" name="openDurationDays" value={form.openDurationDays} onChange={handleChange} min="1" max="90" className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                         </div>
                     </div>
                     {endMode === 'endDate' && <input type="date" name="endDate" value={form.endDate} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />}
@@ -214,14 +214,14 @@ const EditPulseProgram = () => {
                         Enable reminders
                     </label>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Reminder days before end</label>
-                        <input type="number" name="reminderDaysBefore" min={0} max={30} value={form.reminderDaysBefore} onChange={handleChange} className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
+                        <label htmlFor="editpulseprogram-field-6" className="block text-sm font-medium text-gray-700 mb-1">Reminder days before end</label>
+                        <input id="editpulseprogram-field-6" type="number" name="reminderDaysBefore" min={0} max={30} value={form.reminderDaysBefore} onChange={handleChange} className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                     </div>
                 </div>
 
                 {/* Questions */}
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center">
+                    <div className="survey-questions-heading flex justify-between items-center">
                         <h2 className="text-xl font-semibold text-gray-800">Questions ({form.questions.length})</h2>
                         <button type="button" onClick={() => { setShowQForm(true); setEditIdx(null); setNewQ({ question: '', type: 'Rating', options: [''], required: false }); }}
                             className="px-4 py-2 bg-[#0E9370] text-white rounded-lg hover:bg-[#0d9488] flex items-center gap-2">
@@ -232,10 +232,10 @@ const EditPulseProgram = () => {
 
                     {showQForm && (
                         <div className="bg-gray-50 p-4 rounded-lg space-y-4 border-2 border-[#0E9370]">
-                            <textarea name="question" value={newQ.question} onChange={handleQChange} rows="2" placeholder="Enter your question"
+                            <textarea aria-label="Question" name="question" value={newQ.question} onChange={handleQChange} rows="2" placeholder="Enter your question"
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]" />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <select name="type" value={newQ.type} onChange={(e) => { handleQChange(e); if (['Text', 'Yes/No', 'eNPS'].includes(e.target.value)) setNewQ((p) => ({ ...p, options: [''] })); else if (['Rating', 'Scale'].includes(e.target.value)) setNewQ((p) => ({ ...p, options: ['1', '2', '3', '4', '5'] })); }}
+                                <select aria-label="Question type" name="type" value={newQ.type} onChange={(e) => { handleQChange(e); if (['Text', 'Yes/No', 'eNPS'].includes(e.target.value)) setNewQ((p) => ({ ...p, options: [''] })); else if (['Rating', 'Scale'].includes(e.target.value)) setNewQ((p) => ({ ...p, options: ['1', '2', '3', '4', '5'] })); }}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0E9370]">
                                     {QUESTION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                                 </select>
@@ -244,9 +244,9 @@ const EditPulseProgram = () => {
                             {['Multiple Choice', 'Scale'].includes(newQ.type) && (
                                 <div>
                                     {newQ.options.map((o, i) => (
-                                        <div key={i} className="flex gap-2 mb-2">
+                                        <div key={i} className="survey-option-row flex gap-2 mb-2">
                                             <input value={o} onChange={(e) => handleOptChange(i, e.target.value)} placeholder={`Option ${i + 1}`} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg" />
-                                            {newQ.options.length > 1 && <button type="button" onClick={() => removeOpt(i)} className="text-red-500"><FaTrash className="w-4 h-4" /></button>}
+                                            {newQ.options.length > 1 && <button aria-label={`Remove option ${i + 1}`} type="button" onClick={() => removeOpt(i)} className="text-red-500"><FaTrash className="w-4 h-4" /></button>}
                                         </div>
                                     ))}
                                     <button type="button" onClick={addOpt} className="mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg flex items-center gap-2"><FaPlus className="w-3 h-3" />Add Option</button>
@@ -263,9 +263,9 @@ const EditPulseProgram = () => {
                         <div className="space-y-3">
                             {form.questions.map((q, idx) => (
                                 <div key={idx} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                    <div className="flex justify-between items-start">
+                                    <div className="survey-question-row flex justify-between items-start">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
+                                            <div className="survey-question-meta flex items-center gap-2 mb-1">
                                                 <FaGripVertical className="text-gray-400" />
                                                 <span className="text-sm font-medium text-gray-500">Q{idx + 1}</span>
                                                 {q.required && <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Required</span>}
@@ -274,10 +274,10 @@ const EditPulseProgram = () => {
                                             <p className="text-gray-800 font-medium">{q.question}</p>
                                         </div>
                                         <div className="flex gap-2">
-                                            {idx > 0 && <button type="button" onClick={() => moveQuestion(idx, 'up')} className="px-2 py-1 text-[#0d9488]">↑</button>}
-                                            {idx < form.questions.length - 1 && <button type="button" onClick={() => moveQuestion(idx, 'down')} className="px-2 py-1 text-[#0d9488]">↓</button>}
+                                            {idx > 0 && <button type="button" aria-label={`Move question ${idx + 1} up`} onClick={() => moveQuestion(idx, 'up')} className="px-2 py-1 text-[#0d9488]">↑</button>}
+                                            {idx < form.questions.length - 1 && <button type="button" aria-label={`Move question ${idx + 1} down`} onClick={() => moveQuestion(idx, 'down')} className="px-2 py-1 text-[#0d9488]">↓</button>}
                                             <button type="button" onClick={() => editQuestion(idx)} className="px-2 py-1 text-green-500">Edit</button>
-                                            <button type="button" onClick={() => removeQuestion(idx)} className="px-2 py-1 text-red-500"><FaTrash className="w-4 h-4" /></button>
+                                            <button type="button" aria-label={`Delete question ${idx + 1}`} onClick={() => removeQuestion(idx)} className="px-2 py-1 text-red-500"><FaTrash className="w-4 h-4" /></button>
                                         </div>
                                     </div>
                                 </div>
@@ -286,9 +286,9 @@ const EditPulseProgram = () => {
                     )}
                 </div>
 
-                <div className="flex gap-3 pt-2">
+                <div className="survey-form__actions flex gap-3 pt-2">
                     <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ background: '#0E9370' }}>
-                        {saving ? <LoadingSpinner small /> : <FaSave className="h-4 w-4" />} Save Changes
+                        {saving ? <FaSpinner className="h-4 w-4 animate-spin" aria-label="Saving" /> : <FaSave className="h-4 w-4" />} Save Changes
                     </button>
                     <button type="button" onClick={() => navigate(`/engagement/pulse/${id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                         <FaTimes className="h-4 w-4" /> Cancel
