@@ -5,12 +5,16 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     FaSun,
+    FaUmbrella,
+    FaRegCalendarCheck,
+    FaRegClock,
+    FaRegFileAlt,
+    FaChartBar,
     FaCalendarAlt,
     FaBirthdayCake,
     FaTasks,
     FaBell,
     FaClock,
-    FaEdit,
     FaEye,
     FaPlus,
     FaUserTie,
@@ -19,16 +23,14 @@ import {
     FaGift,
     FaHandshake,
     FaHeadset,
-    FaChartBar,
     FaProjectDiagram,
-    FaChartLine,
     FaCheckCircle,
     FaArrowRight,
-    FaFileAlt,
     FaChevronLeft,
     FaChevronRight,
 } from 'react-icons/fa';
-import { HiOutlineBell, HiOutlineQuestionMarkCircle } from 'react-icons/hi2';
+import { HiOutlineBell } from 'react-icons/hi2';
+import { FiHeadphones } from 'react-icons/fi';
 import Todo from './Todo';
 import AttendanceBox from '../Attendance/AttendanceBox';
 import NotificationFeed from './NotificationFeed';
@@ -157,7 +159,7 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
 
     return (
         <li
-            className={`min-w-0 overflow-hidden rounded-xl border p-2.5 ${
+            className={`employee-dash__celebration-item min-w-0 overflow-hidden rounded-xl border p-2.5 ${
                 isToday
                     ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm'
                     : 'border-slate-100 bg-[#F8F9FB]'
@@ -165,7 +167,7 @@ function CelebrationRailCard({ item, isSelf, event, reacting, onReact, onWishes 
         >
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                    {selfHeader}
+                    {selfHeader || <p className="employee-dash__celebration-type">{typeLabel}</p>}
                     <p className="truncate text-sm font-semibold text-slate-800">
                         {icon} {isSelf ? 'You' : item.name}
                     </p>
@@ -841,22 +843,12 @@ function DashboardEmployee() {
     }
 
     const kpiCard = (label, value, sub, icon) => (
-        <div
-            className="employee-dash__kpi role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-5"
-            style={{ borderColor: WS.border }}
-        >
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-                    <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{statsLoading ? '…' : value}</p>
-                    {sub ? <p className="mt-1 text-xs text-slate-500">{sub}</p> : null}
-                </div>
-                <div
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: 'rgba(14, 147, 112, 0.10)', color: WS.mint }}
-                >
-                    {icon}
-                </div>
+        <div className="employee-dash__kpi role-dashboard__card">
+            <span className="employee-dash__kpi-icon" aria-hidden="true">{icon}</span>
+            <div className="employee-dash__kpi-content">
+                <p className="employee-dash__kpi-label">{label}</p>
+                <p className="employee-dash__kpi-value">{statsLoading ? '…' : value}</p>
+                {sub ? <p className="employee-dash__kpi-caption">{sub}</p> : null}
             </div>
         </div>
     );
@@ -890,6 +882,27 @@ function DashboardEmployee() {
                         >
                             <div className="flex min-w-0 items-center gap-4">
                                 <FaSun className="employee-dash__sun" aria-hidden="true" />
+                                <div className="min-w-0">
+                                    <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl md:text-2xl">
+                                        Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}{displayName ? `, ${displayName}` : ''}! <span className="employee-dash__wave" aria-hidden="true">👋</span>
+                                    </h1>
+                                    <p className="mt-0.5 text-sm text-slate-600">
+                                        {format(new Date(), 'dd MMM yyyy')} · {[profile?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="employee-dash__header-actions">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/helpdesk')}
+                                    className="employee-dash__icon-button"
+                                    aria-label="Help"
+                                >
+                                    <FiHeadphones aria-hidden="true" />
+                                </button>
+                                <Link to="/notifications" className="employee-dash__icon-button" aria-label="Notifications">
+                                    <HiOutlineBell aria-hidden="true" />
+                                </Link>
                                 <div className="employee-dash__profile relative shrink-0" ref={profileDropdownRef}>
                                     <button
                                         type="button"
@@ -899,65 +912,35 @@ function DashboardEmployee() {
                                         aria-expanded={profileDropdownOpen}
                                         data-hrms-popup-trigger
                                     >
-                                        <ProfilePicture user={user} size="lg" />
+                                        <ProfilePicture user={user} size="header" />
                                     </button>
                                     <ProfileDropdown
                                         isOpen={profileDropdownOpen}
                                         onClose={() => setProfileDropdownOpen(false)}
                                         username={displayName}
                                         onLogout={() => setLogoutModalOpen(true)}
-                                        onViewProfile={() => navigate('/profile-details')}
+                                        onViewProfile={handleEditProfile}
                                         position="right"
                                     />
                                 </div>
-                                <div className="min-w-0">
-                                    <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl md:text-2xl">
-                                        Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}{displayName ? `, ${displayName}` : ''}!
-                                    </h1>
-                                    <p className="mt-0.5 text-sm text-slate-600 hidden sm:block">
-                                        {format(new Date(), 'dd MMM yyyy')} · {[profile?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-                                <Link
-                                    to="/notifications"
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-[#0E9370]/40 hover:text-[#0E9370]"
-                                    aria-label="Notifications"
-                                >
-                                    <HiOutlineBell className="h-5 w-5" />
-                                </Link>
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/helpdesk')}
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-[#0E9370]/40 hover:text-[#0E9370]"
-                                    aria-label="Help"
-                                >
-                                    <HiOutlineQuestionMarkCircle className="h-5 w-5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleEditProfile}
-                                    className="hidden items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0E9370]/40 sm:flex"
-                                >
-                                    <FaEdit className="h-3.5 w-3.5" />
-                                    Profile
-                                </button>
                             </div>
                         </header>
 
-                        <AttendanceBox variant="dashboard" />
+                        <div className="employee-dash__attendance">
+                            <AttendanceBox variant="dashboard" />
+                        </div>
 
                         {/* Mobile only: celebrations directly under punch-in */}
                         <div className="rounded-xl border bg-white shadow-sm lg:hidden" style={{ borderColor: WS.border }}>
                             <div
-                                className="rounded-t-xl px-3 py-2"
+                                className="employee-dash__celebration-heading rounded-t-xl px-3 py-2"
                                 style={{ background: '#0e2b3d' }}
                             >
                                 <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
                                     <FaBirthdayCake className="h-3 w-3" />
                                     Upcoming celebrations
                                 </h3>
+                                <Link to="/celebrations">View all</Link>
                             </div>
                             <div className="p-3">
                                 {dashboardStats.celebrations == null ? (
@@ -1021,18 +1004,22 @@ function DashboardEmployee() {
                             style={{ borderColor: WS.border }}
                         >
                             <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900 sm:mb-4">
-                                <FaChartLine className="text-[#0E9370]" />
                                 Attendance Health
                             </h2>
                             <div className="employee-dash__health grid grid-cols-1 gap-4 md:grid-cols-3">
                                 {[
                                     {
                                         title: 'On-time score',
+                                        icon: <FaRegCalendarCheck />,
+                                        tone: 'green',
+                                        percent: Math.max(0, Math.min(100, dashboardStats.attendanceRate)),
                                         val: statsLoading ? '…' : `${Math.min(100, dashboardStats.attendanceRate)}%`,
                                         hint: 'Vs expected hours',
                                     },
                                     {
                                         title: 'Avg. hours / day',
+                                        icon: <FaRegClock />,
+                                        tone: 'purple',
                                         val: statsLoading
                                             ? '…'
                                             : dashboardStats.daysPresent > 0
@@ -1042,24 +1029,33 @@ function DashboardEmployee() {
                                     },
                                     {
                                         title: 'Hours this month',
+                                        icon: <FaRegFileAlt />,
+                                        tone: 'blue',
                                         val: statsLoading ? '…' : `${dashboardStats.monthHours.toFixed(1)}h`,
                                         hint: 'Recorded attendance hours',
                                     },
                                     {
                                         title: 'Overtime (est.)',
+                                        icon: <FaClock />,
+                                        tone: 'orange',
                                         val: statsLoading
                                             ? '…'
                                             : `${dashboardStats.overtimeHours.toFixed(1)}h`,
                                         hint: 'Beyond 8h × present days',
                                     },
                                 ].map((cell) => (
-                                    <div
-                                        key={cell.title}
-                                        className="rounded-xl border border-slate-100 bg-[#F8F9FB] p-4 text-center"
-                                    >
-                                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{cell.title}</p>
-                                        <p className="mt-2 text-2xl font-bold text-[#00694F]">{cell.val}</p>
-                                        <p className="mt-1 text-xs text-slate-500">{cell.hint}</p>
+                                    <div key={cell.title} className={`employee-dash__health-cell employee-dash__health-cell--${cell.tone}`}>
+                                        <span className="employee-dash__metric-icon" aria-hidden="true">{cell.icon}</span>
+                                        <div>
+                                            <p className="employee-dash__metric-label">{cell.title}</p>
+                                            <p className="employee-dash__metric-value">{cell.val}</p>
+                                            <p className="employee-dash__metric-caption">{cell.hint}</p>
+                                            {cell.percent != null && !statsLoading ? (
+                                                <div className="employee-dash__progress" role="progressbar" aria-label={cell.title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={cell.percent}>
+                                                    <span style={{ width: `${cell.percent}%` }} />
+                                                </div>
+                                            ) : null}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1073,23 +1069,8 @@ function DashboardEmployee() {
                             </div>
                         </section>
 
-                        {/* Quick actions */}
-                        <div className="employee-dash__quick-actions">
-                            <h2 className="mb-3 text-sm font-semibold text-slate-800">Quick actions</h2>
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                {quickAction('Apply leave', <FaCalendarAlt className="h-6 w-6" />, () =>
-                                    navigate('/employee/leave-attendance')
-                                )}
-                                {quickAction('Regularization', <FaClock className="h-6 w-6" />, () =>
-                                    navigate('/my-attendance-regularization')
-                                )}
-                                {quickAction('View payslip', <FaFileAlt className="h-6 w-6" />, () => navigate('/employee-payroll'))}
-                                {quickAction('Daily report', <FaChartBar className="h-6 w-6" />, () => navigate('/daily-report'))}
-                            </div>
-                        </div>
-
-                        {/* Projects + Tasks */}
-                        <div className="grid grid-cols-1 gap-6">
+                        {/* Personal tasks */}
+                        <div className="employee-dash__tasks grid grid-cols-1 gap-6">
 
                             <section
                                 className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
@@ -1129,13 +1110,14 @@ function DashboardEmployee() {
                     <aside className="w-full min-w-0 role-dashboard__stack lg:self-start">
                         <div className="hidden rounded-xl border bg-white shadow-sm lg:block" style={{ borderColor: WS.border }}>
                             <div
-                                className="rounded-t-xl px-3 py-2"
+                                className="employee-dash__celebration-heading rounded-t-xl px-3 py-2"
                                 style={{ background: '#0e2b3d' }}
                             >
                                 <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
                                     <FaBirthdayCake className="h-3 w-3" />
                                     Upcoming celebrations
                                 </h3>
+                                <Link to="/celebrations">View all</Link>
                             </div>
                             <div className="p-3">
                                 {dashboardStats.celebrations == null ? (
@@ -1196,15 +1178,15 @@ function DashboardEmployee() {
 
 
 
-                        <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
-                            <h3 className="text-sm font-semibold text-slate-900">Leave balance</h3>
+                        <div className="employee-dash__leave role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
+                            <div className="employee-dash__leave-heading">
+                                <h3 className="text-sm font-semibold text-slate-900">Leave balance</h3>
+                                {dashboardStats.monthlyCapSummary ? <span>{dashboardStats.monthlyCapSummary.monthLabel || 'This month'}</span> : null}
+                            </div>
                             {statsLoading ? (
                                 <p className="mt-3 text-3xl font-bold text-[#00694F]">…</p>
                             ) : dashboardStats.monthlyCapSummary ? (
                                 <>
-                                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                                        {dashboardStats.monthlyCapSummary.monthLabel || 'This month'}
-                                    </p>
                                     {(dashboardStats.monthlyCapSummary.inProbation ||
                                         dashboardStats.monthlyCapSummary.types?.some((t) => t.probationAccrualActive)) && (
                                         <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
@@ -1222,8 +1204,9 @@ function DashboardEmployee() {
                                             return (
                                             <li
                                                 key={t.leaveType}
-                                                className="rounded-lg border border-slate-100 bg-[#F8F9FB] px-3 py-2 text-sm"
+                                                className="employee-dash__leave-type rounded-lg border border-slate-100 bg-[#F8F9FB] px-3 py-2 text-sm"
                                             >
+                                                <span className="employee-dash__leave-icon" aria-hidden="true"><FaUmbrella /></span>
                                                 <div className="flex items-start justify-between gap-2">
                                                     <span className="font-medium text-slate-800">
                                                         {t.displayName}
@@ -1360,21 +1343,45 @@ function DashboardEmployee() {
 
                         <div className="role-dashboard__card rounded-2xl border bg-white p-3 shadow-sm sm:p-5" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Quick Links</h3>
-                            <div className="mt-3 flex flex-col gap-2 text-sm">
+                            <div className="employee-dash__links mt-3 grid grid-cols-2 gap-2 text-sm">
+                                <button type="button" onClick={() => navigate('/employee-payroll')} className="employee-dash__link">
+                                    <FaRegFileAlt aria-hidden="true" /> My Payroll
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/employee/documents-id')}
+                                    className="employee-dash__link"
+                                >
+                                    <FaFolderOpen className="text-[#0E9370]" /> Documents &amp; ID
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/employee/policies')}
                                     className="text-left font-medium text-[#0E9370] hover:text-[#00694F]"
                                 >
-                                    Company policies
+                                    <FaRegFileAlt aria-hidden="true" /> Company policies
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/helpdesk')}
                                     className="text-left font-medium text-[#0E9370] hover:text-[#00694F]"
                                 >
-                                    Support desk
+                                    <FiHeadphones aria-hidden="true" /> Support desk
                                 </button>
+                            </div>
+                        </div>
+
+                        {/* Quick actions */}
+                        <div className="employee-dash__quick-actions">
+                            <h2 className="mb-3 text-sm font-semibold text-slate-800">Quick actions</h2>
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                {quickAction('Apply leave', <FaCalendarAlt className="h-6 w-6" />, () =>
+                                    navigate('/employee/leave-attendance')
+                                )}
+                                {quickAction('Regularization', <FaClock className="h-6 w-6" />, () =>
+                                    navigate('/my-attendance-regularization')
+                                )}
+                                {quickAction('Daily report', <FaChartBar className="h-6 w-6" />, () => navigate('/daily-report'))}
                             </div>
                         </div>
 
@@ -1395,13 +1402,6 @@ function DashboardEmployee() {
                                     className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#0E9370]/30"
                                 >
                                     <FaGift className="text-[#0E9370]" /> Benefits
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/employee/documents-id')}
-                                    className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-[#0E9370]/30"
-                                >
-                                    <FaFolderOpen className="text-[#0E9370]" /> Documents &amp; ID
                                 </button>
                                 <button
                                     type="button"
