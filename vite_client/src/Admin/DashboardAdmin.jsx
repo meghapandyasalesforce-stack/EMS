@@ -499,6 +499,15 @@ function DashboardAdmin() {
               </div>
             </Card>
 
+            <Card className="admin-dash__announcements">
+              <div className="admin-dash__announcement-head"><h2><FiFileText aria-hidden />Announcements</h2><Button type="button" variant="outlined" onClick={() => { setOverlay(null); setShowAnnouncementModal(true); }}><FiPlus aria-hidden />New announcement</Button></div>
+              <div className="admin-dash__announcement-body">
+              {announcements.length ? <div className="admin-dash__announcement-grid">{announcements.map(item => <button key={item._id} type="button" className="admin-dash__list-row" onClick={() => openOverlay('announcements')}><time className="admin-dash__announcement-date">{formatDate(item.createdAt)}</time><span className={`admin-dash__announcement-badge${item.priority === 'high' || item.metadata?.important ? ' is-important' : ''}`}>{item.priority === 'high' || item.metadata?.important ? 'Important' : item.metadata?.category || 'General'}</span><strong className="admin-dash__grow">{String(item.metadata?.title || item.message || '').replace(/<[^>]+>/g, ' ').trim()}</strong><FiArrowRight aria-hidden /></button>)}</div> : <EmptyState title="No announcements yet" />}
+
+              <div className="admin-dash__footer-actions"><Button type="button" variant="outlined" className="admin-dash__view-announcements" aria-label="Sent announcements" onClick={() => openOverlay('announcements')}>View all announcements<FiArrowRight aria-hidden /></Button>{can([PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM]) && <Button type="button" variant="outlined" onClick={() => navigate('/all-attendance-history')}>Today's log</Button>}{can([PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM]) && <Button type="button" variant="outlined" onClick={() => openOverlay('leave')}>Leave report</Button>}</div>
+              </div>
+            </Card>
+
             <Card className="admin-dash__attendance">
               {panelHead('Attendance Today', FiCalendar, can([PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM]) ? 'View today' : null, () => openOverlay('attendance'))}
               <div className="admin-dash__attendance-content">
@@ -512,31 +521,29 @@ function DashboardAdmin() {
               </div>
             </Card>
 
-            <Card className="admin-dash__leaves">
-              {panelHead('Pending Leave', FiClock, can([PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM]) ? 'Review all' : null, () => openOverlay('leave'))}
-              {approvalsPreview.length ? <div className="space-y-2">{approvalsPreview.map(leave => <button type="button" key={leave._id} className="admin-dash__list-row" onClick={() => openOverlay('leave', { leave })} disabled={!can([PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM])}><span className="admin-dash__avatar">{getInitials(leave.employeeName || leave.employee?.name || 'Employee')}</span><span className="admin-dash__grow"><strong>{leave.employeeName || leave.employee?.name || 'Employee'}</strong><small>{leave.leaveType || 'Leave'} · {leave.totalDays || leave.numberOfDays || 1} day(s)</small></span><span className="admin-dash__date">{formatDate(leave.startDate || leave.fromDate || leave.createdAt)}</span><span className="admin-dash__review">Review</span><FiArrowRight aria-hidden /></button>)}</div> : <EmptyState title="No pending requests" />}
-            </Card>
+
 
             <Card className="admin-dash__events">
               {panelHead('Upcoming Events', FiCalendar, can([PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE]) ? 'View calendar' : null, () => openOverlay('calendar'))}
               {calendarError ? <p role="alert" className="text-sm text-red-700">{calendarError}</p> : calendarEvents.length ? <div className="space-y-2">{calendarEvents.map((event, index) => <button type="button" className="admin-dash__list-row admin-dash__event" key={event._id || index} onClick={() => openOverlay('calendar')}><span className="admin-dash__event-date"><strong>{new Date(event.date).getDate()}</strong><small>{new Date(event.date).toLocaleDateString([], { month: 'short' })}</small></span><span><strong>{event.name}</strong><small>{event.description || event.type || 'Calendar event'}</small></span></button>)}</div> : <EmptyState title="No upcoming calendar events" />}
             </Card>
 
-            {can([PERMISSIONS.PAYROLL_VIEW_ALL]) && <Card className="admin-dash__payroll">
-              <div className="admin-dash__panel-head"><h2><FiDollarSign aria-hidden /><span>Payroll by Department<small>This period's payroll distribution</small></span></h2><select aria-label="Payroll month" className="admin-dash__month" value={payrollMonth} onChange={event => setPayrollMonth(event.target.value)}>{payrollMonths.options.map(month => <option key={month} value={month}>{new Date(`${month}-01T12:00:00`).toLocaleDateString([], { month: 'short', year: 'numeric' })}</option>)}</select></div>
-              {payrollByDepartment.length ? <div className="admin-dash__payroll-content"><button type="button" className="admin-dash__payroll-total" onClick={() => openOverlay('payroll')}><PayrollDonut rows={payrollByDepartment} total={monthlyPayrollTotal} formatCurrency={formatCurrency} /><small>View payroll details →</small></button><div className="admin-dash__table"><table><thead><tr><th>Department</th><th>Employees</th><th>Total payroll</th><th>Avg. salary</th></tr></thead><tbody>{payrollByDepartment.map(row => <tr key={row.department}><th scope="row">{row.department}</th><td>{row.count || '—'}</td><td>{formatCurrency(row.amount)}</td><td>{row.count ? formatCurrency(row.amount / row.count) : '—'}</td></tr>)}</tbody></table></div></div> : <EmptyState title="No payroll data for this period" />}
-            </Card>}
+
+
+            <Card className="admin-dash__leaves">
+              {panelHead('Pending Leave', FiClock, can([PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM]) ? 'Review all' : null, () => openOverlay('leave'))}
+              {approvalsPreview.length ? <div className="space-y-2">{approvalsPreview.map(leave => <button type="button" key={leave._id} className="admin-dash__list-row" onClick={() => openOverlay('leave', { leave })} disabled={!can([PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM])}><span className="admin-dash__avatar">{getInitials(leave.employeeName || leave.employee?.name || 'Employee')}</span><span className="admin-dash__grow"><strong>{leave.employeeName || leave.employee?.name || 'Employee'}</strong><small>{leave.leaveType || 'Leave'} · {leave.totalDays || leave.numberOfDays || 1} day(s)</small></span><span className="admin-dash__date">{formatDate(leave.startDate || leave.fromDate || leave.createdAt)}</span><span className="admin-dash__review">Review</span><FiArrowRight aria-hidden /></button>)}</div> : <EmptyState title="No pending requests" />}
+            </Card>
 
             <Card className="admin-dash__hires">
               {panelHead('New Hires', FiUserPlus, can([PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM]) ? 'View all' : null, () => openOverlay('employees'))}
               {newHires.length ? <div className="space-y-2">{newHires.map(employee => <button type="button" key={employee._id || employee.id} className="admin-dash__list-row" onClick={() => openOverlay('employee', { employee })} disabled={!can([PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM])}><span className="admin-dash__avatar">{getInitials(`${employee.name || ''} ${employee.lastName || ''}`)}</span><span className="admin-dash__grow"><strong>{employee.name} {employee.lastName}</strong><small>{employee.position || employee.jobTitle || 'Team member'} · Joined {formatDate(employee.joiningDate || employee.createdAt)}</small></span><span className="admin-dash__view"><FiEye aria-hidden /> View</span></button>)}</div> : <EmptyState title="No recent hires found" />}
             </Card>
 
-            <Card className="admin-dash__announcements">
-              {panelHead('Announcements', FiFileText, 'View all', () => openOverlay('announcements'))}
-              {announcements.length ? <div className="admin-dash__announcement-grid">{announcements.map(item => <button key={item._id} type="button" className="admin-dash__list-row" onClick={() => openOverlay('announcements')}><span><strong>{String(item.metadata?.title || item.message || '').replace(/<[^>]+>/g, ' ').trim()}</strong><small>{formatDate(item.createdAt)}{item.priority === 'high' || item.metadata?.important ? ' · Important' : ''}</small></span></button>)}</div> : <EmptyState title="No announcements yet" />}
-              <div className="admin-dash__footer-actions"><Button type="button" variant="outlined" onClick={() => { setOverlay(null); setShowAnnouncementModal(true); }}><FiPlus aria-hidden />New announcement</Button><Button type="button" variant="outlined" onClick={() => openOverlay('announcements')}>Sent announcements</Button>{can([PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM]) && <Button type="button" variant="outlined" onClick={() => navigate('/all-attendance-history')}>Today's log</Button>}{can([PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM]) && <Button type="button" variant="outlined" onClick={() => openOverlay('leave')}>Leave report</Button>}</div>
-            </Card>
+            {can([PERMISSIONS.PAYROLL_VIEW_ALL]) && <Card className="admin-dash__payroll">
+              <div className="admin-dash__panel-head"><h2><FiDollarSign aria-hidden /><span>Payroll by Department<small>This period's payroll distribution</small></span></h2><select aria-label="Payroll month" className="admin-dash__month" value={payrollMonth} onChange={event => setPayrollMonth(event.target.value)}>{payrollMonths.options.map(month => <option key={month} value={month}>{new Date(`${month}-01T12:00:00`).toLocaleDateString([], { month: 'short', year: 'numeric' })}</option>)}</select></div>
+              {payrollByDepartment.length ? <div className="admin-dash__payroll-content"><button type="button" className="admin-dash__payroll-total" onClick={() => openOverlay('payroll')}><PayrollDonut rows={payrollByDepartment} total={monthlyPayrollTotal} formatCurrency={formatCurrency} /><small>View payroll details →</small></button><ul className="admin-dash__payroll-legend" aria-label="Payroll distribution">{payrollByDepartment.map((row, index) => <li key={row.department}><span aria-hidden style={{ backgroundColor: ['#238aff', '#0e9370', '#a855f7', '#ff9d19', '#fb7185', '#5caea0'][index % 6] }} /><span className="admin-dash__grow">{row.department}</span><strong>{formatCurrency(row.amount)}</strong><small>({monthlyPayrollTotal > 0 ? Math.round(row.amount / monthlyPayrollTotal * 100) : 0}%)</small></li>)}</ul><div className="admin-dash__table"><table><thead><tr><th>Department</th><th>Employees</th><th>Total payroll</th><th>Avg. salary</th></tr></thead><tbody>{payrollByDepartment.map(row => <tr key={row.department}><th scope="row">{row.department}</th><td>{row.count || '—'}</td><td>{formatCurrency(row.amount)}</td><td>{row.count ? formatCurrency(row.amount / row.count) : '—'}</td></tr>)}</tbody></table></div></div> : <EmptyState title="No payroll data for this period" />}
+            </Card>}
           </div>
         </div>
       </div>
