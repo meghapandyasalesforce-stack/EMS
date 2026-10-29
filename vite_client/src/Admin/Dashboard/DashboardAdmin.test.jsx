@@ -65,7 +65,6 @@ describe('Admin dashboard reference layout and overlays', () => {
     [/^View today$/, "Today's Attendance"],
     [/^View calendar$/, 'Calendar'],
     [/^Review all$/, 'Pending Leave Approvals (1)'],
-    [/^Sent announcements$/, 'Announcements'],
     [/View payroll details/, 'Payroll'],
   ])('opens %s in one on-page overlay', async (button, title) => {
     mount();
@@ -77,6 +76,12 @@ describe('Admin dashboard reference layout and overlays', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(document.body.style.overflow).not.toBe('hidden');
+  });
+  it('opens the existing Announcements page from View All Announcements', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'View All Announcements', exact: true }));
+    await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('/sent-announcements'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
   it('opens the selected new hire and closes on backdrop click', async () => {
     mount();

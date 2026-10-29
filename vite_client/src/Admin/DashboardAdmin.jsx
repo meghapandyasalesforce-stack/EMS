@@ -504,7 +504,7 @@ function DashboardAdmin() {
               <div className="admin-dash__announcement-body">
               {announcements.length ? <div className="admin-dash__announcement-grid">{announcements.map(item => <button key={item._id} type="button" className="admin-dash__list-row" onClick={() => openOverlay('announcements')}><time className="admin-dash__announcement-date">{formatDate(item.createdAt)}</time><strong className="admin-dash__grow">{String(item.metadata?.title || item.message || '').replace(/<[^>]+>/g, ' ').trim()}</strong></button>)}</div> : <EmptyState title="No announcements yet" />}
 
-              <div className="admin-dash__footer-actions"><Button type="button" variant="outlined" className="admin-dash__view-announcements" aria-label="Sent announcements" onClick={() => openOverlay('announcements')}>View All Announcements</Button></div>
+              <div className="admin-dash__footer-actions"><Button type="button" variant="outlined" className="admin-dash__view-announcements" onClick={() => navigate('/sent-announcements')}>View All Announcements</Button></div>
               </div>
             </Card>
 
