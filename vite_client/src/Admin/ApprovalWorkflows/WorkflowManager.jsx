@@ -1,10 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiCheckCircle, FiXCircle, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiCheckCircle, FiXCircle, FiSettings, FiCalendar, FiClock, FiFileText, FiBriefcase, FiDollarSign, FiArrowRight } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import WorkflowModal from './WorkflowModal';
 import WorkflowDetail from './WorkflowDetail';
 import '../../styles/approvalWorkflows.css';
+
+const WORKFLOW_ENTITY_ICONS = {
+  Leave: FiCalendar,
+  AttendanceRegularization: FiClock,
+  Expense: FiFileText,
+  Document: FiFileText,
+  Project: FiBriefcase,
+  WorkforcePlan: FiBriefcase,
+  TaxRegimeChange: FiDollarSign,
+};
+
+const WorkflowTypeIcon = ({ entityType }) => {
+  const Icon = WORKFLOW_ENTITY_ICONS[entityType] || FiSettings;
+  return <Icon />;
+};
 
 const WorkflowManager = () => {
   const [workflows, setWorkflows] = useState([]);
@@ -158,7 +173,7 @@ const WorkflowManager = () => {
               className="workflow-card bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-6"
             >
               <div className="workflow-card-heading">
-                <span className="workflow-card-icon" aria-hidden="true"><FiSettings /></span>
+                <span className="workflow-card-icon" aria-hidden="true"><WorkflowTypeIcon entityType={workflow.entityType} /></span>
                 <div className="workflow-card-title">
                   <span className="workflow-type">{workflow.entityType}</span>
                   <h3>{workflow.name}</h3>
@@ -173,6 +188,7 @@ const WorkflowManager = () => {
                 {workflow.steps?.length > 0 && <ol className="workflow-step-preview">
                   {workflow.steps.map((step, index) => <li key={step._id || index}>
                     <span>{step.stepNumber || index + 1}</span>{step.stepName || step.approverType}
+                    {index < workflow.steps.length - 1 && <FiArrowRight className="workflow-step-arrow" aria-hidden="true" />}
                   </li>)}
                 </ol>}
               </div>
@@ -185,7 +201,7 @@ const WorkflowManager = () => {
                   }}
                   className="flex-1 bg-theme-secondary/10 text-theme-secondary px-4 py-2 rounded-lg hover:bg-theme-secondary/10 transition-colors font-medium text-sm"
                 >
-                  View Details
+                  View Details <FiArrowRight aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => {
