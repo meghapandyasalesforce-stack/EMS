@@ -261,7 +261,7 @@ const EmployeeEngagementPage = () => {
 
         if (found) {
             if (found.canRespond) {
-                navigate(`/engagement/surveys/${surveyId}`);
+                navigate(`/employee/engagement/surveys/${surveyId}`);
             } else if (found.completionState === 'completed') {
                 toast.info('You have already completed this survey.');
             } else if (found.status === 'Closed') {
@@ -287,7 +287,7 @@ const EmployeeEngagementPage = () => {
             const startOk = !survey.startDate || new Date(survey.startDate).getTime() <= now;
             const endOk = !survey.endDate || new Date(survey.endDate).getTime() >= now;
             if (survey.status === 'Active' && startOk && endOk) {
-                navigate(`/engagement/surveys/${surveyId}`);
+                navigate(`/employee/engagement/surveys/${surveyId}`);
             } else if (survey.status === 'Closed' || !endOk) {
                 toast.info('This survey has expired or closed.');
             } else {
@@ -598,6 +598,7 @@ const EmployeeEngagementPage = () => {
                                 <button
                                     key={tab.id}
                                     type="button"
+                                    aria-pressed={activeTab === tab.id}
                                     onClick={() => {
                                         setActiveTab(tab.id);
                                         if (tab.id === 'feedback') setFeedbackSub('feedback');
@@ -671,6 +672,7 @@ const EmployeeEngagementPage = () => {
                                                     {s.status}
                                                 </span>
                                             </div>
+                                            {s.description && <p className="employee-survey-description">{s.description}</p>}
                                             <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                                                 <span className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-100">
                                                     {s.anonymous ? 'Anonymous' : 'Identified'}
@@ -688,7 +690,7 @@ const EmployeeEngagementPage = () => {
                                             {s.canRespond && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => navigate(`/engagement/surveys/${s._id}`)}
+                                                    onClick={() => navigate(`/employee/engagement/surveys/${s._id}`)}
                                                     className="mt-4 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
                                                     style={{ background: MINT_GRADIENT }}
                                                 >

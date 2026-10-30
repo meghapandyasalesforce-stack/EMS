@@ -97,3 +97,16 @@
 #root .employee-engagement nav[aria-label='Engagement sections'] button[class*='ring-1'] { background: #e6faf3; border-bottom: 2px solid #009b7d; }
 #root .employee-engagement .employee-engagement-content > div:first-child h2 { display: flex; align-items: center; gap: 14px; }
 #root .employee-engagement .employee-surveys-section-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 46px; flex: 0 0 44px; border-radius: 12px; background: #e1f8ef; color: #009e80; font-size: 21px; }
+
+/* Personal workspace remains visually independent after visiting HR screens. */
+#root .employee-engagement.engagement-page > .page-shell-inner > header { padding: 20px; background: linear-gradient(115deg,#fff 45%,#e2f8f0) !important; }
+#root .employee-engagement.engagement-page > .page-shell-inner > header h1 { color: #10334a; font-size: clamp(22px,2vw,29px); }
+#root .employee-engagement.engagement-page .employee-engagement-content { border: 1px solid #e1ecf0; border-radius: 16px; box-shadow: 0 4px 18px rgb(18 62 75 / 4%); }
+#root .employee-engagement .employee-survey-description { font-size: 13px; line-height: 1.6; color: #506b87; margin: 0 0 0 74px; }
+#root .employee-engagement nav[aria-label='Engagement sections'] button[aria-pressed='true'] { background: #e4f8f0; color: #00876e; border-bottom: 2px solid #009d7f; }
+#root .employee-engagement .employee-survey-grid article { height: 100%; align-self: stretch; }
+#root .employee-engagement .employee-survey-grid article > button { flex-shrink: 0; }
+@media (max-width: 639px) {
+  #root .employee-engagement.engagement-page > .page-shell-inner > header { padding: 16px; }
+  #root .employee-engagement .employee-survey-description { margin-left: 0; }
+}
