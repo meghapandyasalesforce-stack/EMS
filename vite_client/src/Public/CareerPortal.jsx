@@ -1,3 +1,4 @@
+import useCanonicalCareerUrl from '../Hooks/useCanonicalCareerUrl';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -141,6 +142,7 @@ function CareerJobCard({ job, organizationId }) {
 
 const CareerPortal = () => {
     const { organizationId } = useParams();
+    useCanonicalCareerUrl(organizationId);
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');

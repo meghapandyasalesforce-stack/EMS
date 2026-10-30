@@ -1,3 +1,4 @@
+import useCanonicalCareerUrl from '../Hooks/useCanonicalCareerUrl';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -115,6 +116,7 @@ const APPLY_SCROLL_STYLE = {
 
 const CareerJobApply = () => {
     const { organizationId, jobId } = useParams();
+    useCanonicalCareerUrl(organizationId);
     const authUser = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const permissions = useSelector((state) => state.auth.permissions) || [];
