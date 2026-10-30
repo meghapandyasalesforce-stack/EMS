@@ -8,16 +8,6 @@ const organizationSchema = new mongoose.Schema({
         trim: true,
         minlength: [2, 'Organization name must be at least 2 characters long']
     },
-    // Stable, public-facing careers URL; allocated when HR first opens career links.
-    careerSlug: {
-        type: String,
-        trim: true,
-        lowercase: true,
-        unique: true,
-        sparse: true,
-        maxlength: 90,
-        match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-    },
     legalName: {
         type: String,
         trim: true

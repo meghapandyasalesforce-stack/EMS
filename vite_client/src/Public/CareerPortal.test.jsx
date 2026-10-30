@@ -10,12 +10,12 @@ beforeEach(() => {
     vi.clearAllMocks();
     axios.post.mockRejectedValue({ response: { status: 404 } });
 });
-function setup(initial = '/careers/paarsiv') {
-    render(<MemoryRouter initialEntries={[initial]}><Link to="/careers/megha">Other portal</Link><Link to="/careers/paarsiv">Company portal</Link><Routes><Route path="/careers/:organizationId" element={<CareerPortal />} /></Routes></MemoryRouter>);
+function setup(initial = '/careers/6a3cbbacc02ff3769ba3e8c6') {
+    render(<MemoryRouter initialEntries={[initial]}><Link to="/careers/megha">Other portal</Link><Link to="/careers/6a3cbbacc02ff3769ba3e8c6">Company portal</Link><Routes><Route path="/careers/:organizationId" element={<CareerPortal />} /></Routes></MemoryRouter>);
 }
 describe('career portal organization navigation', () => {
     it('uses the URL identifier and removes old jobs and errors when changing portals', async () => {
-        axios.get.mockImplementation(url => url.endsWith('/paarsiv/jobs')
+        axios.get.mockImplementation(url => url.endsWith('/6a3cbbacc02ff3769ba3e8c6/jobs')
             ? Promise.resolve({ data: { data: [job] } }) : Promise.reject({ response: { status: 404 } }));
         setup();
         await screen.findByText(job.jobTitle);
@@ -26,6 +26,7 @@ describe('career portal organization navigation', () => {
         fireEvent.click(screen.getByRole('link', { name: 'Company portal' }));
         await screen.findByText(job.jobTitle);
         expect(screen.queryByText('Career portal not found')).not.toBeInTheDocument();
+        expect(axios.post).not.toHaveBeenCalled();
     });
     it('ignores a delayed response from the previous portal', async () => {
         let resolveOld;

@@ -1,7 +1,6 @@
 import express from 'express';
 import asyncHandler from '../../middlewares/asyncHandler.js';
-import Organization from '../../models/organization.model.js';
-import { ensureCareerSlug, resolveCareerOrganizationId } from '../../helpers/careerPortalSlug.js';
+import { resolveCareerOrganizationId } from '../../helpers/careerPortalSlug.js';
 import {
     listPublicJobs,
     getPublicJobById,
@@ -18,17 +17,6 @@ router.param('organizationId', asyncHandler(async (req, res, next) => {
     }
     req.params.organizationId = organizationId;
     next();
-}));
-
-// Idempotent public link initialization. The name comes from the organization,
-// never from caller input; listings remain readable when initialization fails.
-router.post('/:organizationId/portal-link', writeLimiter, asyncHandler(async (req, res) => {
-    const org = await Organization.findOne({ _id: req.params.organizationId, isActive: true, deletedAt: null })
-        .select('_id').lean();
-    if (!org) return res.status(404).json({ success: false, message: 'Career portal not found' });
-    const slug = await ensureCareerSlug(org._id);
-    if (!slug) return res.status(404).json({ success: false, message: 'Career portal not found' });
-    res.json({ success: true, data: { slug } });
 }));
 
 router.route('/:organizationId/jobs')

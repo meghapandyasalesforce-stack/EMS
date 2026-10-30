@@ -79,96 +79,23 @@ describe('anonymous public recruitment visibility', () => {
     });
 });
 
-describe('readable public career links', () => {
-    it('lists the same tenant jobs through a company slug', async () => {
-        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: organizationId });
-        const find = jest.spyOn(Recruitment.collection, 'find').mockImplementation(filter => ({
-            toArray: async () => [baseJob, { ...baseJob, organizationId: new mongoose.Types.ObjectId() }].filter(sift(filter)),
-        }));
-        const response = await request(app).get('/api/v1/public/recruitment/paarsiv/jobs').expect(200);
-        expect(response.body.data).toHaveLength(1);
-        expect(String(find.mock.calls[0][0].organizationId)).toBe(String(organizationId));
-    });
-    it('opens public job detail through the same slug', async () => {
-        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: organizationId });
-        jest.spyOn(Recruitment.collection, 'findOne').mockImplementation(async filter => sift(filter)(baseJob) ? baseJob : null);
-        const response = await request(app).get(`/api/v1/public/recruitment/paarsiv/jobs/${jobId}`).expect(200);
-        expect(response.body.data.jobTitle).toBe(baseJob.jobTitle);
-    });
-    it('scopes application lookup to the resolved tenant', async () => {
-        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: organizationId });
-        const lookup = jest.spyOn(Recruitment.collection, 'findOne').mockResolvedValue(null);
-        await request(app).post(`/api/v1/public/recruitment/paarsiv/jobs/${jobId}/apply`)
-            .send({ firstName: 'Candidate', email: 'candidate@example.com', consentAccepted: true }).expect(404);
-        expect(String(lookup.mock.calls[0][0].organizationId)).toBe(String(organizationId));
-    });
-    it('returns 404 for unknown slugs without querying jobs', async () => {
-        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue(null);
-        const find = jest.spyOn(Recruitment.collection, 'find');
-        await request(app).get('/api/v1/public/recruitment/missing-company/jobs').expect(404);
-        expect(find).not.toHaveBeenCalled();
-    });
-});
-
-describe('public canonical career address', () => {
-    it('returns the saved company slug for anonymous bookmarks and ignores caller-supplied names', async () => {
-        jest.spyOn(Organization, 'findOne').mockReturnValue({ select: () => ({ lean: async () => ({ _id: organizationId }) }) });
-        jest.spyOn(Organization, 'findById').mockReturnValue({ select: () => ({ lean: async () => ({ _id: organizationId, careerSlug: 'paarsiv' }) }) });
-        const response = await request(app).post(`/api/v1/public/recruitment/${organizationId}/portal-link`)
-            .send({ slug: 'another-company', organizationId: new mongoose.Types.ObjectId() }).expect(200);
-        expect(response.body.data.slug).toBe('paarsiv');
-        expect(Organization.findOne).toHaveBeenCalledWith({ _id: String(organizationId), isActive: true, deletedAt: null });
-    });
-    it('does not initialize public links for missing or inactive organizations', async () => {
-        jest.spyOn(Organization, 'findOne').mockReturnValue({ select: () => ({ lean: async () => null }) });
-        const allocation = jest.spyOn(Organization, 'findById');
-        await request(app).post(`/api/v1/public/recruitment/${organizationId}/portal-link`).send({}).expect(404);
-        expect(allocation).not.toHaveBeenCalled();
-    });
-});
-
-describe('canonical tenant ownership', () => {
-    it('keeps six Paarsiv jobs separate from two jobs owned by another saved portal', async () => {
-        const otherId = new mongoose.Types.ObjectId();
-        jest.spyOn(Organization.collection, 'findOne').mockImplementation(async filter => {
-            if (filter.careerSlug === 'paarsiv') return { _id: organizationId };
-            if (filter.careerSlug === 'other-company') return { _id: otherId };
-            return null;
-        });
-        const jobs = [
-            ...Array.from({ length: 6 }, () => ({ ...baseJob, _id: new mongoose.Types.ObjectId() })),
-            ...Array.from({ length: 2 }, () => ({ ...baseJob, _id: new mongoose.Types.ObjectId(), organizationId: otherId })),
-        ];
-        jest.spyOn(Recruitment.collection, 'find').mockImplementation(filter => ({ toArray: async () => jobs.filter(sift(filter)) }));
-        const paarsiv = await request(app).get('/api/v1/public/recruitment/paarsiv/jobs').expect(200);
-        const other = await request(app).get('/api/v1/public/recruitment/other-company/jobs').expect(200);
-        expect(paarsiv.body.data).toHaveLength(6);
-        expect(other.body.data).toHaveLength(2);
-        expect(paarsiv.body.data.every(j => j.organizationId === String(organizationId))).toBe(true);
-        expect(other.body.data.every(j => j.organizationId === String(otherId))).toBe(true);
-        await request(app).get('/api/v1/public/recruitment/megha/jobs').expect(404);
-    });
-    it('preserves a separate organization whose actual saved slug is megha', async () => {
-        const otherId = new mongoose.Types.ObjectId();
-        const lookup = jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: otherId });
-        const jobs = [baseJob, { ...baseJob, organizationId: otherId }, { ...baseJob, organizationId: otherId }];
-        jest.spyOn(Recruitment.collection, 'find').mockImplementation(filter => ({ toArray: async () => jobs.filter(sift(filter)) }));
-        const response = await request(app).get('/api/v1/public/recruitment/megha/jobs').expect(200);
-        expect(response.body.data).toHaveLength(2);
-        expect(response.body.data.every(j => j.organizationId === String(otherId))).toBe(true);
-        expect(lookup.mock.calls[0][0]).toMatchObject({ careerSlug: 'megha' });
-    });
-    it.each(['jobs', `jobs/${jobId}`, 'portal-link', `jobs/${jobId}/apply`])('rejects an obsolete slug on %s without falling back to any tenant', async suffix => {
-        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue(null);
+describe('ID-only public career routes', () => {
+    it.each(['paarsiv', 'megha', 'other-company'])('rejects name-based URL %s on listings, details, and applications', async name => {
         const find = jest.spyOn(Recruitment.collection, 'find');
         const findOne = jest.spyOn(Recruitment.collection, 'findOne');
-        const path = `/api/v1/public/recruitment/megha/${suffix}`;
-        const req = suffix === 'portal-link' || suffix.endsWith('/apply') ? request(app).post(path).send({}) : request(app).get(path);
-        await req.expect(404);
+        const base = `/api/v1/public/recruitment/${name}/jobs`;
+        await request(app).get(base).expect(404);
+        await request(app).get(`${base}/${jobId}`).expect(404);
+        await request(app).post(`${base}/${jobId}/apply`).send({}).expect(404);
         expect(find).not.toHaveBeenCalled();
         expect(findOne).not.toHaveBeenCalled();
     });
-    it('rejects missing or inactive organizations through legacy IDs too', async () => {
+    it('scopes public application lookup to the URL organization ID', async () => {
+        const lookup = jest.spyOn(Recruitment.collection, 'findOne').mockResolvedValue(null);
+        await request(app).post(`${url}/${jobId}/apply`).send({ firstName: 'Candidate', email: 'candidate@example.com', consentAccepted: true }).expect(404);
+        expect(String(lookup.mock.calls[0][0].organizationId)).toBe(String(organizationId));
+    });
+    it('rejects an ID belonging to a missing or inactive organization', async () => {
         jest.spyOn(Organization.collection, 'findOne').mockResolvedValue(null);
         const find = jest.spyOn(Recruitment.collection, 'find');
         await request(app).get(url).expect(404);
