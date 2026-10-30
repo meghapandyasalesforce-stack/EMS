@@ -148,6 +148,8 @@ const CareerJobApply = () => {
 
     useEffect(() => {
         let cancelled = false;
+        setJob(null);
+        setError('');
         (async () => {
             try {
                 setLoading(true);

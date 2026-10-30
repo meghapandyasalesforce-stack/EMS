@@ -25,15 +25,19 @@ describe('stable readable career links', () => {
         jest.spyOn(Organization, 'findOneAndUpdate').mockReturnValue(query(null));
         expect(await ensureCareerSlug(id)).toBe('paarsiv');
     });
-    it('retains legacy IDs without a company lookup', async () => {
-        const lookup = jest.spyOn(Organization, 'findOne');
+    it('verifies legacy IDs against an active organization', async () => {
+        const lookup = jest.spyOn(Organization, 'findOne').mockReturnValue(query({ _id: id }));
         expect(await resolveCareerOrganizationId(id)).toBe(id);
-        expect(lookup).not.toHaveBeenCalled();
+        expect(lookup).toHaveBeenCalledWith({ _id: id, isActive: true, deletedAt: null });
     });
     it('resolves names only against active, non-deleted organizations', async () => {
         const lookup = jest.spyOn(Organization, 'findOne').mockReturnValue(query({ _id: id }));
         expect(await resolveCareerOrganizationId('Paarsiv')).toBe(id);
         expect(lookup).toHaveBeenCalledWith({ careerSlug: 'paarsiv', isActive: true, deletedAt: null });
+    });
+    it.each([id, 'megha'])('rejects missing or inactive organization %s', async value => {
+        jest.spyOn(Organization, 'findOne').mockReturnValue(query(null));
+        expect(await resolveCareerOrganizationId(value)).toBeNull();
     });
     it.each(['../other', '$ne', 'a'.repeat(91)])('rejects malformed identifier %s', async value => {
         const lookup = jest.spyOn(Organization, 'findOne');

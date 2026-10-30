@@ -44,10 +44,13 @@ export const ensureCareerSlug = async (organizationId) => {
 };
 
 export const resolveCareerOrganizationId = async (identifier) => {
-    if (OBJECT_ID.test(identifier || '')) return identifier;
-    const slug = String(identifier || '').toLowerCase();
-    if (slug.length > 90 || !SLUG.test(slug)) return null;
-    const org = await Organization.findOne({ careerSlug: slug, isActive: true, deletedAt: null })
+    const value = String(identifier || '');
+    const isId = OBJECT_ID.test(value);
+    const slug = value.toLowerCase();
+    if (!isId && (slug.length > 90 || !SLUG.test(slug))) return null;
+    // Both IDs and exact saved slugs must resolve to a live organization.
+    // Never infer an alias from a username, company-name similarity, or jobs.
+    const org = await Organization.findOne({ ...(isId ? { _id: value } : { careerSlug: slug }), isActive: true, deletedAt: null })
         .select('_id').lean();
     return org?._id?.toString() || null;
 };

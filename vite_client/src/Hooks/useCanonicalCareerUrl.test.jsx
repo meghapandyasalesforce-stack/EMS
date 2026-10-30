@@ -17,7 +17,7 @@ describe('automatic readable careers addresses', () => {
         axios.post.mockResolvedValue({ data: { data: { slug: 'paarsiv-technologies' } } });
         render(<MemoryRouter initialEntries={[`/careers/${id}${suffix}`]}><Preview /></MemoryRouter>);
         await waitFor(() => expect(screen.getByTestId('path')).toHaveTextContent(`/careers/paarsiv-technologies${expected}`));
-        expect(axios.post).toHaveBeenCalledTimes(1);
+        expect(axios.post).toHaveBeenCalledWith(`/v1/public/recruitment/${id}/portal-link`, {});
     });
     it('keeps the original link usable when initialization fails', async () => {
         axios.post.mockRejectedValue(new Error('Offline'));
@@ -25,8 +25,21 @@ describe('automatic readable careers addresses', () => {
         await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(1));
         expect(screen.getByTestId('path')).toHaveTextContent(`/careers/${id}`);
     });
-    it('does not request a redirect for an already readable address', () => {
+    it('verifies readable addresses without changing a canonical slug', async () => {
+        axios.post.mockResolvedValue({ data: { data: { slug: 'paarsiv' } } });
         render(<MemoryRouter initialEntries={['/careers/paarsiv']}><Preview /></MemoryRouter>);
-        expect(axios.post).not.toHaveBeenCalled();
+        await waitFor(() => expect(axios.post).toHaveBeenCalledWith('/v1/public/recruitment/paarsiv/portal-link', {}));
+        expect(screen.getByTestId('path')).toHaveTextContent('/careers/paarsiv');
+    });
+    it('normalizes uppercase slugs only using server-confirmed canonical URLs', async () => {
+        axios.post.mockResolvedValue({ data: { data: { slug: 'paarsiv' } } });
+        render(<MemoryRouter initialEntries={['/careers/Paarsiv/jobs/one?ref=mail#apply']}><Preview /></MemoryRouter>);
+        await waitFor(() => expect(screen.getByTestId('path')).toHaveTextContent('/careers/paarsiv/jobs/one?ref=mail#apply'));
+    });
+    it('never guesses a redirect for unknown or obsolete slugs', async () => {
+        axios.post.mockRejectedValue({ response: { status: 404 } });
+        render(<MemoryRouter initialEntries={['/careers/megha']}><Preview /></MemoryRouter>);
+        await waitFor(() => expect(axios.post).toHaveBeenCalled());
+        expect(screen.getByTestId('path')).toHaveTextContent('/careers/megha');
     });
 });

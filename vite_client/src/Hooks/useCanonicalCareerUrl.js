@@ -2,12 +2,12 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from '../utils/axios';
 
-/** Replace legacy bookmarks with the stable company-name address, for guests too. */
+/** Canonicalize only identifiers verified by the server against a saved organization. */
 export default function useCanonicalCareerUrl(organizationId) {
     const navigate = useNavigate();
     const { pathname, search, hash } = useLocation();
     useEffect(() => {
-        if (!/^[a-f\d]{24}$/i.test(organizationId || '')) return undefined;
+        if (!organizationId) return undefined;
         let cancelled = false;
         axios.post(`/v1/public/recruitment/${organizationId}/portal-link`, {})
             .then(({ data }) => {
@@ -16,7 +16,7 @@ export default function useCanonicalCareerUrl(organizationId) {
                 const canonicalPath = pathname.replace(/^\/careers\/[^/]+/, `/careers/${slug}`);
                 if (canonicalPath !== pathname) navigate(`${canonicalPath}${search}${hash}`, { replace: true });
             })
-            .catch(() => { /* Keep working ID links if the backend is temporarily unavailable. */ });
+            .catch(() => { /* Keep working career links if the backend is temporarily unavailable. */ });
         return () => { cancelled = true; };
     }, [organizationId, pathname, search, hash, navigate]);
 }
