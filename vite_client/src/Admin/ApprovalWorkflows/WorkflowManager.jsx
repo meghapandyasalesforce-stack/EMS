@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import WorkflowModal from './WorkflowModal';
 import WorkflowDetail from './WorkflowDetail';
+import '../../styles/approvalWorkflows.css';
 
 const WorkflowManager = () => {
   const [workflows, setWorkflows] = useState([]);
@@ -86,17 +87,17 @@ const WorkflowManager = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="approval-workflows-page min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="page-shell">
       <div className="page-shell-inner">
       <div className="hrms-stack">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="workflow-page-header flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Approval Workflows</h1>
             <p className="text-lg text-gray-600">Manage multi-step approval processes</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="workflow-page-actions flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleBackfillRegularization}
               className="bg-white text-gray-800 px-6 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition-all duration-200 shadow-sm font-medium"
@@ -114,8 +115,8 @@ const WorkflowManager = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="workflow-filters bg-white rounded-xl shadow-md p-6">
+          <div className="workflow-filter-grid grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Entity Type</label>
               <select
@@ -149,36 +150,34 @@ const WorkflowManager = () => {
         </div>
 
         {/* Workflows List */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="workflow-card-grid grid grid-cols-1 lg:grid-cols-2 gap-6">
           {workflows.map((workflow) => (
             <div
               key={workflow._id}
-              className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-6"
+              data-entity={workflow.entityType}
+              className="workflow-card bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-6"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-gray-900">{workflow.name}</h3>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        workflow.isActive
-                          ? 'bg-theme-primary/10 text-theme-primary'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {workflow.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-2">{workflow.description}</p>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span className="font-medium">Type: {workflow.entityType}</span>
-                    <span>•</span>
-                    <span>{workflow.steps?.length || 0} Steps</span>
-                  </div>
+              <div className="workflow-card-heading">
+                <span className="workflow-card-icon" aria-hidden="true"><FiSettings /></span>
+                <div className="workflow-card-title">
+                  <span className="workflow-type">{workflow.entityType}</span>
+                  <h3>{workflow.name}</h3>
                 </div>
+                <span className={`workflow-status ${workflow.isActive ? 'is-active' : ''}`}>
+                  <span aria-hidden="true" />{workflow.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <p className="workflow-description">{workflow.description}</p>
+              <div className="workflow-routing">
+                <div className="workflow-routing-label"><span>Approval steps</span><span>{workflow.steps?.length || 0} Steps</span></div>
+                {workflow.steps?.length > 0 && <ol className="workflow-step-preview">
+                  {workflow.steps.map((step, index) => <li key={step._id || index}>
+                    <span>{step.stepNumber || index + 1}</span>{step.stepName || step.approverType}
+                  </li>)}
+                </ol>}
               </div>
 
-              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+              <div className="workflow-card-actions flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
                 <button
                   onClick={() => {
                     setSelectedWorkflow(workflow);
@@ -222,7 +221,7 @@ const WorkflowManager = () => {
         </div>
 
         {workflows.length === 0 && !loading && (
-          <div className="text-center py-12 bg-white rounded-xl shadow-md">
+          <div className="workflow-empty text-center py-12 bg-white rounded-xl shadow-md">
             <FiSettings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600 text-lg">No workflows found</p>
             <button
