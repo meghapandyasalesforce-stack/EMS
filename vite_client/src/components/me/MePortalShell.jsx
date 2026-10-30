@@ -180,8 +180,8 @@ const MePortalShell = ({
     <>
       {/* Phone top bar */}
       {isPhone ? (
-        <header className="safe-area-top relative z-30 w-full shrink-0 border-b border-gray-200 bg-white text-gray-800 shadow-sm">
-          <div className="flex min-w-0 items-center justify-between gap-2 p-3">
+        <header className="me-phone-topbar safe-area-top relative z-30 w-full shrink-0 border-b border-white/10 bg-[#0e2b3d] text-white shadow-sm">
+          <div className="flex min-h-20 min-w-0 items-center justify-between gap-2 px-3 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
@@ -192,11 +192,10 @@ const MePortalShell = ({
                   setMoreOpen(false);
                   setDrawerOpen((open) => !open);
                 }}
-                className="me-touch-target me-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#0e2b3d] text-white hover:bg-[#16384c]"
+                className="me-touch-target me-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white hover:bg-white/10"
               >
                 {drawerOpen ? <FaTimes className="text-xl" aria-hidden="true" /> : <FaBars className="text-xl" aria-hidden="true" />}
               </button>
-              <MeWordmark className="text-lg" />
             </div>
             <TopActions />
           </div>
