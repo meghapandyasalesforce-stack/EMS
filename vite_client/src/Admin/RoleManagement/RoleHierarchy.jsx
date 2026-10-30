@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FiPlus, FiEdit, FiTrash2, FiUsers, FiShield, FiChevronDown, FiChevronRight, FiUserPlus } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
+import '../../styles/roleManagement.css';
 
 const DASHBOARD_ROUTE_OPTIONS = [
   { value: '/dashboard-employee', label: 'Employee Dashboard' },
@@ -198,25 +199,27 @@ const RoleHierarchy = () => {
     const hasChildren = role.childRoles && role.childRoles.length > 0;
 
     return (
-      <div key={role._id} className={`${level > 0 ? 'ml-8' : ''}`}>
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-2xl mb-4 hover:shadow-lg hover:border-theme-secondary transition-all duration-300 group">
-          <div className="flex items-center space-x-4 flex-1 min-w-0">
+      <div key={role._id} className={`role-tree-node ${level > 0 ? 'ml-8' : ''}`}>
+        <div className="role-tree-card flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-2xl mb-4 hover:shadow-lg hover:border-theme-secondary transition-all duration-300 group">
+          <div className="role-tree-info flex items-center space-x-4 flex-1 min-w-0">
             {hasChildren && (
               <button
                 onClick={() => toggleRoleExpansion(role._id)}
-                className="p-2 hover:bg-theme-secondary/10 rounded-xl transition-all duration-200 group-hover:bg-theme-secondary/10 flex-shrink-0"
+                aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${role.name}`}
+                aria-expanded={isExpanded}
+                className="role-tree-toggle p-2 hover:bg-theme-secondary/10 rounded-xl transition-all duration-200 group-hover:bg-theme-secondary/10 flex-shrink-0"
               >
                 {isExpanded ? <FiChevronDown className="w-5 h-5 text-theme-secondary" /> : <FiChevronRight className="w-5 h-5 text-theme-secondary" />}
               </button>
             )}
-            {!hasChildren && <div className="w-9 flex-shrink-0" />}
+            {!hasChildren && <div className="role-tree-spacer w-9 flex-shrink-0" />}
             
             <div className="flex items-center space-x-4 flex-1 min-w-0">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-[var(--color-secondary)] rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 flex-shrink-0">
+              <div className="role-tree-icon w-14 h-14 bg-gradient-to-br from-blue-500 to-[var(--color-secondary)] rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 flex-shrink-0">
                 <FiShield className="w-7 h-7 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-900 text-xl mb-1 truncate">{role.name}</h3>
+                <h3 className="role-tree-name font-bold text-gray-900 text-xl mb-1 truncate">{role.name}</h3>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
                   <span className="px-2 py-1 bg-gray-100 rounded-lg font-medium">Level {role.level}</span>
                   <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-medium">
@@ -231,8 +234,8 @@ const RoleHierarchy = () => {
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 mt-4 lg:mt-0 lg:ml-4">
-            <span className="px-4 py-2 bg-gradient-to-r from-blue-500 to-[var(--color-secondary)] text-white text-sm font-semibold rounded-xl shadow-md whitespace-nowrap">
+          <div className="role-tree-actions flex items-center space-x-3 mt-4 lg:mt-0 lg:ml-4">
+            <span className="role-permission-count px-4 py-2 bg-gradient-to-r from-blue-500 to-[var(--color-secondary)] text-white text-sm font-semibold rounded-xl shadow-md whitespace-nowrap">
               {role.permissions?.length || 0} permissions
             </span>
             <div className="flex space-x-2">
@@ -262,7 +265,7 @@ const RoleHierarchy = () => {
         </div>
 
         {isExpanded && hasChildren && (
-          <div className="ml-6 border-l-2 border-gray-200 pl-6">
+          <div className="role-tree-children ml-6 border-l-2 border-gray-200 pl-6">
             {role.childRoles.map(childRole => renderRoleTree(childRole, level + 1))}
           </div>
         )}
@@ -276,15 +279,15 @@ const RoleHierarchy = () => {
 
   if (loading) {
     return (
-      <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="page-shell-inner hrms-stack">
+      <div className="role-management-page page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="role-management-layout page-shell-inner hrms-stack">
           <div>
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Role Management</h1>
             <p className="text-lg text-gray-600">Manage user roles and permissions</p>
           </div>
           
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-            <div className="px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+          <div className="role-hierarchy-panel bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+            <div className="role-hierarchy-heading px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
               <h2 className="text-2xl font-bold text-gray-900">Role Hierarchy</h2>
               <p className="text-gray-600 mt-1">Manage and organize your role structure</p>
             </div>
@@ -299,15 +302,15 @@ const RoleHierarchy = () => {
   }
 
   return (
-    <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="page-shell-inner hrms-stack">
+    <div className="role-management-page page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="role-management-layout page-shell-inner hrms-stack">
         {/* Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="role-management-header flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex-1 min-w-0">
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Role Management</h1>
             <p className="text-lg text-gray-600">Manage user roles and permissions</p>
           </div>
-          <div className="flex gap-3 flex-shrink-0">
+          <div className="role-management-header-actions flex gap-3 flex-shrink-0">
             <button
               onClick={() => setShowCreateModal(true)}
               className="bg-theme-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap font-medium"
@@ -323,7 +326,7 @@ const RoleHierarchy = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="role-management-stats grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between">
               <div className="flex-1">
@@ -386,8 +389,8 @@ const RoleHierarchy = () => {
         </div>
 
         {/* Roles Section */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+        <div className="role-hierarchy-panel bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="role-hierarchy-heading px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
             <h2 className="text-2xl font-bold text-gray-900">Role Hierarchy</h2>
             <p className="text-gray-600 mt-1">Manage and organize your role structure</p>
           </div>
@@ -408,7 +411,7 @@ const RoleHierarchy = () => {
               </button>
             </div>
           ) : (
-            <div className="p-8">
+            <div className="role-hierarchy-body p-8">
               {getTopLevelRoles().map(role => renderRoleTree(role))}
             </div>
           )}
@@ -495,7 +498,7 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
+    <div className="role-management-modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
@@ -674,7 +677,7 @@ const AssignRoleModal = ({
   onClose
 }) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
+    <div className="role-management-modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl border border-gray-100">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-900">Assign Role</h3>
