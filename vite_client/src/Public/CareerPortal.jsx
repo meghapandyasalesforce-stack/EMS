@@ -154,13 +154,19 @@ const CareerPortal = () => {
 
     useEffect(() => {
         let cancelled = false;
+        setJobs([]);
+        setError('');
+        setQuery('');
+        setDept('');
+        setLoc('');
+        setEmpType('');
         (async () => {
             try {
                 setLoading(true);
                 const { data } = await axios.get(`/v1/public/recruitment/${organizationId}/jobs`);
                 if (!cancelled) setJobs(data.data || []);
-            } catch {
-                if (!cancelled) setError('Unable to load open positions');
+            } catch (err) {
+                if (!cancelled) setError(err.response?.status === 404 ? 'Career portal not found' : 'Unable to load open positions');
             } finally {
                 if (!cancelled) setLoading(false);
             }
