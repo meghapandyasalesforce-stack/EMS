@@ -10,6 +10,7 @@ import { Route } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
 import ProtectedRoute from '../components/ProtectedRoute';
+import EngagementWorkspaceRoute from '../components/EngagementWorkspaceRoute';
 import PlatformProtectedRoute from '../components/PlatformProtectedRoute';
 import { ROUTE_PERMISSIONS } from '../utils/permissions';
 
@@ -32,7 +33,9 @@ const createProtectedLazyRoute = (route) => {
     requiredPermissions = [],
     redirectTo,
     orgOwnerOnly = false,
+    engagementAccess,
   } = route;
+  const content = createLazyRoute(Component, message);
   return (
     <Route
       key={path}
@@ -44,11 +47,9 @@ const createProtectedLazyRoute = (route) => {
           redirectTo={redirectTo}
           orgOwnerOnly={orgOwnerOnly}
         >
-          <RouteErrorBoundary>
-            <Suspense fallback={<LoadingSpinner message={message} />}>
-              <Component />
-            </Suspense>
-          </RouteErrorBoundary>
+          {engagementAccess ? (
+            <EngagementWorkspaceRoute access={engagementAccess}>{content}</EngagementWorkspaceRoute>
+          ) : content}
         </ProtectedRoute>
       }
     />
@@ -352,13 +353,14 @@ export const hrRoutes = [
   { path: '/employee/benefits-learning', component: lazy(() => import('../Employee/Learning/BenefitsLearningHub')), message: 'Loading benefits and learning...', allowedRoles: [] },
   { path: '/learning/create-course', component: lazy(() => import('../HR/Learning/CreateCourse')), message: 'Loading course creator...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/learning/edit-course/:courseId', component: lazy(() => import('../HR/Learning/EditCourse')), message: 'Loading course editor...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/engagement', component: lazy(() => import('../HR/Engagement/EngagementPage')), message: 'Loading employee engagement...', allowedRoles: [] },
+  { path: '/engagement', component: lazy(() => import('../HR/Engagement/EngagementPage')), message: 'Loading employee engagement...', allowedRoles: [], engagementAccess: 'workspace' },
   { path: '/engagement/surveys/:surveyId', component: lazy(() => import('../HR/Engagement/SurveyDetailPage')), message: 'Loading survey...', allowedRoles: [] },
-  { path: '/engagement/surveys/:surveyId/edit', component: lazy(() => import('../HR/Engagement/EditSurvey')), message: 'Loading survey editor...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/engagement/create-survey', component: lazy(() => import('../HR/Engagement/CreateSurvey')), message: 'Loading survey builder...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/engagement/pulse/create', component: lazy(() => import('../HR/Engagement/CreatePulseProgram')), message: 'Loading pulse builder...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/engagement/pulse/:id', component: lazy(() => import('../HR/Engagement/PulseProgramDetail')), message: 'Loading pulse program...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/engagement/pulse/:id/edit', component: lazy(() => import('../HR/Engagement/EditPulseProgram')), message: 'Loading pulse editor...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/engagement/surveys/:surveyId/edit', component: lazy(() => import('../HR/Engagement/EditSurvey')), message: 'Loading survey editor...', allowedRoles: [], engagementAccess: 'manage' },
+  { path: '/engagement/create-survey', component: lazy(() => import('../HR/Engagement/CreateSurvey')), message: 'Loading survey builder...', allowedRoles: [], engagementAccess: 'manage' },
+  { path: '/engagement/pulse/create', component: lazy(() => import('../HR/Engagement/CreatePulseProgram')), message: 'Loading pulse builder...', allowedRoles: [], engagementAccess: 'manage' },
+  { path: '/engagement/pulse/:id', component: lazy(() => import('../HR/Engagement/PulseProgramDetail')), message: 'Loading pulse program...', allowedRoles: [], engagementAccess: 'manage' },
+  { path: '/engagement/pulse/:id/edit', component: lazy(() => import('../HR/Engagement/EditPulseProgram')), message: 'Loading pulse editor...', allowedRoles: [], engagementAccess: 'manage' },
+  { path: '/employee/engagement/surveys/:surveyId', component: lazy(() => import('../HR/Engagement/SurveyDetailPage')), message: 'Loading your survey...', allowedRoles: [] },
   { path: '/employee/engagement', component: lazy(() => import('../Employee/Engagement/EmployeeEngagementPage')), message: 'Loading engagement...', allowedRoles: [] },
   { path: '/documents', component: lazy(() => import('../HR/Documents/DocumentsPage')), message: 'Loading documents...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/employee/documents-id', component: lazy(() => import('../Employee/DocumentsAndId/DocumentsAndIdPage')), message: 'Loading documents & ID card...', allowedRoles: [] },

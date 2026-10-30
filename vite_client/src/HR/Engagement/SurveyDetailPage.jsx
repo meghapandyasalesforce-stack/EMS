@@ -20,10 +20,9 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { MINT_GRADIENT } from '../Reports/constants';
-import { canManageEngagement, surveyStatusStyle } from './engagementUtils';
+import { surveyStatusStyle } from './engagementUtils';
 import { getStatusHint, toastForSave } from '../../utils/publishStatusUi';
-import { PERMISSIONS } from '../../utils/permissions';
-import { useAuthPermissions } from '../../Hooks/useAuthPermissions';
+import useEngagementWorkspace from '../../Hooks/useEngagementWorkspace';
 import { downloadEngagementExport, exportFilename } from './engagementExportUtils';
 
 const TREND_RANGES = [
@@ -133,23 +132,8 @@ const QuestionAnalyticsBlock = ({ q }) => {
 const SurveyDetailPage = () => {
     const { surveyId } = useParams();
     const navigate = useNavigate();
-    const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
-    const { permissions, isOrgOwner } = useAuthPermissions();
-
-    const canManage = useMemo(() => canManageEngagement(user, employee), [user, employee]);
-    const canViewAnalytics = useMemo(() => {
-        if (canManage || isOrgOwner) return true;
-        const keys = [
-            PERMISSIONS.ENGAGEMENT_ANALYTICS_ORG,
-            PERMISSIONS.ENGAGEMENT_ANALYTICS_TEAM,
-            PERMISSIONS.ENGAGEMENT_SURVEY_MANAGE,
-            PERMISSIONS.ENGAGEMENT_MANAGE,
-        ];
-        if (!Array.isArray(permissions) || !permissions.length) return false;
-        if (permissions.includes('*')) return true;
-        return keys.some((k) => permissions.includes(k));
-    }, [canManage, isOrgOwner, permissions]);
+    const { canManageSurveys: canManage, canViewAnalytics, engagementHome } = useEngagementWorkspace();
 
     const isEmployeeActor = Boolean(employee?._id || employee?.id);
 
@@ -332,7 +316,7 @@ const SurveyDetailPage = () => {
                 withCredentials: true,
             });
             toast.success('Survey deleted');
-            navigate('/engagement');
+            navigate(engagementHome);
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to delete survey');
         } finally {
@@ -413,7 +397,7 @@ const SurveyDetailPage = () => {
                 { withCredentials: true }
             );
             toast.success('Thank you for your response!');
-            navigate(canManage ? '/engagement' : '/employee/engagement');
+            navigate(engagementHome);
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to submit response');
         } finally {
@@ -522,7 +506,7 @@ const SurveyDetailPage = () => {
                         <p className="text-lg font-semibold text-slate-900">Survey not found</p>
                         <button
                             type="button"
-                            onClick={() => navigate('/engagement')}
+                            onClick={() => navigate(engagementHome)}
                             className="mt-4 rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700"
                         >
                             Back to Engagement
@@ -561,7 +545,7 @@ const SurveyDetailPage = () => {
                 <section className="survey-detail-hero rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
                     <button
                         type="button"
-                        onClick={() => navigate('/engagement')}
+                        onClick={() => navigate(engagementHome)}
                         className="survey-detail-back inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                     >
                         <FaArrowLeft className="text-xs" /> Back
