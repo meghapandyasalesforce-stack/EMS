@@ -586,3 +586,14 @@ html.me-portal .me-more-sheet__item.is-active {
 .me-wordmark-rest {
   color: var(--me-secondary);
 }
+
+/* Employee phone header: navy chrome matching the mobile HR navigation. */
+.me-phone-topbar .me-topbar-help {
+  color: #d4e1e9;
+  background: transparent;
+  border-color: rgb(255 255 255 / 18%);
+}
+.me-phone-topbar button[aria-label='Notifications'] { color: #a5b7c6; }
+.me-phone-topbar button[aria-label='Notifications']:hover,
+.me-phone-topbar .me-topbar-help:hover { color: #fff; background: rgb(255 255 255 / 10%); }
+.me-phone-topbar .me-focus-ring:focus-visible { outline-color: #fff; }
