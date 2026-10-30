@@ -1,3 +1,4 @@
+import useCareerPortalIdentifier from '../../Hooks/useCareerPortalIdentifier';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { differenceInCalendarDays, format, isValid } from 'date-fns';
@@ -103,6 +104,7 @@ const JobDetailPage = () => {
     const [job, setJob] = useState(null);
     const [candidates, setCandidates] = useState([]);
     const [orgId, setOrgId] = useState('');
+    const careerIdentifier = useCareerPortalIdentifier(orgId);
     const [tab, setTab] = useState('overview');
     const [screeningStats, setScreeningStats] = useState(null);
     const [search, setSearch] = useState('');
@@ -637,7 +639,7 @@ const JobDetailPage = () => {
     if (loading) return <LoadingSpinner message="Loading job…" />;
     if (!job) return null;
 
-    const careerUrl = orgId ? `${window.location.origin}/careers/${orgId}/jobs/${job._id}` : '';
+    const careerUrl = careerIdentifier ? `${window.location.origin}/careers/${careerIdentifier}/jobs/${job._id}` : '';
     const reqId = jobReqId(job);
     const salary = formatSalaryRange(job.salaryRange);
     const postedLabel = formatJobPostedDate(getJobPostedDate(job), { withYear: true });

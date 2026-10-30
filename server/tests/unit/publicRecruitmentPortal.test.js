@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import sift from 'sift';
 import router from '../../routes/Public/RecruitmentPortalRoutes.js';
 import { Recruitment } from '../../models/recruitment.model.js';
+import Organization from '../../models/organization.model.js';
 
 const organizationId = new mongoose.Types.ObjectId();
 const jobId = new mongoose.Types.ObjectId();
@@ -74,5 +75,36 @@ describe('anonymous public recruitment visibility', () => {
         expect(sift(findOne.mock.calls[0][0])(baseJob)).toBe(true);
         expect(sift(findOne.mock.calls[0][0])({ ...baseJob, isActive: false })).toBe(false);
         expect(sift(findOne.mock.calls[0][0])({ ...baseJob, archivedAt: new Date() })).toBe(false);
+    });
+});
+
+describe('readable public career links', () => {
+    it('lists the same tenant jobs through a company slug', async () => {
+        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: organizationId });
+        const find = jest.spyOn(Recruitment.collection, 'find').mockImplementation(filter => ({
+            toArray: async () => [baseJob, { ...baseJob, organizationId: new mongoose.Types.ObjectId() }].filter(sift(filter)),
+        }));
+        const response = await request(app).get('/api/v1/public/recruitment/paarsiv/jobs').expect(200);
+        expect(response.body.data).toHaveLength(1);
+        expect(String(find.mock.calls[0][0].organizationId)).toBe(String(organizationId));
+    });
+    it('opens public job detail through the same slug', async () => {
+        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: organizationId });
+        jest.spyOn(Recruitment.collection, 'findOne').mockImplementation(async filter => sift(filter)(baseJob) ? baseJob : null);
+        const response = await request(app).get(`/api/v1/public/recruitment/paarsiv/jobs/${jobId}`).expect(200);
+        expect(response.body.data.jobTitle).toBe(baseJob.jobTitle);
+    });
+    it('scopes application lookup to the resolved tenant', async () => {
+        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: organizationId });
+        const lookup = jest.spyOn(Recruitment.collection, 'findOne').mockResolvedValue(null);
+        await request(app).post(`/api/v1/public/recruitment/paarsiv/jobs/${jobId}/apply`)
+            .send({ firstName: 'Candidate', email: 'candidate@example.com', consentAccepted: true }).expect(404);
+        expect(String(lookup.mock.calls[0][0].organizationId)).toBe(String(organizationId));
+    });
+    it('returns 404 for unknown slugs without querying jobs', async () => {
+        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue(null);
+        const find = jest.spyOn(Recruitment.collection, 'find');
+        await request(app).get('/api/v1/public/recruitment/missing-company/jobs').expect(404);
+        expect(find).not.toHaveBeenCalled();
     });
 });
