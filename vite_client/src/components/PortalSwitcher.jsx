@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { switchPortal, checkAuthSession } from '../context/Auth/authSlice';
 import { fetchEmployeeOwnInfo } from '../context/employeeDetailsSlice';
-import { canSwitchPortals } from '../utils/portalConfig';
+import { canSwitchPortals, PORTAL_META } from '../utils/portalConfig';
 
 const PortalSwitcher = ({ compact = false, lightTheme = false }) => {
   const dispatch = useDispatch();
@@ -20,7 +20,8 @@ const PortalSwitcher = ({ compact = false, lightTheme = false }) => {
   const handleSelect = (portal) => {
     if (portal.id === activePortal) return;
     dispatch(switchPortal(portal.id));
-    navigate(portal.home);
+    // Older persisted portal objects may still point Me to a manager dashboard.
+    navigate(portal.id === 'employee' ? PORTAL_META.employee.home : portal.home);
     if (portal.id === 'employee') {
       dispatch(checkAuthSession());
       dispatch(fetchEmployeeOwnInfo());
