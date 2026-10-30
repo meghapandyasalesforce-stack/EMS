@@ -19,6 +19,8 @@ import {
     FaCog,
     FaTrash,
     FaStream,
+    FaEye,
+    FaUsers,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -708,19 +710,24 @@ const EngagementPage = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="engagement-survey-grid grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                                     {filteredSurveys.map((survey) => (
                                         <article
                                             key={survey._id}
                                             className="flex flex-col overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/50 transition hover:border-[#0E9370]/30 hover:shadow-md"
                                         >
                                             <div className="flex-1 border-b border-slate-100 bg-white p-5">
-                                                <h3 className="truncate text-lg font-semibold text-slate-900">
-                                                    {survey.title}
-                                                </h3>
-                                                {survey.type && (
-                                                    <p className="text-xs text-slate-500">{survey.type}</p>
-                                                )}
+                                                <div className="engagement-survey-heading">
+                                                    <span className="engagement-survey-icon" aria-hidden="true"><FaClipboardList /></span>
+                                                    <div>
+                                                        <h3 className="truncate text-lg font-semibold text-slate-900">
+                                                            {survey.title}
+                                                        </h3>
+                                                        {survey.type && (
+                                                            <p className="text-xs text-slate-500">{survey.type}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
                                                 <p className="mt-3 line-clamp-2 text-sm text-slate-600">
                                                     {survey.description || 'No description provided.'}
                                                 </p>
@@ -730,7 +737,8 @@ const EngagementPage = () => {
                                                     >
                                                         {survey.status || 'Draft'}
                                                     </span>
-                                                    <span className="text-sm text-slate-500">
+                                                    <span className="engagement-survey-responses text-sm text-slate-500">
+                                                        <FaUsers aria-hidden="true" />
                                                         {survey.responseCount || 0} responses
                                                     </span>
                                                 </div>
@@ -744,6 +752,7 @@ const EngagementPage = () => {
                                                     className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
                                                     style={{ background: MINT_GRADIENT }}
                                                 >
+                                                    <FaEye aria-hidden="true" />
                                                     View Survey
                                                 </button>
                                                 {isManagerUser && (
