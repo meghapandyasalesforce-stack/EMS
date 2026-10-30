@@ -21,6 +21,21 @@ const WorkflowTypeIcon = ({ entityType }) => {
   return <Icon />;
 };
 
+const workflowTimeoutLabel = (steps = []) => {
+  const hours = (Array.isArray(steps) ? steps : []).map(step => step.timeoutHours).filter(value => typeof value === 'number' && Number.isFinite(value) && value > 0);
+  if (!hours.length) return null;
+  const min = Math.min(...hours);
+  const max = Math.max(...hours);
+  return min === max ? `${min}h` : `${min}–${max}h`;
+};
+
+const workflowEscalationLabel = (escalation) => {
+  if (escalation?.enabled === false) return 'Disabled';
+  if (escalation?.enabled !== true) return 'Not configured';
+  const hours = escalation.escalateAfterHours;
+  return typeof hours === 'number' && Number.isFinite(hours) && hours > 0 ? `After ${hours}h` : 'Enabled';
+};
+
 const WorkflowManager = () => {
   const [workflows, setWorkflows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +190,10 @@ const WorkflowManager = () => {
               <div className="workflow-card-heading">
                 <span className="workflow-card-icon" aria-hidden="true"><WorkflowTypeIcon entityType={workflow.entityType} /></span>
                 <div className="workflow-card-title">
-                  <span className="workflow-type">{workflow.entityType}</span>
+                  <div className="workflow-card-tags">
+                    <span className="workflow-type">{workflow.entityType}</span>
+                    {workflowTimeoutLabel(workflow.steps) && <span className="workflow-timeout">Step timeout {workflowTimeoutLabel(workflow.steps)}</span>}
+                  </div>
                   <h3>{workflow.name}</h3>
                 </div>
                 <span className={`workflow-status ${workflow.isActive ? 'is-active' : ''}`}>
@@ -192,6 +210,11 @@ const WorkflowManager = () => {
                   </li>)}
                 </ol>}
               </div>
+
+              <dl className="workflow-config-summary">
+                <div><dt>Auto-approval</dt><dd>{workflow.autoApprove?.enabled === true ? 'Enabled' : workflow.autoApprove?.enabled === false ? 'Disabled' : 'Not configured'}</dd></div>
+                <div><dt>Escalation</dt><dd>{workflowEscalationLabel(workflow.escalation)}</dd></div>
+              </dl>
 
               <div className="workflow-card-actions flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
                 <button
