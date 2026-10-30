@@ -1,4 +1,5 @@
 import '../../styles/surveyUI.css';
+import '../../styles/surveyDetail.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -533,7 +534,7 @@ const SurveyDetailPage = () => {
     const showAnalyticsDetail = overview?.available === true;
 
     return (
-        <div className="survey-ui survey-ui--page survey-ui--detail page-shell bg-transparent">
+        <div className={`survey-detail-page ${canManage ? 'survey-detail--hr' : 'survey-detail--employee'} survey-ui survey-ui--page survey-ui--detail page-shell bg-transparent`}>
             <div className="page-shell-inner hrms-stack max-w-6xl">
                 <button
                     type="button"
@@ -543,7 +544,7 @@ const SurveyDetailPage = () => {
                     <FaArrowLeft className="text-xs" /> Back
                 </button>
 
-                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                <section className="survey-detail-hero rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
                     <div className="flex flex-col gap-5">
                         <div className="flex items-start gap-3 sm:gap-4">
                             <div
@@ -582,7 +583,7 @@ const SurveyDetailPage = () => {
                         </div>
 
                         {canManage && (
-                            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+                            <div className="survey-management-controls flex flex-col gap-3 border-t border-slate-100 pt-4">
                                 <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                                     {(survey.responseCount || 0) === 0 ? (
                                         <button
@@ -671,7 +672,7 @@ const SurveyDetailPage = () => {
                     </div>
 
                     {survey.startDate && (
-                        <p className="mt-4 text-xs text-slate-500">
+                        <p className="survey-detail-metadata mt-4 text-xs text-slate-500">
                             {new Date(survey.startDate).toLocaleDateString()} —{' '}
                             {survey.endDate
                                 ? new Date(survey.endDate).toLocaleDateString()
@@ -919,10 +920,10 @@ const SurveyDetailPage = () => {
                             {(survey.questions || []).map((question, idx) => (
                                 <div
                                     key={String(question._id || idx)}
-                                    className="rounded-xl border border-slate-100 p-4"
+                                    className="survey-response-question rounded-xl border border-slate-100 p-4"
                                 >
                                     <p className="text-sm font-semibold text-slate-900">
-                                        {idx + 1}. {question.question}
+                                        <span className="survey-question-number">{idx + 1}</span>{question.question}
                                         {question.required && (
                                             <span className="ml-1 text-red-500">*</span>
                                         )}
@@ -951,10 +952,10 @@ const SurveyDetailPage = () => {
                                 survey.questions.map((q, idx) => (
                                     <li
                                         key={String(q._id || idx)}
-                                        className="rounded-xl border border-slate-100 bg-slate-50/50 p-4"
+                                        className="survey-preview-question rounded-xl border border-slate-100 bg-slate-50/50 p-4"
                                     >
                                         <p className="font-medium text-slate-900">
-                                            {idx + 1}. {q.question}
+                                            <span className="survey-question-number">{idx + 1}</span>{q.question}
                                         </p>
                                         <p className="mt-1 text-xs text-slate-500">
                                             {q.type}
