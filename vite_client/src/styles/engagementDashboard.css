@@ -186,3 +186,53 @@
 #root .engagement-page .engagement-comparisons > div:first-child { background: linear-gradient(120deg, #fff 60%, #fff0f4) !important; }
 #root .engagement-page .engagement-comparisons > div:nth-child(3) { background: linear-gradient(120deg, #fff 60%, #eef5ff) !important; }
 #root .engagement-page .engagement-comparisons > div:nth-child(4) { background: linear-gradient(120deg, #fff 60%, #f4efff) !important; }
+
+/* Surveys tab: compact, equal-height cards with the existing actions. */
+#root .engagement-page.survey-ui--hub > .page-shell-inner > header {
+  background: linear-gradient(110deg, #fff, #ecfbf7) !important;
+  border-color: #deeee9;
+}
+#root .engagement-page.survey-ui--hub .engagement-workspace { border-radius: 12px !important; }
+#root .engagement-page.survey-ui--hub .engagement-workspace > div:first-child { padding: 18px 16px 10px; border-bottom: 0; }
+#root .engagement-page.survey-ui--hub .engagement-workspace > div + div { padding: 4px 16px 18px; }
+#root .engagement-page.survey-ui--hub .engagement-workspace input[type='search'] { border-radius: 9px !important; background: #f4f7fc !important; border-color: #dde7f2 !important; }
+#root .engagement-page.survey-ui--hub .engagement-subtabs { margin-bottom: 12px; }
+#root .engagement-page.survey-ui--hub .engagement-subtabs button { border-radius: 8px; padding: 8px 14px; font-size: 12px; }
+#root .engagement-page .engagement-survey-grid { gap: 14px; align-items: stretch; }
+#root .engagement-page .engagement-survey-grid article {
+  --survey-accent: #009d83;
+  --survey-tint: #ddf7ee;
+  background: #fff;
+  border: 1px solid #e2ebf1;
+  border-radius: 12px;
+  box-shadow: 0 5px 16px rgb(19 69 81 / 5%);
+}
+#root .engagement-page .engagement-survey-grid article:nth-child(4n+2) { --survey-accent: #009eff; --survey-tint: #dff2ff; }
+#root .engagement-page .engagement-survey-grid article:nth-child(4n+3) { --survey-accent: #8c4efa; --survey-tint: #f0e8ff; }
+#root .engagement-page .engagement-survey-grid article:nth-child(4n+4) { --survey-accent: #f3a000; --survey-tint: #fff1dc; }
+#root .engagement-page .engagement-survey-grid article:hover { border-color: #a5d9cd; box-shadow: 0 7px 20px rgb(19 69 81 / 9%); }
+#root .engagement-page .engagement-survey-grid article > div:first-child { padding: 14px 14px 0; border: 0; }
+#root .engagement-page .engagement-survey-heading { display: flex; align-items: flex-start; gap: 12px; }
+#root .engagement-page .engagement-survey-heading > div { min-width: 0; padding-top: 2px; }
+#root .engagement-page .engagement-survey-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 42px; width: 42px; height: 44px; border-radius: 10px; background: var(--survey-tint); color: var(--survey-accent); font-size: 21px; }
+#root .engagement-page .engagement-survey-heading h3 { font-size: 14px; line-height: 1.4; font-weight: 700; color: #152744; white-space: normal; overflow-wrap: anywhere; }
+#root .engagement-page .engagement-survey-heading p { margin-top: 3px; font-size: 12px; color: #7184a0; }
+#root .engagement-page .engagement-survey-grid article > div:first-child > p { margin-top: 10px; font-size: 12px; line-height: 1.6; color: #425a7d; }
+#root .engagement-page .engagement-survey-grid article > div:first-child > div:last-child { margin-top: 12px; flex-wrap: wrap; gap: 8px; }
+#root .engagement-page .engagement-survey-grid article > div:first-child > div:last-child > span:first-child { display: inline-flex; align-items: center; gap: 7px; border-radius: 7px; padding: 4px 10px; font-size: 11px; }
+#root .engagement-page .engagement-survey-grid article > div:first-child > div:last-child > span:first-child::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+#root .engagement-page .engagement-survey-responses { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: #546e93; }
+#root .engagement-page .engagement-survey-responses svg { font-size: 14px; }
+#root .engagement-page .engagement-survey-grid article > div:last-child { padding: 10px 14px 14px; }
+#root .engagement-page .engagement-survey-grid article > div:last-child > button:first-child { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; min-height: 40px; font-size: 12px; padding: 9px 12px; background: linear-gradient(110deg, #009b7e, #00856c) !important; box-shadow: 0 2px 4px rgb(0 133 108 / 10%); }
+#root .engagement-page .engagement-survey-grid button[title='Delete survey'] { min-width: 40px; min-height: 40px; border-radius: 8px; border-color: #ffd6de; background: #fff; color: #f43f5e; }
+@media (min-width: 800px) {
+  #root .engagement-page .engagement-survey-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  #root .engagement-page.survey-ui--hub .engagement-workspace > div:first-child { padding: 14px 12px 10px; }
+  #root .engagement-page.survey-ui--hub .engagement-workspace > div + div { padding: 4px 12px 14px; }
+  #root .engagement-page .engagement-survey-grid { gap: 12px; }
+}
+
+#root .engagement-page .engagement-survey-grid article > div:first-child { background: transparent !important; box-shadow: none; border-radius: 0 !important; }
