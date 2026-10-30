@@ -10,11 +10,11 @@
 #root .workflow-page-actions button { min-height: 36px; padding: 7px 12px; border-radius: var(--kh-radius-control, 8px); font-size: 13px; font-family: inherit; font-weight: 600; line-height: 20px; box-shadow: none; border: 1px solid var(--kh-outline, #e2e8f0); white-space: nowrap; }
 #root .workflow-page-actions svg { width: 16px; height: 16px; }
 #root .workflow-page-actions button:last-child { color: #fff; background: var(--color-primary, #0e9370) !important; border-color: var(--color-primary, #0e9370); }
-#root .workflow-filters { width: 100%; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--ats-radius-card, 12px); padding: 12px; box-shadow: none; }
+#root .workflow-filters { width: 100%; max-width: 856px; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--ats-radius-card, 12px); padding: 12px; box-shadow: none; }
 #root .workflow-filter-grid { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 200px); gap: 12px; }
 #root .workflow-filters label { font-size: 12px; font-weight: 500; color: var(--kh-on-variant, #3d4944); margin-bottom: 5px; }
 #root .workflow-filters select { width: 100%; min-width: 0; height: 36px; border: 1px solid var(--kh-outline-strong, #cbd5e1); border-radius: var(--kh-radius-control, 8px); padding: 6px 10px; background: #fff; color: var(--kh-on, #111c2d); font: inherit; }
-#root .workflow-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+#root .workflow-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 420px)); gap: 16px; align-items: stretch; max-width: 856px; }
 #root .workflow-card { --workflow-accent: var(--color-primary, #0e9370); --workflow-tint: var(--kh-primary-softer, #e8faf4); display: flex; flex-direction: column; min-width: 0; padding: 16px 16px 0; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--ats-radius-card, 12px); background: #fff; box-shadow: none; position: relative; overflow: hidden; }
 #root .workflow-card:hover { border-color: var(--kh-outline-strong, #cbd5e1); box-shadow: var(--kh-shadow, 0 4px 20px -2px rgb(14 43 61 / 6%)); }
 #root .workflow-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--workflow-accent), var(--workflow-accent-end, #13c9c3)); }
@@ -51,7 +51,6 @@
 #root .approval-workflows-page > .fixed input:not([type='checkbox']), #root .approval-workflows-page > .fixed select { min-height: 36px; }
 @container (max-width: 700px) {
   #root .workflow-page-header { align-items: flex-start; flex-direction: column; }
-  #root .workflow-card-grid { grid-template-columns: minmax(0, 1fr); }
   #root .workflow-filter-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
 }
 @container (max-width: 360px) {
@@ -69,10 +68,23 @@
 #root .workflow-card-heading { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
 #root .workflow-card-title { display: contents; }
 #root .workflow-card-icon { grid-column: 1; grid-row: 1 / 3; }
-#root .workflow-type { grid-column: 2; grid-row: 1; justify-self: start; max-width: calc(100% - 66px); margin: 0; }
+#root .workflow-card-tags { grid-column: 2; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-right: 62px; min-width: 0; }
+#root .workflow-type { margin: 0; }
+#root .workflow-timeout { padding: 1px 5px; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: 4px; background: #f8fafc; color: var(--kh-secondary, #476175); font-size: 10px; line-height: 16px; white-space: nowrap; }
 #root .workflow-card-title h3 { grid-column: 2; grid-row: 2; margin-top: -5px; }
 #root .workflow-status { position: absolute; top: 0; right: 0; }
 #root .workflow-step-preview .workflow-step-arrow { position: absolute; width: 11px; height: 11px; right: -13px; color: var(--workflow-accent); pointer-events: none; }
 #root .workflow-step-preview li:nth-child(2) > span { background: #3267ee; }
 #root .workflow-step-preview li:nth-child(3) > span { background: #ef8b0c; }
 #root .workflow-card-actions button:first-child svg { width: 13px; height: 13px; }
+
+#root .workflow-config-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 14px; }
+#root .workflow-config-summary > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 7px 8px; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: 5px; background: #f8fafc; }
+#root .workflow-config-summary > div:first-child { border-color: color-mix(in srgb, var(--workflow-accent) 12%, white); background: var(--workflow-tint); }
+#root .workflow-config-summary dt { font-size: 10px; color: var(--kh-muted, #666); }
+#root .workflow-config-summary dd { font-size: 10px; font-weight: 600; color: var(--kh-secondary, #476175); margin: 0; }
+#root .workflow-config-summary > div:first-child dd { color: var(--workflow-accent); }
+@container (max-width: 640px) {
+  #root .workflow-card-grid { grid-template-columns: minmax(0, 420px); max-width: 420px; }
+  #root .workflow-filters { max-width: 420px; }
+}
