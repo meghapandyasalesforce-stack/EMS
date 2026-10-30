@@ -610,7 +610,7 @@ const EngagementPage = () => {
                     </div>
                 </nav>
 
-                <section className="engagement-workspace min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-[28px]">
+                <section className={`engagement-workspace ${activeSection === 'dashboard' ? 'engagement-workspace--dashboard' : ''} min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-[28px]`}>
                     <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5 sm:py-4 md:px-6">
                         <h2 className="min-w-0 truncate text-base font-semibold text-slate-900 sm:text-lg">
                             {sectionTitle}

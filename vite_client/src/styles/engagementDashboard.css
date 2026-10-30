@@ -1,19 +1,19 @@
 /* Engagement hub only: shared HR colors, compact cards and fluid grids.
    Keep survey forms, detail pages and other modules on their existing styles. */
-.engagement-page.page-shell {
+#root .engagement-page.page-shell {
   background: linear-gradient(135deg, #edf8fc 0%, #f0fbf7 100%);
   color: #111c2d;
   font-family: 'Inter', 'Manrope', system-ui, sans-serif;
 }
-.engagement-page > .page-shell-inner { max-width: 1600px; gap: 12px; }
-.engagement-page > .page-shell-inner > header {
+#root .engagement-page > .page-shell-inner { max-width: 1600px; gap: 12px; }
+#root .engagement-page > .page-shell-inner > header {
   padding: 18px 20px;
   background: #fff;
   border-color: #e4eef1;
   border-radius: 16px;
   box-shadow: 0 4px 20px -2px rgb(14 43 61 / 4%);
 }
-.engagement-page > .page-shell-inner > header h1 {
+#root .engagement-page > .page-shell-inner > header h1 {
   color: #111c2d;
   font-size: clamp(20px, 2vw, 28px);
   line-height: 1.25;
@@ -21,103 +21,168 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.engagement-page > .page-shell-inner > header p:first-child { color: #7c8ba2; }
-.engagement-page > .page-shell-inner > header h1 + p { color: #64748b; font-size: 13px; }
-.engagement-page > .page-shell-inner > header > div > div > div:first-child { width: 44px; height: 44px; border-radius: 12px; }
-.engagement-page .engagement-summary-grid { gap: 12px; }
-.engagement-page .engagement-summary-card {
+#root .engagement-page > .page-shell-inner > header p:first-child { color: #7c8ba2; }
+#root .engagement-page > .page-shell-inner > header h1 + p { color: #64748b; font-size: 13px; }
+#root .engagement-page > .page-shell-inner > header > div > div > div:first-child { width: 44px; height: 44px; border-radius: 12px; }
+#root .engagement-page .engagement-summary-grid { gap: 12px; }
+#root .engagement-page .engagement-summary-card {
   min-width: 0;
   padding: 14px 16px;
   border-radius: 14px;
   border-color: #e4eef1;
   box-shadow: 0 3px 12px rgb(14 43 61 / 3%);
 }
-.engagement-page .engagement-summary-card > div > div { width: 38px; height: 38px; border-radius: 10px; }
-.engagement-page .engagement-summary-card > p:first-of-type { margin-top: 10px; font-size: 23px; line-height: 1.2; }
-.engagement-page .engagement-summary-card > p:nth-of-type(2) {
+#root .engagement-page .engagement-summary-card > div > div { width: 38px; height: 38px; border-radius: 10px; }
+#root .engagement-page .engagement-summary-card > p:first-of-type { margin-top: 10px; font-size: 23px; line-height: 1.2; }
+#root .engagement-page .engagement-summary-card > p:nth-of-type(2) {
   color: #334155;
   font-size: 11px;
   line-height: 1.4;
   letter-spacing: 0;
   text-transform: none;
 }
-.engagement-page nav[aria-label='Engagement sections'] { padding: 6px; border-radius: 14px; }
-.engagement-page nav[aria-label='Engagement sections'] button { min-height: 42px; border-radius: 9px; }
-.engagement-page .engagement-workspace { border-radius: 16px; border-color: #e4eef1; }
-.engagement-page .engagement-workspace > div:first-child { padding: 16px 20px 12px; }
-.engagement-page .engagement-workspace > div + div { padding: 14px 20px 20px; }
-.engagement-page .engagement-subtabs { gap: 10px; margin-bottom: 14px; }
-.engagement-page .engagement-subtabs button { min-height: 38px; }
-.engagement-page .engagement-dashboard { min-width: 0; }
-.engagement-page .engagement-dashboard :where(.grid, .flex) > * { min-width: 0; }
-.engagement-page .engagement-dashboard :where(h3, h4, p, th, td) { overflow-wrap: anywhere; }
-.engagement-page .engagement-filters { align-items: flex-start; gap: 12px; }
-.engagement-page .engagement-filters > div { gap: 6px; }
-.engagement-page .engagement-filters > div:last-child { justify-content: flex-end; }
-.engagement-page .engagement-filters :where(button, select) { min-height: 36px; max-width: 100%; }
-.engagement-page .engagement-dashboard :where(button, select, input):focus-visible,
-.engagement-page > .page-shell-inner > nav button:focus-visible {
+#root .engagement-page nav[aria-label='Engagement sections'] { padding: 6px; border-radius: 14px; }
+#root .engagement-page nav[aria-label='Engagement sections'] button { min-height: 42px; border-radius: 9px; }
+#root .engagement-page .engagement-workspace { border-radius: 16px; border-color: #e4eef1; }
+#root .engagement-page .engagement-workspace > div:first-child { padding: 16px 20px 12px; }
+#root .engagement-page .engagement-workspace > div + div { padding: 14px 20px 20px; }
+#root .engagement-page .engagement-subtabs { gap: 10px; margin-bottom: 14px; }
+#root .engagement-page .engagement-subtabs button { min-height: 38px; }
+#root .engagement-page .engagement-dashboard { min-width: 0; }
+#root .engagement-page .engagement-dashboard :where(.grid, .flex) > * { min-width: 0; }
+#root .engagement-page .engagement-dashboard :where(h3, h4, p, th, td) { overflow-wrap: anywhere; }
+#root .engagement-page .engagement-filters { align-items: flex-start; gap: 12px; }
+#root .engagement-page .engagement-filters > div { gap: 6px; }
+#root .engagement-page .engagement-filters > div:last-child { justify-content: flex-end; }
+#root .engagement-page .engagement-filters :where(button, select) { min-height: 36px; max-width: 100%; }
+#root .engagement-page .engagement-dashboard :where(button, select, input):focus-visible,
+#root .engagement-page > .page-shell-inner > nav button:focus-visible {
   outline: 2px solid #0e9370;
   outline-offset: 3px;
 }
-.engagement-page .engagement-metrics,
-.engagement-page .engagement-actions,
-.engagement-page .engagement-insights { gap: 12px; }
-.engagement-page .engagement-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
-.engagement-page .engagement-kpi { height: 100%; padding: 16px; border-radius: 14px; }
-.engagement-page .engagement-kpi > div { flex-direction: row-reverse; gap: 10px; }
-.engagement-page .engagement-kpi > div > div:last-child { gap: 4px; }
-.engagement-page .engagement-kpi > div > div:last-child > div { width: 36px; height: 36px; border-radius: 10px; }
-.engagement-page .engagement-kpi > div > div:last-child > svg { width: 10px; height: 10px; }
-.engagement-page .engagement-kpi p:first-child {
+#root .engagement-page .engagement-metrics,
+#root .engagement-page .engagement-actions,
+#root .engagement-page .engagement-insights { gap: 12px; }
+#root .engagement-page .engagement-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+#root .engagement-page .engagement-kpi { height: 100%; padding: 16px; border-radius: 14px; }
+#root .engagement-page .engagement-kpi > div { flex-direction: row-reverse; gap: 10px; }
+#root .engagement-page .engagement-kpi > div > div:last-child { gap: 4px; }
+#root .engagement-page .engagement-kpi > div > div:last-child > div { width: 36px; height: 36px; border-radius: 10px; }
+#root .engagement-page .engagement-kpi > div > div:last-child > svg { width: 10px; height: 10px; }
+#root .engagement-page .engagement-kpi p:first-child {
   color: #334155;
   font-size: 11px;
   line-height: 1.45;
   letter-spacing: 0;
   text-transform: none;
 }
-.engagement-page .engagement-kpi p.truncate { white-space: normal; overflow-wrap: anywhere; font-size: 23px; line-height: 1.25; }
-.engagement-page .engagement-kpi p:last-child:not(:first-child):not(.truncate) { font-size: 11px; line-height: 1.5; }
-.engagement-page .engagement-panel,
-.engagement-page .engagement-tenure { padding: 16px; border-radius: 14px; }
-.engagement-page .engagement-panel.survey-ui--analytics { border-top-width: 1px; }
-.engagement-page .engagement-panel > h3,
-.engagement-page .engagement-tenure > h3 { font-size: 13px; font-weight: 700; }
-.engagement-page .engagement-panel > .mt-4 { margin-top: 12px; }
-.engagement-page .engagement-comparisons > div { padding: 14px 16px; border-radius: 12px; }
-.engagement-page .engagement-comparisons > div > p:first-child { font-size: 11px; text-transform: none; line-height: 1.5; }
-.engagement-page .engagement-tenure > .grid { margin-top: 12px; }
-.engagement-page .engagement-tenure > .grid > div { background: #f8fbfc; }
-.engagement-page .engagement-table { max-width: 100%; overscroll-behavior-inline: contain; }
-.engagement-page .engagement-table table { min-width: 850px; }
-.engagement-page .engagement-table th { font-size: 10px; line-height: 1.5; padding: 12px; background: #f5f8fc; }
-.engagement-page .engagement-table td { padding: 12px; font-size: 12px; }
-.engagement-page .engagement-table td:last-child > span { display: inline-block; border-radius: 8px; line-height: 1.5; }
+#root .engagement-page .engagement-kpi p.truncate { white-space: normal; overflow-wrap: anywhere; font-size: 23px; line-height: 1.25; }
+#root .engagement-page .engagement-kpi p:last-child:not(:first-child):not(.truncate) { font-size: 11px; line-height: 1.5; }
+#root .engagement-page .engagement-panel,
+#root .engagement-page .engagement-tenure { padding: 16px; border-radius: 14px; }
+#root .engagement-page .engagement-panel.survey-ui--analytics { border-top-width: 1px; }
+#root .engagement-page .engagement-panel > h3,
+#root .engagement-page .engagement-tenure > h3 { font-size: 13px; font-weight: 700; }
+#root .engagement-page .engagement-panel > .mt-4 { margin-top: 12px; }
+#root .engagement-page .engagement-comparisons > div { padding: 14px 16px; border-radius: 12px; }
+#root .engagement-page .engagement-comparisons > div > p:first-child { font-size: 11px; text-transform: none; line-height: 1.5; }
+#root .engagement-page .engagement-tenure > .grid { margin-top: 12px; }
+#root .engagement-page .engagement-tenure > .grid > div { background: #f8fbfc; }
+#root .engagement-page .engagement-table { max-width: 100%; overscroll-behavior-inline: contain; }
+#root .engagement-page .engagement-table table { min-width: 850px; }
+#root .engagement-page .engagement-table th { font-size: 10px; line-height: 1.5; padding: 12px; background: #f5f8fc; }
+#root .engagement-page .engagement-table td { padding: 12px; font-size: 12px; }
+#root .engagement-page .engagement-table td:last-child > span { display: inline-block; border-radius: 8px; line-height: 1.5; }
 @media (max-width: 1279px) {
-  .engagement-page .engagement-filters { flex-direction: column; }
-  .engagement-page .engagement-filters > div:last-child { justify-content: flex-start; }
-  .engagement-page .engagement-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #root .engagement-page .engagement-filters { flex-direction: column; }
+  #root .engagement-page .engagement-filters > div:last-child { justify-content: flex-start; }
+  #root .engagement-page .engagement-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 639px) {
-  .engagement-page.page-shell { padding: 12px; }
-  .engagement-page > .page-shell-inner > header { padding: 16px; }
-  .engagement-page .engagement-summary-grid { gap: 10px; }
-  .engagement-page .engagement-summary-card { padding: 12px; }
-  .engagement-page .engagement-workspace > div:first-child,
-  .engagement-page .engagement-workspace > div + div { padding: 14px 12px; }
-  .engagement-page nav[aria-label='Engagement sections'] > div { gap: 4px; }
-  .engagement-page nav[aria-label='Engagement sections'] button { flex: 1 1 135px; justify-content: center; padding-inline: 8px; }
-  .engagement-page .engagement-filters :where(button, select) { min-height: 44px; }
-  .engagement-page .engagement-filters select,
-  .engagement-page .engagement-dashboard input { font-size: 16px; }
-  .engagement-page .engagement-metrics,
-  .engagement-page .engagement-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .engagement-page .engagement-kpi { padding: 12px; }
-  .engagement-page .engagement-kpi > div { flex-direction: column-reverse; gap: 8px; }
-  .engagement-page .engagement-panel,
-  .engagement-page .engagement-tenure { padding: 14px; }
+  #root .engagement-page.page-shell { padding: 12px; }
+  #root .engagement-page > .page-shell-inner > header { padding: 16px; }
+  #root .engagement-page .engagement-summary-grid { gap: 10px; }
+  #root .engagement-page .engagement-summary-card { padding: 12px; }
+  #root .engagement-page .engagement-workspace > div:first-child,
+  #root .engagement-page .engagement-workspace > div + div { padding: 14px 12px; }
+  #root .engagement-page nav[aria-label='Engagement sections'] > div { gap: 4px; }
+  #root .engagement-page nav[aria-label='Engagement sections'] button { flex: 1 1 135px; justify-content: center; padding-inline: 8px; }
+  #root .engagement-page .engagement-filters :where(button, select) { min-height: 44px; }
+  #root .engagement-page .engagement-filters select,
+  #root .engagement-page .engagement-dashboard input { font-size: 16px; }
+  #root .engagement-page .engagement-metrics,
+  #root .engagement-page .engagement-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #root .engagement-page .engagement-kpi { padding: 12px; }
+  #root .engagement-page .engagement-kpi > div { flex-direction: column-reverse; gap: 8px; }
+  #root .engagement-page .engagement-panel,
+  #root .engagement-page .engagement-tenure { padding: 14px; }
 }
 @media (max-width: 359px) {
-  .engagement-page .engagement-metrics,
-  .engagement-page .engagement-actions { grid-template-columns: minmax(0, 1fr); }
+  #root .engagement-page .engagement-metrics,
+  #root .engagement-page .engagement-actions { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Reference layout: separate surfaces on a pale canvas. */
+#root .engagement-page.page-shell { background: #eff9fc; }
+#root .engagement-page > .page-shell-inner > header { padding: 16px; border-radius: 12px; }
+#root .engagement-page > .page-shell-inner > header h1 { font-size: clamp(20px, 1.8vw, 26px); color: #0f1b30; }
+#root .engagement-page .engagement-summary-card { border-radius: 12px; }
+#root .engagement-page .engagement-summary-card > p:nth-of-type(2) { color: #25364e; font-weight: 650; }
+#root .engagement-page .engagement-summary-card:nth-child(2) > div > div { background: #e0f1ff !important; color: #0297ff !important; }
+#root .engagement-page .engagement-summary-card:nth-child(6) > div > div { background: #ffe6ee !important; color: #ed4e8a !important; }
+#root .engagement-page .engagement-workspace--dashboard { background: transparent !important; border: 0; border-radius: 0 !important; box-shadow: none !important; overflow: visible; }
+#root .engagement-page .engagement-workspace--dashboard > div:first-child { padding: 14px 16px 0; border: 0; }
+#root .engagement-page .engagement-workspace--dashboard > div + div { padding: 10px 0 0; }
+#root .engagement-page .engagement-workspace--dashboard .engagement-subtabs { padding-inline: 16px; }
+#root .engagement-page .engagement-dashboard > div:first-child:not(.engagement-filters) { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0 16px; font-size: 12px; }
+#root .engagement-page .engagement-dashboard > p { padding-inline: 16px; }
+#root .engagement-page .engagement-filters { padding: 0 16px; }
+#root .engagement-page .engagement-kpi { --eng-accent: #009b82; --eng-tint: #e4f7f1; border-radius: 12px; background: linear-gradient(180deg, #fff 55%, var(--eng-tint)); border-color: #e8f0f4; }
+#root .engagement-page .engagement-metrics > .engagement-kpi { min-height: 132px; padding: 16px 12px 22px; }
+#root .engagement-page .engagement-metrics > .engagement-kpi:nth-child(2), #root .engagement-page .engagement-actions > .engagement-kpi:nth-child(3) { --eng-accent: #039bfc; --eng-tint: #e7f4ff; }
+#root .engagement-page .engagement-metrics > .engagement-kpi:nth-child(3), #root .engagement-page .engagement-actions > .engagement-kpi:nth-child(4) { --eng-accent: #9850f5; --eng-tint: #f2eaff; }
+#root .engagement-page .engagement-metrics > .engagement-kpi:nth-child(4) { --eng-accent: #f59e0b; --eng-tint: #fff5df; }
+#root .engagement-page .engagement-metrics > .engagement-kpi:nth-child(5) { --eng-accent: #ec548a; --eng-tint: #ffedf3; }
+#root .engagement-page .engagement-kpi > div > div:last-child > div { background: var(--eng-tint) !important; color: var(--eng-accent) !important; }
+#root .engagement-page .engagement-kpi p:first-child { color: #14243b; font-weight: 700; }
+#root .engagement-page .engagement-kpi p.truncate { color: #0f1b30; font-size: 24px; }
+#root .engagement-page .engagement-kpi p:last-child:not(:first-child):not(.truncate) { color: #65758d; }
+#root .engagement-page .engagement-actions > .engagement-kpi { min-height: 100px; padding: 14px 12px; }
+#root .engagement-page .engagement-comparisons > div { padding: 14px; background: linear-gradient(120deg, #fff 60%, #f1fbf9); }
+#root .engagement-page .engagement-comparisons > div:first-child { background: linear-gradient(120deg, #fff 60%, #fff0f4); }
+#root .engagement-page .engagement-comparisons > div:nth-child(3) { background: linear-gradient(120deg, #fff 60%, #eef5ff); }
+#root .engagement-page .engagement-comparisons > div:nth-child(4) { background: linear-gradient(120deg, #fff 60%, #f4efff); }
+#root .engagement-page .engagement-comparisons > div > p:first-child { color: #172942; font-weight: 700; }
+#root .engagement-page .engagement-panel, #root .engagement-page .engagement-tenure { background: #fff; border-radius: 12px; padding: 16px; }
+#root .engagement-page .engagement-panel-heading { display: flex; align-items: center; gap: 10px; color: #122139; line-height: 1.4; }
+#root .engagement-page .engagement-panel-icon { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 9px; background: #dcf5ee; color: #009d82; font-size: 17px; }
+#root .engagement-page .engagement-insights > .engagement-panel:nth-child(2) .engagement-panel-icon { background: #e4f3ff; color: #009bfc; }
+#root .engagement-page .engagement-insights + .engagement-insights > .engagement-panel:nth-child(2) .engagement-panel-icon { background: #fff1d6; color: #f59e0b; }
+#root .engagement-page .engagement-panel > .engagement-panel-heading + p { margin: -8px 0 0 44px; font-size: 11px; color: #65758d; }
+#root .engagement-page .engagement-panel > .mt-4 { margin-top: 16px; }
+#root .engagement-page .engagement-panel .text-xs.uppercase { text-transform: none; color: #25364e; font-weight: 650; }
+#root .engagement-page .engagement-panel .bg-amber-50\/70 { background: #fff7ed; border-color: #ffedd5; color: #b45309; border-radius: 10px; font-size: 12px; padding: 10px 12px; }
+#root .engagement-page .engagement-panel .bg-slate-50\/80 { background: #f5f8fc; box-shadow: none; border-color: #eff3f7; border-radius: 10px; padding: 10px; }
+#root .engagement-page .engagement-tenure > .grid > div { padding: 12px 14px; border-left: 3px solid #beeee0; }
+#root .engagement-page .engagement-tenure > .grid > div:nth-child(2) { border-left-color: #bfe4ff; }
+#root .engagement-page .engagement-tenure > .grid > div:nth-child(3) { border-left-color: #ffe0a1; }
+#root .engagement-page .engagement-tenure > .grid > div:nth-child(4) { border-left-color: #dfccff; }
+#root .engagement-page .engagement-trend-chart { height: 160px; }
+#root .engagement-page .engagement-table :where(th, td) { padding: 10px 12px; }
+@media (max-width: 639px) {
+  #root .engagement-page .engagement-metrics > .engagement-kpi { min-height: 152px; padding: 12px; }
+  #root .engagement-page .engagement-actions > .engagement-kpi { min-height: 142px; }
+  #root .engagement-page .engagement-workspace--dashboard > div:first-child { padding-inline: 4px; }
+  #root .engagement-page .engagement-workspace--dashboard > div + div { padding-inline: 0; }
+  #root .engagement-page .engagement-workspace--dashboard .engagement-subtabs, #root .engagement-page .engagement-filters,
+  #root .engagement-page .engagement-dashboard > div:first-child:not(.engagement-filters), #root .engagement-page .engagement-dashboard > p { padding-inline: 4px; }
+}
+
+/* Shared theme uses important white surfaces; keep the override local. */
+#root .engagement-page.page-shell { background: #eff9fc !important; }
+#root .engagement-page .engagement-kpi { background: linear-gradient(180deg, #fff 55%, var(--eng-tint)) !important; }
+#root .engagement-page .engagement-panel .bg-slate-50\/80 { background: #f5f8fc !important; }
+#root .engagement-page .engagement-comparisons > div { background: linear-gradient(120deg, #fff 60%, #f1fbf9) !important; }
+#root .engagement-page .engagement-comparisons > div:first-child { background: linear-gradient(120deg, #fff 60%, #fff0f4) !important; }
+#root .engagement-page .engagement-comparisons > div:nth-child(3) { background: linear-gradient(120deg, #fff 60%, #eef5ff) !important; }
+#root .engagement-page .engagement-comparisons > div:nth-child(4) { background: linear-gradient(120deg, #fff 60%, #f4efff) !important; }

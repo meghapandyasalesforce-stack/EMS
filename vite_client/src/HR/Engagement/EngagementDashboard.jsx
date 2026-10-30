@@ -86,11 +86,29 @@ const PrivacyBanner = ({ message = PRIVACY_MSG }) => (
     </div>
 );
 
+const SECTION_ICONS = {
+    'Survey insights': FaPoll,
+    'eNPS insights': FaChartBar,
+    'Feedback & suggestions': FaComments,
+    'Recognition insights': FaAward,
+    'Department breakdown': FaClipboardList,
+};
+
+const SectionHeading = ({ title }) => {
+    const Icon = SECTION_ICONS[title];
+    return (
+        <h3 className="engagement-panel-heading text-sm font-semibold text-slate-800">
+            {Icon && <span className="engagement-panel-icon" aria-hidden="true"><Icon /></span>}
+            {title}
+        </h3>
+    );
+};
+
 const SectionShell = ({ title, description, children, error, loading, emptyMessage, className = '' }) => {
     if (loading) {
         return (
             <div className={`engagement-panel rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
-                <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+                <SectionHeading title={title} />
                 {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
                 <div className="mt-6 flex items-center justify-center py-8">
                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]" />
@@ -114,7 +132,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
     if (emptyMessage) {
         return (
             <div className={`engagement-panel rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
-                <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+                <SectionHeading title={title} />
                 {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
                 <p className="mt-6 py-8 text-center text-sm text-slate-500">{emptyMessage}</p>
             </div>
@@ -122,7 +140,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
     }
     return (
         <div className={`engagement-panel rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
-            <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+            <SectionHeading title={title} />
             {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
             <div className="mt-4">{children}</div>
         </div>
@@ -165,11 +183,11 @@ const StatusBreakdown = ({ title, statuses, items, accent }) => {
     );
 };
 
-const SimpleTrendChart = ({ data, dataKey = 'count', color = MINT, height = 220 }) => {
+const SimpleTrendChart = ({ data, dataKey = 'count', color = MINT }) => {
     if (!data?.length) return null;
     return (
-        <div className="h-[220px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height={height}>
+        <div className="engagement-trend-chart w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
@@ -199,8 +217,8 @@ const EnpsTrendChart = ({ data }) => {
     const chartData = (data || []).filter((d) => d.available && d.score != null);
     if (!chartData.length) return null;
     return (
-        <div className="h-[220px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height={220}>
+        <div className="engagement-trend-chart w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
