@@ -11,7 +11,7 @@ export const careerSlugFromName = (name) => {
     return OBJECT_ID.test(slug) ? `company-${slug}` : slug;
 };
 
-// Allocate once, on authenticated link generation. Public visits never write data.
+// Allocate the server-derived company name once; callers cannot choose or change it.
 export const ensureCareerSlug = async (organizationId) => {
     const org = await Organization.findById(organizationId).select('name careerSlug').lean();
     if (!org) return null;

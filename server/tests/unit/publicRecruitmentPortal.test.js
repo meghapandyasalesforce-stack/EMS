@@ -108,3 +108,20 @@ describe('readable public career links', () => {
         expect(find).not.toHaveBeenCalled();
     });
 });
+
+describe('public canonical career address', () => {
+    it('returns the saved company slug for anonymous bookmarks and ignores caller-supplied names', async () => {
+        jest.spyOn(Organization, 'findOne').mockReturnValue({ select: () => ({ lean: async () => ({ _id: organizationId }) }) });
+        jest.spyOn(Organization, 'findById').mockReturnValue({ select: () => ({ lean: async () => ({ _id: organizationId, careerSlug: 'paarsiv' }) }) });
+        const response = await request(app).post(`/api/v1/public/recruitment/${organizationId}/portal-link`)
+            .send({ slug: 'another-company', organizationId: new mongoose.Types.ObjectId() }).expect(200);
+        expect(response.body.data.slug).toBe('paarsiv');
+        expect(Organization.findOne).toHaveBeenCalledWith({ _id: String(organizationId), isActive: true, deletedAt: null });
+    });
+    it('does not initialize public links for missing or inactive organizations', async () => {
+        jest.spyOn(Organization, 'findOne').mockReturnValue({ select: () => ({ lean: async () => null }) });
+        const allocation = jest.spyOn(Organization, 'findById');
+        await request(app).post(`/api/v1/public/recruitment/${organizationId}/portal-link`).send({}).expect(404);
+        expect(allocation).not.toHaveBeenCalled();
+    });
+});
