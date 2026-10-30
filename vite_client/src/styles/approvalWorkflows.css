@@ -1,0 +1,61 @@
+/* Approval Workflows only: existing API, filter and dialog behavior is unchanged. */
+#root .approval-workflows-page { background: #f7f9fc !important; background-image: none !important; min-width: 0; padding: clamp(16px, 2.4vw, 32px); color: #172740; container-type: inline-size; }
+#root .approval-workflows-page > .page-shell { background: transparent !important; padding: 0; min-width: 0; }
+#root .approval-workflows-page .page-shell-inner { max-width: 1480px; margin: auto; min-width: 0; }
+#root .approval-workflows-page .hrms-stack { display: flex; flex-direction: column; gap: 24px; }
+#root .workflow-page-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; }
+#root .workflow-page-header h1 { font-size: clamp(25px, 2.3vw, 32px); font-weight: 750; line-height: 1.25; letter-spacing: -.035em; color: #102039; margin: 0 0 7px; }
+#root .workflow-page-header p { font-size: 14px; color: #7c8ca5; line-height: 1.5; }
+#root .workflow-page-actions { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; }
+#root .workflow-page-actions button { min-height: 42px; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; box-shadow: none; border: 1px solid #dde5ef; white-space: nowrap; }
+#root .workflow-page-actions button:last-child { color: #fff; background: #10b991 !important; border-color: #10b991; }
+#root .workflow-filters { border: 1px solid #e5ebf4; border-radius: 13px; padding: 20px; box-shadow: none; }
+#root .workflow-filter-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; max-width: 800px; }
+#root .workflow-filters label { font-size: 12px; font-weight: 600; color: #50627f; margin-bottom: 8px; }
+#root .workflow-filters select { width: 100%; min-width: 0; min-height: 42px; border: 1px solid #dde5ef; border-radius: 8px; padding: 10px 12px; background: #fff; color: #344b70; font-size: 13px; }
+#root .workflow-card-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; }
+#root .workflow-card { --workflow-accent: #0ab695; --workflow-tint: #edfdf8; display: flex; flex-direction: column; min-width: 0; padding: 24px 24px 0; border: 1px solid #e0e7f1; border-radius: 13px; background: #fff; box-shadow: 0 2px 4px rgb(25 49 83 / 2%); position: relative; overflow: hidden; }
+#root .workflow-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg,var(--workflow-accent),#2bcee1); }
+#root .workflow-card[data-entity='AttendanceRegularization'], #root .workflow-card[data-entity='Document'] { --workflow-accent: #4462ef; --workflow-tint: #eff4ff; }
+#root .workflow-card[data-entity='Expense'] { --workflow-accent: #f39a0a; --workflow-tint: #fffaec; }
+#root .workflow-card[data-entity='TaxRegimeChange'], #root .workflow-card[data-entity='WorkforcePlan'] { --workflow-accent: #8d40ec; --workflow-tint: #f7f0ff; }
+#root .workflow-card-heading { display: flex; align-items: flex-start; gap: 13px; min-width: 0; }
+#root .workflow-card-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 42px; width: 42px; height: 44px; border-radius: 11px; background: var(--workflow-accent); color: #fff; font-size: 21px; box-shadow: 0 3px 6px rgb(27 64 100 / 10%); }
+#root .workflow-card-title { flex: 1; min-width: 0; }
+#root .workflow-type { display: inline-block; padding: 3px 7px; border-radius: 5px; background: var(--workflow-tint); color: var(--workflow-accent); font-size: 11px; font-weight: 600; overflow-wrap: anywhere; margin-bottom: 5px; }
+#root .workflow-card-title h3 { color: #142b4b; font-size: 16px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+#root .workflow-status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; border: 1px solid #e3eaf3; background: #f3f6fa; color: #8394ac; font-size: 10px; white-space: nowrap; }
+#root .workflow-status > span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+#root .workflow-status.is-active { color: #02a786; border-color: #c6f3e6; background: #f0fdf7; }
+#root .workflow-description { margin: 17px 0 20px; color: #7a8ba5; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+#root .workflow-routing { margin-top: auto; margin-bottom: 22px; }
+#root .workflow-routing-label { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; color: #8393ad; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 9px; }
+#root .workflow-step-preview { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border: 1px solid #e9edf5; border-radius: 8px; background: #f8faff; list-style: none; }
+#root .workflow-step-preview li { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 8px; font-size: 11px; color: #426080; border: 1px solid #e7edf6; border-radius: 5px; background: #fff; overflow-wrap: anywhere; }
+#root .workflow-step-preview li > span { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; flex: 0 0 17px; font-size: 10px; border-radius: 50%; color: #fff; background: var(--workflow-accent); }
+#root .workflow-card-actions { margin: 0 -24px; padding: 12px 18px; gap: 6px; border-color: #edf1f7; background: #fbfcff; }
+#root .workflow-card-actions button { min-height: 36px; font-size: 12px; }
+#root .workflow-card-actions button:first-child { background: transparent !important; color: var(--workflow-accent); text-align: left; padding-left: 6px; }
+#root .workflow-card-actions button[title='Edit'] { color: #8c9db9; }
+#root .workflow-card-actions button[title='Delete'] { color: #ed7182; }
+#root .workflow-empty { border: 1px solid #e4eaf3; box-shadow: none; }
+#root .approval-workflows-page > .fixed { padding: 16px; }
+#root .approval-workflows-page > .fixed > div { max-height: calc(100dvh - 32px); min-width: 0; overflow-x: hidden; }
+#root .approval-workflows-page > .fixed input, #root .approval-workflows-page > .fixed select, #root .approval-workflows-page > .fixed textarea { min-width: 0; max-width: 100%; }
+@container (max-width: 900px) {
+  #root .workflow-page-header { align-items: flex-start; flex-direction: column; }
+  #root .workflow-card-grid { grid-template-columns: minmax(0,1fr); }
+}
+@container (max-width: 480px) {
+  #root .workflow-page-actions { width: 100%; }
+  #root .workflow-page-actions button { flex: 1; padding-inline: 10px; font-size: 12px; justify-content: center; white-space: normal; }
+  #root .workflow-filter-grid { grid-template-columns: minmax(0,1fr); gap: 14px; }
+  #root .workflow-filters { padding: 16px; }
+  #root .workflow-card { padding: 18px 16px 0; }
+  #root .workflow-card-heading { flex-wrap: wrap; gap: 10px; }
+  #root .workflow-card-title { flex-basis: calc(100% - 55px); }
+  #root .workflow-status { margin-left: 52px; }
+  #root .workflow-card-actions { margin-inline: -16px; padding-inline: 12px; }
+  #root .approval-workflows-page > .fixed .grid-cols-2 { grid-template-columns: minmax(0,1fr); }
+  #root .approval-workflows-page > .fixed .px-6, #root .approval-workflows-page > .fixed .p-6 { padding: 16px; }
+}
