@@ -14,31 +14,31 @@
 #root .workflow-filter-grid { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 200px); gap: 12px; }
 #root .workflow-filters label { font-size: 12px; font-weight: 500; color: var(--kh-on-variant, #3d4944); margin-bottom: 5px; }
 #root .workflow-filters select { width: 100%; min-width: 0; height: 36px; border: 1px solid var(--kh-outline-strong, #cbd5e1); border-radius: var(--kh-radius-control, 8px); padding: 6px 10px; background: #fff; color: var(--kh-on, #111c2d); font: inherit; }
-#root .workflow-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-#root .workflow-card { --workflow-accent: var(--color-primary, #0e9370); --workflow-tint: var(--kh-primary-softer, #e8faf4); display: flex; flex-direction: column; min-width: 0; padding: 14px 14px 0; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--ats-radius-card, 12px); background: #fff; box-shadow: none; position: relative; overflow: hidden; }
+#root .workflow-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+#root .workflow-card { --workflow-accent: var(--color-primary, #0e9370); --workflow-tint: var(--kh-primary-softer, #e8faf4); display: flex; flex-direction: column; min-width: 0; padding: 16px 16px 0; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--ats-radius-card, 12px); background: #fff; box-shadow: none; position: relative; overflow: hidden; }
 #root .workflow-card:hover { border-color: var(--kh-outline-strong, #cbd5e1); box-shadow: var(--kh-shadow, 0 4px 20px -2px rgb(14 43 61 / 6%)); }
-#root .workflow-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--workflow-accent); }
-#root .workflow-card[data-entity='AttendanceRegularization'], #root .workflow-card[data-entity='Document'] { --workflow-accent: var(--kh-info, #0284c7); --workflow-tint: #eff6ff; }
-#root .workflow-card[data-entity='Expense'] { --workflow-accent: #b45309; --workflow-tint: #fffbeb; }
-#root .workflow-card[data-entity='TaxRegimeChange'], #root .workflow-card[data-entity='WorkforcePlan'] { --workflow-accent: #7c3aed; --workflow-tint: #f5f3ff; }
+#root .workflow-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--workflow-accent), var(--workflow-accent-end, #13c9c3)); }
+#root .workflow-card[data-entity='AttendanceRegularization'], #root .workflow-card[data-entity='Document'] { --workflow-accent: #3555ed; --workflow-accent-end: #42baff; --workflow-tint: #eff6ff; }
+#root .workflow-card[data-entity='Expense'] { --workflow-accent: #f38a05; --workflow-accent-end: #ff758d; --workflow-tint: #fffbeb; }
+#root .workflow-card[data-entity='TaxRegimeChange'], #root .workflow-card[data-entity='WorkforcePlan'] { --workflow-accent: #7c3aed; --workflow-accent-end: #d443ff; --workflow-tint: #f5f3ff; }
 #root .workflow-card-heading { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; min-width: 0; }
-#root .workflow-card-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: var(--kh-radius-control, 8px); background: var(--workflow-tint); color: var(--workflow-accent); font-size: 17px; box-shadow: none; }
+#root .workflow-card-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 38px; border-radius: var(--kh-radius-control, 8px); background: linear-gradient(140deg, var(--workflow-accent), color-mix(in srgb, var(--workflow-accent) 85%, #102039)); color: #fff; font-size: 19px; box-shadow: 0 3px 6px rgb(24 65 100 / 12%); }
 #root .workflow-card-title { flex: 1; min-width: 0; }
 #root .workflow-type { display: inline-block; padding: 1px 5px; border-radius: 4px; background: var(--workflow-tint); color: var(--workflow-accent); font-size: 10px; font-weight: 500; line-height: 16px; overflow-wrap: anywhere; margin-bottom: 3px; }
-#root .workflow-card-title h3 { color: var(--kh-on, #111c2d); font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+#root .workflow-card-title h3 { color: var(--kh-on, #111c2d); font-size: 14px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
 #root .workflow-status { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--kh-outline, #e2e8f0); background: #f8fafc; color: var(--kh-muted, #666); font-size: 10px; line-height: 16px; white-space: nowrap; }
 #root .workflow-status > span { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 #root .workflow-status.is-active { color: var(--kh-primary, #00694f); border-color: var(--kh-primary-soft, #d1f5ea); background: var(--kh-primary-softer, #e8faf4); }
-#root .workflow-description { margin: 10px 0 12px; color: var(--kh-muted, #666); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-#root .workflow-routing { margin: 0 0 12px; }
+#root .workflow-description { margin: 12px 0 16px; color: var(--kh-muted, #666); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+#root .workflow-routing { margin: auto 0 16px; }
 #root .workflow-routing-label { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--kh-muted, #666); text-transform: uppercase; letter-spacing: .025em; margin-bottom: 6px; }
-#root .workflow-step-preview { display: flex; flex-wrap: wrap; gap: 5px; padding: 7px; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--kh-radius-control, 8px); background: #f8fafc; list-style: none; }
-#root .workflow-step-preview li { display: flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 5px; font-size: 11px; line-height: 16px; color: var(--kh-secondary, #476175); border: 1px solid var(--kh-outline, #e2e8f0); border-radius: 4px; background: #fff; overflow-wrap: anywhere; }
+#root .workflow-step-preview { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--kh-radius-control, 8px); background: #f8fafc; list-style: none; }
+#root .workflow-step-preview li { display: flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 5px; position: relative; font-size: 11px; line-height: 16px; color: var(--kh-secondary, #476175); border: 1px solid var(--kh-outline, #e2e8f0); border-radius: 4px; background: #fff; overflow-wrap: anywhere; }
 #root .workflow-step-preview li > span { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex: 0 0 15px; font-size: 9px; border-radius: 50%; color: #fff; background: var(--workflow-accent); }
-#root .workflow-card-actions { margin: 0 -14px; padding: 6px 10px; gap: 4px; border-color: var(--kh-outline, #e2e8f0); background: #fafcfd; }
+#root .workflow-card-actions { margin: 0 -16px; padding: 8px 12px; gap: 4px; border-color: var(--kh-outline, #e2e8f0); background: #fbfcff; }
 #root .workflow-card-actions button { min-height: 32px; padding: 6px; font-size: 12px; line-height: 20px; }
 #root .workflow-card-actions svg { width: 16px; height: 16px; }
-#root .workflow-card-actions button:first-child { background: transparent !important; color: var(--color-primary, #0e9370); text-align: left; }
+#root .workflow-card-actions button:first-child { background: transparent !important; color: var(--workflow-accent); text-align: left; display: inline-flex; align-items: center; gap: 6px; }
 #root .workflow-card-actions button[title='Edit'] { color: var(--kh-secondary, #476175); }
 #root .workflow-card-actions button[title='Delete'] { color: var(--kh-error, #e11d48); }
 #root .workflow-empty { border: 1px solid var(--kh-outline, #e2e8f0); box-shadow: none; padding-block: 24px; }
@@ -49,14 +49,6 @@
 #root .approval-workflows-page > .fixed .text-lg { font-size: 15px; }
 #root .approval-workflows-page > .fixed input:not([type='checkbox']), #root .approval-workflows-page > .fixed select, #root .approval-workflows-page > .fixed textarea { min-width: 0; max-width: 100%; padding: 7px 10px; font: inherit; border-radius: var(--kh-radius-control, 8px); }
 #root .approval-workflows-page > .fixed input:not([type='checkbox']), #root .approval-workflows-page > .fixed select { min-height: 36px; }
-/* A single result uses a compact full-width row instead of an empty grid column. */
-@container (min-width: 701px) {
-  #root .workflow-card:only-child { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, 1fr); column-gap: 32px; }
-  #root .workflow-card:only-child .workflow-card-heading { grid-column: 1; grid-row: 1; }
-  #root .workflow-card:only-child .workflow-description { grid-column: 1; grid-row: 2; margin-bottom: 16px; }
-  #root .workflow-card:only-child .workflow-routing { grid-column: 2; grid-row: 1 / 3; align-self: center; }
-  #root .workflow-card:only-child .workflow-card-actions { grid-column: 1 / -1; }
-}
 @container (max-width: 700px) {
   #root .workflow-page-header { align-items: flex-start; flex-direction: column; }
   #root .workflow-card-grid { grid-template-columns: minmax(0, 1fr); }
@@ -73,3 +65,14 @@
   #root .workflow-card-actions button { min-height: 36px; }
   #root .approval-workflows-page > .fixed .px-6 { padding-inline: 16px; }
 }
+
+#root .workflow-card-heading { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
+#root .workflow-card-title { display: contents; }
+#root .workflow-card-icon { grid-column: 1; grid-row: 1 / 3; }
+#root .workflow-type { grid-column: 2; grid-row: 1; justify-self: start; max-width: calc(100% - 66px); margin: 0; }
+#root .workflow-card-title h3 { grid-column: 2; grid-row: 2; margin-top: -5px; }
+#root .workflow-status { position: absolute; top: 0; right: 0; }
+#root .workflow-step-preview .workflow-step-arrow { position: absolute; width: 11px; height: 11px; right: -13px; color: var(--workflow-accent); pointer-events: none; }
+#root .workflow-step-preview li:nth-child(2) > span { background: #3267ee; }
+#root .workflow-step-preview li:nth-child(3) > span { background: #ef8b0c; }
+#root .workflow-card-actions button:first-child svg { width: 13px; height: 13px; }
