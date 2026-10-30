@@ -52,7 +52,7 @@ const ClickableKpi = ({ label, value, subtext, icon: Icon, accent, onClick, mute
     <button
         type="button"
         onClick={onClick}
-        className="group w-full rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-[#0E9370]/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#0E9370]/30"
+        className="engagement-kpi group w-full rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-[#0E9370]/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#0E9370]/30"
     >
         <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -89,7 +89,7 @@ const PrivacyBanner = ({ message = PRIVACY_MSG }) => (
 const SectionShell = ({ title, description, children, error, loading, emptyMessage, className = '' }) => {
     if (loading) {
         return (
-            <div className={`rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
+            <div className={`engagement-panel rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
                 <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
                 {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
                 <div className="mt-6 flex items-center justify-center py-8">
@@ -100,7 +100,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
     }
     if (error) {
         return (
-            <div className={`rounded-2xl border border-red-100 bg-red-50/50 p-6 shadow-sm ${className}`}>
+            <div className={`engagement-panel rounded-2xl border border-red-100 bg-red-50/50 p-6 shadow-sm ${className}`}>
                 <div className="flex items-start gap-2 text-sm text-red-800">
                     <FaExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
@@ -113,7 +113,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
     }
     if (emptyMessage) {
         return (
-            <div className={`rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
+            <div className={`engagement-panel rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
                 <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
                 {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
                 <p className="mt-6 py-8 text-center text-sm text-slate-500">{emptyMessage}</p>
@@ -121,7 +121,7 @@ const SectionShell = ({ title, description, children, error, loading, emptyMessa
         );
     }
     return (
-        <div className={`rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
+        <div className={`engagement-panel rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${className}`}>
             <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
             {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
             <div className="mt-4">{children}</div>
@@ -362,14 +362,14 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
     }, [analytics]);
 
     return (
-        <div className="space-y-4">
+        <div className="engagement-dashboard space-y-4">
             {!forceTeamScope && (
                 <div className="rounded-xl border border-[#0E9370]/20 bg-[#0E9370]/5 px-3 py-2 text-xs text-slate-600 sm:px-4 sm:py-2.5 sm:text-sm">
                     <span className="font-semibold text-slate-900">Organization dashboard</span>
                     <span className="hidden sm:inline"> — company-wide engagement health and trends.</span>
                 </div>
             )}
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="engagement-filters flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                     {analytics?.scope && (
                         <span className="rounded-full bg-[#0E9370]/10 px-3 py-1 text-xs font-semibold text-[#0d9488] ring-1 ring-[#0E9370]/20">
@@ -469,7 +469,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
 
             {!analyticsState.loading && analytics && (
                 <>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                    <div className="engagement-metrics grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                         <ClickableKpi
                             label="Survey Participation"
                             value={participationDisplay}
@@ -518,7 +518,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                     </div>
 
                     {analytics.closedLoop?.actionPlans && (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="engagement-actions grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             <ClickableKpi
                                 label="Action Closure Rate"
                                 value={
@@ -575,7 +575,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                     )}
 
                     {analytics.comparison && (
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="engagement-comparisons grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             {[
                                 { label: 'Responses vs prior period', row: analytics.comparison.responses },
                                 { label: 'Feedback vs prior period', row: analytics.comparison.feedback },
@@ -595,7 +595,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                     )}
 
                     {analytics.tenureInsights?.length > 0 && (
-                        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                        <div className="engagement-tenure rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                             <h3 className="text-sm font-semibold text-slate-800">Tenure-based engagement (identified responses)</h3>
                             <p className="mt-1 text-xs text-slate-500">Anonymous responses are excluded. Sub-threshold cohorts are hidden.</p>
                             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -614,7 +614,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                         </div>
                     )}
 
-                    <div className="grid gap-6 lg:grid-cols-2">
+                    <div className="engagement-insights grid gap-6 lg:grid-cols-2">
                         <SectionShell
                             className="survey-ui survey-ui--analytics"
                             title="Survey insights"
@@ -683,7 +683,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                         </SectionShell>
                     </div>
 
-                    <div className="grid gap-6 lg:grid-cols-2">
+                    <div className="engagement-insights grid gap-6 lg:grid-cols-2">
                         <SectionShell
                             title="Feedback & suggestions"
                             description="Operational status (lifetime totals)"
@@ -802,7 +802,7 @@ const EngagementDashboard = ({ onNavigateTab, forceTeamScope = false }) => {
                             loading={analyticsState.loading}
                             error={analyticsState.error}
                         >
-                            <div className="overflow-x-auto rounded-xl border border-slate-100">
+                            <div className="engagement-table overflow-x-auto rounded-xl border border-slate-100">
                                 <table className="w-full min-w-[400px] text-left text-sm">
                                     <thead>
                                         <tr className="border-b border-slate-100 bg-slate-50/80">
