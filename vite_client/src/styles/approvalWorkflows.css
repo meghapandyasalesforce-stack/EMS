@@ -10,7 +10,7 @@
 #root .workflow-page-actions button { min-height: 36px; padding: 7px 12px; border-radius: var(--kh-radius-control, 8px); font-size: 13px; font-family: inherit; font-weight: 600; line-height: 20px; box-shadow: none; border: 1px solid var(--kh-outline, #e2e8f0); white-space: nowrap; }
 #root .workflow-page-actions svg { width: 16px; height: 16px; }
 #root .workflow-page-actions button:last-child { color: #fff; background: var(--color-primary, #0e9370) !important; border-color: var(--color-primary, #0e9370); }
-#root .workflow-filters { width: 100%; max-width: 856px; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--ats-radius-card, 12px); padding: 12px; box-shadow: none; }
+#root .workflow-filters { width: 100%; border: 1px solid var(--kh-outline, #e2e8f0); border-radius: var(--ats-radius-card, 12px); padding: 12px; box-shadow: none; }
 #root .workflow-filter-grid { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 200px); gap: 12px; }
 #root .workflow-filters label { font-size: 12px; font-weight: 500; color: var(--kh-on-variant, #3d4944); margin-bottom: 5px; }
 #root .workflow-filters select { width: 100%; min-width: 0; height: 36px; border: 1px solid var(--kh-outline-strong, #cbd5e1); border-radius: var(--kh-radius-control, 8px); padding: 6px 10px; background: #fff; color: var(--kh-on, #111c2d); font: inherit; }
@@ -86,5 +86,4 @@
 #root .workflow-config-summary > div:first-child dd { color: var(--workflow-accent); }
 @container (max-width: 640px) {
   #root .workflow-card-grid { grid-template-columns: minmax(0, 420px); max-width: 420px; }
-  #root .workflow-filters { max-width: 420px; }
 }
