@@ -1,4 +1,7 @@
 import express from 'express';
+import asyncHandler from '../../middlewares/asyncHandler.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import { ensureCareerSlug } from '../../helpers/careerPortalSlug.js';
 import { requireFeature } from '../../middlewares/tenantMiddleware.js';
 import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
@@ -81,6 +84,13 @@ const router = express.Router();
 
 router.use(attachAuthContext);
 router.use(requireFeature(SAAS_FEATURES.RECRUITMENT));
+router.post('/career-link', isAdminOrHROrExecutiveAuthenticated, writeLimiter, asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) return res.status(403).json({ success: false, message: 'Organization context required' });
+    const slug = await ensureCareerSlug(organizationId);
+    if (!slug) return res.status(404).json({ success: false, message: 'Organization not found' });
+    res.json({ success: true, data: { slug } });
+}));
 router.route('/screening/settings')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getScreeningSettings)
     .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, putScreeningSettings);

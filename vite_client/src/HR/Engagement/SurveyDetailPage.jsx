@@ -13,6 +13,8 @@ import {
     FaDownload,
     FaCopy,
     FaTrash,
+    FaCalendarAlt,
+    FaUsers,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -32,9 +34,10 @@ const TREND_RANGES = [
 ];
 
 const PrivacyBanner = ({ message }) => (
-    <p className="rounded-2xl border border-amber-100 bg-amber-50/60 px-5 py-6 text-center text-sm text-amber-900">
-        {message || 'Not enough responses to display analytics.'}
-    </p>
+    <div className="survey-analytics-empty rounded-2xl border border-amber-100 bg-amber-50/60 px-5 py-6 text-center text-sm text-amber-900">
+        <FaChartLine aria-hidden="true" />
+        <p>{message || 'Not enough responses to display analytics.'}</p>
+    </div>
 );
 
 const StatCard = ({ label, value }) => (
@@ -530,6 +533,25 @@ const SurveyDetailPage = () => {
         );
     }
 
+    const surveyMetadata = survey.startDate ? (
+        <div className="survey-detail-metadata mt-4 text-xs text-slate-500">
+            <span>
+                <FaCalendarAlt aria-hidden="true" />
+                {new Date(survey.startDate).toLocaleDateString()} —{' '}
+                {survey.endDate
+                    ? new Date(survey.endDate).toLocaleDateString()
+                    : 'No end date'}
+            </span>
+            <span>
+                <FaUsers aria-hidden="true" />
+                Audience: {survey.targetAudience}
+                {survey.targetAudience === 'Department' &&
+                    survey.targetDepartments?.length > 0 &&
+                    ` (${survey.targetDepartments.join(', ')})`}
+            </span>
+        </div>
+    ) : null;
+
     const overview = analytics?.overview;
     const showAnalyticsDetail = overview?.available === true;
 
@@ -579,6 +601,18 @@ const SurveyDetailPage = () => {
                                     )}
                                 </div>
                             </div>
+                            <svg className="survey-hero-art" viewBox="0 0 160 110" aria-hidden="true" focusable="false">
+                                <path d="M0 105C30 75 20 30 65 40S110 0 160 10V110H0Z" fill="#9aefd4" opacity=".7" />
+                                <rect x="32" y="12" width="82" height="90" rx="10" fill="white" />
+                                {[32, 51, 70].map((y) => (
+                                    <g key={y}>
+                                        <rect x="47" y={y} width="12" height="8" rx="4" fill="#68dfbf" />
+                                        <rect x="64" y={y} width="34" height="6" rx="3" fill="#b4f1e1" />
+                                    </g>
+                                ))}
+                                <circle cx="123" cy="78" r="23" fill="#009a7d" />
+                                <path d="m112 78 7 7 15-17" fill="none" stroke="white" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                         </div>
 
                         {canManage && (
@@ -655,6 +689,7 @@ const SurveyDetailPage = () => {
                                             </p>
                                         )}
                                     </div>
+                                    {surveyMetadata}
                                     <button
                                         type="button"
                                         onClick={handleStatusSave}
@@ -670,19 +705,7 @@ const SurveyDetailPage = () => {
                         )}
                     </div>
 
-                    {survey.startDate && (
-                        <p className="survey-detail-metadata mt-4 text-xs text-slate-500">
-                            {new Date(survey.startDate).toLocaleDateString()} —{' '}
-                            {survey.endDate
-                                ? new Date(survey.endDate).toLocaleDateString()
-                                : 'No end date'}
-                            {' · '}
-                            Audience: {survey.targetAudience}
-                            {survey.targetAudience === 'Department' &&
-                                survey.targetDepartments?.length > 0 &&
-                                ` (${survey.targetDepartments.join(', ')})`}
-                        </p>
-                    )}
+                    {!canManage && surveyMetadata}
 
                     {canManage && metadataEditOpen && metadataForm && (
                         <div className="mt-4 space-y-3 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
@@ -745,7 +768,7 @@ const SurveyDetailPage = () => {
                 </section>
 
                 {canViewAnalytics && (
-                    <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
+                    <section className="survey-detail-analytics rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                                 <FaChartLine className="text-[#0d9488]" />
@@ -978,14 +1001,14 @@ const SurveyDetailPage = () => {
                 </section>
 
                 {canManage && (
-                    <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
+                    <section className="survey-detail-responses rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                         <h2 className="mb-4 text-lg font-semibold text-slate-900">
-                            Responses ({responsePagination?.total ?? responses.length})
+                            <FaUsers aria-hidden="true" /> Responses ({responsePagination?.total ?? responses.length})
                         </h2>
                         {responsesLoading ? (
                             <p className="text-sm text-slate-500">Loading responses...</p>
                         ) : responses.length === 0 ? (
-                            <p className="text-sm text-slate-500">No responses submitted yet.</p>
+                            <div className="survey-responses-empty"><FaClipboardList aria-hidden="true" /><p className="text-sm text-slate-500">No responses submitted yet.</p></div>
                         ) : (
                             <>
                             <ul className="space-y-3">
