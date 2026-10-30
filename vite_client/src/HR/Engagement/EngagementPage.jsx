@@ -1,3 +1,4 @@
+import '../../styles/surveyUI.css';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -538,7 +539,7 @@ const EngagementPage = () => {
     }
 
     return (
-        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-transparent">
+        <div className={`engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-transparent ${activeSection === 'surveys' ? 'survey-ui survey-ui--hub' : ''}`}>
             <div className="page-shell-inner hrms-stack min-w-0">
                 <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
