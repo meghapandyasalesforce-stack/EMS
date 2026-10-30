@@ -4,6 +4,7 @@ import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 import {
     createJobPosting,
     getJobPostings,
+    getCareerPortalLink,
     getJobPostingById,
     updateJobPosting,
     deleteJobPosting,
@@ -81,6 +82,7 @@ const router = express.Router();
 
 router.use(attachAuthContext);
 router.use(requireFeature(SAAS_FEATURES.RECRUITMENT));
+router.get('/career-link', isAdminOrHROrExecutiveAuthenticated, readLimiter, getCareerPortalLink);
 router.route('/screening/settings')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getScreeningSettings)
     .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, putScreeningSettings);

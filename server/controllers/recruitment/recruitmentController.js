@@ -135,6 +135,15 @@ export const createJobPosting = asyncHandler(async (req, res) => {
     });
 });
 
+// The link tenant must match authenticated recruitment queries, not browser storage.
+export const getCareerPortalLink = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId || !mongoose.isValidObjectId(organizationId)) {
+        return res.status(403).json({ success: false, message: 'Organization context required' });
+    }
+    res.json({ success: true, data: { organizationId: String(organizationId) } });
+});
+
 /**
  * @route   GET /api/v1/admin/recruitment/jobs
  * @desc    Get all job postings with pagination

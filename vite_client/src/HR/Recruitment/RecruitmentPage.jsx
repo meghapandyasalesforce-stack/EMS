@@ -44,8 +44,7 @@ const RecruitmentPage = () => {
     const [candidates, setCandidates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('jobs');
-    const [orgId, setOrgId] = useState('');
-    const careerIdentifier = useCareerPortalIdentifier(orgId);
+    const careerIdentifier = useCareerPortalIdentifier();
     const [screeningDash, setScreeningDash] = useState(null);
     const [candFilter, setCandFilter] = useState({ screeningStatus: '', q: '', matchMin: '', matchMax: '', searchRejected: false });
     const [showScreeningSettings, setShowScreeningSettings] = useState(false);
@@ -75,13 +74,6 @@ const RecruitmentPage = () => {
     const [jobView, setJobView] = useState('grid');
     const [candidateCount, setCandidateCount] = useState(0);
     const [offerTemplateCount, setOfferTemplateCount] = useState(0);
-
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem('organizationId');
-            if (stored) setOrgId(stored);
-        } catch { /* ignore */ }
-    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -138,9 +130,6 @@ const RecruitmentPage = () => {
                 const response = await axios.get('/v1/admin/recruitment/jobs', { withCredentials: true });
                 const jobs = response.data?.data || [];
                 setJobPostings(jobs);
-                const rawOrg = jobs[0]?.organizationId;
-                const resolvedOrg = typeof rawOrg === 'object' && rawOrg ? (rawOrg._id || rawOrg.id) : rawOrg;
-                if (resolvedOrg) setOrgId(String(resolvedOrg));
             } else if (activeTab === 'candidates') {
                 const params = { limit: 100 };
                 if (candFilter.screeningStatus) params.screeningStatus = candFilter.screeningStatus;
