@@ -179,3 +179,69 @@
   .role-dashboard--employee .employee-dash__health { grid-template-columns: minmax(0, 1fr); }
   .employee-dash__leave-heading { flex-wrap: wrap; }
 }
+
+/* Size to the available dashboard area, including the space used by navigation. */
+#root .role-dashboard--employee.page-shell { container: employee-home / inline-size; }
+#root .role-dashboard--employee .role-dashboard__layout > *,
+#root .role-dashboard--employee :where(.grid,.flex) > * { min-width: 0; }
+#root .role-dashboard--employee :where(h1,h2,h3,p,li,button,a) { overflow-wrap: anywhere; }
+#root .role-dashboard--employee .role-dashboard__layout { grid-template-columns: minmax(0, 2.4fr) minmax(280px, 1fr); }
+#root .role-dashboard--employee .role-dashboard__header { flex-wrap: wrap; }
+#root .role-dashboard--employee .role-dashboard__header > div:first-child { flex: 1 1 240px; }
+#root .role-dashboard--employee .role-dashboard__header h1 { white-space: normal; }
+#root .role-dashboard--employee .employee-dash__icon-button { min-width: 44px; min-height: 44px; }
+#root .role-dashboard--employee .employee-dash__projects > div:first-child { flex-wrap: wrap; gap: 8px; }
+#root .role-dashboard--employee .employee-dash__projects > div:first-child h3 { min-width: 0; }
+#root .role-dashboard--employee .employee-dash__projects > div:first-child > a { flex-shrink: 0; }
+#root .role-dashboard--employee .employee-dash__project-link { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+#root .role-dashboard--employee .employee-dash__project-link > span { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+#root .role-dashboard--employee .employee-dash__project-link > svg { flex: 0 0 12px; }
+#root .role-dashboard--employee .employee-dash__links button,
+#root .role-dashboard--employee .employee-dash__shortcuts button { line-height: 1.45; }
+#root .role-dashboard--employee .employee-dash__announcements > div:last-child { min-height: 0; padding: 12px; }
+#root .role-dashboard--employee .employee-dash__announcements > div:last-child > div { padding: 8px; }
+#root .role-dashboard--employee .employee-dash__announcements .text-center.py-8 { padding-block: 24px; }
+#root .role-dashboard--employee .employee-dash__attendance > div:first-child > .relative > .flex:not(.absolute) { flex-wrap: wrap; }
+#root .role-dashboard--employee .employee-dash__attendance [aria-label='Work location'] { max-width: 100%; }
+@container employee-home (max-width: 1100px) {
+  #root .role-dashboard--employee .employee-dash__kpi { flex-direction: column; gap: 6px; }
+  #root .role-dashboard--employee .employee-dash__attendance > div:first-child > .relative > .flex:not(.absolute) { flex-direction: column; align-items: stretch; }
+  #root .role-dashboard--employee .employee-dash__attendance > div:first-child > .relative > .flex:not(.absolute) > div:last-child { flex-wrap: wrap; }
+}
+@container employee-home (max-width: 960px) {
+  #root .role-dashboard--employee .role-dashboard__layout { grid-template-columns: minmax(0,1fr); }
+  #root .role-dashboard--employee .employee-dash__kpi { flex-direction: row; }
+}
+@container employee-home (min-width: 640px) and (max-width: 960px) {
+  #root .role-dashboard--employee .role-dashboard__layout > aside { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+  #root .role-dashboard--employee .role-dashboard__layout > aside > * { margin: 0; }
+}
+@container employee-home (max-width: 639px) {
+  #root .role-dashboard--employee .role-dashboard__kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  #root .role-dashboard--employee .employee-dash__health { grid-template-columns: minmax(0,1fr); }
+  #root .role-dashboard--employee .employee-dash__attendance > div:first-child > .relative { padding: 16px; }
+  #root .role-dashboard--employee .employee-dash__tasks > section > div { padding: 12px; }
+}
+@container employee-home (max-width: 420px) {
+  #root .role-dashboard--employee .role-dashboard__kpis { grid-template-columns: minmax(0,1fr); }
+  #root .role-dashboard--employee .employee-dash__kpi { min-height: 0; }
+  #root .role-dashboard--employee .employee-dash__header-actions { gap: 8px; }
+}
+/* Fallback for browsers without container queries. */
+@media (max-width: 1023px) {
+  #root .role-dashboard--employee .role-dashboard__layout { grid-template-columns: minmax(0,1fr); }
+}
+/* A populated rail must not turn the dashboard into a very tall empty canvas. */
+#root .role-dashboard--employee .employee-dash__projects ul {
+  max-height: min(24rem, 60vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+@container employee-home (min-width: 961px) and (max-width: 1100px) {
+  #root .role-dashboard--employee .employee-dash__quick-actions > div { grid-template-columns: minmax(0,1fr); }
+}
+@container employee-home (max-width: 420px) {
+  #root .role-dashboard--employee .employee-dash__quick-actions > div { grid-template-columns: minmax(0,1fr); }
+}
