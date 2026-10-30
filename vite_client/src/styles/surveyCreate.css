@@ -59,3 +59,16 @@
   #root .survey-create form > .space-y-4 > h2, #root .survey-create .survey-questions-heading h2 { font-size: 17px; gap: 12px; }
   #root .survey-create .survey-form__actions { padding: 12px; }
 }
+
+/* HR creation workspace follows the dark teal reference, independently of
+   the light employee survey-response hero. */
+#root .survey-create .survey-ui--form header {
+  background: linear-gradient(120deg, #092c3a 0%, #006653 55%, #04353a 100%) !important;
+  border-color: #0c4e4b;
+  box-shadow: 0 5px 18px rgb(6 56 57 / 12%);
+}
+#root .survey-create .survey-form__heading h1 { color: #fff; }
+#root .survey-create .survey-form__heading p:first-child { color: #b0e8df; }
+#root .survey-create .survey-form__heading h1 + p { color: #d0e5e7; }
+#root .survey-create .survey-ui--form header > div > button { background: #ffffff12; border-color: #ffffff38; color: #fff; }
+#root .survey-create .survey-questions-heading > div > button { background: #00695d; border-color: #007c6c; }

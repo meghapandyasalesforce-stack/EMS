@@ -1,0 +1,44 @@
+/* Survey detail/response presentation. Roles and permissions remain in JSX. */
+#root .survey-detail-page.page-shell { background: #eff9fa !important; padding: 20px 24px; color: #16334d; }
+#root .survey-detail-page > .page-shell-inner { max-width: 1480px; gap: 16px; }
+#root .survey-detail-page > .page-shell-inner > button { min-height: 38px; padding: 8px 14px; border-radius: 12px; background: #fff; border-color: #e4edf2; font-size: 12px; }
+#root .survey-detail-page > .page-shell-inner > section { padding: 20px; border: 1px solid #e3ecef; border-radius: 14px !important; box-shadow: 0 4px 16px rgb(18 62 75 / 5%); }
+#root .survey-detail-page > .page-shell-inner > .survey-detail-hero { background: linear-gradient(110deg, #fff 35%, #e0f8f1 100%) !important; border-color: #deeeeb; }
+#root .survey-detail-page .survey-detail-hero h1 { color: #112c44 !important; font-size: clamp(21px, 2vw, 28px); letter-spacing: -.02em; line-height: 1.35; }
+#root .survey-detail-page .survey-detail-hero h1 + p { color: #536d87 !important; font-size: 13px; }
+#root .survey-detail-page .survey-detail-hero h1 ~ div span { font-size: 11px; padding: 4px 12px; }
+#root .survey-detail-page .survey-detail-hero h1 ~ div span:nth-child(2) { background: #def0ff; color: #2375cb; }
+#root .survey-detail-page .survey-management-controls { border-color: #d9ede8; padding-top: 14px; }
+#root .survey-detail-page .survey-management-controls button { min-height: 40px; border-radius: 8px; font-size: 12px; }
+#root .survey-detail-page .survey-management-controls > div:last-child { background: #eaf9f6; border-color: #deefea; padding: 14px; border-radius: 12px; }
+#root .survey-detail-page .survey-detail-metadata { color: #426780; background: #ecf8f5; padding: 12px 14px; border-radius: 10px; font-size: 12px; }
+#root .survey-detail-page > .page-shell-inner > section > h2,
+#root .survey-detail-page > .page-shell-inner > section > div > h2 { color: #15344d; font-size: 17px; font-weight: 700; }
+#root .survey-detail-page :where(input:not([type='checkbox']):not([type='radio']),textarea,select) { min-height: 42px; background: #fff; border: 1px solid #dbe5ee; border-radius: 8px; font-size: 14px; color: #284565; }
+#root .survey-detail-page textarea { min-height: 86px; }
+#root .survey-detail-page .survey-response-question,
+#root .survey-detail-page .survey-preview-question { position: relative; background: #f7f9fd !important; border: 1px solid #edf2f7; border-radius: 12px; padding: 16px 16px 16px 64px; }
+#root .survey-detail-page .survey-response-question > p:first-child,
+#root .survey-detail-page .survey-preview-question > p:first-child { color: #17334f; font-size: 13px; line-height: 1.5; }
+#root .survey-detail-page .survey-question-number { position: absolute; left: 14px; top: 14px; display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 50%; background: #d0f4e9; color: #15435a; font-size: 17px; font-weight: 700; }
+#root .survey-detail-page .survey-response-question > p:nth-child(2) { margin-top: 4px; margin-bottom: 8px; }
+#root .survey-detail-page .survey-response-question :where(input[type='number'],textarea) { max-width: 100%; width: 100%; }
+#root .survey-detail-page form > .survey-response-question + .survey-response-question { margin-top: 12px; }
+#root .survey-detail-page form > button[type='submit'] { min-height: 42px; border-radius: 24px; font-size: 13px; }
+#root .survey-detail-page :where(button,input,select,textarea):focus-visible { outline: 2px solid #009d80; outline-offset: 3px; }
+/* Employee response: softer hero and focused question surfaces. */
+#root .survey-detail--employee .survey-detail-hero { border-left: 4px solid #00a183; }
+#root .survey-detail--employee .survey-response-question { background: linear-gradient(110deg, #f5f9fc, #fff) !important; }
+#root .survey-detail--employee .survey-detail-metadata { background: #e3f5f0; }
+/* HR view keeps management sections visibly distinct from response fields. */
+#root .survey-detail--hr .survey-management-controls { background: #fff; padding: 14px; border: 1px solid #dcebe7; border-radius: 12px; }
+#root .survey-detail--hr .survey-preview-question { background: #f5f8fc !important; }
+@media (max-width: 767px) {
+  #root .survey-detail-page.page-shell { padding: 12px; }
+  #root .survey-detail-page > .page-shell-inner { gap: 12px; }
+  #root .survey-detail-page > .page-shell-inner > section { padding: 16px; }
+  #root .survey-detail-page .survey-response-question, #root .survey-detail-page .survey-preview-question { padding: 14px 12px 14px 54px; }
+  #root .survey-detail-page .survey-question-number { left: 10px; top: 12px; width: 30px; height: 30px; font-size: 16px; }
+  #root .survey-detail-page :where(input:not([type='checkbox']):not([type='radio']),textarea,select) { font-size: 16px; }
+  #root .survey-detail-page .survey-management-controls { padding: 10px; }
+}
