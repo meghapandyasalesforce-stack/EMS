@@ -1,0 +1,101 @@
+/* Scoped to Role Management; shared dashboard styles remain unchanged. */
+#root .role-management-page {
+  background: #edf2f6;
+  color: #102039;
+  padding: clamp(16px, 2.6vw, 40px);
+  min-width: 0;
+}
+#root .role-management-layout { max-width: 1520px; margin-inline: auto; display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+#root .role-management-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; }
+#root .role-management-header h1 { color: #0c192d; font-size: clamp(26px, 2.5vw, 38px); font-weight: 800; letter-spacing: -.035em; line-height: 1.2; margin-bottom: 6px; }
+#root .role-management-header p, #root .role-hierarchy-heading p { color: #71839c; line-height: 1.5; }
+#root .role-management-header p { font-size: 18px; }
+#root .role-management-header-actions { flex-wrap: wrap; gap: 12px; }
+#root .role-management-header-actions button { min-height: 48px; padding: 12px 20px; border-radius: 11px; font-size: 15px; font-weight: 600; box-shadow: none; }
+#root .role-management-header-actions button:first-child { background: #00b798; color: #fff; }
+#root .role-management-header-actions button:last-child { color: #40536f; background: #f3f6fa; border: 1px solid #d2ddea; }
+#root .role-management-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; margin: 0; }
+#root .role-management-stats > div { min-width: 0; padding: 25px; border: 1px solid #f4f7fa; border-radius: 21px; background: #fff; box-shadow: 0 5px 18px rgb(33 52 75 / 5%); transform: none; }
+#root .role-management-stats > div > div { gap: 12px; height: 100%; }
+#root .role-management-stats p:first-child { font-size: 12px; font-weight: 700; letter-spacing: .045em; color: #657c99; margin-bottom: 10px; }
+#root .role-management-stats p:nth-child(2) { font-size: 36px; line-height: 1.15; color: #101e34; margin-bottom: 8px; }
+#root .role-management-stats p:last-child { font-size: 13px; color: #8a9db8; }
+#root .role-management-stats > div > div > div:last-child { width: 64px; height: 64px; flex: 0 0 64px; border-radius: 19px; box-shadow: 0 4px 5px rgb(40 80 150 / 14%); }
+#root .role-management-stats > div:nth-child(1) > div > div:last-child { background: linear-gradient(140deg, #3888ff, #2050df); }
+#root .role-management-stats > div:nth-child(2) > div > div:last-child { background: linear-gradient(140deg, #2dce99, #009c76); }
+#root .role-management-stats > div:nth-child(3) > div > div:last-child { background: linear-gradient(140deg, #ffab00, #f56800); }
+#root .role-management-stats > div:nth-child(4) > div > div:last-child { background: linear-gradient(140deg, #aa50f8, #c625dc); }
+#root .role-hierarchy-panel { min-width: 0; background: #fff; border: 1px solid #e7edf4; border-radius: 21px; box-shadow: 0 5px 18px rgb(33 52 75 / 5%); }
+#root .role-hierarchy-heading { padding: 27px 30px; background: #fff; border-color: #edf2f7; }
+#root .role-hierarchy-heading h2 { color: #101f36; font-size: 23px; font-weight: 700; letter-spacing: -.025em; }
+#root .role-hierarchy-heading p { font-size: 15px; margin-top: 5px; }
+#root .role-hierarchy-body { padding: 28px 30px 12px; background: #fcfdff; }
+#root .role-tree-node { min-width: 0; margin-left: 0; }
+#root .role-tree-card { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; padding: 20px; margin-bottom: 16px; border: 1px solid #e1e9f3; border-radius: 15px; background: #fff; box-shadow: 0 2px 3px rgb(22 45 80 / 3%); }
+#root .role-tree-card:hover { border-color: #c8d9ee; box-shadow: 0 4px 12px rgb(22 45 80 / 5%); }
+#root .role-tree-info { gap: 12px; }
+#root .role-tree-spacer { display: none; }
+#root .role-tree-icon { width: 58px; height: 58px; flex: 0 0 58px; border-radius: 16px; background: #2443ba; box-shadow: none; }
+#root .role-tree-name { font-size: 18px; color: #111f36; overflow: visible; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; margin-bottom: 6px; }
+#root .role-tree-card .text-sm > span { padding: 3px 10px; border-radius: 6px; font-size: 12px; line-height: 1.5; border: 1px solid #e6edf5; background: #f2f5f9; color: #57708e; overflow-wrap: anywhere; }
+#root .role-tree-card .text-sm > span:nth-child(2) { background: #eff6ff; color: #2962ff; border-color: #d2e3ff; }
+#root .role-tree-actions { flex: 0 0 auto; margin: 0; gap: 14px; }
+#root .role-permission-count { background: #2863ed; border-radius: 999px; padding: 7px 16px; font-size: 12px; box-shadow: none; }
+#root .role-tree-actions > div { border-left: 1px solid #dbe4ef; padding-left: 12px; gap: 3px; }
+#root .role-tree-actions button { color: #92a4bc; padding: 10px; background: transparent; }
+#root .role-tree-actions button:hover { background: #f0f5fb; color: #355b90; }
+#root .role-tree-actions button[title='Delete Role']:hover { color: #dc334e; background: #fff1f3; }
+#root .role-tree-children { margin-left: 28px; padding-left: 24px; border-color: #e0e8f2; }
+#root .role-tree-toggle { margin: 0; padding: 6px; }
+#root .role-management-modal { padding: 16px; }
+#root .role-management-modal > div { min-width: 0; max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: clamp(18px, 3vw, 32px); }
+#root .role-management-modal input, #root .role-management-modal select, #root .role-management-modal textarea { min-width: 0; max-width: 100%; }
+#root .role-management-modal form > div:last-child { flex-wrap: wrap; gap: 8px; }
+#root .role-management-modal form > div:last-child > button { margin: 0; }
+@media (max-width: 1199px) {
+  #root .role-management-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  #root .role-tree-card { flex-wrap: wrap; }
+  #root .role-tree-actions { margin-left: auto; }
+}
+@media (max-width: 767px) {
+  #root .role-management-layout { gap: 20px; }
+  #root .role-management-header { align-items: flex-start; flex-direction: column; gap: 16px; }
+  #root .role-management-header p { font-size: 15px; }
+  #root .role-hierarchy-heading { padding: 20px; }
+  #root .role-hierarchy-body { padding: 16px 14px 0; }
+  #root .role-tree-card { padding: 16px; gap: 14px; }
+  #root .role-tree-info { width: 100%; }
+  #root .role-tree-icon { width: 46px; height: 46px; flex-basis: 46px; border-radius: 12px; }
+  #root .role-tree-info > div.flex { gap: 12px; margin-left: 0; }
+  #root .role-tree-actions { width: 100%; justify-content: space-between; gap: 8px; }
+  #root .role-tree-actions > div { padding-left: 8px; }
+  #root .role-tree-actions button { padding: 8px; }
+  #root .role-tree-children { margin-left: 8px; padding-left: 8px; }
+  #root .role-management-modal .grid { gap: 12px; }
+  #root .role-management-modal form > div > .space-y-6 > div { padding: 14px; }
+}
+@media (max-width: 479px) {
+  #root .role-management-stats { gap: 12px; }
+  #root .role-management-stats > div { padding: 16px; border-radius: 16px; }
+  #root .role-management-stats > div > div { flex-wrap: wrap-reverse; align-content: flex-start; }
+  #root .role-management-stats > div > div > div:last-child { width: 42px; height: 42px; flex-basis: 42px; border-radius: 13px; }
+  #root .role-management-stats svg { width: 23px; height: 23px; }
+  #root .role-management-stats p:first-child { font-size: 10px; }
+  #root .role-management-stats p:nth-child(2) { font-size: 29px; }
+  #root .role-management-stats p:last-child { font-size: 12px; }
+  #root .role-management-header-actions { width: 100%; }
+  #root .role-management-header-actions button { flex: 1; justify-content: center; padding: 10px; font-size: 13px; }
+  #root .role-tree-actions { flex-wrap: wrap; }
+  #root .role-tree-name { font-size: 16px; }
+  #root .role-tree-children .role-tree-info > div.flex { flex-wrap: wrap; }
+}
+/* Override the shared canvas gradient only inside this page. */
+#root .role-management-page { background: #edf2f6 !important; background-image: none !important; }
+#root .role-management-header-actions button:first-child { background: #00b798 !important; }
+#root .role-tree-info > .flex { margin-left: 0; gap: 14px; }
+#root .role-tree-info > .flex > * { margin-left: 0; }
+#root .role-tree-actions > * { margin-left: 0; }
+@media (max-width: 479px) {
+  #root .role-management-stats > div > div { flex-direction: column-reverse; align-items: flex-start; gap: 12px; }
+  #root .role-management-stats p:first-child { min-height: 30px; }
+}
