@@ -536,17 +536,16 @@ const SurveyDetailPage = () => {
     return (
         <div className={`survey-detail-page ${canManage ? 'survey-detail--hr' : 'survey-detail--employee'} survey-ui survey-ui--page survey-ui--detail page-shell bg-transparent`}>
             <div className="page-shell-inner hrms-stack max-w-6xl">
-                <button
-                    type="button"
-                    onClick={() => navigate('/engagement')}
-                    className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                    <FaArrowLeft className="text-xs" /> Back
-                </button>
-
                 <section className="survey-detail-hero rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                    <button
+                        type="button"
+                        onClick={() => navigate('/engagement')}
+                        className="survey-detail-back inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    >
+                        <FaArrowLeft className="text-xs" /> Back
+                    </button>
                     <div className="flex flex-col gap-5">
-                        <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="survey-detail-title-row flex items-start gap-3 sm:gap-4">
                             <div
                                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white sm:h-12 sm:w-12"
                                 style={{ background: MINT_GRADIENT }}
