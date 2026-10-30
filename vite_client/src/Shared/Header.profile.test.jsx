@@ -68,11 +68,11 @@ describe('desktop Profile navigation', () => {
     renderHeader('employee', 1366, path);
     expect(screen.getByRole('button', { name: 'Profile', exact: true })).toHaveClass('is-active');
   });
-  it('keeps the More sheet available on Me phone', () => {
+  it('uses the hamburger instead of a floating bottom bar on Me phone', () => {
     renderHeader('employee', 375);
     expect(screen.getByRole('button', { name: 'Open menu' })).toHaveAttribute('aria-expanded', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'More' }));
-    expect(screen.getByRole('button', { name: 'Profile', exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More', exact: true })).not.toBeInTheDocument();
   });
   it('opens the employee phone drawer and closes it after navigation', () => {
     renderHeader('employee', 375);
@@ -138,11 +138,9 @@ describe('Employee reference navigation', () => {
 
   it.each([375, 768])('exposes every destination at %spx and closes the menu after navigation', width => {
     renderHeader('employee', width);
-    fireEvent.click(screen.getByRole('button', { name: width < 768 ? 'More' : 'Open menu', exact: true }));
-    const menu = screen.getByRole('dialog', { name: width < 768 ? 'More' : 'Navigation menu' });
-    const bottomPaths = ['/dashboard-employee', '/employee/leave-attendance', '/employee-payroll', '/employee/documents-id'];
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu', exact: true }));
+    const menu = screen.getByRole('dialog', { name: 'Navigation menu' });
     for (const [label, path] of destinations) {
-      if (width < 768 && bottomPaths.includes(path)) continue;
       expect(within(menu).getByRole('button', { name: label, exact: true })).toBeInTheDocument();
     }
     fireEvent.click(within(menu).getByRole('button', { name: 'Calendar', exact: true }));
