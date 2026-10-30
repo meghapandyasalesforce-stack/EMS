@@ -103,8 +103,7 @@ const JobDetailPage = () => {
     const [saving, setSaving] = useState(false);
     const [job, setJob] = useState(null);
     const [candidates, setCandidates] = useState([]);
-    const [orgId, setOrgId] = useState('');
-    const careerIdentifier = useCareerPortalIdentifier(orgId);
+    const careerIdentifier = useCareerPortalIdentifier();
     const [tab, setTab] = useState('overview');
     const [screeningStats, setScreeningStats] = useState(null);
     const [search, setSearch] = useState('');
@@ -151,7 +150,6 @@ const JobDetailPage = () => {
             const jobData = jobRes.data.data;
             setJob(jobData);
             setCandidates(candRes.data?.data || []);
-            setOrgId(jobData.organizationId || '');
             setScreeningStats(statsRes?.data?.data || null);
             const sc = jobData.screeningCriteria || {};
             setCriteriaForm({
