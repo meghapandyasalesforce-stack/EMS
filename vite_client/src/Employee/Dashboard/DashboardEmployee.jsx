@@ -1029,7 +1029,7 @@ function DashboardEmployee() {
 
                         {/* Announcements */}
                         <section
-                            className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
+                            className="employee-dash__announcements role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
                             style={{ borderColor: WS.border }}
                         >
                             <div
@@ -1231,7 +1231,7 @@ function DashboardEmployee() {
                         </div>
 
                             <section
-                                className="role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
+                                className="employee-dash__projects role-dashboard__card role-dashboard__card--flush rounded-2xl border bg-white shadow-sm"
                                 style={{ borderColor: WS.border }}
                             >
                                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 sm:px-5 sm:py-4">
@@ -1258,10 +1258,10 @@ function DashboardEmployee() {
                                                     <button
                                                         type="button"
                                                         onClick={() => navigate(`/employee/projects/${project._id}`)}
-                                                        className="w-full rounded-xl border border-slate-100 p-3 text-left transition hover:border-[#0E9370]/30 hover:bg-[#F8F9FB]"
+                                                        className="employee-dash__project-link w-full rounded-xl border border-slate-100 p-3 text-left transition hover:border-[#0E9370]/30 hover:bg-[#F8F9FB]"
                                                     >
                                                         <span className="font-medium text-slate-800">{project.name}</span>
-                                                        <FaArrowRight className="float-right mt-1 h-3 w-3 text-slate-400" />
+                                                        <FaArrowRight className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
                                                     </button>
                                                 </li>
                                             ))}
