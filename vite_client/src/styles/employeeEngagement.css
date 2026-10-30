@@ -1,0 +1,99 @@
+/* Employee My Engagement only; leave HR engagement and modal behavior intact. */
+#root .employee-engagement.page-shell { background: #eff9fc !important; color: #15344b; }
+#root .employee-engagement > .page-shell-inner { max-width: 1600px; gap: 18px; }
+#root .employee-engagement > .page-shell-inner > header {
+  position: relative;
+  overflow: hidden;
+  min-height: 108px;
+  padding: 22px;
+  background: linear-gradient(110deg, #fff 45%, #e4faf4 100%) !important;
+  border: 1px solid #e0edf1;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgb(20 60 75 / 4%);
+}
+#root .employee-engagement > .page-shell-inner > header::after { content: ''; position: absolute; right: -20px; bottom: -100px; width: 450px; height: 240px; border-radius: 50%; background: #b8f2e4; opacity: .45; transform: rotate(-12deg); pointer-events: none; }
+#root .employee-engagement > .page-shell-inner > header > div { position: relative; z-index: 1; }
+#root .employee-engagement > .page-shell-inner > header h1 { font-size: clamp(23px, 2.1vw, 30px); color: #0d3046; white-space: normal; line-height: 1.3; letter-spacing: -.025em; }
+#root .employee-engagement > .page-shell-inner > header p { color: #54728c; }
+#root .employee-engagement .employee-engagement-summary { gap: 16px; }
+#root .employee-engagement .employee-engagement-summary > button {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) 14px;
+  grid-template-rows: auto auto;
+  column-gap: 18px;
+  align-content: center;
+  padding: 20px;
+  min-height: 106px;
+  background: #fff;
+  border-color: #e1ebf0;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px rgb(20 60 75 / 4%);
+}
+#root .employee-engagement .employee-engagement-summary > button > div { display: contents; }
+#root .employee-engagement .employee-engagement-summary > button > div > div { grid-column: 1; grid-row: 1 / 3; width: 60px; height: 60px; border-radius: 16px; }
+#root .employee-engagement .employee-engagement-summary > button > div > div svg { width: 23px; height: 23px; }
+#root .employee-engagement .employee-engagement-summary > button > div > svg { display: block; grid-column: 3; grid-row: 1 / 3; align-self: center; color: #6d87a0; margin: 0; }
+#root .employee-engagement .employee-engagement-summary > button > p:first-of-type { grid-column: 2; grid-row: 1; margin: 0; font-size: 30px; line-height: 1.2; color: #0d3046; }
+#root .employee-engagement .employee-engagement-summary > button > p:last-of-type { grid-column: 2; grid-row: 2; margin: 3px 0 0; color: #45607c; font-size: 12px; letter-spacing: .03em; white-space: normal; overflow-wrap: anywhere; }
+#root .employee-engagement nav[aria-label='Engagement sections'] { padding: 5px; border-radius: 14px; }
+#root .employee-engagement nav[aria-label='Engagement sections'] button { min-height: 48px; padding-inline: 22px; border-radius: 10px; font-size: 14px; }
+#root .employee-engagement .employee-engagement-content { padding: 20px; border-radius: 16px !important; }
+#root .employee-engagement .employee-engagement-content > div:first-child { background: transparent; margin: 0 0 20px; padding: 0; border-radius: 0; }
+#root .employee-engagement .employee-engagement-content > div:first-child h2 { color: #103047; font-size: 21px; }
+#root .employee-engagement .employee-engagement-content input[type='search'] { background: #f7f9fc !important; border: 1px solid #dce6f0 !important; border-radius: 10px !important; min-height: 46px; }
+#root .employee-engagement .employee-survey-grid { gap: 18px; }
+#root .employee-engagement .employee-survey-grid article {
+  --employee-survey-accent: #f0a000;
+  --employee-survey-tint: #fff3de;
+  background: #fff;
+  border: 1px solid #e1eaf1;
+  border-top: 2px solid #438efb;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgb(20 60 75 / 4%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#root .employee-engagement .employee-survey-grid article:nth-child(3n+2) { --employee-survey-accent: #1683ff; --employee-survey-tint: #e5f0ff; }
+#root .employee-engagement .employee-survey-grid article[data-respond='true'] { --employee-survey-accent: #00a180; --employee-survey-tint: #def8ed; border-top-color: #009b7d; }
+#root .employee-engagement .employee-survey-heading { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+#root .employee-engagement .employee-survey-heading > div { min-width: 0; padding-top: 3px; }
+#root .employee-engagement .employee-survey-icon { display: inline-flex; flex: 0 0 58px; width: 58px; height: 60px; align-items: center; justify-content: center; border-radius: 15px; color: var(--employee-survey-accent); background: var(--employee-survey-tint); font-size: 26px; }
+#root .employee-engagement .employee-survey-heading h3 { font-size: 17px; line-height: 1.4; color: #11334b; overflow-wrap: anywhere; }
+#root .employee-engagement .employee-survey-heading p { margin-top: 3px; font-size: 12px; color: #526d8a; }
+#root .employee-engagement .employee-survey-grid article > div:first-child { flex-wrap: nowrap; }
+#root .employee-engagement .employee-survey-grid article > div:first-child > div { flex: 1; }
+#root .employee-engagement .employee-survey-grid article > div:first-child > span { margin-top: 5px; flex-shrink: 0; border-radius: 20px; padding: 4px 14px; }
+#root .employee-engagement .employee-survey-grid article > div.mt-3 { margin: 0 0 0 74px; gap: 7px; }
+#root .employee-engagement .employee-survey-grid article > div.mt-3 > span { background: #f1f5f8 !important; color: #48627d; padding: 4px 9px; font-size: 11px; box-shadow: none; }
+#root .employee-engagement .employee-survey-grid article > button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-top: auto; min-height: 42px; border-radius: 9px; font-size: 14px; background: linear-gradient(110deg, #009d80, #00896f) !important; }
+#root .employee-engagement :where(button,input,select,textarea):focus-visible { outline: 2px solid #009d80; outline-offset: 3px; }
+@media (max-width: 900px) {
+  #root .employee-engagement .employee-engagement-summary > button { grid-template-columns: 42px minmax(0,1fr) 10px; gap: 8px; padding: 14px; }
+  #root .employee-engagement .employee-engagement-summary > button > div > div { width: 42px; height: 46px; border-radius: 12px; }
+  #root .employee-engagement .employee-engagement-summary > button > p:first-of-type { font-size: 26px; }
+  #root .employee-engagement .employee-engagement-summary > button > p:last-of-type { font-size: 11px; }
+}
+@media (max-width: 639px) {
+  #root .employee-engagement > .page-shell-inner { gap: 12px; }
+  #root .employee-engagement > .page-shell-inner > header { min-height: 92px; padding: 16px; }
+  #root .employee-engagement .employee-engagement-summary { grid-template-columns: minmax(0,1fr); gap: 10px; }
+  #root .employee-engagement .employee-engagement-summary > button { min-height: 80px; }
+  #root .employee-engagement nav[aria-label='Engagement sections'] > div { gap: 4px; }
+  #root .employee-engagement nav[aria-label='Engagement sections'] button { flex: 1 1 90px; padding: 10px 8px; font-size: 12px; }
+  #root .employee-engagement .employee-engagement-content { padding: 14px; }
+  #root .employee-engagement .employee-survey-grid article { padding: 14px; }
+  #root .employee-engagement .employee-survey-heading { gap: 10px; }
+  #root .employee-engagement .employee-survey-icon { width: 40px; height: 44px; flex-basis: 40px; border-radius: 11px; font-size: 21px; }
+  #root .employee-engagement .employee-survey-heading h3 { font-size: 15px; }
+  #root .employee-engagement .employee-survey-grid article > div.mt-3 { margin-left: 0; }
+  #root .employee-engagement .employee-survey-grid article > div:first-child > span { padding: 3px 9px; font-size: 10px; }
+  #root .employee-engagement .employee-engagement-content input[type='search'] { font-size: 16px; }
+}
+/* Retain the card accents when the shared theme supplies important borders. */
+#root .employee-engagement .employee-survey-grid article { border-top-color: #438efb !important; }
+#root .employee-engagement .employee-survey-grid article[data-respond='true'] { border-top-color: #009b7d !important; }
+#root .employee-engagement nav[aria-label='Engagement sections'] button[class*='ring-1'] { background: #e6faf3; border-bottom: 2px solid #009b7d; }
+#root .employee-engagement .employee-engagement-content > div:first-child h2 { display: flex; align-items: center; gap: 14px; }
+#root .employee-engagement .employee-surveys-section-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 46px; flex: 0 0 44px; border-radius: 12px; background: #e1f8ef; color: #009e80; font-size: 21px; }

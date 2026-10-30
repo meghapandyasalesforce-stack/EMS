@@ -1,4 +1,5 @@
 import '../../styles/surveyUI.css';
+import '../../styles/employeeEngagement.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -11,6 +12,7 @@ import {
     FaHeart,
     FaChevronRight,
     FaSearch,
+    FaEye,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -512,7 +514,7 @@ const EmployeeEngagementPage = () => {
     }
 
     return (
-        <div className="engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-[#F5F7FB]">
+        <div className="employee-engagement engagement-page page-shell min-h-[calc(100vh-64px)] overflow-x-visible bg-[#F5F7FB]">
             <div className="page-shell-inner hrms-stack min-w-0">
                 <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
                     <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -531,7 +533,8 @@ const EmployeeEngagementPage = () => {
                             </h1>
                         </div>
                     </div>
-                    <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
+                </header>
+                    <div className="employee-engagement-summary grid grid-cols-3 gap-2 sm:gap-3">
                         <ActionCard
                             label="Surveys"
                             count={pendingSurveys.length}
@@ -560,7 +563,6 @@ const EmployeeEngagementPage = () => {
                             }}
                         />
                     </div>
-                </header>
 
                 <nav
                     aria-label="Engagement sections"
@@ -613,9 +615,10 @@ const EmployeeEngagementPage = () => {
                     </div>
                 </nav>
 
-                <section className={`min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6 ${activeTab === 'surveys' ? 'survey-ui survey-ui--list' : ''}`}>
+                <section className={`employee-engagement-content min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6 ${activeTab === 'surveys' ? 'survey-ui survey-ui--list' : ''}`}>
                     <div className="mb-4 flex flex-col gap-2 sm:mb-5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+                            {activeTab === 'surveys' && <span className="employee-surveys-section-icon" aria-hidden="true"><FaClipboardList /></span>}
                             {activeTab === 'surveys' && 'Surveys'}
                             {activeTab === 'feedback' &&
                                 (feedbackSub === 'suggestions' ? 'Suggestions' : 'Feedback')}
@@ -647,16 +650,20 @@ const EmployeeEngagementPage = () => {
                                     {searchQuery ? 'No surveys match your search.' : 'No surveys assigned.'}
                                 </p>
                             ) : (
-                                <div className="grid gap-4 md:grid-cols-2">
+                                <div className="employee-survey-grid grid gap-4 md:grid-cols-2">
                                     {filteredSurveys.map((s) => (
                                         <article
                                             key={s._id}
+                                            data-respond={s.canRespond ? 'true' : 'false'}
                                             className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5"
                                         >
                                             <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <h3 className="font-semibold text-slate-900">{s.title}</h3>
-                                                    <p className="text-xs text-slate-500">{s.type}</p>
+                                                <div className="employee-survey-heading">
+                                                    <span className="employee-survey-icon" aria-hidden="true"><FaClipboardList /></span>
+                                                    <div>
+                                                        <h3 className="font-semibold text-slate-900">{s.title}</h3>
+                                                        <p className="text-xs text-slate-500">{s.type}</p>
+                                                    </div>
                                                 </div>
                                                 <span
                                                     className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${surveyStatusStyle(s.status)}`}
@@ -685,6 +692,7 @@ const EmployeeEngagementPage = () => {
                                                     className="mt-4 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
                                                     style={{ background: MINT_GRADIENT }}
                                                 >
+                                                    <FaEye aria-hidden="true" />
                                                     Start Survey
                                                 </button>
                                             )}
