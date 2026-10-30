@@ -68,11 +68,33 @@ describe('desktop Profile navigation', () => {
     renderHeader('employee', 1366, path);
     expect(screen.getByRole('button', { name: 'Profile', exact: true })).toHaveClass('is-active');
   });
-  it('uses More sheet on Me phone instead of hamburger Profile list', () => {
+  it('keeps the More sheet available on Me phone', () => {
     renderHeader('employee', 375);
-    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open menu' })).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(screen.getByRole('button', { name: 'Profile', exact: true })).toBeInTheDocument();
+  });
+  it('opens the employee phone drawer and closes it after navigation', () => {
+    renderHeader('employee', 375);
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    const drawer = screen.getByRole('dialog', { name: 'Navigation menu' });
+    expect(drawer).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Profile', exact: true }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/profile-details');
+    expect(screen.queryByRole('dialog', { name: 'Navigation menu' })).not.toBeInTheDocument();
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+  it('dismisses the employee phone drawer with Escape and restores focus', () => {
+    renderHeader('employee', 375);
+    const toggle = screen.getByRole('button', { name: 'Open menu' });
+    toggle.focus();
+    fireEvent.click(toggle);
+    const drawer = screen.getByRole('dialog', { name: 'Navigation menu' });
+    expect(within(drawer).getByRole('button', { name: 'Close menu', exact: true })).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Navigation menu' })).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
   });
   it.each([768, 1023])('keeps Open menu on Me tablet rail at %spx', width => {
     renderHeader('employee', width);
