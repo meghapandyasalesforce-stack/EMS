@@ -224,7 +224,7 @@ export const getMyWfhRequests = async (req, res) => {
  */
 export const getAllWfhRequests = async (req, res) => {
     try {
-        const { startDate, endDate, page = '1', limit = '25' } = req.query;
+        const { startDate, endDate, page = '1', limit = '25', status, search } = req.query;
 
         const organizationId = getOrganizationId(req);
         const filter = addOrganizationFilter(req, {});
@@ -236,6 +236,38 @@ export const getAllWfhRequests = async (req, res) => {
             const teamEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
             filter.employeeId = { $in: teamEmployeeIds };
         }
+        const statusFilter = String(status || '').trim();
+        if (statusFilter === 'pending') {
+            filter.status = { $in: ['pending', 'submitted'] };
+        } else if (statusFilter === 'approved' || statusFilter === 'rejected') {
+            filter.status = statusFilter;
+        }
+
+        const searchText = String(search || '').trim().slice(0, 80);
+        if (searchText) {
+            const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const rx = new RegExp(escaped, 'i');
+            const matchedEmployees = await Employee.find(
+                addOrganizationFilter(req, {
+                    $or: [
+                        { name: rx },
+                        { lastName: rx },
+                        { email: rx },
+                        { employeeId: rx },
+                        { department: rx },
+                    ],
+                })
+            ).select('_id').limit(300).lean();
+            const employeeIds = matchedEmployees.map((row) => row._id);
+            filter.$and = [...(filter.$and || []), {
+                $or: [
+                    ...(employeeIds.length ? [{ employeeId: { $in: employeeIds } }] : []),
+                    { reason: rx },
+                    { remarks: rx },
+                ],
+            }];
+        }
+
         if (startDate || endDate) {
             filter.wfhDate = {};
             if (startDate && !Number.isNaN(new Date(startDate).getTime())) {
@@ -251,7 +283,10 @@ export const getAllWfhRequests = async (req, res) => {
         const pageNum = Math.max(1, parseInt(page, 10) || 1);
         const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 25));
 
-        const [requests, total] = await Promise.all([
+        const countFilter = { ...filter };
+        delete countFilter.status;
+
+        const [requests, total, allTotal] = await Promise.all([
             WfhRequest.find(filter)
                 .populate({
                     path: 'employeeId',
@@ -265,13 +300,15 @@ export const getAllWfhRequests = async (req, res) => {
                 .skip((pageNum - 1) * limitNum)
                 .limit(limitNum)
                 .lean(),
-            WfhRequest.countDocuments(filter)
+            WfhRequest.countDocuments(filter),
+            WfhRequest.countDocuments(countFilter)
         ]);
 
         return res.json({
             success: true,
             requests,
             total,
+            allTotal,
             page: pageNum,
             limit: limitNum
         });

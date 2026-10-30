@@ -1,3 +1,6 @@
+import { createPortal } from 'react-dom';
+import TodayStatusComponent from './TodayStatusComponent';
+import './attendanceSuite.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -7,12 +10,11 @@ import {
   FiActivity,
   FiChevronLeft,
   FiChevronRight,
-  FiMoreHorizontal,
-  FiAlertTriangle,
-  FiClock,
   FiHome,
   FiBriefcase,
   FiCoffee,
+  FiUsers,
+  FiLoader,
   FiX,
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
@@ -87,6 +89,7 @@ function toLocalDateKey(d) {
   return `${y}-${m}-${day}`;
 }
 
+// eslint-disable-next-line no-unused-vars -- retained date helper
 function toDateInput(d) {
   if (!d) return '';
   const date = new Date(d);
@@ -263,6 +266,9 @@ const AllAttendanceStatsComponent = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [showEmployeeDetails, setShowEmployeeDetails] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [suiteView, setSuiteView] = useState('overview');
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [showExtraColumns, setShowExtraColumns] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [selectedBreaksRow, setSelectedBreaksRow] = useState(null);
   const [showBreaksModal, setShowBreaksModal] = useState(false);
@@ -763,7 +769,7 @@ const AllAttendanceStatsComponent = () => {
   if (showEmployeeDetails && employeeDetails) {
     const recordsFull = employeeStats?.recentRecords || [];
     return (
-      <div className="page-shell min-h-screen bg-[#f4f7f6]">
+      <div className="attendance-suite page-shell min-h-screen">
         <div className="page-shell-inner hrms-stack">
           <button
             type="button"
@@ -824,7 +830,7 @@ const AllAttendanceStatsComponent = () => {
                     <th className="px-6 py-3">Date</th>
                     <th className="px-6 py-3">Check in</th>
                     <th className="px-6 py-3">Check out</th>
-                    <th className="px-6 py-3">Hours</th>
+                    <th className="px-6 py-3">Total Hours</th>
                     <th className="px-6 py-3">Break</th>
                     <th className="px-6 py-3">Status</th>
                   </tr>
@@ -854,27 +860,26 @@ const AllAttendanceStatsComponent = () => {
     );
   }
 
-  const statusActions = {
-    absent: FiAlertTriangle,
-    late: FiClock,
-    wfh: FiHome,
-  };
 
   return (
-    <div className="page-shell min-h-screen bg-[#f4f7f6]">
+    <div className="attendance-suite page-shell min-h-screen">
       <div className="page-shell-inner hrms-stack">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Attendance History</h1>
+          <div><h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Attendance &amp; Time Tracking Suite</h1><p className="attendance-suite__subtitle">Monitor live workforce presence, analyze attendance history, and manage time anomalies.</p></div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate('/today-attendance')}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border-2 px-5 py-2.5 text-sm font-semibold shadow-sm hover:bg-white/80 bg-white disabled:opacity-50"
-              style={{ borderColor: TEAL, color: TEAL }}
+              onClick={() => navigate('/attendance-regularization')}
+              className="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
+              style={{ background: TEAL }}
             >
               <FiActivity className="h-4 w-4" />
-              Today's live roster
+              Regularization & WFH
             </button>
+            <div className="attendance-suite__export">
+              <button type="button" aria-expanded={exportMenuOpen} onClick={() => setExportMenuOpen(!exportMenuOpen)} className="attendance-suite__export-trigger"><FiDownload /> Export Excel</button>
+              {exportMenuOpen && <div className="attendance-suite__export-menu"><button type="button" onClick={() => { setExportMenuOpen(false); handleExportClick('date'); }}>Export by date</button><button type="button" onClick={() => { setExportMenuOpen(false); handleExportClick('month'); }}>Export by month</button></div>}
+            </div>
             <button
               type="button"
               onClick={handleExportCsv}
@@ -887,20 +892,24 @@ const AllAttendanceStatsComponent = () => {
             </button>
           </div>
         </header>
+        <nav className="attendance-suite__tabs" aria-label="Attendance views">
+          <button type="button" aria-pressed={suiteView === 'overview'} onClick={() => setSuiteView('overview')}>Today Overview</button>
+          <button type="button" aria-pressed={suiteView === 'history'} onClick={() => setSuiteView('history')}>Attendance History</button>
+        </nav>
+        {suiteView === 'overview' && <TodayStatusComponent embedded onHistory={() => setSuiteView('history')} />}
+        <div className="attendance-suite__history" hidden={suiteView !== 'history'}>
+
 
         {errMsg ? (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{errMsg}</div>
         ) : null}
 
-        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm lg:p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-                Search team member
-              </label>
-              <div className="relative">
+        <p className="attendance-history__range">Attendance records: {startDate} to {endDate}. Use the date-range control to filter history.</p>
+        <section className="attendance-history__filterbar">
+                        <div className="relative">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                 <input
+                  aria-label="Search attendance history"
                   type="search"
                   placeholder="Search by name or email…"
                   value={search}
@@ -908,8 +917,22 @@ const AllAttendanceStatsComponent = () => {
                   className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/30 focus:border-[#0a8f6c]"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 items-end">
+                        <select
+                aria-label="Filter department" value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-0 w-full sm:min-w-[200px] max-w-full"
+              >
+                <option value="">All departments</option>
+                {departmentSelectOptions.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+          <select aria-label="Filter attendance status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All Statuses</option><option value="present">Present</option><option value="late">Late Arrival</option><option value="absent">Absent</option><option value="leave">On Leave</option><option value="office">Office</option><option value="wfh">WFH</option>
+          </select>
+          <details className="attendance-history__dates"><summary>{startDate} - {endDate}</summary><div className="attendance-history__date-panel">            <div className="grid grid-cols-2 gap-3 items-end">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">From</label>
                 <input
@@ -929,9 +952,9 @@ const AllAttendanceStatsComponent = () => {
                 />
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 mb-4">
+</div></details>
+        </section>
+        <details className="attendance-history__advanced"><summary>More filters &amp; columns</summary><div className="attendance-history__advanced-body">          <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-2">Year</span>
             <select
               value={filterYear}
@@ -964,56 +987,6 @@ const AllAttendanceStatsComponent = () => {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            {[
-              { id: 'all', label: 'All' },
-              { id: 'present', label: 'Present' },
-              { id: 'late', label: 'Late' },
-              { id: 'absent', label: 'Absent' },
-              { id: 'leave', label: 'On Leave' },
-              { id: 'office', label: 'Office' },
-              { id: 'wfh', label: 'WFH' },
-            ].map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => setStatusFilter(chip.id)}
-                className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                  statusFilter === chip.id
-                    ? chip.id === 'all'
-                      ? 'border-2 shadow-sm'
-                      : 'border-transparent text-white shadow-sm'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                }`}
-                style={
-                  statusFilter === chip.id && chip.id === 'all'
-                    ? { borderColor: TEAL, background: TEAL_LIGHT, color: TEAL }
-                    : statusFilter === chip.id && chip.id !== 'all'
-                      ? { background: TEAL, borderColor: TEAL }
-                      : undefined
-                }
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-4 items-center">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-2">Department</label>
-              <select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-0 w-full sm:min-w-[200px] max-w-full"
-              >
-                <option value="">All departments</option>
-                {departmentSelectOptions.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-2">Sort by</label>
               <select
@@ -1025,115 +998,19 @@ const AllAttendanceStatsComponent = () => {
                 <option value="date_asc">Date ascending</option>
               </select>
             </div>
-          </div>
-        </section>
+<label className="flex items-center gap-2"><input type="checkbox" checked={showExtraColumns} onChange={(e) => setShowExtraColumns(e.target.checked)} />Show shift, break details &amp; location</label></div></details>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              title: 'Avg attendance %',
-              value: `${kpis.avgAttendancePct ?? 0}%`,
-              sub: 'Days with a record, not absent',
-              accent: TEAL,
-            },
-            {
-              title: 'Total late days',
-              value: String(kpis.totalLateDays ?? 0).padStart(2, '0'),
-              sub: 'In selected range',
-              accent: ORANGE,
-            },
-            {
-              title: 'Total absent days',
-              value: String(kpis.totalAbsentDays ?? 0).padStart(2, '0'),
-              sub: 'Unplanned absence',
-              accent: RED,
-            },
-            {
-              title: 'WFH days',
-              value: String(kpis.wfhDays ?? 0),
-              sub: 'Remote',
-              accent: SKY,
-            },
-          ].map((card) => (
-            <div
-              key={card.title}
-              className="relative overflow-hidden rounded-2xl bg-white border border-slate-100 p-5 shadow-sm"
-            >
-              <div
-                className="absolute -right-6 -bottom-6 h-24 w-24 rounded-full opacity-10 pointer-events-none"
-                style={{ background: card.accent }}
-              />
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{card.title}</p>
-              <p className="text-3xl font-bold text-slate-900">{card.value}</p>
-              <p className="text-sm text-slate-500 mt-1">{card.sub}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Daily attendance %</h3>
-            <div className="h-[280px] w-full">
-              {dailyData.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#64748b" />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#64748b" />
-                    <Tooltip formatter={(value) => [`${value}%`, 'Attendance']} />
-                    <ReferenceLine y={85} stroke="#94a3b8" strokeDasharray="6 6" label={{ value: '85%', fill: '#64748b', fontSize: 10 }} />
-                    <Bar dataKey="pct" fill={TEAL} radius={[6, 6, 0, 0]} maxBarSize={40} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-500 text-sm">
-                  No trend data for this filter
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Status distribution (by member)</h3>
-            <div className="h-[280px] w-full">
-              {memberData.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={memberData}
-                    margin={{ top: 4, right: 12, left: 4, bottom: 4 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="present" name="Present" stackId="s" fill={TEAL} />
-                    <Bar dataKey="late" name="Late" stackId="s" fill={ORANGE} />
-                    <Bar dataKey="absent" name="Absent" stackId="s" fill={RED} />
-                    <Bar dataKey="wfh" name="WFH" stackId="s" fill={SKY} />
-                    <Bar dataKey="leave" name="Leave" stackId="s" fill={VIOLET} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-500 text-sm">
-                  No member breakdown yet
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+        <div data-extra-columns={showExtraColumns} className="attendance-suite__ledger attendance-history__ledger rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-[760px] w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-slate-50/90 border-b border-slate-100">
-                  <th className="px-4 py-4 pl-6">Team member</th>
+                  <th className="px-4 py-4 pl-6">Employee</th>
                   <th className="px-4 py-4">Shift</th>
                   <th className="px-4 py-4">Date</th>
-                  <th className="px-4 py-4">Check in / out</th>
-                  <th className="px-4 py-4">Hours</th>
+                  <th className="px-4 py-4">Punch In</th>
+                  <th className="px-4 py-4">Punch Out</th>
+                  <th className="px-4 py-4">Total Hours</th>
                   <th className="px-4 py-4">Break</th>
                   <th className="px-4 py-4">Status</th>
                   <th className="px-4 py-4">Location</th>
@@ -1152,7 +1029,6 @@ const AllAttendanceStatsComponent = () => {
                       : row.uiStatus === 'absent' || row.uiStatus === 'leave'
                         ? null
                         : { Icon: FiBriefcase, label: 'Office' };
-                  const ActionIcon = statusActions[row.uiStatus];
                   const LocIcon = locMeta?.Icon;
                   const empId = emp?._id;
                   const canOpenProfile = !!empId;
@@ -1163,8 +1039,8 @@ const AllAttendanceStatsComponent = () => {
                         <div className="flex items-center gap-3">
                           <RowAvatar employee={emp} />
                           <div>
-                            <p className="font-semibold text-slate-900">{displayName}</p>
-                            <p className="text-xs text-slate-500">{title}</p>
+                            <p className="attendance-history__employee-name">{displayName}</p>
+                            <p className="text-xs text-slate-500">{[emp?.department, emp?.employeeId].filter(Boolean).join(' / ') || title}</p>
                           </div>
                         </div>
                       </td>
@@ -1172,19 +1048,10 @@ const AllAttendanceStatsComponent = () => {
                         {row.shiftName || emp?.shiftName || '—'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-slate-700">
-                        {formatRowDate(row)}
+                        {formatRowDateIso(row)}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
-                        {hasPunch ? (
-                          <div className="text-xs sm:text-sm">
-                            <span className="font-medium text-slate-900">IN:</span> {formatTime(row.clockIn)}
-                            {' · '}
-                            <span className="font-medium text-slate-900">OUT:</span> {formatTime(row.clockOut)}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic">No entry recorded</span>
-                        )}
-                      </td>
+                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">{formatTime(row.clockIn)}</td>
+                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">{formatTime(row.clockOut)}</td>
                       <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
                         {!hasPunch && row.uiStatus === 'absent' ? (
                           <span className="text-slate-400">0h 0m</span>
@@ -1221,42 +1088,7 @@ const AllAttendanceStatsComponent = () => {
                         )}
                       </td>
                       <td className="px-4 py-4 pr-6 text-right whitespace-nowrap">
-                        {ActionIcon ? (
-                          <button
-                            type="button"
-                            disabled={!canOpenProfile}
-                            onClick={() => canOpenProfile && handleEmployeeView(empId)}
-                            className="inline-flex disabled:opacity-40 disabled:pointer-events-none"
-                            title="Employee details"
-                            aria-label="Employee details"
-                          >
-                            <ActionIcon
-                              className="inline h-5 w-5"
-                              style={{
-                                color: row.uiStatus === 'absent' ? RED : row.uiStatus === 'late' ? ORANGE : SKY,
-                              }}
-                            />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!canOpenProfile}
-                            onClick={() => canOpenProfile && handleEmployeeView(empId)}
-                            className="inline-flex p-1 rounded-lg hover:bg-slate-100 text-slate-500 disabled:opacity-40 disabled:pointer-events-none"
-                            aria-label="Employee details"
-                          >
-                            <FiMoreHorizontal className="h-5 w-5" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          disabled={!canOpenProfile}
-                          onClick={() => canOpenProfile && handleEmployeeView(empId)}
-                          className="ml-3 text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-40 disabled:no-underline"
-                          style={{ color: TEAL }}
-                        >
-                          View
-                        </button>
+                        <button type="button" disabled={!canOpenProfile} onClick={() => canOpenProfile && handleEmployeeView(empId)} className="attendance-history__open" aria-label={`View attendance details for ${displayName}`}><FiChevronRight /></button>
                       </td>
                     </tr>
                   );
@@ -1314,9 +1146,108 @@ const AllAttendanceStatsComponent = () => {
           </footer>
         </div>
 
+        <details className="attendance-history__reports"><summary>Attendance insights &amp; charts</summary>        <div className="attendance-suite__stats grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              title: 'Avg attendance %',
+              value: `${kpis.avgAttendancePct ?? 0}%`,
+              sub: 'Days with a record, not absent',
+              accent: TEAL,
+            },
+            {
+              title: 'Total late days',
+              value: String(kpis.totalLateDays ?? 0).padStart(2, '0'),
+              sub: 'In selected range',
+              accent: ORANGE,
+            },
+            {
+              title: 'Total absent days',
+              value: String(kpis.totalAbsentDays ?? 0).padStart(2, '0'),
+              sub: 'Unplanned absence',
+              accent: RED,
+            },
+            {
+              title: 'WFH days',
+              value: String(kpis.wfhDays ?? 0),
+              sub: 'Remote',
+              accent: SKY,
+            },
+          ].map((card) => (
+            <div
+              key={card.title}
+              className="relative overflow-hidden rounded-2xl bg-white border border-slate-100 p-5 shadow-sm"
+            >
+              <div
+                className="absolute -right-6 -bottom-6 h-24 w-24 rounded-full opacity-10 pointer-events-none"
+                style={{ background: card.accent }}
+              />
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{card.title}</p>
+              <p className="text-3xl font-bold text-slate-900">{card.value}</p>
+              <p className="text-sm text-slate-500 mt-1">{card.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="attendance-suite__charts grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Daily attendance %</h3>
+            <div className="h-[280px] w-full">
+              {dailyData.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#64748b" />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#64748b" />
+                    <Tooltip formatter={(value) => [`${value}%`, 'Attendance']} />
+                    <ReferenceLine y={85} stroke="#94a3b8" strokeDasharray="6 6" label={{ value: '85%', fill: '#64748b', fontSize: 10 }} />
+                    <Bar dataKey="pct" fill={TEAL} radius={[6, 6, 0, 0]} maxBarSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+                  No trend data for this filter
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Status distribution (by member)</h3>
+            <div className="h-[280px] w-full">
+              {memberData.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={memberData}
+                    margin={{ top: 4, right: 12, left: 4, bottom: 4 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="present" name="Present" stackId="s" fill={TEAL} />
+                    <Bar dataKey="late" name="Late" stackId="s" fill={ORANGE} />
+                    <Bar dataKey="absent" name="Absent" stackId="s" fill={RED} />
+                    <Bar dataKey="wfh" name="WFH" stackId="s" fill={SKY} />
+                    <Bar dataKey="leave" name="Leave" stackId="s" fill={VIOLET} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+                  No member breakdown yet
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+</details>
+        </div>
+
         {/* Break Details Modal */}
-        {showBreaksModal && selectedBreaksRow && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+        {showBreaksModal && selectedBreaksRow && createPortal(
+          <div className="attendance-suite__modal-overlay fixed inset-0 flex items-center justify-center bg-black/50 p-4 sm:p-6">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
               <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
                 <div className="flex items-center gap-3">
@@ -1403,11 +1334,11 @@ const AllAttendanceStatsComponent = () => {
               </div>
             </div>
           </div>
-        )}
+        , document.body)}
 
         {/* Export Selection Modal */}
-        {showExportModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+        {showExportModal && createPortal(
+          <div className="attendance-suite__modal-overlay fixed inset-0 flex items-center justify-center bg-black/50 p-4 sm:p-6">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
               <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
                 <div className="flex items-center gap-3">
@@ -1545,7 +1476,7 @@ const AllAttendanceStatsComponent = () => {
               </div>
             </div>
           </div>
-        )}
+        , document.body)}
       </div>
     </div>
   );

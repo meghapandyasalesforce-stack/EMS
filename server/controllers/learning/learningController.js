@@ -59,7 +59,7 @@ export const getAdminCourses = asyncHandler(async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const courses = await Course.find(query)
-        .populate('instructor', 'name email')
+        .populate('instructor', 'name lastName email')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -190,7 +190,7 @@ export const getCourses = asyncHandler(async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const courses = await Course.find(query)
-        .populate('instructor', 'name email')
+        .populate('instructor', 'name lastName email')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));

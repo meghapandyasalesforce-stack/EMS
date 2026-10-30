@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
     FaBook,
     FaGraduationCap,
     FaPlus,
-    FaEdit,
     FaSearch,
     FaClock,
     FaCheckCircle,
     FaUsers,
-    FaUserPlus,
     FaTimes,
     FaMedal,
+    FaDownload,
+    FaEllipsisV,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -26,23 +27,60 @@ import {
     isEnrollmentOverdue,
     isExternalCourse
 } from './learningUtils';
-import { UI_FORM_LABEL_CLASS, UI_TABLE_HEADING_CLASS } from '../../utils/textFormat.js';
+import { UI_TABLE_HEADING_CLASS } from '../../utils/textFormat.js';
 import DraftAwaitingBanner from '../../components/DraftAwaitingBanner';
 import CertificateModal from '../../Employee/Learning/CertificateModal';
 
 const MINT_DARK = '#0d9488';
 
-const KpiStat = ({ label, value, icon, tint }) => (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${tint}`}>
-            {React.createElement(icon)}
+const KpiStat = ({ label, value, hint, icon }) => (
+    <div className="rounded-2xl border border-slate-200 p-5 shadow-sm" style={{ backgroundColor: '#ffffff' }}>
+        <div className="flex items-start justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full text-[#0a8f6c]" style={{ backgroundColor: '#e7f7f2' }}>
+                {React.createElement(icon, { className: 'h-4 w-4' })}
+            </span>
         </div>
-        <div className="min-w-0">
-            <p className={UI_FORM_LABEL_CLASS}>{label}</p>
-            <p className="text-2xl font-bold leading-tight text-slate-900">{value}</p>
-        </div>
+        <p className="mt-4 text-3xl font-bold tracking-tight text-[#0E2B3D]">{value}</p>
+        {hint ? <p className="mt-2 text-xs font-medium text-[#0a8f6c]">{hint}</p> : <span className="mt-2 block h-4" aria-hidden="true" />}
     </div>
 );
+
+const personName = (person) =>
+    [person?.name, person?.lastName].filter(Boolean).join(' ').trim();
+
+const courseLeadName = (course) =>
+    personName(course?.instructor) || course?.externalInstructor?.name || '';
+
+const formatUpdated = (date) => {
+    if (!date) return 'Loading catalog';
+    const minutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+    if (minutes < 1) return 'Updated just now';
+    if (minutes < 60) return `Updated ${minutes} min${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `Updated ${hours} hour${hours === 1 ? '' : 's'} ago`;
+    return `Updated ${date.toLocaleDateString()}`;
+};
+
+const csvCell = (value) => `"${String(value ?? '').split('"').join('""')}"`;
+
+const downloadCsv = (filename, header, rows) => {
+    const blob = new Blob(
+        [[header.join(','), ...rows.map((row) => row.map(csvCell).join(','))].join('\n')],
+        { type: 'text/csv;charset=utf-8' }
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+};
+
+const certificateReady = (enrollment) =>
+    enrollment?.status === 'Completed' && Boolean(enrollment?.courseId?.certificate?.enabled);
+
+const LEVEL_ORDER = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 
 const LearningPage = () => {
     const navigate = useNavigate();
@@ -68,6 +106,12 @@ const LearningPage = () => {
     const [certificate, setCertificate] = useState(null);
     const [certificateEnrollmentId, setCertificateEnrollmentId] = useState(null);
     const [certificateLoadingId, setCertificateLoadingId] = useState(null);
+    const [loadedAt, setLoadedAt] = useState(null);
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [levelFilter, setLevelFilter] = useState('all');
+    const [menuCourseId, setMenuCourseId] = useState(null);
+    const [exporting, setExporting] = useState(false);
+    const menuRef = useRef(null);
 
     const fetchAll = useCallback(async () => {
         try {
@@ -85,6 +129,7 @@ const LearningPage = () => {
             ]);
             setCourses(coursesRes.data?.data || []);
             setEnrollments(enrollmentsRes.data?.data || []);
+            setLoadedAt(new Date());
         } catch (error) {
             setCourses([]);
             setEnrollments([]);
@@ -176,16 +221,38 @@ const LearningPage = () => {
         }
     };
 
+    const enrollmentsByCourse = useMemo(() => {
+        const map = new Map();
+        enrollments.forEach((enrollment) => {
+            const id = String(enrollment.courseId?._id || enrollment.courseId || '');
+            if (!id) return;
+            const list = map.get(id) || [];
+            list.push(enrollment);
+            map.set(id, list);
+        });
+        return map;
+    }, [enrollments]);
+
     const stats = useMemo(() => {
         const published = courses.filter((c) => (c.status || '').toLowerCase() === 'published').length;
-        const totalHours = courses.reduce((sum, c) => sum + (Number(c.duration) || 0), 0);
         const completed = enrollments.filter((e) => e.status === 'Completed').length;
+        const people = new Set(
+            enrollments.map((e) => String(e.employeeId?._id || e.employeeId || '')).filter(Boolean)
+        );
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const addedThisMonth = courses.filter((course) => {
+            const created = course.createdAt ? new Date(course.createdAt) : null;
+            return created && !Number.isNaN(created.getTime()) && created >= monthStart;
+        }).length;
         return {
-            totalCourses: courses.length,
             published,
-            enrollments: enrollments.length,
+            enrolledEmployees: people.size,
+            completionRate: enrollments.length ? Math.round((completed / enrollments.length) * 1000) / 10 : 0,
+            certificates: enrollments.filter(certificateReady).length,
             completed,
-            totalHours,
+            addedThisMonth,
         };
     }, [courses, enrollments]);
 
@@ -194,168 +261,277 @@ const LearningPage = () => {
         [courses]
     );
 
+    const categories = useMemo(
+        () => [...new Set(courses.map((course) => course.category).filter(Boolean))].sort(),
+        [courses]
+    );
+    const levels = useMemo(() => {
+        const present = new Set(courses.map((course) => course.level).filter(Boolean));
+        return LEVEL_ORDER.filter((level) => present.has(level));
+    }, [courses]);
+
+    const matchesCourseFacets = useCallback((course) => {
+        if (!course) return categoryFilter === 'all' && levelFilter === 'all';
+        if (categoryFilter !== 'all' && course.category !== categoryFilter) return false;
+        if (levelFilter !== 'all' && course.level !== levelFilter) return false;
+        return true;
+    }, [categoryFilter, levelFilter]);
+
     const filteredCourses = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        if (!q) return courses;
         return courses.filter((course) => {
-            const haystack = [course.title, course.category, course.description, course.status, course.level]
-                .filter(Boolean)
-                .join(' ')
-                .toLowerCase();
-            return haystack.includes(q);
-        });
-    }, [courses, searchQuery]);
-
-    const filteredEnrollments = useMemo(() => {
-        const q = searchQuery.trim().toLowerCase();
-        if (!q) return enrollments;
-        return enrollments.filter((e) => {
+            if (!matchesCourseFacets(course)) return false;
+            if (!q) return true;
             const haystack = [
-                e.courseId?.title,
-                e.employeeId?.name,
-                e.employeeId?.lastName,
-                e.status,
+                course.title,
+                course.category,
+                course.description,
+                course.status,
+                course.level,
+                courseLeadName(course),
             ]
                 .filter(Boolean)
                 .join(' ')
                 .toLowerCase();
             return haystack.includes(q);
         });
-    }, [enrollments, searchQuery]);
+    }, [courses, searchQuery, matchesCourseFacets]);
 
-    if (loading) {
-        return (
-            <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-transparent">
-                <div className="text-center">
-                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#0E9370] border-r-[#0E9370]" />
-                    <p className="text-sm font-medium text-slate-600">Loading learning data...</p>
-                </div>
-            </div>
-        );
-    }
+    const filteredEnrollments = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        return enrollments.filter((enrollment) => {
+            if (!matchesCourseFacets(enrollment.courseId)) return false;
+            if (!q) return true;
+            const haystack = [
+                enrollment.courseId?.title,
+                enrollment.employeeId?.name,
+                enrollment.employeeId?.lastName,
+                enrollment.status,
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            return haystack.includes(q);
+        });
+    }, [enrollments, searchQuery, matchesCourseFacets]);
+
+    const certificateRows = useMemo(
+        () => filteredEnrollments.filter(certificateReady),
+        [filteredEnrollments]
+    );
+
+    const resetFilters = () => {
+        setSearchQuery('');
+        setCategoryFilter('all');
+        setLevelFilter('all');
+    };
+
+    const exportCurrent = () => {
+        setExporting(true);
+        try {
+            if (activeTab === 'courses') {
+                downloadCsv(
+                    'learning-courses.csv',
+                    ['Title', 'Category', 'Level', 'Status', 'Hours', 'Enrollments', 'Average completion', 'Lead'],
+                    filteredCourses.map((course) => {
+                        const rows = enrollmentsByCourse.get(String(course._id)) || [];
+                        const average = rows.length
+                            ? Math.round(rows.reduce((sum, row) => sum + (Number(row.progress) || 0), 0) / rows.length)
+                            : 0;
+                        return [
+                            course.title,
+                            course.category,
+                            course.level,
+                            course.status,
+                            course.duration || 0,
+                            rows.length,
+                            `${average}%`,
+                            courseLeadName(course),
+                        ];
+                    })
+                );
+            } else if (activeTab === 'certificates') {
+                downloadCsv(
+                    'learning-certificates.csv',
+                    ['Employee', 'Course', 'Completed'],
+                    certificateRows.map((enrollment) => [
+                        personName(enrollment.employeeId),
+                        enrollment.courseId?.title || '',
+                        enrollment.completedAt || enrollment.completionDate || '',
+                    ])
+                );
+            } else {
+                downloadCsv(
+                    'learning-enrollments.csv',
+                    ['Course', 'Employee', 'Assigned as', 'Progress', 'Status', 'Due'],
+                    filteredEnrollments.map((enrollment) => [
+                        enrollment.courseId?.title || '',
+                        personName(enrollment.employeeId),
+                        enrollment.assignmentTarget?.type === 'team' ? 'Team' : 'Individual',
+                        `${enrollment.progress || 0}%`,
+                        enrollment.status || '',
+                        enrollment.dueDate ? new Date(enrollment.dueDate).toLocaleDateString() : '',
+                    ])
+                );
+            }
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!menuCourseId) return undefined;
+        const onPointer = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) setMenuCourseId(null);
+        };
+        document.addEventListener('mousedown', onPointer);
+        return () => document.removeEventListener('mousedown', onPointer);
+    }, [menuCourseId]);
 
     return (
         <div className="page-shell min-h-[calc(100vh-64px)] bg-transparent">
             <div className="page-shell-inner hrms-stack">
-                <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-theme-primary/10 text-xl text-theme-primary">
-                                <FaGraduationCap />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
-                                    Learning & Development
-                                </h1>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    Manage the course catalog, assignments, and completion tracking
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                            <label className="relative block min-w-[220px] flex-1 sm:w-72">
-                                <FaSearch className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    type="search"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder={
-                                        activeTab === 'courses'
-                                            ? 'Search courses...'
-                                            : 'Search enrollments...'
-                                    }
-                                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-theme-primary focus:bg-white focus:ring-2 focus:ring-theme-primary/20"
-                                />
-                            </label>
-                            {isManagerUser && (
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/learning/create-course')}
-                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-theme-primary px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-                                >
-                                    <FaPlus className="h-3.5 w-3.5" />
-                                    Create Course
-                                </button>
-                            )}
-                        </div>
+                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0a8f6c]">
+                            Engage &amp; support
+                            <span className="ml-2 font-medium normal-case tracking-normal text-slate-400">· {formatUpdated(loadedAt)}</span>
+                        </p>
+                        <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#0E2B3D] sm:text-3xl">
+                            Enterprise Learning &amp; Development Hub
+                        </h1>
+                        <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                            Orchestrate internal training tracks, compliance certifications, and employee skill roadmaps.
+                        </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                        {isManagerUser && (
+                            <button
+                                type="button"
+                                onClick={() => navigate('/learning/create-course')}
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0a8f6c] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#087a5c]"
+                            >
+                                <FaPlus className="h-3.5 w-3.5" />
+                                Create Course
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={exportCurrent}
+                            disabled={exporting}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                            style={{ backgroundColor: '#ffffff' }}
+                            aria-label="Export current list"
+                            title="Export current list"
+                        >
+                            <FaDownload className="h-4 w-4" />
+                        </button>
                     </div>
                 </header>
 
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-                    <KpiStat label="Total Courses" value={stats.totalCourses} icon={FaBook} tint="bg-slate-100 text-slate-600" />
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                     <KpiStat
-                        label="Published"
+                        label="Active courses"
                         value={stats.published}
+                        hint={stats.addedThisMonth ? `+${stats.addedThisMonth} added this month` : null}
+                        icon={FaBook}
+                    />
+                    <KpiStat label="Enrolled employees" value={stats.enrolledEmployees.toLocaleString()} icon={FaUsers} />
+                    <KpiStat
+                        label="Completion rate"
+                        value={`${stats.completionRate}%`}
+                        hint={stats.completed ? `${stats.completed} completed` : null}
                         icon={FaCheckCircle}
-                        tint="bg-emerald-50 text-emerald-600"
                     />
                     <KpiStat
-                        label="Enrollments"
-                        value={stats.enrollments}
-                        icon={FaUsers}
-                        tint="bg-teal-50 text-teal-700"
-                    />
-                    <KpiStat
-                        label="Training Hours"
-                        value={stats.totalHours}
-                        icon={FaClock}
-                        tint="bg-violet-50 text-violet-600"
+                        label="Certifications issued"
+                        value={stats.certificates}
+                        hint={stats.certificates ? 'Ready to view' : null}
+                        icon={FaMedal}
                     />
                 </div>
 
-                <section className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                        <div className="min-w-0">
-                            <h2 className="text-lg font-bold text-slate-900">
-                                {activeTab === 'courses'
-                                    ? `Courses (${filteredCourses.length})`
-                                    : `Enrollments (${filteredEnrollments.length})`}
-                            </h2>
-                            <p className="text-sm text-slate-500">
-                                {activeTab === 'courses'
-                                    ? 'Browse and manage training programs'
-                                    : `${stats.completed} completed enrollments`}
-                            </p>
-                        </div>
-                        <div className="flex w-full rounded-xl bg-slate-100 p-1 sm:w-auto">
+                <div className="flex flex-wrap gap-6 border-b border-slate-200" role="tablist">
+                    {[
+                        { id: 'courses', label: 'Courses Catalog', count: filteredCourses.length, icon: FaBook },
+                        { id: 'enrollments', label: 'Assignments & Progress', count: filteredEnrollments.length, icon: FaGraduationCap },
+                        { id: 'certificates', label: 'Certificates Ledger', count: certificateRows.length, icon: FaMedal },
+                    ].map((tab) => {
+                        const active = activeTab === tab.id;
+                        return (
                             <button
+                                key={tab.id}
                                 type="button"
-                                onClick={() => setActiveTab('courses')}
-                                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition sm:flex-none sm:px-4 ${
-                                    activeTab === 'courses'
-                                        ? 'bg-theme-primary text-white shadow-sm'
-                                        : 'text-slate-600 hover:text-slate-900'
+                                role="tab"
+                                aria-selected={active}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`-mb-px inline-flex items-center gap-2 border-b-2 pb-3 text-sm font-semibold ${
+                                    active ? 'border-[#0a8f6c] text-[#0a8f6c]' : 'border-transparent text-slate-500 hover:text-slate-700'
                                 }`}
                             >
-                                <FaBook className="h-3.5 w-3.5" />
-                                Courses
-                                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                                    activeTab === 'courses' ? 'bg-white/20 text-white' : 'bg-white text-slate-500'
-                                }`}>{courses.length}</span>
+                                <tab.icon className="h-3.5 w-3.5" />
+                                {tab.label}
+                                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${active ? 'bg-[#0a8f6c]/10 text-[#0a8f6c]' : 'bg-slate-100 text-slate-500'}`}>
+                                    {tab.count}
+                                </span>
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('enrollments')}
-                                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition sm:flex-none sm:px-4 ${
-                                    activeTab === 'enrollments'
-                                        ? 'bg-theme-primary text-white shadow-sm'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                            >
-                                <FaGraduationCap className="h-3.5 w-3.5" />
-                                Enrollments
-                                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                                    activeTab === 'enrollments' ? 'bg-white/20 text-white' : 'bg-white text-slate-500'
-                                }`}>{enrollments.length}</span>
-                            </button>
-                        </div>
-                    </div>
+                        );
+                    })}
+                </div>
 
-                    <div className="min-w-0 max-w-full p-5 md:p-6">
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 shadow-sm lg:flex-row lg:items-center" style={{ backgroundColor: '#ffffff' }}>
+                    <label className="relative min-w-0 flex-1">
+                        <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <input
+                            type="search"
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
+                            placeholder={activeTab === 'courses' ? 'Search courses by title, skill...' : 'Search by employee or course'}
+                            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#0a8f6c] focus:ring-2 focus:ring-[#0a8f6c]/20"
+                        />
+                    </label>
+                    <select
+                        value={categoryFilter}
+                        onChange={(event) => setCategoryFilter(event.target.value)}
+                        className="h-11 min-w-[10.5rem] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    >
+                        <option value="all">All categories</option>
+                        {categories.map((category) => (
+                            <option key={category} value={category}>{category}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={levelFilter}
+                        onChange={(event) => setLevelFilter(event.target.value)}
+                        className="h-11 min-w-[9.5rem] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    >
+                        <option value="all">All levels</option>
+                        {levels.map((level) => (
+                            <option key={level} value={level}>{level}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="h-11 px-3 text-sm font-semibold text-[#0a8f6c] hover:underline"
+                    >
+                        Reset filters
+                    </button>
+                </div>
+
+                <section className="relative min-w-0 max-w-full">
+                    {loading ? (
+                        <div className="absolute inset-0 z-[2] flex items-center justify-center rounded-2xl bg-white/70">
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-transparent border-t-[#0a8f6c]" />
+                        </div>
+                    ) : null}
+                    <div className="min-w-0 max-w-full">
                         {activeTab === 'courses' ? (
                             <>
                             <DraftAwaitingBanner count={draftCourseCount} entityLabel="course" />
-                            {filteredCourses.length === 0 ? (
+                            {loading && courses.length === 0 ? (
+                                <div className="py-20" />
+                            ) : filteredCourses.length === 0 ? (
                                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
                                     <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-primary/10 text-theme-primary">
                                         <FaBook className="h-7 w-7" />
@@ -378,90 +554,172 @@ const LearningPage = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                                    {filteredCourses.map((course) => (
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                    {filteredCourses.map((course) => {
+                                        const rows = enrollmentsByCourse.get(String(course._id)) || [];
+                                        const average = rows.length
+                                            ? Math.round(rows.reduce((sum, row) => sum + (Number(row.progress) || 0), 0) / rows.length)
+                                            : 0;
+                                        const lead = courseLeadName(course);
+                                        const menuOpen = menuCourseId === String(course._id);
+                                        return (
                                         <article
                                             key={course._id}
-                                            className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-theme-primary/30 hover:shadow-md"
+                                            className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 shadow-sm"
+                                            style={{ backgroundColor: '#ffffff' }}
                                         >
-                                            <div className="flex flex-1 flex-col p-5">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-theme-primary/10 text-theme-primary">
-                                                        <FaBook />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <h3 className="truncate text-base font-semibold text-slate-900">
-                                                            {course.title}
-                                                        </h3>
-                                                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                                            {course.category && (
-                                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                                                                    {course.category}
-                                                                </span>
-                                                            )}
-                                                            {course.level && (
-                                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-                                                                    {course.level}
-                                                                </span>
-                                                            )}
-                                                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${courseStatusStyle(course.status)}`}>
-                                                                {formatCourseStatusLabel(course.status || 'Draft')}
-                                                            </span>
-                                                        </div>
-                                                        {isExternalCourse(course) && (
-                                                            <p className="mt-1 text-xs font-medium text-theme-primary">
-                                                                {course.provider || externalResourceLabel(course.resourceType)}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <p className="mt-3 line-clamp-2 text-sm text-slate-600">
-                                                    {course.description || 'No description provided.'}
-                                                </p>
-                                                <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                                                    <FaClock className="h-3 w-3" />
-                                                    {course.duration || 0} hours
-                                                    {course.isMandatory ? ' • Mandatory' : ''}
-                                                </p>
-                                            </div>
-                                            <div className="mt-auto grid gap-2 border-t border-slate-100 p-4">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => navigate(`/learning/courses/${course._id}`)}
-                                                    className="w-full rounded-xl bg-theme-primary py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-                                                >
-                                                    View Course
-                                                </button>
-                                                {isManagerUser && (
-                                                    <div className={`grid gap-2 ${course.status === 'Published' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                                        {course.status === 'Published' && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openAssignment(course)}
-                                                                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-theme-primary bg-theme-primary/10 py-2 text-sm font-semibold text-theme-primary transition hover:bg-theme-primary hover:text-white"
-                                                            >
-                                                                <FaUserPlus className="h-3.5 w-3.5" />
-                                                                Assign
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                navigate(`/learning/edit-course/${course._id}`)
-                                                            }
-                                                            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                                                        >
-                                                            <FaEdit className="h-3.5 w-3.5" />
-                                                            Edit
-                                                        </button>
+                                            <div
+                                                className="relative flex shrink-0 flex-col justify-end"
+                                                style={{ height: 148, minHeight: 148, backgroundColor: '#0E2B3D' }}
+                                            >
+                                                {course.thumbnail ? (
+                                                    <img src={course.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0E2B3D 0%, #146b56 100%)' }}>
+                                                        <span className="text-3xl font-bold tracking-wide text-white/90">
+                                                            {(course.title || course.category || 'C').slice(0, 1).toUpperCase()}
+                                                        </span>
                                                     </div>
                                                 )}
+                                                {course.category ? (
+                                                    <span className="absolute left-3 top-3 z-[1] rounded-md bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-[#0E2B3D]">
+                                                        {course.category}
+                                                    </span>
+                                                ) : null}
+                                                <div className="relative z-[1] flex justify-end gap-2 px-4 pb-3">
+                                                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#0E2B3D]">
+                                                            <FaClock className="mr-1 inline h-3 w-3" />
+                                                            {course.duration || 0} hours
+                                                        </span>
+                                                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#0E2B3D]">
+                                                            <FaUsers className="mr-1 inline h-3 w-3" />
+                                                            {rows.length} enrolled
+                                                        </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-1 flex-col border-t border-slate-100 p-4" style={{ backgroundColor: '#ffffff' }}>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        {course.level ? (
+                                                            <span className="text-[11px] font-bold uppercase tracking-wide text-[#0a8f6c]">{course.level} level</span>
+                                                        ) : null}
+                                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${courseStatusStyle(course.status)}`}>
+                                                            {formatCourseStatusLabel(course.status || 'Draft')}
+                                                        </span>
+                                                        {course.isMandatory ? (
+                                                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Mandatory</span>
+                                                        ) : null}
+                                                    </div>
+                                                    <div className="relative" ref={menuOpen ? menuRef : null}>
+                                                        <button
+                                                            type="button"
+                                                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                                            aria-label="Course actions"
+                                                            onClick={() => setMenuCourseId(menuOpen ? null : String(course._id))}
+                                                        >
+                                                            <FaEllipsisV className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        {menuOpen ? (
+                                                            <div className="absolute right-0 z-20 mt-1 w-36 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                                                                <button type="button" className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => navigate(`/learning/courses/${course._id}`)}>View</button>
+                                                                {isManagerUser ? (
+                                                                    <button type="button" className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => navigate(`/learning/edit-course/${course._id}`)}>Edit</button>
+                                                                ) : null}
+                                                                {isManagerUser && course.status === 'Published' ? (
+                                                                    <button type="button" className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => { setMenuCourseId(null); openAssignment(course); }}>Assign</button>
+                                                                ) : null}
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+                                                <h3 className="mt-2 line-clamp-2 text-base font-bold text-[#0E2B3D]">{course.title}</h3>
+                                                <p className="mt-1 line-clamp-2 text-sm text-slate-600">{course.description || 'No description provided.'}</p>
+                                                {isExternalCourse(course) ? (
+                                                    <p className="mt-1 text-xs font-medium text-[#0a8f6c]">{course.provider || externalResourceLabel(course.resourceType)}</p>
+                                                ) : null}
+                                                <div className="mt-4">
+                                                    <div className="mb-1 flex justify-between text-[11px] font-medium text-slate-500">
+                                                        <span>Avg completion</span>
+                                                        <span>{average}%</span>
+                                                    </div>
+                                                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                                        <div className="h-full rounded-full bg-[#0a8f6c]" style={{ width: `${average}%` }} />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-4 flex items-center justify-between gap-2">
+                                                    <p className="min-w-0 truncate text-xs text-slate-600">
+                                                        {lead ? (
+                                                            <>Lead: <span className="font-semibold text-[#0E2B3D]">{lead}</span></>
+                                                        ) : (
+                                                            <span className="font-medium text-slate-500">{course.category || 'Course'}</span>
+                                                        )}
+                                                    </p>
+                                                    {isManagerUser && course.status === 'Published' ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openAssignment(course)}
+                                                            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                                        >
+                                                            Assign
+                                                        </button>
+                                                    ) : null}
+                                                </div>
                                             </div>
                                         </article>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                             </>
+                        ) : activeTab === 'certificates' ? (
+                            certificateRows.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center">
+                                    <FaMedal className="mx-auto mb-3 h-8 w-8 text-slate-300" />
+                                    <h3 className="text-lg font-semibold text-slate-900">No certificates to show</h3>
+                                    <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+                                        Completed courses with certificates enabled appear here.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                                    <table className="min-w-full text-left text-sm">
+                                        <thead>
+                                            <tr className="border-b border-slate-100 bg-slate-50/80">
+                                                <th className={`px-5 py-3 ${UI_TABLE_HEADING_CLASS}`}>Employee</th>
+                                                <th className={`px-5 py-3 ${UI_TABLE_HEADING_CLASS}`}>Course</th>
+                                                <th className={`px-5 py-3 ${UI_TABLE_HEADING_CLASS}`}>Completed</th>
+                                                <th className={`px-5 py-3 ${UI_TABLE_HEADING_CLASS}`}>Certificate</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {certificateRows.map((enrollment) => (
+                                                <tr key={enrollment._id} className="border-b border-slate-50">
+                                                    <td className="px-5 py-4 text-slate-800">{personName(enrollment.employeeId) || '—'}</td>
+                                                    <td className="px-5 py-4 font-medium text-slate-900">{enrollment.courseId?.title || '—'}</td>
+                                                    <td className="px-5 py-4 text-slate-600">
+                                                        {enrollment.completedAt || enrollment.completionDate
+                                                            ? new Date(enrollment.completedAt || enrollment.completionDate).toLocaleDateString()
+                                                            : '—'}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openCertificate(enrollment._id)}
+                                                            disabled={certificateLoadingId === enrollment._id}
+                                                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                                        >
+                                                            <FaMedal className="h-3.5 w-3.5 text-[#0a8f6c]" />
+                                                            {certificateLoadingId === enrollment._id ? 'Opening...' : 'View'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )
+                        ) : loading && enrollments.length === 0 ? (
+                            <div className="py-20" />
                         ) : filteredEnrollments.length === 0 ? (
                             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
                                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-primary/10 text-theme-primary">
@@ -592,8 +850,8 @@ const LearningPage = () => {
                         )}
                     </div>
                 </section>
-                {assignmentCourse && (
-                    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+                {assignmentCourse && createPortal(
+                    <div className="fixed inset-0 z-[12000] flex items-end justify-center bg-[#0E2B3D]/70 p-0 sm:items-center sm:p-4">
                         <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-2xl">
                             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-6 sm:py-5">
                                 <div className="min-w-0">
@@ -753,7 +1011,8 @@ const LearningPage = () => {
                             </div>
                             </div>
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 )}
                 <CertificateModal
                     certificate={certificate}

@@ -40,8 +40,8 @@ export const getSuccessionPlans = asyncHandler(async (req, res) => {
 
     const plans = await SuccessionPlan.find(query)
         .populate('positionId', 'name level')
-        .populate('currentIncumbent', 'name email department')
-        .populate('successors.employeeId', 'name email department position')
+        .populate('currentIncumbent', 'name lastName email department')
+        .populate('successors.employeeId', 'name lastName email department position')
         .populate('successors.developmentPlan')
         .sort({ riskLevel: 1, criticality: 1 });
 
@@ -86,7 +86,7 @@ export const getTalentPool = asyncHandler(async (req, res) => {
     if (currentRole) query.currentRole = currentRole;
 
     const talentPool = await TalentPool.find(query)
-        .populate('employeeId', 'name email department position')
+        .populate('employeeId', 'name lastName email department position')
         .populate('currentRole', 'name level')
         .populate('targetRoles.roleId', 'name level')
         .populate('developmentPlan')
@@ -110,8 +110,8 @@ export const getSuccessionPlan = asyncHandler(async (req, res) => {
         organizationId
     })
         .populate('positionId', 'name level')
-        .populate('currentIncumbent', 'name email department position')
-        .populate('successors.employeeId', 'name email department position')
+        .populate('currentIncumbent', 'name lastName email department position')
+        .populate('successors.employeeId', 'name lastName email department position')
         .populate('successors.developmentPlan')
         .populate('developmentActivities.assignedTo', 'name email')
         .populate('createdBy', 'name email');
@@ -153,8 +153,8 @@ export const updateSuccessionPlan = asyncHandler(async (req, res) => {
 
     const populatedPlan = await SuccessionPlan.findById(plan._id)
         .populate('positionId', 'name level')
-        .populate('currentIncumbent', 'name email department position')
-        .populate('successors.employeeId', 'name email department position')
+        .populate('currentIncumbent', 'name lastName email department position')
+        .populate('successors.employeeId', 'name lastName email department position')
         .populate('successors.developmentPlan')
         .populate('developmentActivities.assignedTo', 'name email')
         .populate('createdBy', 'name email');
@@ -216,7 +216,7 @@ export const updateTalentPool = asyncHandler(async (req, res) => {
     await talent.save();
 
     const populatedTalent = await TalentPool.findById(talent._id)
-        .populate('employeeId', 'name email department position')
+        .populate('employeeId', 'name lastName email department position')
         .populate('currentRole', 'name level')
         .populate('targetRoles.roleId', 'name level')
         .populate('developmentPlan');

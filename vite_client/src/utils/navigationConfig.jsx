@@ -8,7 +8,7 @@ import {
     FaCog, FaShieldAlt, FaCreditCard, FaDollarSign, FaFileAlt,
     FaChartLine, FaBuilding, FaTasks, FaUserCheck, FaBell,
     FaGraduationCap, FaHandshake, FaFolderOpen, FaGift, FaUserTie,
-    FaChartBar, FaClock
+    FaChartBar, FaClock, FaSeedling, FaHeadset
 } from 'react-icons/fa';
 import { FaCrown } from 'react-icons/fa6';
 import { IoBookmarks } from 'react-icons/io5';
@@ -308,7 +308,6 @@ const getAdminNavigation = () => [
     { path: "/one-on-one", name: "One-on-one", icon: <FaUserCheck /> },
     { path: "/benefits", name: "Benefits", icon: <FaGift /> },
     { path: "/learning", name: "Learning & development", icon: <FaGraduationCap /> },
-    { path: "/employee/benefits-learning", name: "My benefits & learning", icon: <FaGift /> },
     { path: "/salary-structure", name: "Salary structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
     { path: "/admin/document-management", name: "Document management", icon: <FaFileAlt /> },
     { path: "/organization/subscription", name: "Subscription", icon: <FaCreditCard />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
@@ -332,7 +331,6 @@ const getExecutiveNavigation = (position) => {
         { path: "/employee/engagement", name: "Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_SURVEY_TAKE, PERMISSIONS.ENGAGEMENT_FEEDBACK_SUBMIT, PERMISSIONS.ENGAGEMENT_RECOGNITION_GIVE, PERMISSIONS.ENGAGEMENT_MANAGE] },
         { path: "/benefits", name: "Benefits", icon: <FaGift /> },
         { path: "/learning", name: "Learning & development", icon: <FaGraduationCap /> },
-        { path: "/employee/benefits-learning", name: "My benefits & learning", icon: <FaGift /> },
         { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
         { path: "/admin/reports", name: "Reports & analytics", icon: <FaChartBar /> },
         { path: "/organization/subscription", name: "Subscription", icon: <FaCreditCard /> },
@@ -422,7 +420,6 @@ const HR_NAV_ITEMS = [
     { path: "/onboarding", name: "Employee lifecycle", icon: <FaUserCheck />, permissions: [PERMISSIONS.ONBOARDING_MANAGE, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/benefits", name: "Benefits", icon: <FaGift /> },
     { path: "/learning", name: "Learning & development", icon: <FaGraduationCap /> },
-    { path: "/employee/benefits-learning", name: "My benefits & learning", icon: <FaGift /> },
     { path: "/engagement", name: "Employee engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_MANAGE, PERMISSIONS.ENGAGEMENT_SURVEY_MANAGE, PERMISSIONS.ENGAGEMENT_ANALYTICS_ORG, PERMISSIONS.ENGAGEMENT_ANALYTICS_TEAM] },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
     { path: "/documents", name: "Documents", icon: <FaFolderOpen /> },
@@ -440,6 +437,7 @@ const HR_NAV_ITEMS = [
     { path: "/employee-payroll", name: "My payroll", icon: <FaMoneyBill /> },
     { path: "/id-card-generator", name: "ID cards", icon: <FaCreditCard /> },
     { path: "/admin/reports", name: "HR reports", icon: <FaFileAlt /> },
+    { path: "/helpdesk", name: "Helpdesk", icon: <FaHeadset /> },
 ];
 
 /** HR Manager — all HR options except Projects */
