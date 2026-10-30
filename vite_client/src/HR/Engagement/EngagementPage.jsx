@@ -16,7 +16,6 @@ import {
     FaLightbulb,
     FaDownload,
     FaTasks,
-    FaCog,
     FaTrash,
     FaStream,
     FaEye,
@@ -467,7 +466,6 @@ const EngagementPage = () => {
             ...(isManagerUser
                 ? [
                     { id: 'actions', label: 'Action Plans', shortLabel: 'Actions', icon: FaTasks, defaultSub: null },
-                    { id: 'settings', label: 'Settings', shortLabel: 'Settings', icon: FaCog, defaultSub: null },
                 ]
                 : []),
         ];
