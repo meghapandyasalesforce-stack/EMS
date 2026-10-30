@@ -1,15 +1,7 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import {
-  FaBell,
-  FaBriefcase,
-  FaFolderOpen,
-  FaHome,
-  FaMoneyBill,
-  FaSeedling,
-  FaSignOutAlt,
   FaTimes,
   FaBars,
-  FaClock,
 } from 'react-icons/fa';
 import { FiHeadphones } from 'react-icons/fi';
 import { VscProject } from 'react-icons/vsc';
@@ -20,15 +12,8 @@ import SidebarNavList from '../SidebarNavList';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import MeWordmark from './MeWordmark';
 
-const BOTTOM_DEFS = [
-  { path: '/dashboard-employee', name: 'Home', icon: <FaHome /> },
-  { path: '/employee/leave-attendance', name: 'Time', icon: <FaClock /> },
-  { path: '/employee-payroll', name: 'Pay', icon: <FaMoneyBill /> },
-  { path: '/employee/documents-id', name: 'Docs', icon: <FaFolderOpen /> },
-];
-
 /**
- * Me-portal-only chrome: phone bottom bar, tablet icon rail, desktop sidebar.
+ * Me-portal-only chrome: phone navigation drawer, tablet icon rail, desktop sidebar.
  * Reuses existing navigate / logout / profile handlers — no auth logic.
  */
 const MePortalShell = ({
@@ -45,32 +30,20 @@ const MePortalShell = ({
   onViewProfile,
   drawerOpen,
   setDrawerOpen,
-  moreOpen,
-  setMoreOpen,
 }) => {
   const isPhone = viewport === 'phone';
   const isTablet = viewport === 'tablet';
   const isDesktop = viewport === 'desktop';
 
-  const bottomItems = useMemo(
-    () => BOTTOM_DEFS.filter((def) => navItems.some((n) => n.path === def.path)),
-    [navItems]
-  );
-
-  const moreNavItems = useMemo(() => {
-    const items = desktopNavItems.length ? desktopNavItems : navItems;
-    return items.filter((item) => !BOTTOM_DEFS.some((def) => def.path === item.path));
-  }, [desktopNavItems, navItems]);
-
   useEffect(() => {
-    if (!(drawerOpen || moreOpen)) return undefined;
+    if (!drawerOpen) return undefined;
     if (!isPhone && !isTablet) return undefined;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [drawerOpen, moreOpen, isPhone, isTablet]);
+  }, [drawerOpen, isPhone, isTablet]);
 
   useEffect(() => {
     if (!drawerOpen || (!isPhone && !isTablet)) return undefined;
@@ -87,7 +60,6 @@ const MePortalShell = ({
   }, [drawerOpen, isPhone, isTablet, setDrawerOpen]);
 
   const go = (path) => {
-    setMoreOpen(false);
     setDrawerOpen(false);
     onNavigate(path);
   };
@@ -188,10 +160,7 @@ const MePortalShell = ({
                 aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={drawerOpen}
                 aria-controls="me-navigation-drawer"
-                onClick={() => {
-                  setMoreOpen(false);
-                  setDrawerOpen((open) => !open);
-                }}
+                onClick={() => setDrawerOpen((open) => !open)}
                 className="me-touch-target me-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white hover:bg-white/10"
               >
                 {drawerOpen ? <FaTimes className="text-xl" aria-hidden="true" /> : <FaBars className="text-xl" aria-hidden="true" />}
@@ -309,106 +278,6 @@ const MePortalShell = ({
         </>
       ) : null}
 
-      {/* Phone floating bottom bar */}
-      {isPhone ? (
-        <nav className="me-bottom-nav" aria-label="Primary">
-          {bottomItems.map((item) => {
-            const active = isActive(item.path);
-            return (
-              <button
-                key={item.path}
-                type="button"
-                className={`me-bottom-nav__item${active ? ' is-active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => go(item.path)}
-              >
-                <span aria-hidden>{item.icon}</span>
-                {item.name}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className={`me-bottom-nav__item${moreOpen || moreNavItems.some((item) => isActive(item.path)) ? ' is-active' : ''}`}
-            aria-expanded={moreOpen}
-            aria-label="More"
-            onClick={() => setMoreOpen(true)}
-          >
-            <span aria-hidden>
-              <FaBriefcase />
-            </span>
-            More
-          </button>
-        </nav>
-      ) : null}
-
-      {/* More full-screen sheet (phone) */}
-      {isPhone && moreOpen ? (
-        <>
-          <button
-            type="button"
-            className="me-more-sheet-backdrop"
-            aria-label="Close more menu"
-            onClick={() => setMoreOpen(false)}
-          />
-          <div className="me-more-sheet" role="dialog" aria-modal="true" aria-label="More">
-            <div className="me-more-sheet__header">
-              <MeWordmark />
-              <button
-                type="button"
-                aria-label="Close"
-                className="me-touch-target me-focus-ring rounded-lg p-2 text-gray-600 hover:bg-gray-100"
-                onClick={() => setMoreOpen(false)}
-              >
-                <FaTimes className="text-xl" />
-              </button>
-            </div>
-            <ul className="me-more-sheet__list">
-              {moreNavItems.map((item) => (
-                <li key={item.path}>
-                  <button type="button" className={`me-more-sheet__item${isActive(item.path) ? ' is-active' : ''}`} aria-current={isActive(item.path) ? 'page' : undefined} onClick={() => go(item.path)}>
-                    <span className="me-more-sheet__icon" aria-hidden>
-                      {item.icon || <FaSeedling />}
-                    </span>
-                    {item.name}
-                  </button>
-                </li>
-              ))}
-              <li>
-                <button type="button" className="me-more-sheet__item" onClick={() => go('/notifications')}>
-                  <span className="me-more-sheet__icon" aria-hidden>
-                    <FaBell />
-                  </span>
-                  Notifications
-                </button>
-              </li>
-              <li>
-                <button type="button" className="me-more-sheet__item" onClick={() => go('/helpdesk')}>
-                  <span className="me-more-sheet__icon" aria-hidden>
-                    <FiHeadphones />
-                  </span>
-                  Helpdesk
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="me-more-sheet__item me-more-sheet__item--danger"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onOpenLogout();
-                  }}
-                >
-                  <span className="me-more-sheet__icon" aria-hidden>
-                    <FaSignOutAlt />
-                  </span>
-                  Logout
-                </button>
-              </li>
-            </ul>
-          </div>
-        </>
-      ) : null}
     </>
   );
 };
