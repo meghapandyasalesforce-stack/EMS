@@ -72,6 +72,20 @@ const MePortalShell = ({
     };
   }, [drawerOpen, moreOpen, isPhone, isTablet]);
 
+  useEffect(() => {
+    if (!drawerOpen || (!isPhone && !isTablet)) return undefined;
+    const previousFocus = document.activeElement;
+    document.querySelector('#me-navigation-drawer button[aria-label="Close menu"]')?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setDrawerOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [drawerOpen, isPhone, isTablet, setDrawerOpen]);
+
   const go = (path) => {
     setMoreOpen(false);
     setDrawerOpen(false);
@@ -136,6 +150,7 @@ const MePortalShell = ({
             paddingTop: 'env(safe-area-inset-top, 0px)',
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           }}
+          id="me-navigation-drawer"
           role="dialog"
           aria-modal="true"
           aria-label="Navigation menu"
@@ -167,11 +182,28 @@ const MePortalShell = ({
       {isPhone ? (
         <header className="safe-area-top relative z-30 w-full shrink-0 border-b border-gray-200 bg-white text-gray-800 shadow-sm">
           <div className="flex min-w-0 items-center justify-between gap-2 p-3">
-            <MeWordmark className="text-lg" />
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={drawerOpen}
+                aria-controls="me-navigation-drawer"
+                onClick={() => {
+                  setMoreOpen(false);
+                  setDrawerOpen((open) => !open);
+                }}
+                className="me-touch-target me-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#0e2b3d] text-white hover:bg-[#16384c]"
+              >
+                {drawerOpen ? <FaTimes className="text-xl" aria-hidden="true" /> : <FaBars className="text-xl" aria-hidden="true" />}
+              </button>
+              <MeWordmark className="text-lg" />
+            </div>
             <TopActions />
           </div>
         </header>
       ) : null}
+
+      {isPhone ? <Drawer items={desktopNavItems.length ? desktopNavItems : navItems} /> : null}
 
       {/* Tablet icon rail */}
       {isTablet ? (
