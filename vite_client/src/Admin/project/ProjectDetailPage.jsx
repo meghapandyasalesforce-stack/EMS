@@ -1,4 +1,5 @@
 import './projectDailyUpdates.css';
+import './projectDetailWorkspace.css';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Button,
@@ -586,7 +587,7 @@ const ProjectDetailPage = () => {
           borderColor: 'divider',
         }}
       >
-        <Paper variant="outlined" sx={{ p: 2 }}>
+        <Paper className="project-work-item" variant="outlined" sx={{ p: 2 }}>
           <Box
             display="flex"
             flexDirection={isMobile ? 'column' : 'row'}
@@ -836,7 +837,7 @@ const ProjectDetailPage = () => {
   }
 
   return (
-    <Box className={tabValue === 3 ? 'project-daily-view' : undefined}
+    <Box className={`project-detail-workspace project-detail-tab-${tabValue}${tabValue === 3 ? ' project-daily-view' : ''}`}
       sx={{ 
         padding: isMobile ? 2 : 4,
         marginLeft: isMobile ? 0 : '16rem',
@@ -958,7 +959,7 @@ const ProjectDetailPage = () => {
       {tabValue === 0 && (
         <>
           {isEditing ? (
-            <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+            <Paper className="project-edit-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
               <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <TextField
                   fullWidth
@@ -1121,10 +1122,10 @@ const ProjectDetailPage = () => {
               </Box>
             </Paper>
           ) : (
-            <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+            <Paper className="project-details-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
               <Typography variant={isMobile ? 'h5' : 'h4'} gutterBottom>{project.name}</Typography>
               
-              <Box 
+              <Box className="project-details-facts"
                 display="flex" 
                 flexDirection={isMobile ? 'column' : 'row'} 
                 gap={isMobile ? 2 : 4} 
@@ -1184,7 +1185,7 @@ const ProjectDetailPage = () => {
                   <Typography variant="h6" sx={{ mb: 2 }}>
                     Financial Overview
                   </Typography>
-                  <Box 
+                  <Box className="project-details-financials"
                     display="flex" 
                     flexDirection={isMobile ? 'column' : 'row'} 
                     gap={isMobile ? 2 : 4} 
@@ -1250,7 +1251,7 @@ const ProjectDetailPage = () => {
       )}
 
       {tabValue === 1 && (
-        <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+        <Paper className="project-workplan-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
             Work plan
           </Typography>
@@ -1258,7 +1259,7 @@ const ProjectDetailPage = () => {
             Tasks and subtasks for this project. This is separate from employees&apos; daily task logs.
           </Typography>
 
-          <Box display="flex" flexDirection={isMobile ? 'column' : 'row'} gap={1} alignItems="flex-start" sx={{ mb: 3 }}>
+          <Box className="project-workplan-addbar" display="flex" flexDirection={isMobile ? 'column' : 'row'} gap={1} alignItems="flex-start" sx={{ mb: 3 }}>
             <TextField
               size="small"
               fullWidth={isMobile}
@@ -1300,7 +1301,7 @@ const ProjectDetailPage = () => {
       )}
 
       {tabValue === 2 && (
-        <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+        <Paper className="project-team-logs-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>Daily task logs</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Per-day work entries logged by team members (not the project work breakdown).
@@ -1321,7 +1322,7 @@ const ProjectDetailPage = () => {
           ) : (
             <Box display="flex" flexDirection="column" gap={2}>
               {projectTasks.map(task => (
-                <Paper key={task._id} elevation={2} sx={{ p: 2 }}>
+                <Paper className="project-team-log" key={task._id} elevation={2} sx={{ p: 2 }}>
                   <Box display="flex" justifyContent="space-between" alignItems="center">
                     <Box>
                       <Typography variant="subtitle1">{task.taskDescription}</Typography>
@@ -1329,7 +1330,7 @@ const ProjectDetailPage = () => {
                         {task.employee?.name} • {new Date(task.date).toLocaleDateString()}
                       </Typography>
                       {task.comments && (
-                        <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                        <Typography className="project-team-log-note" variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
                           {task.comments}
                         </Typography>
                       )}

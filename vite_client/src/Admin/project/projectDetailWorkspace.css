@@ -1,0 +1,450 @@
+/* Shared project workspace styling. All four tabs retain their existing content. */
+.project-detail-workspace {
+  margin-left: 0 !important;
+  padding: 24px 28px 40px !important;
+  min-width: 0;
+  min-height: 100vh;
+  background: #f5f8fa;
+  color: #19354a;
+}
+.project-detail-workspace * {
+  box-sizing: border-box;
+}
+.project-detail-workspace .project-daily-toolbar {
+  margin-bottom: 20px;
+  gap: 14px;
+}
+.project-detail-workspace .project-daily-toolbar > .MuiBox-root {
+  gap: 8px;
+}
+.project-detail-workspace .MuiButton-root {
+  border-radius: 8px;
+  text-transform: none;
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 12px;
+  min-height: 36px;
+  padding: 8px 14px;
+}
+.project-detail-workspace .MuiButton-containedPrimary,
+.project-detail-workspace .MuiButton-contained.MuiButton-colorPrimary {
+  background: #09896e;
+  color: white;
+}
+.project-detail-workspace .MuiButton-containedSuccess,
+.project-detail-workspace .MuiButton-contained.MuiButton-colorSuccess {
+  background: #087856;
+  color: white;
+}
+.project-detail-workspace .MuiButton-outlined {
+  border-color: #d6e3e8;
+  color: #3f6473;
+}
+.project-detail-workspace .project-daily-toolbar > .MuiButton-root {
+  background: white;
+  border-color: #dce7ed;
+  color: #617c8c;
+}
+.project-detail-workspace .project-daily-toolbar .MuiButton-containedInfo,
+.project-detail-workspace .project-daily-toolbar .MuiButton-containedPrimary {
+  background: #e9f2f8;
+  color: #36576e;
+}
+.project-detail-workspace .project-daily-toolbar .MuiButton-containedError {
+  background: #ffebed;
+  color: #c13b51;
+}
+.project-detail-workspace .project-daily-tabs {
+  margin: 0 0 22px;
+  padding: 7px;
+  min-height: 54px;
+  background: white;
+  border: 1px solid #dce7ed;
+  border-radius: 13px;
+  box-shadow: 0 3px 12px #264b4404;
+}
+.project-detail-workspace .project-daily-tabs .MuiTabs-flexContainer {
+  gap: 7px;
+}
+.project-detail-workspace .project-daily-tabs .MuiTab-root {
+  min-height: 38px;
+  padding: 10px 19px;
+  text-transform: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #718595;
+  border-radius: 8px;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.project-detail-workspace .project-daily-tabs .MuiTab-root:hover {
+  background: #f1f8f5;
+  color: #09886c;
+}
+.project-detail-workspace .project-daily-tabs .MuiTab-root.Mui-selected {
+  background: #0a886b;
+  color: white;
+  box-shadow: 0 3px 7px #00816918;
+}
+.project-detail-workspace .project-daily-tabs .MuiTabs-indicator {
+  background: transparent;
+}
+.project-detail-workspace .project-details-panel,
+.project-detail-workspace .project-edit-panel,
+.project-detail-workspace .project-workplan-panel,
+.project-detail-workspace .project-team-logs-panel {
+  padding: 26px;
+  margin-bottom: 24px;
+  border: 1px solid #dfe8ed;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 4px 20px #183c3506;
+  overflow: hidden;
+}
+.project-detail-workspace .project-details-panel > .MuiTypography-h4,
+.project-detail-workspace .project-details-panel > .MuiTypography-h5 {
+  margin: -26px -26px 24px;
+  padding: 28px 26px;
+  font-size: 28px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.7px;
+  color: #143c37;
+  background:
+    radial-gradient(ellipse at 100% 0%, #d9f3e9, transparent 65%),
+    linear-gradient(105deg, #f6faf8, #f3f8fd);
+  border-bottom: 1px solid #e2eee8;
+}
+.project-detail-workspace .project-details-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.project-detail-workspace .project-details-facts > .MuiBox-root {
+  padding: 17px 19px;
+  background: #f8fafc;
+  border: 1px solid #e7eef3;
+  border-radius: 11px;
+  min-width: 0;
+}
+.project-detail-workspace .project-details-facts .MuiTypography-subtitle1 {
+  margin-bottom: 7px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 650;
+  color: #8194a6;
+}
+.project-detail-workspace .project-details-facts .MuiTypography-body1,
+.project-detail-workspace .project-details-facts .MuiTypography-body2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c4b61;
+}
+.project-detail-workspace .project-details-panel > .MuiTypography-subtitle1 {
+  font-size: 13px;
+  font-weight: 650;
+  color: #4d6879;
+  margin-bottom: 12px;
+}
+.project-detail-workspace .MuiDivider-root {
+  border-color: #edf2f5;
+}
+.project-detail-workspace .project-details-panel .MuiChip-outlinedSecondary {
+  background: #eff9f5;
+  border-color: #cce6dc;
+  color: #20856c;
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 4px;
+  height: 32px;
+}
+.project-detail-workspace .project-details-panel .MuiChip-colorPrimary {
+  background: #e8f7f1;
+  color: #0b8b6b;
+}
+.project-detail-workspace .project-details-panel .MuiChip-colorSuccess {
+  background: #e5f8ed;
+  color: #087b56;
+}
+.project-detail-workspace .project-details-panel .MuiChip-colorWarning {
+  background: #fff4dc;
+  color: #af7919;
+}
+.project-detail-workspace .project-details-panel > .MuiTypography-h6 {
+  font-size: 16px;
+  font-weight: 650;
+  color: #274f5e;
+}
+.project-detail-workspace .project-details-financials {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.project-detail-workspace .project-details-financials > .MuiBox-root {
+  background: #f4faf7;
+  padding: 16px;
+  border: 1px solid #deece5;
+  border-radius: 11px;
+}
+.project-detail-workspace .project-details-financials .MuiTypography-subtitle1 {
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #849a8e;
+  margin-bottom: 8px;
+}
+.project-detail-workspace .project-details-financials .MuiTypography-body1,
+.project-detail-workspace .project-details-financials .MuiTypography-body2 {
+  font-size: 19px;
+  font-weight: 700;
+  color: #16836a;
+}
+.project-detail-workspace
+  .project-details-financials
+  > .MuiBox-root:nth-child(2) {
+  background: #fff8f1;
+  border-color: #f1e6d9;
+}
+.project-detail-workspace
+  .project-details-financials
+  > .MuiBox-root:nth-child(2)
+  .MuiTypography-body1 {
+  color: #ba7551;
+}
+.project-detail-workspace .MuiOutlinedInput-root {
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+}
+.project-detail-workspace .MuiOutlinedInput-notchedOutline {
+  border-color: #d7e3e9;
+}
+.project-detail-workspace .MuiInputLabel-root {
+  color: #718b9b;
+  font-size: 13px;
+}
+.project-detail-workspace .project-edit-panel form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.project-detail-workspace .project-edit-panel form > .MuiDivider-root,
+.project-detail-workspace .project-edit-panel form > .MuiTypography-root,
+.project-detail-workspace .project-edit-panel form > .MuiBox-root {
+  grid-column: 1 / -1;
+}
+.project-detail-workspace .project-edit-panel form > .MuiBox-root {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.project-detail-workspace .project-workplan-panel > .MuiTypography-h6,
+.project-detail-workspace .project-team-logs-panel > .MuiTypography-h6 {
+  margin: 0 0 8px;
+  color: #184739;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+}
+.project-detail-workspace .project-workplan-panel > .MuiTypography-body2,
+.project-detail-workspace .project-team-logs-panel > .MuiTypography-body2 {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #8496a6;
+  margin-bottom: 22px;
+}
+.project-detail-workspace .project-workplan-addbar {
+  align-items: center;
+  padding: 15px;
+  background: #f1f9f5;
+  border: 1px solid #dcede4;
+  border-radius: 11px;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.project-detail-workspace .project-workplan-addbar > .MuiTextField-root {
+  flex: 1;
+  min-width: 0;
+}
+.project-detail-workspace .project-work-item {
+  border-color: #e1e9ef;
+  border-radius: 12px;
+  padding: 19px;
+  box-shadow: 0 2px 8px #24483d04;
+}
+.project-detail-workspace .project-work-item .MuiTypography-subtitle1 {
+  font-size: 16px;
+  font-weight: 650;
+  color: #294b59;
+}
+.project-detail-workspace .project-work-item .MuiTypography-body2 {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #7d93a0;
+}
+.project-detail-workspace .project-work-item .MuiChip-root {
+  height: 24px;
+  border-radius: 6px;
+  border-color: #e1e9ef;
+  background: #f7f9fc;
+  font-size: 10px;
+  color: #68839a;
+}
+.project-detail-workspace .project-work-item .MuiChip-root:first-child {
+  background: #fff8e9;
+  border-color: #f3e4c3;
+  color: #ae842d;
+}
+.project-detail-workspace .project-work-item .MuiButton-colorError {
+  color: #cc5365;
+}
+.project-detail-workspace .project-work-item .MuiButton-colorPrimary {
+  color: #258d75;
+}
+.project-detail-workspace .project-work-item .MuiButton-containedPrimary {
+  color: white;
+}
+.project-detail-workspace .project-work-item textarea {
+  border-radius: 9px;
+  border-color: #dce9e1;
+  background: #fcfefc;
+}
+.project-detail-workspace .project-work-item details {
+  background: #f4f8fc;
+  border-radius: 8px;
+  padding: 9px 11px;
+  border-color: #e4edf4;
+}
+.project-detail-workspace .project-team-log {
+  padding: 20px 22px;
+  border: 1px solid #e4ecf1;
+  border-left: 3px solid #8bd0b8;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px #153a3304;
+}
+.project-detail-workspace .project-team-log .MuiTypography-subtitle1 {
+  color: #254959;
+  font-size: 16px;
+  font-weight: 650;
+}
+.project-detail-workspace .project-team-log .MuiTypography-body2 {
+  color: #8498a5;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.project-detail-workspace .project-team-log .project-team-log-note {
+  background: #f3f9f6;
+  border-left: 2px solid #c6e8da;
+  padding: 11px 14px;
+  margin-top: 12px;
+  border-radius: 0 8px 8px 0;
+  color: #617c70;
+  font-style: normal;
+}
+.project-detail-workspace .project-team-log .MuiChip-root {
+  height: 27px;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.project-detail-workspace .project-team-log .MuiChip-colorSuccess {
+  background: #e9f8f0;
+  color: #17845f;
+}
+.project-detail-workspace .project-team-log .MuiChip-colorPrimary {
+  background: #edf4fe;
+  color: #497bab;
+}
+.project-detail-workspace .project-team-log .MuiChip-colorWarning {
+  background: #fff5df;
+  color: #b68a32;
+}
+.project-detail-workspace.project-daily-view .project-daily-tabs {
+  margin-bottom: 0;
+  border-radius: 13px 13px 0 0;
+}
+.project-detail-workspace.project-daily-view .project-daily-header {
+  border-color: #dfe8ed;
+  background:
+    radial-gradient(ellipse at 100% 0%, #def1e9, transparent 60%),
+    linear-gradient(105deg, #fff, #f4f9fd);
+}
+@media (max-width: 900px) {
+  .project-detail-workspace {
+    padding: 20px !important;
+  }
+  .project-detail-workspace .project-daily-toolbar {
+    align-items: stretch;
+  }
+  .project-detail-workspace .project-details-facts {
+    gap: 10px;
+  }
+  .project-detail-workspace .project-details-facts > .MuiBox-root {
+    padding: 15px;
+  }
+}
+@media (max-width: 600px) {
+  .project-detail-workspace {
+    padding: 14px 12px 28px !important;
+  }
+  .project-detail-workspace .project-daily-toolbar > .MuiButton-root {
+    align-self: flex-start;
+  }
+  .project-detail-workspace .MuiButton-root {
+    font-size: 11px;
+    padding: 7px 11px;
+  }
+  .project-detail-workspace .project-daily-tabs .MuiTab-root {
+    padding: 9px 12px;
+    font-size: 11px;
+  }
+  .project-detail-workspace .project-details-panel,
+  .project-detail-workspace .project-edit-panel,
+  .project-detail-workspace .project-workplan-panel,
+  .project-detail-workspace .project-team-logs-panel {
+    padding: 19px;
+  }
+  .project-detail-workspace .project-details-panel > .MuiTypography-h4,
+  .project-detail-workspace .project-details-panel > .MuiTypography-h5 {
+    margin: -19px -19px 19px;
+    padding: 23px 19px;
+    font-size: 25px;
+  }
+  .project-detail-workspace .project-details-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .project-detail-workspace .project-details-financials {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .project-detail-workspace .project-details-financials > .MuiBox-root {
+    padding: 12px;
+  }
+  .project-detail-workspace .project-details-financials .MuiTypography-body1 {
+    font-size: 16px;
+  }
+  .project-detail-workspace .project-edit-panel form,
+  .project-detail-workspace .project-edit-panel form > .MuiBox-root {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .project-detail-workspace .project-workplan-addbar {
+    align-items: stretch;
+  }
+  .project-detail-workspace .project-work-item,
+  .project-detail-workspace .project-team-log {
+    padding: 16px;
+  }
+  .project-detail-workspace .project-team-log > .MuiBox-root {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+.project-detail-workspace .MuiButton-root.Mui-disabled {
+  background: #eef2f4;
+  color: #9aaab2;
+  box-shadow: none;
+  border-color: #e4eaee;
+}
