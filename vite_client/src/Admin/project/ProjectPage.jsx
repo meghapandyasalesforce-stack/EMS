@@ -791,7 +791,7 @@ const ProjectsPageEnhanced = () => {
                 <Grid container spacing={3}>
                   {paginatedProjects.length > 0 ? (
                     paginatedProjects.map(project => (
-                      <Grid item xs={12} sm={6} lg={4} key={project._id}>
+                      <Grid item xs={12} sm={6} lg={paginatedProjects.length <= 2 ? 6 : 4} key={project._id}>
                         <ProjectCard 
                           project={project} 
                           isOverdue={isOverdue(project)}

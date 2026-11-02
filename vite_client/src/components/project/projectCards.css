@@ -1,0 +1,316 @@
+.initiative-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  padding: 23px;
+  background: #fff;
+  border: 1px solid #dfe7ee;
+  border-radius: 18px;
+  color: #18263c;
+  box-shadow: 0 3px 12px #19374a05;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.initiative-card:hover {
+  border-color: #9fd4c6;
+  box-shadow: 0 10px 28px #173d3710;
+  transform: translateY(-3px);
+}
+.initiative-card--overdue {
+  border-color: #f3cdd0;
+}
+.initiative-card button {
+  cursor: pointer;
+  font: inherit;
+}
+.initiative-card button:focus-visible {
+  outline: 3px solid #66cbb3;
+  outline-offset: 4px;
+}
+.initiative-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.initiative-card__tags {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.initiative-card__category,
+.initiative-card__priority {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.initiative-card__category {
+  background: #f0f4f8;
+  color: #57687e;
+}
+.initiative-card__priority {
+  background: #fff7df;
+  color: #a5690b;
+  border: 1px solid #f8e8ae;
+}
+.initiative-card__priority--high {
+  color: #bf6712;
+  background: #fff4e8;
+  border-color: #ffe1bd;
+}
+.initiative-card__priority--critical {
+  color: #c62d48;
+  background: #fff0f3;
+  border-color: #ffd5de;
+}
+.initiative-card__priority--low {
+  color: #3177bc;
+  background: #f0f7ff;
+  border-color: #d3e7ff;
+}
+.initiative-card__menu {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #f8fafc;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  color: #788b9b;
+}
+.initiative-card__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.initiative-card h3 {
+  margin: 0;
+  flex: 1 1 150px;
+  min-width: 0;
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: -0.35px;
+}
+.initiative-card h3 button {
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.initiative-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #c4ecd9;
+  background: #effcf5;
+  color: #098667;
+  border-radius: 20px;
+  padding: 4px 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.initiative-card__status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.initiative-card__status--overdue {
+  background: #fff3f4;
+  border-color: #ffd7dc;
+  color: #d84259;
+}
+.initiative-card__status--pending,
+.initiative-card__status--on-hold {
+  background: #fff9eb;
+  border-color: #f6e4b7;
+  color: #b2781e;
+}
+.initiative-card__status--cancelled {
+  background: #f3f5f8;
+  border-color: #e1e6eb;
+  color: #6b7a8c;
+}
+.initiative-card__description {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 44px;
+  margin: 0 0 17px;
+  color: #7a8ba2;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.initiative-card__activity {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid #eef2f6;
+  padding-top: 14px;
+  margin-top: auto;
+  font-size: 11px;
+  color: #5f728c;
+}
+.initiative-card__activity > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.initiative-card__activity svg {
+  color: #8ba1b7;
+}
+.initiative-card__budget {
+  background: #f0faf6;
+  color: #087d63;
+  border-radius: 5px;
+  padding: 4px 7px;
+}
+.initiative-card__progress {
+  margin: 17px 0;
+}
+.initiative-card__progress > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #788ca5;
+}
+.initiative-card__progress strong {
+  color: #26364e;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.initiative-card__track {
+  height: 6px;
+  background: #f0f4f8;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.initiative-card__track > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #0aa784, #20c491);
+  border-radius: 6px;
+}
+.initiative-card__people {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid #eef2f6;
+  padding-top: 14px;
+}
+.initiative-card__avatars {
+  display: flex;
+  flex-shrink: 0;
+  padding-left: 3px;
+}
+.initiative-card__avatar {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  width: 28px;
+  border-radius: 50%;
+  border: 2px solid white;
+  margin-left: -3px;
+  background: #5444c5;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+}
+.initiative-card__avatar--1 {
+  background: #098876;
+}
+.initiative-card__avatar--2 {
+  background: #3278e5;
+}
+.initiative-card__avatar--more {
+  background: #e7edf4;
+  color: #586c85;
+}
+.initiative-card__lead {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 10px;
+}
+.initiative-card__lead strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+  font-weight: 600;
+}
+.initiative-card small {
+  color: #91a0b2;
+  font-size: 9px;
+  font-weight: 400;
+}
+.initiative-card__due {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #667e9b;
+  font-size: 10px;
+}
+.initiative-card__due > span {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+}
+.initiative-card__due.is-overdue,
+.initiative-card__due.is-overdue small {
+  color: #d74c60;
+}
+.initiative-card__open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 -4px;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid #f0f3f7;
+  background: none;
+  color: #07866a;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+@media (max-width: 600px) {
+  .initiative-card {
+    padding: 20px;
+  }
+  .initiative-card h3 {
+    font-size: 18px;
+  }
+  .initiative-card__lead strong {
+    max-width: 95px;
+  }
+}
