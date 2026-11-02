@@ -73,7 +73,6 @@
 .project-create .project-section-heading h2 { font-size:16px; margin:0 0 4px; }
 .project-create .project-section-heading p { font-size:12px; line-height:1.5; }
 .creation-section-icon { height:38px; width:38px; flex-shrink:0; display:grid; place-items:center; border-radius:11px; color:#098573; background:#e8f7f1; font-size:18px; }
-.creation-step { margin-left:auto; font-size:22px; font-weight:700; color:#d9e5e9; }
 .project-create .project-identity { gap:16px; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); }
 .project-create .MuiOutlinedInput-root { font-size:13px; background:#fcfdfe; }
 .project-create .MuiInputBase-input:not(textarea) { padding-top:13px; padding-bottom:13px; }
@@ -208,3 +207,27 @@
   #root .project-filters .project-filter-advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   #root .project-filters .project-filter-options > :nth-child(3) { grid-column: 1 / -1; }
 }
+
+/* Consistent creation fields and labels, including employee pickers. */
+#root .project-create .project-create-form > .MuiBox-root:first-of-type { gap: 20px; }
+#root .project-create .project-identity { align-items: start; gap: 18px; }
+#root .project-create .MuiFormControl-root { padding-top: 22px; margin-top: 0; margin-bottom: 0; min-width: 0; }
+#root .project-create .MuiInputLabel-root { position: absolute; left: 0; top: 0; transform: none; max-width: 100%; color: #607b89; font-size: 12px; line-height: 16px; font-weight: 500; }
+#root .project-create .MuiInputLabel-asterisk { color: #be6655; }
+#root .project-create .MuiOutlinedInput-root { min-height: 46px; height: 46px; padding: 0 14px; border-radius: 9px; background: #fff; color: #254755; font-size: 14px; }
+#root .project-create .MuiOutlinedInput-notchedOutline { top: 0; border-color: #d7e3eb; }
+#root .project-create .MuiOutlinedInput-notchedOutline legend { display: none; }
+#root .project-create .MuiOutlinedInput-input { height: 22px; min-height: 0; padding: 12px 0; margin: 0; font: inherit; line-height: 22px; border: 0; box-shadow: none; background: transparent; box-sizing: content-box; }
+#root .project-create .MuiSelect-select { padding-right: 24px; }
+#root .project-create .MuiOutlinedInput-root.MuiInputBase-multiline { height: auto; padding: 12px 14px; }
+#root .project-create .MuiInputBase-inputMultiline { height: auto; padding: 0; line-height: 1.7; }
+#root .project-create .MuiOutlinedInput-root.Mui-focused { box-shadow: 0 0 0 3px #07866d12; }
+#root .project-create .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline { border-color: #07866d; border-width: 1px; }
+#root .project-create .MuiAutocomplete-root .MuiOutlinedInput-root { height: auto; min-height: 46px; padding: 6px 40px 6px 12px; }
+#root .project-create .MuiAutocomplete-inputRoot .MuiAutocomplete-input { min-width: 30px; height: 22px; padding: 6px 0; }
+#root .project-create .MuiAutocomplete-endAdornment { top: 50%; transform: translateY(-50%); }
+#root .project-create .project-section-heading { padding-bottom: 20px; margin-bottom: 20px; }
+#root .project-create .project-section-heading h2 { font-size: 18px; }
+#root .project-create .team-heading { margin-top: 28px; padding-top: 24px; }
+#root .project-create .creation-section-icon { width: 42px; height: 42px; }
+@media (max-width:600px) { #root .project-create .project-identity { gap: 18px; } }

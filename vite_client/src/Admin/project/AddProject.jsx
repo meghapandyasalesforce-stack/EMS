@@ -330,12 +330,13 @@ function AddProject() {
                     }}
                 >
                     <form className="project-create-form" onSubmit={handleSubmit}>
-                        <div className="project-section-heading"><span className="creation-section-icon"><FiFolder /></span><div><h2>Project details</h2><p>The essentials that give your project a clear identity.</p></div><span className="creation-step">01</span></div>
+                        <div className="project-section-heading"><span className="creation-section-icon"><FiFolder /></span><div><h2>Project details</h2><p>The essentials that give your project a clear identity.</p></div></div>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 0.5, sm: 1 } }}>
                             <div className="project-identity">
                             <TextField
                                 fullWidth
                                 label="Project Name"
+                                InputLabelProps={{ shrink: true }}
                                 placeholder="e.g. Customer experience redesign"
                                 name="name"
                                 value={form.name}
@@ -348,6 +349,7 @@ function AddProject() {
                             <TextField
                                 fullWidth
                                 label="Category"
+                                InputLabelProps={{ shrink: true }}
                                 name="category"
                                 value={form.category}
                                 onChange={handleChange}
@@ -359,6 +361,7 @@ function AddProject() {
                             <TextField
                                 fullWidth
                                 label="Description"
+                                InputLabelProps={{ shrink: true }}
                                 placeholder="What are we building, and what does success look like?"
                                 name="description"
                                 value={form.description}
@@ -432,7 +435,7 @@ function AddProject() {
                             </Grid>
                         </Box>
 
-                        <div className="project-section-heading team-heading"><span className="creation-section-icon"><FiUsers /></span><div><h2>Team &amp; ownership</h2><p>Great projects start with the right people.</p></div><span className="creation-step">02</span></div>
+                        <div className="project-section-heading team-heading"><span className="creation-section-icon"><FiUsers /></span><div><h2>Team &amp; ownership</h2><p>Great projects start with the right people.</p></div></div>
                         {/* Project Leader Section */}
                         <Box className="creation-team-field"
                             sx={{
