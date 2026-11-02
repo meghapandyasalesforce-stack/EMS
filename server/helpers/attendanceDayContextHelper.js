@@ -1,3 +1,4 @@
+import { loadWfhEntriesByDateKey, isEmployeeCoveredByWfhEntry, parseLocalDate } from './wfhCalendarHelper.js';
 /**
  * Attendance day context for WFH + half-day leave/holiday integration.
  * Composes approved leave / approved WFH / optional half-day holiday into
@@ -259,7 +260,7 @@ export async function loadAttendanceDayPlan({
   const dayStart = DateTime.fromFormat(dateKey, 'yyyy-MM-dd', { zone: tz }).startOf('day');
   const dayEnd = dayStart.endOf('day');
 
-  const [leaveRows, wfhRows] = await Promise.all([
+  const [leaveRows, wfhRows, scheduledEntries] = await Promise.all([
     Leave.find({
       organizationId,
       employee: employeeId,
@@ -291,11 +292,14 @@ export async function loadAttendanceDayPlan({
     })
       .select('status wfhType halfDayType wfhDate wfhDateTo')
       .lean(),
+    loadWfhEntriesByDateKey(organizationId, parseLocalDate(dateKey), parseLocalDate(dateKey)),
   ]);
 
   // WFH may start before today and extend via wfhDateTo — filter in classify
   const leaveType = classifyLeaveForDate(leaveRows, dateKey, tz);
-  const wfhType = classifyWfhForDate(wfhRows, dateKey, tz);
+  const wfhType = isEmployeeCoveredByWfhEntry(scheduledEntries.get(dateKey), employeeId)
+    ? 'full'
+    : classifyWfhForDate(wfhRows, dateKey, tz);
   const holidayType = classifyHoliday(holiday);
 
   const effectiveRule = applyEmployeeShiftToRule(rule, employee);

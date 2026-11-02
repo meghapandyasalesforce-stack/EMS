@@ -1,3 +1,4 @@
+import { withWfhWriteLock } from '../../helpers/wfhWriteLock.js';
 import WfhRequest from "../../models/wfhRequest.model.js";
 import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Employee from "../../models/employee.model.js";
@@ -12,15 +13,14 @@ import {
     resolveStoredThreadRootMessageId,
     THREAD_ROOT_REPLY_LOOKUP
 } from "../../helpers/emailThreadPersistenceHelper.js";
-import { validateEmployeeWfhEligibility } from "../../helpers/wfhCalendarHelper.js";
+import { validateEmployeeWfhEligibility, findWfhRequestConflicts, parseLocalDate } from "../../helpers/wfhCalendarHelper.js";
 
 /**
  * Create a Work From Home request (employee).
- * Informational only — notifies manager/HR/admin by email.
- * Does NOT affect attendance, punches, or leave.
- * Dates must be HR-enabled on the calendar; excluded employees cannot apply.
+ * Independent application, reviewed by the existing manager/HR/admin workflow.
+ * Applicable HR schedules and active requests reserve their dates.
  */
-export const createWfhRequest = async (req, res) => {
+export const createWfhRequest = withWfhWriteLock(async (req, res) => {
     try {
         if (!req.employee || !req.employee._id) {
             return res.status(401).json({
@@ -41,9 +41,9 @@ export const createWfhRequest = async (req, res) => {
 
         const { wfhDate, wfhDateFrom, wfhDateTo, wfhType, halfDayType, reason, remarks } = req.body;
         const fromDateRaw = wfhDateFrom || wfhDate;
-        const fromDate = fromDateRaw ? new Date(fromDateRaw) : null;
+        const fromDate = parseLocalDate(fromDateRaw);
         const toDateRaw = wfhDateTo || fromDateRaw;
-        const toDate = toDateRaw ? new Date(toDateRaw) : null;
+        const toDate = parseLocalDate(toDateRaw);
 
         // Default to full_day for backward compatibility
         const normalizedWfhType = wfhType || 'full_day';
@@ -65,6 +65,13 @@ export const createWfhRequest = async (req, res) => {
                 success: false,
                 message: 'WFH end date cannot be before the start date'
             });
+        }
+
+        if (!['full_day', 'half_day'].includes(normalizedWfhType)) {
+            return res.status(400).json({ success: false, message: 'Invalid WFH type' });
+        }
+        if (String(reason || '').trim().length > 500 || String(remarks || '').trim().length > 500) {
+            return res.status(400).json({ success: false, message: 'Reason and remarks cannot exceed 500 characters' });
         }
 
         // Half Day WFH specific validations
@@ -106,6 +113,13 @@ export const createWfhRequest = async (req, res) => {
             });
         }
 
+        const conflicts = await findWfhRequestConflicts({ organizationId, employeeId: req.employee._id, fromDate, toDate });
+        if (conflicts.length) {
+            const dates = [...new Set(conflicts.flatMap((conflict) => conflict.dates))].sort();
+            return res.status(409).json({ success: false, code: 'WFH_REQUEST_CONFLICT', message: `You already have a pending or approved WFH request on: ${dates.join(', ')}. The entire request was not submitted.`, details: { dates, conflicts } });
+        }
+
+        await req.assertWfhWriteLock?.();
         const wfhRequest = await WfhRequest.create({
             organizationId,
             employeeId: req.employee._id,
@@ -172,6 +186,7 @@ export const createWfhRequest = async (req, res) => {
             request: wfhRequest
         });
     } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
         logger.error('Error creating WFH request', {
             error: error.message,
             stack: error.stack,
@@ -182,7 +197,7 @@ export const createWfhRequest = async (req, res) => {
             message: 'Failed to submit Work From Home request'
         });
     }
-};
+});
 
 /**
  * List the logged-in employee's own WFH requests.
@@ -288,7 +303,7 @@ export const getAllWfhRequests = async (req, res) => {
  * Approve or reject a WFH request (admin / HR / manager).
  * PUT /api/v1/both/wfh-requests/:id/review  { action: 'approve' | 'reject', note? }
  */
-export const reviewWfhRequest = async (req, res) => {
+export const reviewWfhRequest = withWfhWriteLock(async (req, res) => {
     try {
         const { id } = req.params;
         const { action, note } = req.body;
@@ -315,7 +330,7 @@ export const reviewWfhRequest = async (req, res) => {
             });
         }
 
-        if (wfhRequest.status === 'approved' || wfhRequest.status === 'rejected') {
+        if (!['pending', 'submitted'].includes(wfhRequest.status)) {
             return res.status(409).json({
                 success: false,
                 message: `This request has already been ${wfhRequest.status}`
@@ -338,6 +353,16 @@ export const reviewWfhRequest = async (req, res) => {
             }
         }
 
+        if (action === 'approve') {
+            const eligibility = await validateEmployeeWfhEligibility({ organizationId, employeeId: wfhRequest.employeeId, fromDate: wfhRequest.wfhDate, toDate: wfhRequest.wfhDateTo });
+            if (!eligibility.ok) return res.status(409).json({ success: false, ...eligibility });
+            const conflicts = await findWfhRequestConflicts({ organizationId, employeeId: wfhRequest.employeeId, fromDate: wfhRequest.wfhDate, toDate: wfhRequest.wfhDateTo, excludeRequestId: wfhRequest._id });
+            if (conflicts.length) {
+                const dates = [...new Set(conflicts.flatMap((conflict) => conflict.dates))].sort();
+                return res.status(409).json({ success: false, message: `Conflicting WFH requests exist on: ${dates.join(', ')}`, code: 'WFH_REQUEST_CONFLICT', details: { dates, conflicts } });
+            }
+        }
+
         const reviewer = req.employee || req.user;
         const reviewerName = [reviewer?.name, reviewer?.lastName].filter(Boolean).join(' ').trim();
 
@@ -346,7 +371,9 @@ export const reviewWfhRequest = async (req, res) => {
         wfhRequest.reviewerName = reviewerName || 'Admin';
         wfhRequest.reviewNote = note ? String(note).trim() : '';
         wfhRequest.reviewedAt = new Date();
-        await wfhRequest.save();
+        await req.assertWfhWriteLock?.();
+        const result = await WfhRequest.updateOne({ _id: wfhRequest._id, organizationId, status: { $in: ['pending', 'submitted'] } }, { $set: { status: wfhRequest.status, reviewedBy: wfhRequest.reviewedBy, reviewerName: wfhRequest.reviewerName, reviewNote: wfhRequest.reviewNote, reviewedAt: wfhRequest.reviewedAt } });
+        if (!result.modifiedCount) return res.status(409).json({ success: false, message: 'This request was already reviewed or cancelled. Refresh and try again.' });
 
         // Notify the employee after the decision without delaying the API response.
         runInBackground('wfh-review-email', async () => {
@@ -416,6 +443,7 @@ export const reviewWfhRequest = async (req, res) => {
             request: wfhRequest
         });
     } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
         logger.error('Error reviewing WFH request', {
             error: error.message,
             stack: error.stack,
@@ -426,4 +454,22 @@ export const reviewWfhRequest = async (req, res) => {
             message: 'Failed to review Work From Home request'
         });
     }
-};
+});
+
+/** Employee may cancel their own pending or approved request; cancelled dates no longer authorize punches. */
+export const cancelWfhRequest = withWfhWriteLock(async (req, res) => {
+    try {
+        if (!req.employee?._id) return res.status(401).json({ success: false, message: 'Authentication required' });
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) return res.status(400).json({ success: false, message: 'Organization ID is required' });
+        await req.assertWfhWriteLock?.();
+        const request = await WfhRequest.findOneAndUpdate({ _id: req.params.id, organizationId, employeeId: req.employee._id, status: { $in: ['pending', 'submitted', 'approved'] } }, { $set: { status: 'cancelled' } }, { new: true, runValidators: true });
+        if (!request) return res.status(409).json({ success: false, message: 'Request not found or it can no longer be cancelled' });
+        return res.json({ success: true, message: 'Work From Home request cancelled', request });
+    } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
+        if (error.name === 'CastError') return res.status(400).json({ success: false, message: 'Invalid request ID' });
+        logger.error('Cancel WFH request failed', { error: error.message });
+        return res.status(500).json({ success: false, message: 'Failed to cancel Work From Home request' });
+    }
+});

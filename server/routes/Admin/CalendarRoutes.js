@@ -55,7 +55,7 @@ router.route('/:year/working-days')
 router.route('/:year/working-hours')
     .put(isAdminOrHROrExecutiveAuthenticated, updateWorkingHours);
 
-// WFH availability (HR calendar) — does not affect attendance punch rules
+// HR WFH assignments and employee coverage
 // Registered before /:year/:month/... so "wfh" is not treated as a month
 router.route('/:year/wfh')
     .post(isAdminOrHROrExecutiveAuthenticated, enableWfhDates)

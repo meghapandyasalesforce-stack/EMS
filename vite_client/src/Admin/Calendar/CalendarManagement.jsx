@@ -48,9 +48,13 @@ const expandContiguousWfhRange = (key, wfhMap) => {
   if (!key || !wfhMap?.has(key)) return null;
   let from = key;
   let to = key;
-  while (wfhMap.has(shiftDateKey(from, -1))) from = shiftDateKey(from, -1);
-  while (wfhMap.has(shiftDateKey(to, 1))) to = shiftDateKey(to, 1);
-  return { from, to };
+  const signature = (entry) => JSON.stringify([entry?.employeeAccess || 'all_except', (entry?.excludedEmployeeIds || []).map((id) => String(id?._id || id)).sort(), entry?.note || '']);
+  const matches = (day) => day.slice(0, 4) === key.slice(0, 4) && wfhMap.has(day) && signature(wfhMap.get(day)) === signature(wfhMap.get(key));
+  while (matches(shiftDateKey(from, -1))) from = shiftDateKey(from, -1);
+  while (matches(shiftDateKey(to, 1))) to = shiftDateKey(to, 1);
+  const keys = [];
+  for (let day = from; day <= to; day = shiftDateKey(day, 1)) keys.push(day);
+  return { from, to, keys };
 };
 
 /** Collapse consecutive YYYY-MM-DD keys into "from … to …" segments for display */
@@ -104,6 +108,7 @@ const CalendarManagement = () => {
     employeeAccess: 'all_except', // all_except | only_these
     excludedEmployeeIds: [],
   });
+  const [originalWfhDates, setOriginalWfhDates] = useState([]);
   const [excludedEmployees, setExcludedEmployees] = useState([]);
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [employeeResults, setEmployeeResults] = useState([]);
@@ -578,9 +583,10 @@ const CalendarManagement = () => {
       dateFrom,
       dateTo,
       note: existing.note,
-      employeeAccess: 'all_except',
+      employeeAccess: existing.employeeAccess,
       excludedEmployeeIds: existing.excludedIds,
     });
+    setOriginalWfhDates(block ? block.keys : []);
     setExcludedEmployees(existing.excluded);
     setEmployeeSearch('');
     setEmployeeResults([]);
@@ -598,7 +604,7 @@ const CalendarManagement = () => {
       // When switching onto an already-enabled date/range, load saved note/exclusions.
       // Otherwise keep whatever the user already typed/selected in this modal.
       note: existing.hasExisting ? existing.note : prev.note,
-      employeeAccess: 'all_except',
+      employeeAccess: existing.hasExisting ? existing.employeeAccess : prev.employeeAccess,
       excludedEmployeeIds: existing.hasExisting ? existing.excludedIds : prev.excludedEmployeeIds,
     }));
     if (existing.hasExisting) {
@@ -650,14 +656,20 @@ const CalendarManagement = () => {
       return;
     }
     const exclusionIds = [...new Set((wfhForm.excludedEmployeeIds || []).map(String).filter(Boolean))];
+    if (wfhForm.employeeAccess === 'only_these' && !exclusionIds.length) {
+      toast.error('Select at least one employee or department for this WFH schedule');
+      return;
+    }
     try {
       setWfhSaving(true);
       const res = await axios.post(`${API_BASE_URL}/admin/calendar/${currentYear}/wfh`, {
         dateFrom: wfhForm.dateFrom,
         dateTo: wfhForm.dateTo,
         note: wfhForm.note || '',
-        employeeAccess: 'all_except',
+        employeeAccess: wfhForm.employeeAccess,
         excludedEmployeeIds: exclusionIds,
+        updateExisting: rangeHasExistingWfh || originalWfhDates.length > 0,
+        replaceDates: originalWfhDates,
       });
       const savedDates = res.data?.data?.wfhDates || res.data?.wfhDates;
       if (Array.isArray(savedDates)) {
@@ -675,7 +687,7 @@ const CalendarManagement = () => {
 
   const handleDisableWfh = async () => {
     if (!wfhForm.dateFrom || !wfhForm.dateTo) return;
-    if (!window.confirm('Disable WFH for the selected date range? Employees will no longer be able to apply.')) {
+    if (!window.confirm('Remove this HR WFH schedule? Employees can then apply independently for these dates.')) {
       return;
     }
     try {
@@ -683,9 +695,9 @@ const CalendarManagement = () => {
       // Prefer explicit date keys so contiguous enabled days in view are cleared even if
       // From/To were edited oddly; fall back to the form range.
       const datesToClear =
-        existingWfhInRange.keys?.length > 0
-          ? existingWfhInRange.keys
-          : null;
+        originalWfhDates.length > 0
+          ? originalWfhDates
+          : existingWfhInRange.keys?.length > 0 ? existingWfhInRange.keys : null;
       const res = await axios.delete(`${API_BASE_URL}/admin/calendar/${currentYear}/wfh`, {
         data: datesToClear
           ? { dates: datesToClear }
@@ -973,7 +985,7 @@ const CalendarManagement = () => {
                   if (isConvertedWorking) {
                     titleParts.push(workMode === 'home' ? 'Working from home' : 'Working from office');
                   }
-                  if (hasWfh) titleParts.push('WFH enabled');
+                  if (hasWfh) titleParts.push('HR-assigned WFH');
                   if (isNonWorking && day && !hasHoliday) titleParts.push('Non-working day');
 
                   return (
@@ -1226,10 +1238,11 @@ const CalendarManagement = () => {
           onSearchEmployees={searchEmployeesForExclusion}
           onToggleEmployee={toggleExcludedEmployee}
           onDatesChange={handleWfhDatesChange}
+          onAccessChange={(employeeAccess) => setWfhForm((prev) => ({ ...prev, employeeAccess }))}
           onNoteChange={(note) => setWfhForm((prev) => ({ ...prev, note }))}
           onSubmit={handleEnableWfh}
-          onDisable={rangeHasExistingWfh ? handleDisableWfh : null}
-          hasExisting={rangeHasExistingWfh}
+          onDisable={rangeHasExistingWfh || originalWfhDates.length > 0 ? handleDisableWfh : null}
+          hasExisting={rangeHasExistingWfh || originalWfhDates.length > 0}
           existingRangeLabel={existingWfhInRange.label}
           onClose={() => setShowWfhModal(false)}
           saving={wfhSaving}
@@ -1257,6 +1270,7 @@ const WfhAvailabilityModal = ({
   onToggleEmployee,
   onDatesChange,
   onNoteChange,
+  onAccessChange,
   onSubmit,
   onDisable,
   hasExisting,
@@ -1274,7 +1288,7 @@ const WfhAvailabilityModal = ({
     <div className="wfh-modal-overlay animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby="wfh-modal-title">
       <div className="wfh-modal bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-slideUp">
           <div className="wfh-modal__header">
-            <h3 id="wfh-modal-title" className="text-lg font-bold text-white">Enable Work From Home</h3>
+            <h3 id="wfh-modal-title" className="text-lg font-bold text-white">Schedule Work From Home</h3>
             <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 text-white shrink-0" aria-label="Close">
               <FiX className="w-5 h-5" />
             </button>
@@ -1314,14 +1328,14 @@ const WfhAvailabilityModal = ({
 
               {hasExisting ? (
                 <div className="wfh-modal__notice">
-                  Already enabled
+                  Existing HR schedule
                   {existingRangeLabel ? (
                     <>
                       {' '}
                       <strong>{existingRangeLabel}</strong>
                     </>
                   ) : null}
-                  . Saving updates the note and excluded list.
+                  . Saving updates the dates, note, and employee coverage. Conflicting employee requests must be resolved first.
                 </div>
               ) : null}
 
@@ -1338,9 +1352,13 @@ const WfhAvailabilityModal = ({
               </div>
 
               <div className="wfh-modal__section">
-                <label className="wfh-modal__label">Exclude employees (optional)</label>
+                <label className="wfh-modal__label">Employee coverage</label>
+                <select className="wfh-modal__input mb-3" aria-label="WFH employee coverage" value={formData.employeeAccess} onChange={(e) => onAccessChange(e.target.value)}>
+                  <option value="all_except">Everyone except selected employees</option>
+                  <option value="only_these">Only selected employees / departments</option>
+                </select>
                 <p className="text-xs text-[#666] mb-3">
-                  Everyone can apply by default. Add people or a whole department here to stop them from applying.
+                  {formData.employeeAccess === 'only_these' ? 'Select the employees or departments assigned to work from home. Other employees can still apply independently.' : 'Everyone is assigned WFH by default. Selected employees are excluded from this schedule and may apply independently.'}
                 </p>
 
                 <div className="flex gap-2 mb-2">
@@ -1362,7 +1380,7 @@ const WfhAvailabilityModal = ({
                     disabled={departmentLoading || !selectedDepartment}
                     className="wfh-modal__btn-secondary whitespace-nowrap disabled:opacity-50"
                   >
-                    {departmentLoading ? '…' : 'Exclude department'}
+                    {departmentLoading ? '…' : 'Add department'}
                   </button>
                 </div>
 
@@ -1373,7 +1391,7 @@ const WfhAvailabilityModal = ({
                     value={employeeSearch}
                     onChange={(e) => onSearchEmployees(e.target.value)}
                     className="wfh-modal__input wfh-modal__input--search"
-                    placeholder="Or search one employee to exclude"
+                    placeholder="Or search an employee to select"
                     autoComplete="off"
                     spellCheck={false}
                   />
@@ -1426,8 +1444,8 @@ const WfhAvailabilityModal = ({
                 <div className="flex items-center justify-between gap-2 mt-1">
                   <p className="text-xs text-[#666]">
                     {peopleCount === 0
-                      ? 'No one excluded'
-                      : `${peopleCount} excluded — click a name to remove`}
+                      ? 'No employees selected'
+                      : `${peopleCount} selected — click a name to remove`}
                   </p>
                   {peopleCount > 0 ? (
                     <button
@@ -1448,7 +1466,7 @@ const WfhAvailabilityModal = ({
                         <button
                           key={id}
                           type="button"
-                          title="Remove from excluded list"
+                          title="Remove from selected list"
                           onClick={() => onToggleEmployee(emp._id ? emp : { _id: emp })}
                           className="inline-flex items-center gap-1 rounded-lg bg-[#e8faf4] px-2.5 py-1 text-xs font-medium text-[#00694f]"
                         >
@@ -1480,7 +1498,7 @@ const WfhAvailabilityModal = ({
                   Cancel
                 </button>
                 <button type="submit" disabled={saving} className="wfh-modal__btn-primary disabled:opacity-50">
-                  {saving ? 'Saving…' : hasExisting ? 'Save changes' : 'Enable WFH'}
+                  {saving ? 'Saving…' : hasExisting ? 'Save changes' : 'Schedule WFH'}
                 </button>
               </div>
             </div>

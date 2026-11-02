@@ -370,13 +370,13 @@ const AttendanceBox = ({ variant = 'default' }) => {
           });
         } else {
           // Do not clear schedule already set from daySchedule (server approved WFH)
-          setTodayWfhSchedule((prev) => {
+          setTodayWfhSchedule(() => {
             const ds = attendanceRule?.daySchedule;
             if (ds?.wfhType === 'full') return { type: 'full_day' };
             if (ds?.wfhType === 'first_half' || ds?.wfhType === 'second_half') {
               return { type: 'half_day', halfDayType: ds.wfhType };
             }
-            return prev;
+            return null;
           });
         }
       } catch {
@@ -1098,7 +1098,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
             id="wfh-approval-popup-title"
             className="flex-1 text-lg font-bold text-slate-900 leading-snug"
           >
-            WFH request required
+            WFH authorization required
           </h3>
           <button
             type="button"
@@ -1111,8 +1111,8 @@ const AttendanceBox = ({ variant = 'default' }) => {
         </div>
 
         <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-          Work From Home punch-in is allowed only after your WFH request for today is approved.
-          You can punch in from the office, or apply for WFH and wait for approval.
+          Work From Home punch-in requires an approved request or an HR-assigned schedule for today.
+          Otherwise, punch in from the office or submit a WFH request for approval.
         </p>
 
         <div className="mt-5 flex flex-col gap-2.5">

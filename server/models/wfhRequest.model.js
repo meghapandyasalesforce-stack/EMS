@@ -58,7 +58,7 @@ const wfhRequestSchema = new mongoose.Schema({
         type: String,
         // 'submitted' kept for legacy records created before the approval flow;
         // it is treated the same as 'pending'.
-        enum: ['pending', 'submitted', 'approved', 'rejected'],
+        enum: ['pending', 'submitted', 'approved', 'rejected', 'cancelled'],
         default: 'pending'
     },
     reviewedBy: {

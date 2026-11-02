@@ -59,6 +59,7 @@ const formatWfhType = (wfhType, halfDayType) => {
 
 const statusClass = (status) => {
   if (status === 'approved') return 'wfh-ui__pill wfh-ui__pill--approved';
+  if (status === 'cancelled') return 'wfh-ui__pill wfh-ui__pill--rejected';
   if (status === 'rejected') return 'wfh-ui__pill wfh-ui__pill--rejected';
   return 'wfh-ui__pill wfh-ui__pill--pending';
 };
@@ -66,8 +67,7 @@ const statusClass = (status) => {
 const emptyToday = () => toDateInput(new Date());
 
 /**
- * Work From Home request panel (informational).
- * Submits a WFH intimation that emails the reporting manager, HR, and admin.
+ * Independent WFH applications using the existing approval workflow.
  */
 const WfhRequestPanel = () => {
   const [wfhDateFrom, setWfhDateFrom] = useState(emptyToday);
@@ -76,6 +76,7 @@ const WfhRequestPanel = () => {
   const [halfDayType, setHalfDayType] = useState('');
   const [reason, setReason] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [cancellingId, setCancellingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -119,8 +120,9 @@ const WfhRequestPanel = () => {
 
   useEffect(() => {
     const years = new Set();
-    if (wfhDateFrom) years.add(Number(wfhDateFrom.slice(0, 4)));
-    if (wfhDateTo) years.add(Number(wfhDateTo.slice(0, 4)));
+    const firstYear = Number(wfhDateFrom.slice(0, 4));
+    const lastYear = Number(wfhDateTo.slice(0, 4));
+    for (let year = Math.max(2020, firstYear); year <= Math.min(2050, lastYear); year += 1) years.add(year);
     if (!years.size) years.add(new Date().getFullYear());
 
     let cancelled = false;
@@ -168,22 +170,16 @@ const WfhRequestPanel = () => {
     }
 
     const rangeKeys = expandLocalDateKeys(wfhDateFrom, wfhDateTo);
-    const notEnabled = rangeKeys.filter((key) => !availabilityByDate.has(key));
-    const excluded = rangeKeys.filter((key) => availabilityByDate.get(key)?.excluded);
-    if (notEnabled.length) {
-      toast.error(
-        notEnabled.length === 1
-          ? `Work From Home is not enabled by HR for ${notEnabled[0]}`
-          : `Work From Home is not enabled by HR for: ${notEnabled.join(', ')}`
-      );
+    const scheduled = rangeKeys.filter((key) => availabilityByDate.get(key)?.scheduled);
+    if (scheduled.length) {
+      toast.error(`HR has already scheduled WFH for you on: ${scheduled.join(', ')}. Please choose a non-overlapping date range.`);
       return;
     }
-    if (excluded.length) {
-      toast.error(
-        excluded.length === 1
-          ? `You are excluded from Work From Home on ${excluded[0]}`
-          : `You are excluded from Work From Home on: ${excluded.join(', ')}`
-      );
+    const duplicates = rangeKeys.filter((key) => requests.some((request) =>
+      ['pending', 'submitted', 'approved'].includes(request.status) &&
+      key >= toLocalDateKey(request.wfhDate) && key <= toLocalDateKey(request.wfhDateTo || request.wfhDate)));
+    if (duplicates.length) {
+      toast.error(`You already have a pending or approved WFH request on: ${duplicates.join(', ')}`);
       return;
     }
 
@@ -205,6 +201,26 @@ const WfhRequestPanel = () => {
     }
   };
 
+  const cancelRequest = async (request) => {
+    if (!window.confirm('Cancel this WFH request? It will no longer authorize WFH punch-in.')) return;
+    try {
+      setCancellingId(request._id);
+      const res = await axios.put(`/v1/both/wfh-requests/${request._id}/cancel`, {}, { withCredentials: true });
+      toast.success(res.data?.message || 'WFH request cancelled');
+      await fetchMyRequests();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to cancel WFH request');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  const renderCancel = (request) => ['pending', 'submitted', 'approved'].includes(request.status) ? (
+    <button type="button" className="wfh-ui__cancel" disabled={cancellingId === request._id} onClick={() => cancelRequest(request)}>
+      {cancellingId === request._id ? 'Cancelling…' : 'Cancel request'}
+    </button>
+  ) : null;
+
   const renderStatus = (r) => {
     const status = r.status === 'submitted' ? 'pending' : r.status || 'pending';
     return (
@@ -222,7 +238,7 @@ const WfhRequestPanel = () => {
       <form onSubmit={handleSubmit} className="wfh-ui__form">
         <h2 className="wfh-ui__title">New Work From Home Request</h2>
         <p className="text-sm text-slate-500 -mt-2 mb-1">
-          You can apply only on dates HR has enabled for Work From Home.
+          Apply independently for any date range. Dates already assigned to you by HR cannot overlap your request. Approval is required before WFH punch-in.
         </p>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -388,6 +404,7 @@ const WfhRequestPanel = () => {
                     <th>Remarks</th>
                     <th>Submitted</th>
                     <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -414,6 +431,7 @@ const WfhRequestPanel = () => {
                         </span>
                       </td>
                       <td className="whitespace-nowrap">{renderStatus(r)}</td>
+                      <td>{renderCancel(r)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -453,6 +471,7 @@ const WfhRequestPanel = () => {
                       </dd>
                     </div>
                   </dl>
+                  {renderCancel(r)}
                 </article>
               ))}
             </div>

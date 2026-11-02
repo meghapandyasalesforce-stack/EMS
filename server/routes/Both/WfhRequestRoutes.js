@@ -5,7 +5,8 @@ import {
     createWfhRequest,
     getMyWfhRequests,
     getAllWfhRequests,
-    reviewWfhRequest
+    reviewWfhRequest,
+    cancelWfhRequest
 } from '../../controllers/wfh/wfhRequestController.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
@@ -17,6 +18,7 @@ router.use(requireFeature(SAAS_FEATURES.ATTENDANCE));
 // Employee: submit + view own WFH requests
 router.route('/').post(isAuthenticated, createWfhRequest);
 router.route('/my').get(isAuthenticated, getMyWfhRequests);
+router.route('/:id/cancel').put(isAuthenticated, cancelWfhRequest);
 
 // Admin / HR / Manager: view + approve/reject organization WFH requests
 router.route('/all').get(isAdminOrManagerOrHRAuthenticated, getAllWfhRequests);
