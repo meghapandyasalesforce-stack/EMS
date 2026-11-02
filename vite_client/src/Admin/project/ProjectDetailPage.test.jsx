@@ -315,6 +315,34 @@ describe("Four project detail tabs", () => {
       expect.stringMatching(/admin\/projects\/one\/tasks\?/),
     );
   });
+  it("refreshes team logs on entry and explains where project updates appear", async () => {
+    logs = [];
+    mount();
+    await tab("Team daily logs");
+    await screen.findByText(/No daily task logs yet/);
+    expect(screen.getByText(/Team membership alone/)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "View Daily Updates" }),
+    );
+    expect(screen.getByRole("tab", { name: "Daily Updates" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    logs = [
+      {
+        _id: "new-log",
+        taskDescription: "New employee work log",
+        employee: { name: "Alex" },
+        date: "2026-11-02",
+        status: "Completed",
+      },
+    ];
+    await tab("Team daily logs");
+    await screen.findByText("New employee work log");
+    logs = [];
+    fireEvent.click(screen.getByRole("button", { name: "Refresh logs" }));
+    await screen.findByText(/No daily task logs yet/);
+  });
   it("shows team log failures", async () => {
     axios.get.mockImplementation(async (url) => {
       if (url.includes("/tasks?"))

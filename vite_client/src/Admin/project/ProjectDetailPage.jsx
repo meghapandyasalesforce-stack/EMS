@@ -342,7 +342,10 @@ const ProjectDetailPage = () => {
 
   const handleTabChange = useCallback((event, newValue) => {
     setTabValue(newValue);
-  }, []);
+    if (newValue === 2 && project?._id) {
+      dispatch(fetchProjectTasks(project._id));
+    }
+  }, [dispatch, project?._id]);
 
   const loadWorkPlan = useCallback(async () => {
     if (!project?._id) return;
@@ -1335,11 +1338,16 @@ const ProjectDetailPage = () => {
 
       {tabValue === 2 && (
         <Paper className="project-team-logs-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>Daily task logs</Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" gap={2} mb={2}>
+            <Typography variant="h6">Daily task logs</Typography>
+            <Button startIcon={<FiRefreshCw />} disabled={tasksStatus === 'loading'} onClick={() => dispatch(fetchProjectTasks(project._id))}>Refresh logs</Button>
+          </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Per-day work entries logged by team members (not the project work breakdown).
+            Work entries employees save under ME → Projects → this project → Today's log.
           </Typography>
-          
+          <Alert severity="info" role="status" sx={{ mb: 3 }} action={<Button color="inherit" size="small" onClick={() => setTabValue(3)}>View Daily Updates</Button>}>
+            Updates posted with the Daily Update button appear in the Daily Updates tab. Team membership alone does not create a daily task log.
+          </Alert>
           {tasksStatus === 'loading' ? (
             <Box display="flex" justifyContent="center">
               <CircularProgress />
@@ -1350,7 +1358,7 @@ const ProjectDetailPage = () => {
             </Alert>
           ) : projectTasks.length === 0 ? (
             <Typography variant="body1" color="text.secondary">
-              No tasks found for this project.
+              No daily task logs yet. Ask team members to save their work in this project's Today's log tab, then refresh logs.
             </Typography>
           ) : (
             <Box display="flex" flexDirection="column" gap={2}>

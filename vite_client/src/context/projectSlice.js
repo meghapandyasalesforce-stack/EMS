@@ -1,4 +1,4 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, nanoid } from "@reduxjs/toolkit";
 import axios from "../utils/axios";
 import { toast } from "react-toastify";
 import { BOTH_TASK_ENDPOINT } from "../utils/constant";
@@ -9,8 +9,8 @@ const projectSlice = createSlice({
     allProjects: [],
     projectTasks: [],
     /** Used for daily task log fetch on project detail — not project create/update */
-    status: 'idle',
-    error: null
+    status: "idle",
+    error: null,
   },
   reducers: {
     setAllProjects: (state, action) => {
@@ -22,50 +22,71 @@ const projectSlice = createSlice({
     },
     updateProject: (state, action) => {
       const { _id } = action.payload;
-      const index = state.allProjects.findIndex(project => project._id === _id);
+      const index = state.allProjects.findIndex(
+        (project) => project._id === _id,
+      );
       if (index !== -1) {
         state.allProjects[index] = action.payload;
       }
     },
     deleteProject: (state, action) => {
       state.allProjects = state.allProjects.filter(
-        project => project._id !== action.payload
+        (project) => project._id !== action.payload,
       );
     },
     setProjectTasks: (state, action) => {
+      if (
+        action.meta?.requestId &&
+        action.meta.requestId !== state.tasksRequestId
+      )
+        return;
       state.projectTasks = action.payload;
-      state.status = 'idle';
+      state.status = "idle";
       state.error = null;
     },
-    setProjectTasksLoading: (state) => {
-      state.status = 'loading';
+    setProjectTasksLoading: (state, action) => {
+      state.tasksRequestId = action.payload;
+      state.error = null;
+      state.status = "loading";
     },
     setProjectTasksError: (state, action) => {
+      if (
+        action.meta?.requestId &&
+        action.meta.requestId !== state.tasksRequestId
+      )
+        return;
       state.error = action.payload;
-      state.status = 'failed';
+      state.status = "failed";
     },
     clearProjectTasksError: (state) => {
       state.error = null;
-      state.status = 'idle';
-    }
-  }
+      state.status = "idle";
+    },
+  },
 });
 
 // Thunk: fetch daily task logs for a project (Team daily logs tab)
-export const fetchProjectTasks = (projectId, filters = {}) => async (dispatch) => {
-  try {
-    dispatch(setProjectTasksLoading());
-    const queryString = new URLSearchParams(filters).toString();
-    const res = await axios.get(
-      `${BOTH_TASK_ENDPOINT}/admin/projects/${projectId}/tasks?${queryString}`
-    );
-    dispatch(setProjectTasks(res.data?.tasks ?? []));
-  } catch (error) {
-    const message = error.response?.data?.error || 'Failed to fetch project tasks';
-    dispatch(setProjectTasksError(message));
-    toast.error(message);
-  }
-};
+export const fetchProjectTasks =
+  (projectId, filters = {}) =>
+  async (dispatch) => {
+    const requestId = nanoid();
+    try {
+      dispatch(setProjectTasksLoading(requestId));
+      const queryString = new URLSearchParams(filters).toString();
+      const res = await axios.get(
+        `${BOTH_TASK_ENDPOINT}/admin/projects/${projectId}/tasks?${queryString}`,
+      );
+      dispatch({
+        ...setProjectTasks(res.data?.tasks ?? []),
+        meta: { requestId },
+      });
+    } catch (error) {
+      const message =
+        error.response?.data?.error || "Failed to fetch project tasks";
+      dispatch({ ...setProjectTasksError(message), meta: { requestId } });
+      toast.error(message);
+    }
+  };
 
 export const {
   setAllProjects,
