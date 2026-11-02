@@ -1,3 +1,4 @@
+import './projectDailyUpdates.css';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Button,
@@ -821,7 +822,7 @@ const ProjectDetailPage = () => {
   }
 
   return (
-    <Box 
+    <Box className={tabValue === 3 ? 'project-daily-view' : undefined}
       sx={{ 
         padding: isMobile ? 2 : 4,
         marginLeft: isMobile ? 0 : '16rem',
@@ -831,7 +832,7 @@ const ProjectDetailPage = () => {
         }),
       }}
     >
-      <Box 
+      <Box className="project-daily-toolbar"
         display="flex" 
         flexDirection={isMobile ? 'column' : 'row'} 
         justifyContent="space-between" 
@@ -933,7 +934,7 @@ const ProjectDetailPage = () => {
         </Alert>
       )}
 
-      <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
+      <Tabs className="project-daily-tabs" value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
         <Tab label="Project Details" />
         <Tab label="Work plan" />
         <Tab label="Team daily logs" />
@@ -1337,8 +1338,8 @@ const ProjectDetailPage = () => {
       )}
 
       {tabValue === 3 && (
-        <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Paper className="project-daily-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+          <Box className="project-daily-header" display="flex" justifyContent="space-between" alignItems="center" mb={3}>
             <Typography variant="h6">Daily Updates</Typography>
             {canPostDailyUpdates && (
               <Button
@@ -1387,11 +1388,11 @@ const ProjectDetailPage = () => {
               )}
             </Box>
           ) : (
-            <Box display="flex" flexDirection="column" gap={2}>
+            <Box className="project-daily-feed" display="flex" flexDirection="column" gap={2}>
               {updates.map((update) => (
-                <Card key={update._id} elevation={2}>
+                <Card className="project-daily-card" key={update._id} elevation={2}>
                   <CardContent>
-                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+                    <Box className="project-daily-card-header" display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                       <Box display="flex" alignItems="center" gap={1.5}>
                         <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}>
                           {update.postedBy?.name?.charAt(0) || 'U'}
@@ -1419,12 +1420,12 @@ const ProjectDetailPage = () => {
                       />
                     </Box>
                     
-                    <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-wrap' }}>
+                    <Typography className="project-daily-text" variant="body1" paragraph sx={{ whiteSpace: 'pre-wrap' }}>
                       {update.update}
                     </Typography>
 
                     {update.progress !== undefined && (
-                      <Box mb={2}>
+                      <Box className="project-daily-progress" mb={2}>
                         <Box display="flex" justifyContent="space-between" mb={0.5}>
                           <Typography variant="caption" color="text.secondary">Progress</Typography>
                           <Typography variant="caption" fontWeight={600}>{update.progress}%</Typography>
@@ -1440,7 +1441,7 @@ const ProjectDetailPage = () => {
                     )}
 
                     {update.blockers && (
-                      <Box mb={1}>
+                      <Box className="project-daily-blocker" mb={1}>
                         <Typography variant="caption" fontWeight={600} color="error.main">
                           Blockers:
                         </Typography>
@@ -1451,7 +1452,7 @@ const ProjectDetailPage = () => {
                     )}
 
                     {update.nextSteps && (
-                      <Box>
+                      <Box className="project-daily-next-steps">
                         <Typography variant="caption" fontWeight={600} color="primary.main">
                           Next Steps:
                         </Typography>
