@@ -163,7 +163,7 @@ const ProjectCard = ({ project, isOverdue = false, progress = 0 }) => {
   };
 
   return (
-    <div>
+    <div className={`workspace-project-card ${isOverdue ? 'is-overdue' : ''}`}>
       <Card
         sx={{
           height: '100%',

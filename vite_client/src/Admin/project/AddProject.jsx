@@ -1,3 +1,5 @@
+import Grid from '@mui/material/GridLegacy';
+import './projectWorkspace.css';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Button,
@@ -18,7 +20,6 @@ import {
   useMediaQuery,
   useTheme,
   InputAdornment,
-  Grid
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -279,7 +280,7 @@ function AddProject() {
     }
 
     return (
-        <Box
+        <Box className="project-create"
             sx={{
                 width: '100%',
                 minWidth: 0,
@@ -291,10 +292,11 @@ function AddProject() {
             <Box
                 sx={{
                     width: '100%',
-                    maxWidth: { xs: '100%', sm: 720, md: 860, lg: 920 },
+                    maxWidth: 1100,
                     mx: 'auto',
                 }}
             >
+                <Button onClick={() => navigate('/projects')} sx={{ mb: 1, color: '#526784', textTransform: 'none', px: 0 }}>← Back to Projects</Button>
                 <Typography
                     variant="h4"
                     sx={{
@@ -306,6 +308,8 @@ function AddProject() {
                 >
                     Add New Project
                 </Typography>
+
+                <Typography color="text.secondary" sx={{ mt: -1, mb: 3 }}>Create a new project workspace, assign team leads, and set financial targets.</Typography>
 
                 {error && (
                     <Alert severity="error" sx={{ mb: 2 }}>
@@ -320,7 +324,7 @@ function AddProject() {
                 )}
 
                 <Paper
-                    elevation={3}
+                    elevation={0}
                     sx={{
                         p: { xs: 2, sm: 2.5, md: 3.5 },
                         borderRadius: 2,
@@ -328,7 +332,9 @@ function AddProject() {
                     }}
                 >
                     <form onSubmit={handleSubmit}>
+                        <div className="project-section-heading"><h2>Project Details</h2><p>Specify core identifiers, category classification, and project timelines.</p></div>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 0.5, sm: 1 } }}>
+                            <div className="project-identity">
                             <TextField
                                 fullWidth
                                 label="Project Name"
@@ -340,6 +346,17 @@ function AddProject() {
                                 size={isMobile ? 'small' : 'medium'}
                             />
 
+                            <TextField
+                                fullWidth
+                                label="Category"
+                                name="category"
+                                value={form.category}
+                                onChange={handleChange}
+                                margin="none"
+                                placeholder="e.g., Development, Marketing, Research"
+                                size={isMobile ? 'small' : 'medium'}
+                            />
+                            </div>
                             <TextField
                                 fullWidth
                                 label="Description"
@@ -415,6 +432,7 @@ function AddProject() {
                             </Grid>
                         </Box>
 
+                        <div className="project-section-heading team-heading"><h2>Team &amp; Ownership</h2><p>Designate the project owner and assemble team contributors.</p></div>
                         {/* Project Leader Section */}
                         <Box
                             sx={{
@@ -565,11 +583,12 @@ function AddProject() {
                         </Box>
 
                         {canViewFinancials && (
-                            <Box
+                            <Box className="project-cost-fields"
                                 sx={{
                                     mt: { xs: 3, sm: 3.5 },
                                     p: { xs: 2, sm: 2.5 },
-                                    bgcolor: '#e3f2fd',
+                                    bgcolor: '#f3fdf9',
+                                    border: '1px solid #c8f5e4',
                                     borderRadius: 2,
                                 }}
                             >
@@ -963,26 +982,6 @@ function AddProject() {
                             ))}
                         </Box>
 
-                        {/* Category */}
-                        <Box
-                            sx={{
-                                mt: { xs: 3, sm: 3.5 },
-                                pt: { xs: 2.5, sm: 3 },
-                                borderTop: 1,
-                                borderColor: 'divider',
-                            }}
-                        >
-                            <TextField
-                                fullWidth
-                                label="Category"
-                                name="category"
-                                value={form.category}
-                                onChange={handleChange}
-                                margin="none"
-                                placeholder="e.g., Development, Marketing, Research"
-                                size={isMobile ? 'small' : 'medium'}
-                            />
-                        </Box>
 
                         <Box
                             sx={{

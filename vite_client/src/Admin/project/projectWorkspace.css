@@ -1,0 +1,55 @@
+.project-workspace, .project-create { background: #f7f9fb; color: #101828; min-height: 100vh; }
+.project-workspace .MuiContainer-root { max-width: 1500px; padding: 30px; }
+.project-workspace .MuiButton-root, .project-create .MuiButton-root { border-radius: 8px; box-shadow: none; text-transform: none; }
+.project-workspace .MuiButton-outlined, .project-create .MuiButton-outlined { border-color: #dce5ef; color: #152b42; }
+.project-workspace .MuiPaper-root, .project-create .MuiPaper-root { box-shadow: none; border: 1px solid #dfe7f0; border-radius: 16px; }
+.project-workspace .MuiTypography-h4 { font-size: 28px; letter-spacing: -1px; }
+.project-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); background: white; border: 1px solid #dfe7f0; border-radius: 16px; overflow: hidden; margin-bottom: 24px; }
+.project-metric { padding: 18px 20px; border-right: 1px solid #eef2f7; display: flex; flex-direction: column; gap: 5px; }
+.project-metric span { color: #879ab5; font-size: 12px; letter-spacing: .6px; }
+.project-metric strong { font-size: 24px; line-height: 1.2; font-weight: 650; }
+.project-metric.active strong, .project-metric.revenue strong, .project-metric.profit strong { color: #009b73; }
+.project-metric.overdue span, .project-metric.overdue strong { color: #ef174b; }
+.project-filters { background: #fff !important; padding: 16px !important; margin-bottom: 24px !important; }
+.project-workspace .MuiOutlinedInput-root, .project-create .MuiOutlinedInput-root { border-radius: 8px; background: white; }
+.project-workspace .MuiOutlinedInput-notchedOutline, .project-create .MuiOutlinedInput-notchedOutline { border-color: #cbd8e8; }
+.project-workspace .MuiInputLabel-root, .project-create .MuiInputLabel-root { color: #526784; }
+.project-analytics > .MuiTypography-h6 { margin-bottom: 4px; font-weight: 650; }
+.project-analytics > .MuiGrid-root { border-top: 1px solid #edf2f7; padding-top: 20px; }
+.project-analytics .MuiTypography-subtitle1 { font-size: 13px; font-weight: 650; text-transform: uppercase; color: #354f70; }
+.is-analytics .project-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; background: transparent; border: none; border-radius: 0; }
+.is-analytics .project-metric { min-height: 120px; border: 1px solid #dfe7f0; border-radius: 16px; background: white; padding: 24px; justify-content: space-between; }
+.is-analytics .project-metric strong { font-size: 32px; }
+.is-analytics .project-metric.budget { background: linear-gradient(120deg, #f5a100, #df8200); }
+.is-analytics .project-metric.revenue { background: linear-gradient(120deg, #0cba8b, #00986e); }
+.is-analytics .project-metric.cost { background: linear-gradient(120deg, #fc4549, #ed2029); }
+.is-analytics .project-metric.profit { background: linear-gradient(120deg, #67ac00, #15a540); }
+.is-analytics .project-metric:is(.budget,.revenue,.cost,.profit) :is(span,strong) { color: white; }
+.project-workspace .workspace-project-card { height: 100%; }
+.project-workspace .workspace-project-card .MuiCard-root { border-radius: 16px; }
+.project-workspace .workspace-project-card .MuiChip-root { border-radius: 5px; }
+.project-workspace .workspace-project-card .MuiLinearProgress-root { height: 7px; border-radius: 8px; background: #f0f4f9; }
+.project-create > .MuiBox-root > .MuiPaper-root { padding: 40px; }
+.project-create .MuiTypography-h4 { margin-bottom: 14px; letter-spacing: -.8px; font-size: 30px; }
+.project-section-heading { padding-bottom: 16px; border-bottom: 1px solid #edf2f7; margin-bottom: 16px; }
+.project-section-heading h2 { margin: 0 0 5px; font-size: 19px; font-weight: 650; }
+.project-section-heading p { margin: 0; color: #607694; font-size: 14px; }
+.project-identity { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: center; }
+.team-heading { margin-top: 32px; padding-top: 24px; border-top: 1px solid #edf2f7; }
+.project-create .team-heading + .MuiBox-root { border-top: none; padding-top: 0; margin-top: 20px; }
+.project-create form > .MuiBox-root:last-child { background: #f8fbff; margin: 32px -40px -40px; padding: 24px 40px; flex-direction: row-reverse; justify-content: flex-start; }
+.project-create .MuiButton-contained { background: #0c948b; color: white; padding-inline: 28px; }
+@media (min-width: 900px) { .project-create form > .MuiBox-root:first-of-type > .MuiGrid-container > .MuiGrid-item { flex-basis: 25%; max-width: 25%; } }
+@media (max-width: 900px) { .project-workspace .MuiContainer-root { padding: 20px 16px; } .project-metrics, .is-analytics .project-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .project-create > .MuiBox-root > .MuiPaper-root { padding: 24px; } .project-create form > .MuiBox-root:last-child { margin: 24px -24px -24px; padding: 20px 24px; } }
+@media (max-width: 600px) { .project-identity { grid-template-columns: 1fr; gap: 8px; } .project-create > .MuiBox-root > .MuiPaper-root { padding: 20px; } .project-create form > .MuiBox-root:last-child { margin: 24px -20px -20px; padding: 20px; flex-direction: column; } .project-metric { padding: 16px; } .is-analytics .project-metric { padding: 18px; } }
+
+@media (min-width: 900px) { .project-cost-fields > .MuiGrid-container > .MuiGrid-item { flex-basis: 25%; max-width: 25%; } }
+
+.project-workspace, .project-create { font-family: var(--font-family, Arial, sans-serif); box-sizing: border-box; }
+.project-workspace *, .project-create * { box-sizing: border-box; }
+
+.project-workspace .workspace-project-card .MuiCard-root { border: 1px solid #dfe7f0; box-shadow: none; }
+.project-workspace .workspace-project-card.is-overdue .MuiCard-root { border-color: #ffbac5; }
+.project-workspace .workspace-project-card .MuiCardContent-root > .MuiBox-root:first-child > .MuiBox-root > .MuiBox-root { flex-direction: column; align-items: flex-start; }
+.project-workspace .workspace-project-card .MuiCardContent-root > .MuiBox-root:first-child { margin-bottom: 0; }
+.project-workspace .workspace-project-card .MuiCardContent-root > .MuiDivider-root:first-of-type { visibility: hidden; margin: 8px 0; }

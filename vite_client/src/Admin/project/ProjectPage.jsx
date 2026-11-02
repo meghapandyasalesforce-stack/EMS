@@ -1,3 +1,5 @@
+import Grid from '@mui/material/GridLegacy';
+import './projectWorkspace.css';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -50,7 +52,6 @@ import {
   TableRow,
   Pagination,
   Stack,
-  Grid
 } from '@mui/material';
 import { 
   FiSearch, FiX, FiPlus, FiTrendingUp, FiClock, FiCheckCircle, FiPause, 
@@ -391,7 +392,7 @@ const ProjectsPageEnhanced = () => {
       labels: ['Pending', 'In Progress', 'Completed', 'On Hold'],
       datasets: [{
         data: [projectStats.pending, projectStats.inProgress, projectStats.completed, projectStats.onHold],
-        backgroundColor: ['#ff9800', '#2196f3', '#4caf50', '#f44336']
+        backgroundColor: ['#f59e0b', '#347df4', '#09b987', '#f43f5e']
       }]
     };
     
@@ -400,7 +401,7 @@ const ProjectsPageEnhanced = () => {
       labels: ['Low', 'Medium', 'High', 'Critical'],
       datasets: [{
         data: [projectStats.low, projectStats.medium, projectStats.high, projectStats.critical],
-        backgroundColor: ['#8bc34a', '#2196f3', '#ff9800', '#f44336']
+        backgroundColor: ['#84cc16', '#347df4', '#f97316', '#ef174b']
       }]
     };
     
@@ -410,7 +411,7 @@ const ProjectsPageEnhanced = () => {
       datasets: [{
         label: 'Amount',
         data: [projectStats.totalBudget, projectStats.totalCost, projectStats.totalRevenue],
-        backgroundColor: ['#2196f3', '#ff9800', '#4caf50']
+        backgroundColor: ['#347df4', '#f59e0b', '#09b987']
       }]
     } : null;
     
@@ -418,7 +419,7 @@ const ProjectsPageEnhanced = () => {
   }, [allProjects, projectStats, canViewFinancials]);
 
   return (
-    <Box sx={{ width: '100%', minWidth: 0 }}>
+    <Box className={`project-workspace ${showAnalytics ? 'is-analytics' : ''}`} sx={{ width: '100%', minWidth: 0 }}>
       <Container maxWidth="xl" sx={{ 
           py: 4,
           px: { xs: 2, sm: 3 },
@@ -448,13 +449,13 @@ const ProjectsPageEnhanced = () => {
                   Projects
                 </Typography>
                 <Chip
-                  label={projectStats.total}
+                  label={`${projectStats.total} total`}
                   size="small"
                   sx={{ fontWeight: 700, bgcolor: '#f1f5f9', color: '#334155' }}
                 />
               </Box>
 
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: '100%' }}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
                 <Button
                   variant="outlined"
                   startIcon={<FiBarChart2 />}
@@ -489,8 +490,60 @@ const ProjectsPageEnhanced = () => {
               </Box>
             </Box>
 
+
+          </Box>
+
+          {!loading && !error && (
+            <div className="project-metrics">
+              {[
+                ['TOTAL', projectStats.total, ''],
+                ['ACTIVE', projectStats.inProgress, 'active'],
+                ['COMPLETED', projectStats.completed, ''],
+                ['OVERDUE', projectStats.overdue, 'overdue'],
+                ...(canViewFinancials ? [
+                  ['BUDGET', `$${(projectStats.totalBudget / 1000).toFixed(1)}K`, 'budget'],
+                  ['REVENUE', `$${(projectStats.totalRevenue / 1000).toFixed(1)}K`, 'revenue'],
+                  ['COST', `$${(projectStats.totalCost / 1000).toFixed(1)}K`, 'cost'],
+                  ['NET PROFIT', `$${((projectStats.totalRevenue - projectStats.totalCost) / 1000).toFixed(1)}K`, 'profit'],
+                ] : [])
+              ].map(([label, value, tone]) => <div className={`project-metric ${tone}`} key={label}><span>{label}</span><strong>{value}</strong></div>)}
+            </div>
+          )}
+
+          {/* Analytics Dashboard */}
+          {showAnalytics && analyticsData && (
+            <Paper className="project-analytics" sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+                Project Analytics
+              </Typography>
+              <Typography color="text.secondary" sx={{ mb: 3 }}>Real-time status breakdown, priority dispersion, and cost metrics</Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={canViewFinancials ? 4 : 6}>
+                  <Typography variant="subtitle1" sx={{ mb: 2 }}>Status Distribution</Typography>
+                  <Box sx={{ height: 300 }}>
+                    <Doughnut data={analyticsData.statusData} options={{ maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'top', labels: { boxWidth: 10 } } } }} />
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={canViewFinancials ? 4 : 6}>
+                  <Typography variant="subtitle1" sx={{ mb: 2 }}>Priority Distribution</Typography>
+                  <Box sx={{ height: 300 }}>
+                    <Doughnut data={analyticsData.priorityData} options={{ maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'top', labels: { boxWidth: 10 } } } }} />
+                  </Box>
+                </Grid>
+                {canViewFinancials && analyticsData.financialData && (
+                  <Grid item xs={12} md={4}>
+                    <Typography variant="subtitle1" sx={{ mb: 2 }}>Financial Overview</Typography>
+                    <Box sx={{ height: 300 }}>
+                      <Bar data={analyticsData.financialData} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+                    </Box>
+                  </Grid>
+                )}
+              </Grid>
+            </Paper>
+          )}
+
             {/* Search and Filters Section */}
-            <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+            <Paper className="project-filters" sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   {[
@@ -680,239 +733,6 @@ const ProjectsPageEnhanced = () => {
                 )}
               </Box>
             </Paper>
-          </Box>
-
-          {/* Statistics Cards */}
-          {!loading && !error && (
-            <Box
-              sx={{
-                mb: 4,
-                display: 'grid',
-                gap: 2,
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, minmax(0, 1fr))',
-                  lg: 'repeat(4, minmax(0, 1fr))'
-                }
-              }}
-            >
-              <Box>
-                <Card sx={{ 
-                  background: '#fff',
-                  borderRadius: 2,
-                  border: '1px solid #e5e7eb'
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>TOTAL PROJECTS</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.total}</Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-
-              <Box>
-                <Card sx={{ 
-                  background: '#fff',
-                  borderRadius: 2,
-                  border: '1px solid #e5e7eb',
-                  borderBottom: '3px solid #0f766e'
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>ACTIVE</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.inProgress}</Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-
-              <Box>
-                <Card sx={{ 
-                  background: '#fff',
-                  borderRadius: 2,
-                  border: '1px solid #e5e7eb'
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>COMPLETED</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.completed}</Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-
-              <Box>
-                <Card sx={{ 
-                  background: '#fff',
-                  borderRadius: 2,
-                  border: '1px solid #e5e7eb',
-                  borderBottom: '3px solid #b91c1c'
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 700 }}>OVERDUE</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.overdue}</Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-
-              {canViewFinancials && (
-                <>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ 
-                      background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
-                      color: 'white',
-                      borderRadius: 2,
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                      transition: 'transform 0.2s ease-in-out',
-                      '&:hover': { transform: 'translateY(-4px)' }
-                    }}>
-                      <CardContent sx={{ p: 3 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box>
-                            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                              ${(projectStats.totalBudget / 1000).toFixed(1)}K
-                            </Typography>
-                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                              Total Budget
-                            </Typography>
-                          </Box>
-                          <Box sx={{ 
-                            backgroundColor: 'rgba(255,255,255,0.2)', 
-                            borderRadius: '50%', 
-                            p: 1.5
-                          }}>
-                            <FiDollarSign size={24} />
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ 
-                      background: 'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)',
-                      color: 'white',
-                      borderRadius: 2,
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                      transition: 'transform 0.2s ease-in-out',
-                      '&:hover': { transform: 'translateY(-4px)' }
-                    }}>
-                      <CardContent sx={{ p: 3 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box>
-                            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                              ${(projectStats.totalRevenue / 1000).toFixed(1)}K
-                            </Typography>
-                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                              Total Revenue
-                            </Typography>
-                          </Box>
-                          <Box sx={{ 
-                            backgroundColor: 'rgba(255,255,255,0.2)', 
-                            borderRadius: '50%', 
-                            p: 1.5
-                          }}>
-                            <FiDollarSign size={24} />
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ 
-                      background: 'linear-gradient(135deg, #f44336 0%, #ff7043 100%)',
-                      color: 'white',
-                      borderRadius: 2,
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                      transition: 'transform 0.2s ease-in-out',
-                      '&:hover': { transform: 'translateY(-4px)' }
-                    }}>
-                      <CardContent sx={{ p: 3 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box>
-                            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                              ${(projectStats.totalCost / 1000).toFixed(1)}K
-                            </Typography>
-                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                              Total Cost
-                            </Typography>
-                          </Box>
-                          <Box sx={{ 
-                            backgroundColor: 'rgba(255,255,255,0.2)', 
-                            borderRadius: '50%', 
-                            p: 1.5
-                          }}>
-                            <FiDollarSign size={24} />
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ 
-                      background: projectStats.totalRevenue > projectStats.totalCost
-                        ? 'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)'
-                        : 'linear-gradient(135deg, #f44336 0%, #ff7043 100%)',
-                      color: 'white',
-                      borderRadius: 2,
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                      transition: 'transform 0.2s ease-in-out',
-                      '&:hover': { transform: 'translateY(-4px)' }
-                    }}>
-                      <CardContent sx={{ p: 3 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box>
-                            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                              ${((projectStats.totalRevenue - projectStats.totalCost) / 1000).toFixed(1)}K
-                            </Typography>
-                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                              Net Profit
-                            </Typography>
-                          </Box>
-                          <Box sx={{ 
-                            backgroundColor: 'rgba(255,255,255,0.2)', 
-                            borderRadius: '50%', 
-                            p: 1.5
-                          }}>
-                            <FiTrendingUp size={24} />
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                </>
-              )}
-            </Box>
-          )}
-
-          {/* Analytics Dashboard */}
-          {showAnalytics && analyticsData && (
-            <Paper sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-                Project Analytics
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle1" sx={{ mb: 2 }}>Status Distribution</Typography>
-                  <Box sx={{ height: 300 }}>
-                    <Doughnut data={analyticsData.statusData} />
-                  </Box>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle1" sx={{ mb: 2 }}>Priority Distribution</Typography>
-                  <Box sx={{ height: 300 }}>
-                    <Doughnut data={analyticsData.priorityData} />
-                  </Box>
-                </Grid>
-                {canViewFinancials && analyticsData.financialData && (
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" sx={{ mb: 2 }}>Financial Overview</Typography>
-                    <Box sx={{ height: 300 }}>
-                      <Bar data={analyticsData.financialData} />
-                    </Box>
-                  </Grid>
-                )}
-              </Grid>
-            </Paper>
-          )}
-
           {/* Bulk Actions Bar */}
           {selectedProjects.length > 0 && (
             <Paper sx={{ p: 2, mb: 3, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
@@ -971,7 +791,7 @@ const ProjectsPageEnhanced = () => {
                 <Grid container spacing={3}>
                   {paginatedProjects.length > 0 ? (
                     paginatedProjects.map(project => (
-                      <Grid item xs={12} sm={6} lg={6} key={project._id}>
+                      <Grid item xs={12} sm={6} lg={4} key={project._id}>
                         <ProjectCard 
                           project={project} 
                           isOverdue={isOverdue(project)}
