@@ -3,6 +3,7 @@ import './projectDetailWorkspace.css';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Button,
+  IconButton,
   TextField,
   FormControl,
   InputLabel,
@@ -1500,52 +1501,66 @@ const ProjectDetailPage = () => {
       </Dialog>
 
       {/* Daily Update Dialog */}
-      <Dialog 
-        open={updateDialog} 
+      <Dialog
+        className="project-update-dialog"
+        open={updateDialog}
         onClose={() => setUpdateDialog(false)}
+        aria-labelledby="project-update-dialog-title"
+        aria-describedby="project-update-dialog-description"
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Post Daily Update</DialogTitle>
+        <DialogTitle id="project-update-dialog-header" className="project-update-dialog-header">
+          <span className="project-update-dialog-icon"><FiMessageSquare /></span>
+          <span className="project-update-dialog-heading">
+            <span id="project-update-dialog-title">Post Daily Update</span>
+            <span id="project-update-dialog-description">Share your progress and keep your project team in sync.</span>
+          </span>
+          <IconButton aria-label="Close daily update" onClick={() => setUpdateDialog(false)}><FiX /></IconButton>
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+          <Box className="project-update-dialog-fields">
+            <Box className="project-update-dialog-row">
+              <TextField
+                label="Update Date"
+                type="date"
+                value={newUpdate.updateDate}
+                onChange={(e) => setNewUpdate({ ...newUpdate, updateDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <FormControl fullWidth>
+                <InputLabel id="project-daily-status-label">Status</InputLabel>
+                <Select labelId="project-daily-status-label"
+                  value={newUpdate.status}
+                  onChange={(e) => setNewUpdate({ ...newUpdate, status: e.target.value })}
+                  label="Status"
+                >
+                  <MenuItem value="pending">Pending</MenuItem>
+                  <MenuItem value="in-progress">In Progress</MenuItem>
+                  <MenuItem value="completed">Completed</MenuItem>
+                  <MenuItem value="on-hold">On Hold</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
             <TextField
-              label="Update Date"
-              type="date"
-              value={newUpdate.updateDate}
-              onChange={(e) => setNewUpdate({ ...newUpdate, updateDate: e.target.value })}
+              label="Update"
               InputLabelProps={{ shrink: true }}
-              fullWidth
-            />
-            
-            <TextField
-              label="Update *"
               multiline
               rows={4}
               value={newUpdate.update}
               onChange={(e) => setNewUpdate({ ...newUpdate, update: e.target.value })}
-              placeholder="Describe today's progress, achievements, and any important updates..."
+              placeholder="What did you work on today? Share progress, achievements, or important updates…"
               fullWidth
               required
             />
-
-            <FormControl fullWidth>
-              <InputLabel id="project-daily-status-label">Status</InputLabel>
-              <Select labelId="project-daily-status-label"
-                value={newUpdate.status}
-                onChange={(e) => setNewUpdate({ ...newUpdate, status: e.target.value })}
-                label="Status"
-              >
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="in-progress">In Progress</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="on-hold">On Hold</MenuItem>
-              </Select>
-            </FormControl>
-
-            <Box>
-              <Typography gutterBottom>Progress: {newUpdate.progress}%</Typography>
+            <Box className="project-update-dialog-progress">
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography id="project-update-progress-label">Progress</Typography>
+                <Typography component="span" className="project-update-progress-value">{newUpdate.progress}%</Typography>
+              </Box>
               <Slider
+                aria-labelledby="project-update-progress-label"
                 value={newUpdate.progress}
                 onChange={(e, value) => setNewUpdate({ ...newUpdate, progress: value })}
                 min={0}
@@ -1557,33 +1572,37 @@ const ProjectDetailPage = () => {
                 ]}
               />
             </Box>
-
-            <TextField
-              label="Blockers / Challenges"
-              multiline
-              rows={2}
-              value={newUpdate.blockers}
-              onChange={(e) => setNewUpdate({ ...newUpdate, blockers: e.target.value })}
-              placeholder="Any blockers or challenges faced..."
-              fullWidth
-            />
-
-            <TextField
-              label="Next Steps"
-              multiline
-              rows={2}
-              value={newUpdate.nextSteps}
-              onChange={(e) => setNewUpdate({ ...newUpdate, nextSteps: e.target.value })}
-              placeholder="Planned next steps..."
-              fullWidth
-            />
+            <Box className="project-update-dialog-row">
+              <TextField
+                label="Blockers / Challenges"
+                InputLabelProps={{ shrink: true }}
+                multiline
+                rows={3}
+                value={newUpdate.blockers}
+                onChange={(e) => setNewUpdate({ ...newUpdate, blockers: e.target.value })}
+                placeholder="Anything slowing you down?"
+                fullWidth
+              />
+              <TextField
+                label="Next Steps"
+                InputLabelProps={{ shrink: true }}
+                multiline
+                rows={3}
+                value={newUpdate.nextSteps}
+                onChange={(e) => setNewUpdate({ ...newUpdate, nextSteps: e.target.value })}
+                placeholder="What will you focus on next?"
+                fullWidth
+              />
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
+          <Typography component="span">Your project team can see this update.</Typography>
           <Button onClick={() => setUpdateDialog(false)}>Cancel</Button>
-          <Button 
-            onClick={handleSubmitUpdate} 
-            variant="contained" 
+          <Button
+            onClick={handleSubmitUpdate}
+            variant="contained"
+            startIcon={submittingUpdate ? <CircularProgress size={16} color="inherit" /> : <FiMessageSquare />}
             disabled={!newUpdate.update.trim() || submittingUpdate}
           >
             {submittingUpdate ? 'Posting...' : 'Post Update'}

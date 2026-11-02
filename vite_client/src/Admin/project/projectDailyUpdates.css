@@ -319,3 +319,57 @@
     font-size: 14px;
   }
 }
+
+/* Portalled daily update composer — scoped independently from the page shell. */
+.project-update-dialog .MuiBackdrop-root { background: rgba(16, 43, 53, .42); backdrop-filter: blur(4px); }
+.project-update-dialog .MuiDialog-paper { width: calc(100% - 48px); max-width: 760px; max-height: calc(100dvh - 48px); margin: 24px; border: 1px solid #e0e9ed; border-radius: 18px; box-shadow: 0 24px 80px #123d4330; color: #173f46; }
+.project-update-dialog .project-update-dialog-header { display: flex; align-items: center; gap: 14px; padding: 24px 28px; border-bottom: 1px solid #e7eeef; background: linear-gradient(115deg, #fff, #f0f8f5); flex-shrink: 0; }
+.project-update-dialog-icon { display: grid; place-items: center; width: 46px; height: 46px; flex-shrink: 0; background: #e2f3eb; color: #07866d; border: 1px solid #cce8dc; border-radius: 13px; }
+.project-update-dialog-icon svg { width: 22px; height: 22px; }
+.project-update-dialog-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.project-update-dialog-heading > span:first-child { font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: -.5px; }
+.project-update-dialog-heading > span:last-child { font-size: 12px; line-height: 1.6; color: #758b93; font-weight: 400; }
+.project-update-dialog-header .MuiIconButton-root { margin-left: auto; padding: 8px; color: #78908f; background: #ffffff90; border: 1px solid #dfebe6; border-radius: 8px; flex-shrink: 0; }
+.project-update-dialog .MuiDialog-paper > .MuiDialogContent-root { padding: 22px 28px 26px; }
+.project-update-dialog-fields { display: flex; flex-direction: column; gap: 20px; }
+.project-update-dialog-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.project-update-dialog .MuiFormControl-root { min-width: 0; padding-top: 22px; margin: 0; }
+.project-update-dialog .MuiInputLabel-root { position: absolute; left: 0; top: 0; transform: none; max-width: 100%; color: #526e7a; font-size: 12px; font-weight: 600; line-height: 16px; }
+.project-update-dialog .MuiInputLabel-asterisk { color: #c76656; }
+.project-update-dialog .MuiOutlinedInput-root { min-height: 46px; background: #fff; border-radius: 9px; padding: 0 14px; color: #254755; font-size: 14px; }
+.project-update-dialog .MuiOutlinedInput-notchedOutline { top: 0; border-color: #dbe5eb; }
+.project-update-dialog .MuiOutlinedInput-notchedOutline legend { display: none; }
+.project-update-dialog .MuiOutlinedInput-input { height: 22px; min-height: 0; padding: 12px 0; margin: 0; border: 0; border-radius: 0; line-height: 22px; font: inherit; box-sizing: content-box; box-shadow: none; background: transparent; }
+.project-update-dialog .MuiSelect-select { padding-right: 24px; }
+.project-update-dialog .MuiOutlinedInput-root.MuiInputBase-multiline { padding: 12px 14px; }
+.project-update-dialog .MuiInputBase-inputMultiline { height: auto; padding: 0; line-height: 1.7; }
+.project-update-dialog textarea::placeholder { color: #95a5ae; opacity: 1; }
+.project-update-dialog .MuiOutlinedInput-root.Mui-focused { box-shadow: 0 0 0 3px #07866d12; }
+.project-update-dialog .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline { border-color: #07866d; border-width: 1px; }
+.project-update-dialog-progress { padding: 16px 22px 20px; background: #f3f9f6; border: 1px solid #dfede6; border-radius: 11px; }
+.project-update-dialog-progress .MuiTypography-root { font-size: 13px; font-weight: 600; color: #46685e; }
+.project-update-dialog-progress .project-update-progress-value { padding: 4px 10px; background: #dff0e7; color: #07866d; border-radius: 7px; font-size: 12px; }
+.project-update-dialog-progress .MuiSlider-root { color: #07866d; margin: 8px 0 0; width: 100%; }
+.project-update-dialog-progress .MuiSlider-thumb { width: 15px; height: 15px; background: white; border: 3px solid #07866d; box-shadow: 0 2px 5px #123d4320; }
+.project-update-dialog-progress .MuiSlider-rail { opacity: 1; background: #d8eae2; }
+.project-update-dialog-progress .MuiSlider-markLabel { font-size: 11px; color: #7a9388; }
+.project-update-dialog .MuiDialogActions-root { padding: 18px 28px; gap: 10px; background: #f8fafb; border-top: 1px solid #e7eef0; flex-shrink: 0; }
+.project-update-dialog .MuiDialogActions-root > .MuiTypography-root { margin-right: auto; color: #81929c; font-size: 11px; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-root { text-transform: none; font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 9px; box-shadow: none; min-height: 42px; margin: 0; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-text { color: #526f7c; background: #fff; border: 1px solid #dbe6ec; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-contained { background: #07866d; color: #fff; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-contained:hover { background: #066d59; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-contained.Mui-disabled { color: #8ba69d; background: #e3eee8; }
+@media (max-width: 600px) {
+  .project-update-dialog .MuiDialog-paper { width: calc(100% - 24px); margin: 12px; max-height: calc(100dvh - 24px); border-radius: 14px; }
+  .project-update-dialog .project-update-dialog-header { padding: 18px; gap: 10px; align-items: flex-start; }
+  .project-update-dialog-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .project-update-dialog-heading > span:first-child { font-size: 19px; }
+  .project-update-dialog-heading > span:last-child { font-size: 11px; }
+  .project-update-dialog .MuiDialog-paper > .MuiDialogContent-root { padding: 18px; }
+  .project-update-dialog-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .project-update-dialog-fields { gap: 18px; }
+  .project-update-dialog .MuiDialogActions-root { padding: 14px 18px; flex-wrap: wrap; }
+  .project-update-dialog .MuiDialogActions-root > .MuiTypography-root { flex-basis: 100%; }
+  .project-update-dialog .MuiDialogActions-root .MuiButton-root { flex: 1; }
+}
