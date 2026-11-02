@@ -11,6 +11,7 @@ import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
 import { shouldApplyLineManagerScope } from "../../helpers/projectManagerHelper.js";
 import {
     canPostProjectUpdates,
+    canManageProjectStatus,
     getRequesterEmployeeId,
 } from "../../helpers/projectMembershipHelper.js";
 
@@ -541,7 +542,7 @@ export const updateProjectStatus = async (req, res) => {
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        if (!canPostProjectUpdates(project, req)) {
+        if (!canManageProjectStatus(project, req)) {
             return res.status(403).json({ 
                 error: 'Only the project leader or a project manager can update the project status' 
             });
@@ -577,7 +578,7 @@ export const updateProjectStatus = async (req, res) => {
     }
 };
 
-// Create a daily project update (project leader or project manager)
+// Create a daily project update (assigned team members, project manager, or owner)
 export const createProjectUpdate = async (req, res) => {
     try {
         const { id } = req.params;
@@ -603,7 +604,7 @@ export const createProjectUpdate = async (req, res) => {
 
         if (!canPostProjectUpdates(project, req)) {
             return res.status(403).json({ 
-                error: 'Only the project leader or a project manager can post daily updates' 
+                error: 'Only assigned project team members or a project manager can post daily updates'
             });
         }
 

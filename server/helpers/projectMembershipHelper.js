@@ -42,9 +42,9 @@ export function isProjectLeaderEmployee(project, employeeId) {
 }
 
 /**
- * Can post daily updates / update status: project leader, org PM, or org owner.
+ * Can change project status: project leader, org PM, or org owner.
  */
-export function canPostProjectUpdates(project, req) {
+export function canManageProjectStatus(project, req) {
   const employeeId = getRequesterEmployeeId(req);
   if (employeeId && isProjectLeaderEmployee(project, employeeId)) return true;
 
@@ -53,4 +53,9 @@ export function canPostProjectUpdates(project, req) {
   if (req?.employee && isProjectManager(req.employee)) return true;
 
   return false;
+}
+
+/** All assigned team members can contribute daily project updates. */
+export function canPostProjectUpdates(project, req) {
+  return isAssignedToProject(project, getRequesterEmployeeId(req)) || canManageProjectStatus(project, req);
 }

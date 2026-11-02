@@ -14,6 +14,10 @@ import { addWorkItemComment } from "../../controllers/both/workItemCommentContro
 import isAuthenticated from './../../middlewares/isAuthenticated.js';
 import isProjectWorkspaceAuthenticated from './../../middlewares/isProjectWorkspaceAuthenticated.js';
 
+import { createProjectUpdate, getProjectUpdates } from '../../controllers/admin/projectController.js';
+import requireProjectTeamMembership from '../../middlewares/requireProjectTeamMembership.js';
+import { writeLimiter } from '../../middlewares/rateLimiter.js';
+
 const router = express.Router();
 
 // Root route - Get tasks (for dashboard)
@@ -30,6 +34,12 @@ router.get("/all-tasks", isAuthenticated, getMyTasks);
 router.get("/projects/:projectId/work-items", isAuthenticated, getEmployeeProjectWorkItems);
 router.put("/work-items/:workItemId", isAuthenticated, updateEmployeeProjectWorkItem);
 router.post("/work-items/:workItemId/comments", isAuthenticated, addWorkItemComment);
+
+// Team members can post updates and read their project's shared history.
+router.route('/projects/:id/updates')
+    .get(isAuthenticated, requireProjectTeamMembership, getProjectUpdates)
+    .post(isAuthenticated, writeLimiter, requireProjectTeamMembership, createProjectUpdate);
+router.get('/projects/:projectId/team-logs', isAuthenticated, requireProjectTeamMembership, getProjectTasks);
 
 // Admin routes — project managers, managers, HR, admins
 router.get("/admin/projects/:projectId/tasks", isProjectWorkspaceAuthenticated, getProjectTasks);

@@ -546,3 +546,20 @@
 }
 
 .employee-project-tabs button svg { flex-shrink: 0; }
+
+.employee-project-workspace .employee-team-updates {
+  padding: 0 !important;
+  min-height: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.employee-team-updates-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; }
+.employee-team-updates-heading > div:last-child { display: flex; flex-wrap: wrap; gap: 10px; }
+.employee-team-update-form { margin-top: 24px; border-top: 1px solid #e3eceb; padding-top: 4px; }
+#root .employee-team-update-form input[type="date"] { width: 100%; height: 46px; padding: 12px; border: 1px solid #d7e3eb; border-radius: 9px; background: white; color: #123d43; font: inherit; font-size: 14px; box-shadow: none; }
+.employee-project-workspace .employee-team-update-form .employee-project-facts { padding: 0; border: 0; margin-top: 0; }
+.employee-project-toolbar { flex-wrap: wrap; }
+.employee-project-toolbar > .employee-project-primary:nth-child(2) { margin-left: auto; }
+@media (max-width: 600px) { .employee-team-updates-heading > div:last-child { width: 100%; } .employee-team-updates-heading button { flex: 1; } }

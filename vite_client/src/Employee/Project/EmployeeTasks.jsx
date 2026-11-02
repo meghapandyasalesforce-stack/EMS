@@ -30,6 +30,7 @@ import {
   updateEmployeeWorkItem,
   addEmployeeWorkItemComment,
 } from "../../context/employeeTaskSlice";
+import ProjectTeamUpdates from "../../components/project/ProjectTeamUpdates";
 import EmployeeWorkPlanSection from "./EmployeeWorkPlanSection";
 import "./employeeProjectWorkspace.css";
 
@@ -79,6 +80,7 @@ export default function EmployeeTasks() {
   const currentEmployeeId =
     employee?._id || user?.employeeProfileId || user?._id;
   const [activeTab, setActiveTab] = useState("details");
+  const [showTeamComposer, setShowTeamComposer] = useState(false);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [taskDescription, setTaskDescription] = useState("");
   const [taskStatus, setTaskStatus] = useState("Not Started");
@@ -264,6 +266,7 @@ export default function EmployeeTasks() {
     ["details", "Project Details", FiClipboard],
     ["plan", "Work plan", FiCheckCircle],
     ["daily", "My daily logs", FiMessageSquare],
+    ["team", "Team daily logs", FiUsers],
   ];
   return (
     <main className="employee-project-workspace">
@@ -273,6 +276,15 @@ export default function EmployeeTasks() {
           onClick={() => navigate("/employee/projects")}
         >
           <FiArrowLeft /> Back to Projects
+        </button>
+        <button
+          className="employee-project-primary"
+          onClick={() => {
+            setShowTeamComposer(true);
+            setActiveTab("team");
+          }}
+        >
+          <FiMessageSquare /> Post Update
         </button>
         <button className="employee-project-primary" onClick={openDailyLog}>
           <FiPlus /> {todayTask ? "Update daily task" : "Add daily task"}
@@ -471,6 +483,12 @@ export default function EmployeeTasks() {
               canComment={Boolean(currentEmployeeId)}
             />
           </div>
+        )}
+        {activeTab === "team" && (
+          <ProjectTeamUpdates
+            project={currentProject}
+            showComposer={showTeamComposer}
+          />
         )}
         {activeTab === "daily" && (
           <div className="employee-project-daily-grid">

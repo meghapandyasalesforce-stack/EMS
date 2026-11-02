@@ -92,7 +92,7 @@ router.route("/get-managers")
 router.route("/:id/update-status")
     .put(isProjectWorkspaceAuthenticated, writeLimiter, updateProjectStatus);
 
-// Create daily project update (only by project leader)
+// Create daily project update (assigned members, project lead, PM, or owner)
 router.route("/:id/updates")
     .post(isProjectWorkspaceAuthenticated, writeLimiter, createProjectUpdate)
     .get(isProjectWorkspaceAuthenticated, projectLimiter, getProjectUpdates);

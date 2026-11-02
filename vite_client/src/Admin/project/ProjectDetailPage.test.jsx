@@ -315,19 +315,28 @@ describe("Four project detail tabs", () => {
       expect.stringMatching(/admin\/projects\/one\/tasks\?/),
     );
   });
-  it("refreshes team logs on entry and explains where project updates appear", async () => {
+  it("refreshes team logs and includes posted updates in the same tab", async () => {
     logs = [];
+    updates = [];
     mount();
     await tab("Team daily logs");
-    await screen.findByText(/No daily task logs yet/);
-    expect(screen.getByText(/Team membership alone/)).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "View Daily Updates" }),
-    );
-    expect(screen.getByRole("tab", { name: "Daily Updates" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    await screen.findByText(/No team updates or daily task logs yet/);
+    updates = [
+      {
+        _id: "new-update",
+        update: "Team member progress report",
+        postedBy: { name: "Alex" },
+        status: "in-progress",
+        updateDate: "2026-11-02",
+        createdAt: "2026-11-02T12:00:00Z",
+      },
+    ];
+    fireEvent.click(screen.getByRole("button", { name: "Refresh logs" }));
+    await screen.findByText("Team member progress report");
+    expect(
+      screen.queryByText(/No team updates or daily task logs yet/),
+    ).not.toBeInTheDocument();
+    await tab("Project Details");
     logs = [
       {
         _id: "new-log",
@@ -339,9 +348,50 @@ describe("Four project detail tabs", () => {
     ];
     await tab("Team daily logs");
     await screen.findByText("New employee work log");
-    logs = [];
-    fireEvent.click(screen.getByRole("button", { name: "Refresh logs" }));
-    await screen.findByText(/No daily task logs yet/);
+  });
+  it('does not let an old update request hide a newer team update', async () => {
+    let finishOld;
+    let first = true;
+    const baseGet = axios.get.getMockImplementation();
+    axios.get.mockImplementation(url => {
+      if (url.endsWith('/updates') && first) {
+        first = false;
+        return new Promise(resolve => { finishOld = resolve; });
+      }
+      return baseGet(url);
+    });
+    mount();
+    await tab('Team daily logs');
+    await screen.findByText('Integration completed');
+    finishOld({ data: { success: true, updates: [], pagination: { pages: 1 } } });
+    await waitFor(() => expect(screen.getByText('Integration completed')).toBeInTheDocument());
+  });
+  it("lets an assigned team member post from Team daily logs and Daily Updates", async () => {
+    const member = { _id: "member", name: "Team member", role: "manager" };
+    mount({ project: { ...fixture, projectMembers: [member] }, user: member });
+    await tab("Team daily logs");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Post Update", exact: true }),
+    );
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Update \*/), {
+      target: { value: "Member posted progress" },
+    });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Post Update", exact: true }),
+    );
+    await screen.findByText("Member posted progress");
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Update Status" }),
+    ).not.toBeInTheDocument();
+    await tab("Daily Updates");
+    await screen.findByText("Member posted progress");
+    expect(
+      screen.getByRole("button", { name: "Post Update", exact: true }),
+    ).toBeInTheDocument();
   });
   it("shows team log failures", async () => {
     axios.get.mockImplementation(async (url) => {

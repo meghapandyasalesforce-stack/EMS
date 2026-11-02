@@ -85,6 +85,41 @@ beforeEach(() => {
   });
 });
 describe("assigned employee project workspace", () => {
+  it("opens Post Update and shared team history directly from the employee project page", async () => {
+    const baseGet = axios.get.getMockImplementation();
+    axios.get.mockImplementation(async (url) =>
+      url.endsWith("/updates")
+        ? {
+            data: {
+              success: true,
+              updates: [
+                {
+                  _id: "team-report",
+                  update: "Another member shared progress",
+                  postedBy: { name: "Another member" },
+                  status: "in-progress",
+                  updateDate: "2026-11-02",
+                  createdAt: "2026-11-02T12:00:00Z",
+                },
+              ],
+              pagination: { pages: 1 },
+            },
+          }
+        : baseGet(url),
+    );
+    mount();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Post Update", exact: true }),
+    );
+    expect(
+      screen.getByRole("tab", { name: "Team daily logs" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("heading", { name: "Post a team update" }),
+    ).toBeInTheDocument();
+    await screen.findByText("Another member shared progress");
+  });
+
   it("shows current details and lets a new member log work without work-plan assignments", async () => {
     mount();
     await screen.findByRole("heading", { name: "HRMS" });

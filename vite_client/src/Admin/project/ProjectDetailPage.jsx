@@ -27,9 +27,6 @@ import {
   DialogContent,
   DialogActions,
   Slider,
-  Avatar,
-  Card,
-  CardContent,
   InputAdornment,
   Autocomplete
 } from '@mui/material';
@@ -52,6 +49,7 @@ import {
 import { format } from 'date-fns';
 import { isExecutive } from '../../utils/navigationConfig';
 import WorkItemComments from '../../components/project/WorkItemComments';
+import ProjectUpdateFeed from '../../components/project/ProjectUpdateFeed';
 import WorkItemDueDateHistory from '../../components/project/WorkItemDueDateHistory';
 import { isProjectManager } from '../../utils/projectManagerHelper';
 
@@ -193,12 +191,17 @@ const ProjectDetailPage = () => {
     return String(leaderId) === String(currentEmployeeId);
   }, [project, user, employee]);
 
-  const canPostDailyUpdates = useMemo(() => {
+  const canManageProjectStatus = useMemo(() => {
     if (isProjectLeader) return true;
     if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner) return true;
     if (isProjectManager(user || employee)) return true;
     return false;
   }, [isProjectLeader, permissionFlags, user, employee]);
+
+  const canPostDailyUpdates = useMemo(() => {
+    const me = resolveEmployeeId(user, employee);
+    return canManageProjectStatus || Boolean(me && (project?.projectMembers || []).some(member => String(member._id || member) === String(me)));
+  }, [canManageProjectStatus, project, user, employee]);
 
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
@@ -752,10 +755,12 @@ const ProjectDetailPage = () => {
     ]
   );
 
+  const updatesRequest = useRef(0);
+
   // Fetch project updates
   const fetchProjectUpdates = useCallback(async () => {
     if (!project?._id) return;
-    
+    const requestId = ++updatesRequest.current;
     try {
       setLoadingUpdates(true);
       setUpdatesError(null);
@@ -773,13 +778,17 @@ const ProjectDetailPage = () => {
         hasNext = pagination?.hasNext ?? (page < Number(pagination?.pages || 1));
         page += 1;
       }
-      setUpdates(collected);
+      if (requestId === updatesRequest.current) setUpdates(collected);
     } catch (error) {
-      setUpdatesError(error.response?.data?.error || error.message || 'Failed to load project updates');
+      if (requestId === updatesRequest.current) setUpdatesError(error.response?.data?.error || error.message || 'Failed to load project updates');
     } finally {
-      setLoadingUpdates(false);
+      if (requestId === updatesRequest.current) setLoadingUpdates(false);
     }
   }, [project?._id]);
+
+  useEffect(() => {
+    if (tabValue === 2 || tabValue === 3) fetchProjectUpdates();
+  }, [tabValue, fetchProjectUpdates]);
 
   // Handle status update
   const handleStatusUpdate = useCallback(async () => {
@@ -891,7 +900,7 @@ const ProjectDetailPage = () => {
             <>
               {canPostDailyUpdates && (
                 <>
-                  <Button 
+                  {canManageProjectStatus && <Button
                     onClick={() => {
                       setNewStatus(project.status);
                       setStatusUpdateDialog(true);
@@ -902,7 +911,7 @@ const ProjectDetailPage = () => {
                     size={isMobile ? 'small' : 'medium'}
                   >
                     {isMobile ? 'Status' : 'Update Status'}
-                  </Button>
+                  </Button>}
                   <Button 
                     onClick={() => {
                       setNewUpdate({
@@ -1339,15 +1348,16 @@ const ProjectDetailPage = () => {
       {tabValue === 2 && (
         <Paper className="project-team-logs-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center" gap={2} mb={2}>
-            <Typography variant="h6">Daily task logs</Typography>
-            <Button startIcon={<FiRefreshCw />} disabled={tasksStatus === 'loading'} onClick={() => dispatch(fetchProjectTasks(project._id))}>Refresh logs</Button>
+            <Typography variant="h6">Team daily updates & logs</Typography>
+            <Box display="flex" gap={1} flexWrap="wrap">
+              {canPostDailyUpdates && <Button variant="contained" color="success" startIcon={<FiMessageSquare />} onClick={() => { setNewUpdate({ ...newUpdate, status: project.status, updateDate: new Date().toISOString().split('T')[0] }); setUpdateDialog(true); }}>Post Update</Button>}
+              <Button startIcon={<FiRefreshCw />} disabled={tasksStatus === 'loading' || loadingUpdates} onClick={() => { dispatch(fetchProjectTasks(project._id)); fetchProjectUpdates(); }}>Refresh logs</Button>
+            </Box>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Work entries employees save under ME → Projects → this project → My daily logs.
+            Daily updates from everyone on this project. Use Post Update to share your work, blockers, and next steps with the team.
           </Typography>
-          <Alert severity="info" role="status" sx={{ mb: 3 }} action={<Button color="inherit" size="small" onClick={() => setTabValue(3)}>View Daily Updates</Button>}>
-            Updates posted with the Daily Update button appear in the Daily Updates tab. Team membership alone does not create a daily task log.
-          </Alert>
+          {loadingUpdates ? <Box display="flex" justifyContent="center" py={2}><CircularProgress /></Box> : updatesError ? <Alert severity="error">{updatesError}</Alert> : updates.length > 0 ? <Box mb={3}><ProjectUpdateFeed updates={updates} /></Box> : null}
           {tasksStatus === 'loading' ? (
             <Box display="flex" justifyContent="center">
               <CircularProgress />
@@ -1357,9 +1367,7 @@ const ProjectDetailPage = () => {
               {tasksError}
             </Alert>
           ) : projectTasks.length === 0 ? (
-            <Typography variant="body1" color="text.secondary">
-              No daily task logs yet. Ask team members to save their work in this project's My daily logs tab, then refresh logs.
-            </Typography>
+            !loadingUpdates && !updatesError && updates.length === 0 ? <Typography variant="body1" color="text.secondary">No team updates or daily task logs yet. Post your first update above.</Typography> : null
           ) : (
             <Box display="flex" flexDirection="column" gap={2}>
               {projectTasks.map(task => (
@@ -1446,83 +1454,7 @@ const ProjectDetailPage = () => {
               )}
             </Box>
           ) : (
-            <Box className="project-daily-feed" display="flex" flexDirection="column" gap={2}>
-              {updates.map((update) => (
-                <Card className="project-daily-card" key={update._id} elevation={2}>
-                  <CardContent>
-                    <Box className="project-daily-card-header" display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                      <Box display="flex" alignItems="center" gap={1.5}>
-                        <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}>
-                          {update.postedBy?.name?.charAt(0) || 'U'}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="subtitle1" fontWeight={600}>
-                            {update.postedBy?.name || 'Unknown'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="flex" alignItems="center" gap={0.5}>
-                            <FiCalendar size={12} />
-                            {format(new Date(update.updateDate), 'MMM dd, yyyy')}
-                            {' • '}
-                            {format(new Date(update.createdAt), 'h:mm a')}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Chip
-                        label={update.status}
-                        size="small"
-                        color={
-                          update.status === 'completed' ? 'success' :
-                          update.status === 'in-progress' ? 'primary' :
-                          update.status === 'on-hold' ? 'warning' : 'default'
-                        }
-                      />
-                    </Box>
-                    
-                    <Typography className="project-daily-text" variant="body1" paragraph sx={{ whiteSpace: 'pre-wrap' }}>
-                      {update.update}
-                    </Typography>
-
-                    {update.progress !== undefined && (
-                      <Box className="project-daily-progress" mb={2}>
-                        <Box display="flex" justifyContent="space-between" mb={0.5}>
-                          <Typography variant="caption" color="text.secondary">Progress</Typography>
-                          <Typography variant="caption" fontWeight={600}>{update.progress}%</Typography>
-                        </Box>
-                        <Slider
-                          value={update.progress}
-                          min={0}
-                          max={100}
-                          disabled
-                          sx={{ pointerEvents: 'none' }}
-                        />
-                      </Box>
-                    )}
-
-                    {update.blockers && (
-                      <Box className="project-daily-blocker" mb={1}>
-                        <Typography variant="caption" fontWeight={600} color="error.main">
-                          Blockers:
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                          {update.blockers}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {update.nextSteps && (
-                      <Box className="project-daily-next-steps">
-                        <Typography variant="caption" fontWeight={600} color="primary.main">
-                          Next Steps:
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                          {update.nextSteps}
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
+            <ProjectUpdateFeed updates={updates} />
           )}
         </Paper>
       )}

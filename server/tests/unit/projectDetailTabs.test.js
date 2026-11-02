@@ -189,8 +189,9 @@ describe("Project detail tabs: actual controller decisions with mocked persisten
     expect(project.save).toHaveBeenCalled();
     expect(project.status).toBe("completed");
   });
-  it("prevents another employee from posting status or daily updates", async () => {
+  it("prevents a nonmember from posting status or daily updates", async () => {
     project.projectLeader = "eeeeeeeeeeeeeeeeeeeeeeee";
+    project.projectMembers = [];
     for (const fn of [
       controller.updateProjectStatus,
       controller.createProjectUpdate,
@@ -200,6 +201,17 @@ describe("Project detail tabs: actual controller decisions with mocked persisten
       expect(out.code).toBe(403);
     }
     expect(savedUpdates).toHaveLength(0);
+  });
+  it("allows an assigned member to post updates without granting project status changes", async () => {
+    project.projectLeader = "eeeeeeeeeeeeeeeeeeeeeeee";
+    const out = res();
+    await controller.createProjectUpdate(req({ update: "Team member progress", status: "in-progress" }), out);
+    expect(out.code).toBe(201);
+    expect(savedUpdates[0].postedBy).toBe(employeeId);
+    const status = res();
+    await controller.updateProjectStatus(req({ status: "completed" }), status);
+    expect(status.code).toBe(403);
+    expect(project.save).not.toHaveBeenCalled();
   });
   it("posts all daily update fields and populates the author", async () => {
     const input = {
