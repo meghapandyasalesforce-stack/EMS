@@ -228,7 +228,7 @@ const WfhRequestPanel = () => {
         className={statusClass(status)}
         title={status === 'rejected' && r.reviewNote ? r.reviewNote : undefined}
       >
-        {status}
+        {status === 'cancelled' ? 'Cancelled by you' : status}
       </span>
     );
   };
