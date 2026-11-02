@@ -39,6 +39,7 @@ function WfhStatusPill({ status }) {
   const map = {
     pending: { label: formatStatusLabel('pending'), className: 'bg-red-50 text-red-700 border border-red-200' },
     approved: { label: formatStatusLabel('approved'), className: 'bg-emerald-50 text-[#0a8f6c] border border-emerald-200' },
+    cancelled: { label: formatStatusLabel('cancelled'), className: 'bg-slate-100 text-slate-600 border border-slate-200' },
     rejected: { label: formatStatusLabel('rejected'), className: 'bg-slate-100 text-slate-600 border border-slate-200' },
   };
   const m = map[normalizeStatus(status)] || map.pending;

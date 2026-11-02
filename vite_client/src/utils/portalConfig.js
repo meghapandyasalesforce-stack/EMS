@@ -1,4 +1,4 @@
-import { isExecutive, getMePortalHomePath } from './navigationConfig';
+import { isExecutive } from './navigationConfig';
 
 /** Canonical portal tab order (highest privilege first). */
 export const PORTAL_ORDER = [
@@ -216,7 +216,7 @@ const buildPortalObjects = (ids, position) => {
   }));
 };
 
-const buildOrgOwnerPortalTabs = (allPortals, position, employee = null) => {
+const buildOrgOwnerPortalTabs = (allPortals) => {
   const byId = Object.fromEntries(allPortals.map((p) => [p.id, p]));
 
   return ORG_OWNER_PORTAL_TABS.map((id) => {
@@ -227,7 +227,8 @@ const buildOrgOwnerPortalTabs = (allPortals, position, employee = null) => {
         home: PORTAL_META.employee.home,
         theme: PORTAL_META.employee.theme,
       };
-      return { ...base, home: getMePortalHomePath(employee || {}) };
+      // Me is the personal employee workspace, independent of operational roles.
+      return { ...base, home: PORTAL_META.employee.home };
     }
     if (byId[id]) return byId[id];
     return {
@@ -251,7 +252,7 @@ export const deriveAvailablePortals = (ctx = {}) => {
   const allPortals = buildPortalObjects(entitledIds, position);
 
   if (canSwitchPortals(user, permissionFlags, roleBuckets)) {
-    return buildOrgOwnerPortalTabs(allPortals, position, employee);
+    return buildOrgOwnerPortalTabs(allPortals);
   }
 
   if (isHrPortalUser(permissionFlags)) {

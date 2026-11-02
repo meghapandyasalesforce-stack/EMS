@@ -480,7 +480,7 @@ export const clockIn = async (req, res) => {
       return res.status(403).json({
         success: false,
         message:
-          'Work From Home punch-in requires an approved WFH request for today. Please punch in from the office, or wait for WFH approval.',
+          'Work From Home punch-in requires an approved WFH request or an HR-assigned WFH schedule for today.',
         code: 'WFH_APPROVAL_REQUIRED',
         wfhType: dayPlan.wfhType,
         currentHalf: dayPlan.currentHalf,

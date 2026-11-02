@@ -1,4 +1,5 @@
 import '../../styles/surveyUI.css';
+import '../../styles/engagementDashboard.css';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -15,9 +16,10 @@ import {
     FaLightbulb,
     FaDownload,
     FaTasks,
-    FaCog,
     FaTrash,
     FaStream,
+    FaEye,
+    FaUsers,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -73,7 +75,7 @@ const resolveEngagementNav = (rawTab, rawSub) => {
 const SubTabBar = ({ tabs, active, onChange, trailing = null }) => {
     if (!tabs?.length && !trailing) return null;
     return (
-        <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="engagement-subtabs mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div className="flex flex-wrap gap-2">
                 {tabs?.map((tab) => (
                     <button
@@ -97,7 +99,7 @@ const SubTabBar = ({ tabs, active, onChange, trailing = null }) => {
 };
 
 const KpiStat = ({ label, value, icon: Icon, accent = MINT, subtext, muted = false }) => (
-    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:rounded-2xl sm:p-5">
+    <div className="engagement-summary-card rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:rounded-2xl sm:p-5">
         <div className="flex items-start justify-between gap-2">
             <div
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11 sm:rounded-xl"
@@ -464,7 +466,6 @@ const EngagementPage = () => {
             ...(isManagerUser
                 ? [
                     { id: 'actions', label: 'Action Plans', shortLabel: 'Actions', icon: FaTasks, defaultSub: null },
-                    { id: 'settings', label: 'Settings', shortLabel: 'Settings', icon: FaCog, defaultSub: null },
                 ]
                 : []),
         ];
@@ -576,7 +577,7 @@ const EngagementPage = () => {
                     </div>
                 </header>
 
-                <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
+                <div className="engagement-summary-grid grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
                     <KpiStat label="Total Surveys" value={stats.totalSurveys} icon={FaClipboardList} accent={MINT} />
                     <KpiStat label="Active" value={stats.active} icon={FaPoll} accent="#10b981" />
                     <KpiStat label="Survey Responses" value={stats.totalResponses} icon={FaInbox} accent={MINT_DARK} />
@@ -609,7 +610,7 @@ const EngagementPage = () => {
                     </div>
                 </nav>
 
-                <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-[28px]">
+                <section className={`engagement-workspace ${activeSection === 'dashboard' ? 'engagement-workspace--dashboard' : ''} min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-[28px]`}>
                     <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5 sm:py-4 md:px-6">
                         <h2 className="min-w-0 truncate text-base font-semibold text-slate-900 sm:text-lg">
                             {sectionTitle}
@@ -707,19 +708,24 @@ const EngagementPage = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="engagement-survey-grid grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                                     {filteredSurveys.map((survey) => (
                                         <article
                                             key={survey._id}
                                             className="flex flex-col overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/50 transition hover:border-[#0E9370]/30 hover:shadow-md"
                                         >
                                             <div className="flex-1 border-b border-slate-100 bg-white p-5">
-                                                <h3 className="truncate text-lg font-semibold text-slate-900">
-                                                    {survey.title}
-                                                </h3>
-                                                {survey.type && (
-                                                    <p className="text-xs text-slate-500">{survey.type}</p>
-                                                )}
+                                                <div className="engagement-survey-heading">
+                                                    <span className="engagement-survey-icon" aria-hidden="true"><FaClipboardList /></span>
+                                                    <div>
+                                                        <h3 className="truncate text-lg font-semibold text-slate-900">
+                                                            {survey.title}
+                                                        </h3>
+                                                        {survey.type && (
+                                                            <p className="text-xs text-slate-500">{survey.type}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
                                                 <p className="mt-3 line-clamp-2 text-sm text-slate-600">
                                                     {survey.description || 'No description provided.'}
                                                 </p>
@@ -729,7 +735,8 @@ const EngagementPage = () => {
                                                     >
                                                         {survey.status || 'Draft'}
                                                     </span>
-                                                    <span className="text-sm text-slate-500">
+                                                    <span className="engagement-survey-responses text-sm text-slate-500">
+                                                        <FaUsers aria-hidden="true" />
                                                         {survey.responseCount || 0} responses
                                                     </span>
                                                 </div>
@@ -743,6 +750,7 @@ const EngagementPage = () => {
                                                     className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
                                                     style={{ background: MINT_GRADIENT }}
                                                 >
+                                                    <FaEye aria-hidden="true" />
                                                     View Survey
                                                 </button>
                                                 {isManagerUser && (

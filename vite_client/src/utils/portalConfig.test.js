@@ -57,15 +57,15 @@ describe('portalConfig — SaaS portal switching policy', () => {
     expect(meTab?.home).toBe('/dashboard-employee');
   });
 
-  it('sets Me tab home from assigned employee role', () => {
+  it.each(['manager', 'project_manager', 'finance', 'executive', 'hr'])('keeps Me on employee dashboard for an admin assigned %s', (role) => {
     const portals = deriveAvailablePortals({
       user: orgAdmin,
-      employee: { _id: 'e0', functionalRoles: ['manager'] },
+      employee: { _id: 'e0', functionalRoles: [role] },
       roleBuckets: orgAdminBuckets,
       permissionFlags: { isOrgOwner: true, isHrManager: true, jwtRole: 'admin' },
     });
     const meTab = portals.find((p) => p.id === 'employee');
-    expect(meTab?.home).toBe('/dashboard-manager');
+    expect(meTab?.home).toBe('/dashboard-employee');
   });
 
   it('does not allow portal switching for HR staff (employee session)', () => {

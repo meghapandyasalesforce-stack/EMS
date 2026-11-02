@@ -1,0 +1,14 @@
+import { beforeEach, expect, it, jest } from '@jest/globals';
+const Project = { findOne: jest.fn() };
+jest.unstable_mockModule('../../models/project.model.js', () => ({ default: Project }));
+const { default: authorize } = await import('../../middlewares/requireProjectTeamMembership.js');
+const organizationId = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+const member = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+const projectId = 'cccccccccccccccccccccccc';
+let project;
+beforeEach(() => { jest.clearAllMocks(); project = { _id: projectId, organizationId, projectLeader: 'dddddddddddddddddddddddd', projectMembers: [member] }; Project.findOne.mockImplementation(async filter => filter.organizationId === organizationId ? project : null); });
+const request = () => ({ params: { id: projectId }, employee: { _id: member, organizationId } });
+const response = () => { const res = { status: jest.fn(), json: jest.fn() }; res.status.mockReturnValue(res); return res; };
+it('allows an assigned employee through to post/read team updates', async () => { const next = jest.fn(); await authorize(request(), response(), next); expect(next).toHaveBeenCalled(); expect(Project.findOne).toHaveBeenCalledWith({ _id: projectId, organizationId }); });
+it('does not expose team logs to a nonmember', async () => { project.projectMembers = []; const next = jest.fn(), res = response(); await authorize(request(), res, next); expect(next).not.toHaveBeenCalled(); expect(res.status).toHaveBeenCalledWith(403); });
+it('does not expose a project in another organization', async () => { const req = request(); req.employee.organizationId = 'eeeeeeeeeeeeeeeeeeeeeeee'; const next = jest.fn(), res = response(); await authorize(req, res, next); expect(next).not.toHaveBeenCalled(); expect(res.status).toHaveBeenCalledWith(403); });

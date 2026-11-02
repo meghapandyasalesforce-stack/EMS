@@ -1,3 +1,4 @@
+import { isEmployeeCoveredByWfhEntry } from '../../helpers/wfhCalendarHelper.js';
 import Calendar from '../../models/calendar.model.js';
 import logger from '../../helpers/logger.js';
 import { detectHolidayTheme } from '../../helpers/indianHolidayService.js';
@@ -61,25 +62,13 @@ export const getEmployeeCalendar = async (req, res) => {
         return holidayObj;
       });
 
-    // HR-enabled WFH dates for apply eligibility (no attendance/punch impact)
-    const employeeId = String(req.employee?._id || '');
-    const wfhDates = (calendar.wfhDates || []).map((entry) => {
-      const obj = entry.toObject ? entry.toObject() : entry;
-      const excludedIds = (obj.excludedEmployeeIds || []).map((id) => String(id?._id || id));
-      const access = obj.employeeAccess === 'only_these' ? 'only_these' : 'all_except';
-      const inList = employeeId ? excludedIds.includes(employeeId) : false;
-      const blocked =
-        !employeeId
-          ? false
-          : access === 'only_these'
-            ? !inList
-            : inList;
-      return {
-        date: obj.date,
-        employeeAccess: access,
-        excluded: blocked,
-      };
-    });
+    // Return only this employee's schedule coverage; do not expose other employees' IDs.
+    const employeeId = req.employee?._id;
+    const wfhDates = (calendar.wfhDates || []).map((entry) => ({
+      date: entry.date,
+      scheduled: isEmployeeCoveredByWfhEntry(entry, employeeId),
+      excluded: !isEmployeeCoveredByWfhEntry(entry, employeeId),
+    }));
 
     const base = calendar.toObject ? calendar.toObject() : calendar;
     res.json({

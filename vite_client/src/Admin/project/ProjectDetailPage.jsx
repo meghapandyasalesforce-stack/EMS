@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import './projectDailyUpdates.css';
+import './projectDetailWorkspace.css';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Button,
+  IconButton,
   TextField,
   FormControl,
   InputLabel,
@@ -25,9 +28,6 @@ import {
   DialogContent,
   DialogActions,
   Slider,
-  Avatar,
-  Card,
-  CardContent,
   InputAdornment,
   Autocomplete
 } from '@mui/material';
@@ -50,6 +50,7 @@ import {
 import { format } from 'date-fns';
 import { isExecutive } from '../../utils/navigationConfig';
 import WorkItemComments from '../../components/project/WorkItemComments';
+import ProjectUpdateFeed from '../../components/project/ProjectUpdateFeed';
 import WorkItemDueDateHistory from '../../components/project/WorkItemDueDateHistory';
 import { isProjectManager } from '../../utils/projectManagerHelper';
 
@@ -66,7 +67,7 @@ const ProjectDetailPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
-  useGetAllProjects();
+  const { loading: projectsLoading, error: projectsError } = useGetAllProjects();
   
   // Memoized selectors to prevent unnecessary re-renders
   const project = useSelector(store => 
@@ -98,7 +99,7 @@ const ProjectDetailPage = () => {
   const canCommentOnWorkPlan = useMemo(() => {
     const me = resolveEmployeeId(user, employee);
     if (!project) return false;
-    if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner || user?.role === 'admin') {
+    if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner || permissionFlags.isHrManager || user?.role === 'admin') {
       return Boolean(me);
     }
     if (!me) return false;
@@ -142,6 +143,7 @@ const ProjectDetailPage = () => {
   // Daily updates state
   const [updates, setUpdates] = useState([]);
   const [loadingUpdates, setLoadingUpdates] = useState(false);
+  const [updatesError, setUpdatesError] = useState(null);
   const [updateDialog, setUpdateDialog] = useState(false);
   const [newUpdate, setNewUpdate] = useState({
     update: '',
@@ -158,6 +160,10 @@ const ProjectDetailPage = () => {
   const [workPlanLoading, setWorkPlanLoading] = useState(false);
   const [workPlanError, setWorkPlanError] = useState(null);
   const [newRootTaskTitle, setNewRootTaskTitle] = useState('');
+  const [newRootTaskError, setNewRootTaskError] = useState('');
+  const [newRootTaskSaving, setNewRootTaskSaving] = useState(false);
+  const newRootTaskInput = useRef(null);
+  const rootTaskRequestInFlight = useRef(false);
   const [workItemEditOpen, setWorkItemEditOpen] = useState(false);
   const [workItemEditSaving, setWorkItemEditSaving] = useState(false);
   const [workItemEditForm, setWorkItemEditForm] = useState({
@@ -186,12 +192,17 @@ const ProjectDetailPage = () => {
     return String(leaderId) === String(currentEmployeeId);
   }, [project, user, employee]);
 
-  const canPostDailyUpdates = useMemo(() => {
+  const canManageProjectStatus = useMemo(() => {
     if (isProjectLeader) return true;
     if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner) return true;
     if (isProjectManager(user || employee)) return true;
     return false;
   }, [isProjectLeader, permissionFlags, user, employee]);
+
+  const canPostDailyUpdates = useMemo(() => {
+    const me = resolveEmployeeId(user, employee);
+    return canManageProjectStatus || Boolean(me && (project?.projectMembers || []).some(member => String(member._id || member) === String(me)));
+  }, [canManageProjectStatus, project, user, employee]);
 
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
@@ -261,8 +272,14 @@ const ProjectDetailPage = () => {
 
   const handleUpdate = useCallback(async () => {
     try {
-      // Validate that all project members are active employees
+      if (!editedProject.name.trim() || !editedProject.projectLeader) {
+        toast.error('Project name and project leader are required');
+        return;
+      }
+      // Existing inactive members may remain; only new assignments must be active.
+      const existingMemberIds = (project.projectMembers || []).map(member => String(member?._id || member));
       const invalidMembers = editedProject.projectMembers.filter(memberId => {
+        if (existingMemberIds.includes(String(memberId))) return false;
         const member = employees.find(emp => emp._id === memberId);
         return !member || (member.status !== 'active' && member.active !== true);
       });
@@ -273,7 +290,7 @@ const ProjectDetailPage = () => {
       }
 
       const projectData = {
-        name: editedProject.name,
+        name: editedProject.name.trim(),
         status: mapStatusToBackend(editedProject.status),
         projectLeader: editedProject.projectLeader,
         projectMembers: editedProject.projectMembers,
@@ -329,12 +346,10 @@ const ProjectDetailPage = () => {
 
   const handleTabChange = useCallback((event, newValue) => {
     setTabValue(newValue);
-  }, []);
-
-  const handleBackToProject = useCallback(() => {
-    navigate('/projects', { replace: true });
-    useGetAllProjects();
-  }, [navigate]);
+    if (newValue === 2 && project?._id) {
+      dispatch(fetchProjectTasks(project._id));
+    }
+  }, [dispatch, project?._id]);
 
   const loadWorkPlan = useCallback(async () => {
     if (!project?._id) return;
@@ -361,8 +376,8 @@ const ProjectDetailPage = () => {
       setEditedProject({
         name: project.name,
         status: project.status || 'pending',
-        projectLeader: project.projectLeader?._id || '',
-        projectMembers: project.projectMembers?.map(m => m._id) || [],
+        projectLeader: project.projectLeader?._id || project.projectLeader || '',
+        projectMembers: (project.projectMembers || []).filter(Boolean).map(m => m._id || m),
         budget: project.budget || '',
         actualCost: project.actualCost || '',
         revenue: project.revenue || '',
@@ -417,19 +432,34 @@ const ProjectDetailPage = () => {
     [loadWorkPlan]
   );
 
-  const handleAddRootWorkItem = useCallback(async () => {
-    if (!newRootTaskTitle.trim() || !project?._id) return;
+  const handleAddRootWorkItem = useCallback(async (event) => {
+    event?.preventDefault();
+    if (rootTaskRequestInFlight.current || !project?._id) return;
+    const title = newRootTaskTitle.trim();
+    if (!title) {
+      setNewRootTaskError('Enter a task title to continue.');
+      newRootTaskInput.current?.focus();
+      return;
+    }
+    setNewRootTaskError('');
+    rootTaskRequestInFlight.current = true;
+    setNewRootTaskSaving(true);
     try {
-      await axios.post(
+      const response = await axios.post(
         `${ADMIN_PROJECT_ENDPOINT}/${project._id}/work-items`,
-        { items: [{ title: newRootTaskTitle.trim() }] },
+        { items: [{ title }] },
         { withCredentials: true }
       );
+      if (response.data?.success === false) throw new Error(response.data?.error || response.data?.message || 'Failed to add task');
       toast.success('Task added');
       setNewRootTaskTitle('');
-      loadWorkPlan();
+      await loadWorkPlan();
+      newRootTaskInput.current?.focus();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to add task');
+      setNewRootTaskError(err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to add task');
+    } finally {
+      rootTaskRequestInFlight.current = false;
+      setNewRootTaskSaving(false);
     }
   }, [newRootTaskTitle, project?._id, loadWorkPlan]);
 
@@ -583,7 +613,7 @@ const ProjectDetailPage = () => {
           borderColor: 'divider',
         }}
       >
-        <Paper variant="outlined" sx={{ p: 2 }}>
+        <Paper className="project-work-item" variant="outlined" sx={{ p: 2 }}>
           <Box
             display="flex"
             flexDirection={isMobile ? 'column' : 'row'}
@@ -625,8 +655,8 @@ const ProjectDetailPage = () => {
             </Box>
             <Box display="flex" flexWrap="wrap" gap={1} alignItems="center">
               <FormControl size="small" sx={{ minWidth: 130 }}>
-                <InputLabel>Status</InputLabel>
-                <Select
+                <InputLabel id={`work-item-status-${item._id}`}>Status</InputLabel>
+                <Select labelId={`work-item-status-${item._id}`}
                   label="Status"
                   value={item.status || 'todo'}
                   onChange={(e) => handleWorkItemStatusChange(item._id, e.target.value)}
@@ -726,28 +756,40 @@ const ProjectDetailPage = () => {
     ]
   );
 
+  const updatesRequest = useRef(0);
+
   // Fetch project updates
   const fetchProjectUpdates = useCallback(async () => {
     if (!project?._id) return;
-    
+    const requestId = ++updatesRequest.current;
     try {
       setLoadingUpdates(true);
-      const response = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/${project._id}/updates`, {
-        withCredentials: true
-      });
-      
-      if (response.data?.success) {
-        setUpdates(response.data.updates || []);
+      setUpdatesError(null);
+      const collected = [];
+      let page = 1;
+      let hasNext = true;
+      while (hasNext) {
+        const response = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/${project._id}/updates`, {
+          withCredentials: true,
+          params: { page, limit: 100 },
+        });
+        if (!response.data?.success) throw new Error(response.data?.error || 'Failed to load project updates');
+        collected.push(...(response.data.updates || []));
+        const pagination = response.data.pagination;
+        hasNext = pagination?.hasNext ?? (page < Number(pagination?.pages || 1));
+        page += 1;
       }
+      if (requestId === updatesRequest.current) setUpdates(collected);
     } catch (error) {
-      // Don't show error toast if updates don't exist yet
-      if (error.response?.status !== 404) {
-        toast.error('Failed to load project updates');
-      }
+      if (requestId === updatesRequest.current) setUpdatesError(error.response?.data?.error || error.message || 'Failed to load project updates');
     } finally {
-      setLoadingUpdates(false);
+      if (requestId === updatesRequest.current) setLoadingUpdates(false);
     }
   }, [project?._id]);
+
+  useEffect(() => {
+    if (tabValue === 2 || tabValue === 3) fetchProjectUpdates();
+  }, [tabValue, fetchProjectUpdates]);
 
   // Handle status update
   const handleStatusUpdate = useCallback(async () => {
@@ -812,6 +854,12 @@ const ProjectDetailPage = () => {
   }, [newUpdate, project?._id, fetchProjectUpdates]);
 
   // Conditional return after all hooks
+  if (!project && projectsLoading) {
+    return <Box p={4} display="flex" justifyContent="center"><CircularProgress aria-label="Loading project" /></Box>;
+  }
+  if (!project && projectsError) {
+    return <Alert severity="error">{projectsError}</Alert>;
+  }
   if (!project) {
     return (
       <Box p={4} textAlign="center">
@@ -821,7 +869,7 @@ const ProjectDetailPage = () => {
   }
 
   return (
-    <Box 
+    <Box className={`project-detail-workspace project-detail-tab-${tabValue}${tabValue === 3 ? ' project-daily-view' : ''}`}
       sx={{ 
         padding: isMobile ? 2 : 4,
         marginLeft: isMobile ? 0 : '16rem',
@@ -831,7 +879,7 @@ const ProjectDetailPage = () => {
         }),
       }}
     >
-      <Box 
+      <Box className="project-daily-toolbar"
         display="flex" 
         flexDirection={isMobile ? 'column' : 'row'} 
         justifyContent="space-between" 
@@ -853,7 +901,7 @@ const ProjectDetailPage = () => {
             <>
               {canPostDailyUpdates && (
                 <>
-                  <Button 
+                  {canManageProjectStatus && <Button
                     onClick={() => {
                       setNewStatus(project.status);
                       setStatusUpdateDialog(true);
@@ -864,7 +912,7 @@ const ProjectDetailPage = () => {
                     size={isMobile ? 'small' : 'medium'}
                   >
                     {isMobile ? 'Status' : 'Update Status'}
-                  </Button>
+                  </Button>}
                   <Button 
                     onClick={() => {
                       setNewUpdate({
@@ -884,7 +932,7 @@ const ProjectDetailPage = () => {
                 </>
               )}
               <Button 
-                onClick={() => setIsEditing(true)}
+                onClick={() => { setIsEditing(true); setTabValue(0); }}
                 startIcon={<FiEdit2 />}
                 variant="contained"
                 color="primary"
@@ -933,7 +981,7 @@ const ProjectDetailPage = () => {
         </Alert>
       )}
 
-      <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
+      <Tabs className="project-daily-tabs" value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
         <Tab label="Project Details" />
         <Tab label="Work plan" />
         <Tab label="Team daily logs" />
@@ -943,7 +991,7 @@ const ProjectDetailPage = () => {
       {tabValue === 0 && (
         <>
           {isEditing ? (
-            <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+            <Paper className="project-edit-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
               <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <TextField
                   fullWidth
@@ -956,8 +1004,8 @@ const ProjectDetailPage = () => {
                 />
                 
                 <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                  <InputLabel>Status</InputLabel>
-                  <Select
+                  <InputLabel id="project-details-status-label">Status</InputLabel>
+                  <Select labelId="project-details-status-label"
                     name="status"
                     value={editedProject.status}
                     onChange={handleInputChange}
@@ -972,8 +1020,8 @@ const ProjectDetailPage = () => {
                 </FormControl>
 
                 <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                  <InputLabel>Project Leader</InputLabel>
-                  <Select
+                  <InputLabel id="project-details-leader-label">Project Leader</InputLabel>
+                  <Select labelId="project-details-leader-label"
                     name="projectLeader"
                     value={editedProject.projectLeader}
                     onChange={handleInputChange}
@@ -989,8 +1037,8 @@ const ProjectDetailPage = () => {
                 </FormControl>
 
                 <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                  <InputLabel>Project Members</InputLabel>
-                  <Select
+                  <InputLabel id="project-details-members-label">Project Members</InputLabel>
+                  <Select labelId="project-details-members-label"
                     multiple
                     name="projectMembers"
                     value={editedProject.projectMembers}
@@ -1076,8 +1124,8 @@ const ProjectDetailPage = () => {
                         }}
                       />
                       <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                        <InputLabel>Currency</InputLabel>
-                        <Select
+                        <InputLabel id="project-details-currency-label">Currency</InputLabel>
+                        <Select labelId="project-details-currency-label"
                           name="currency"
                           value={editedProject.currency}
                           onChange={handleInputChange}
@@ -1106,10 +1154,10 @@ const ProjectDetailPage = () => {
               </Box>
             </Paper>
           ) : (
-            <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+            <Paper className="project-details-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
               <Typography variant={isMobile ? 'h5' : 'h4'} gutterBottom>{project.name}</Typography>
               
-              <Box 
+              <Box className="project-details-facts"
                 display="flex" 
                 flexDirection={isMobile ? 'column' : 'row'} 
                 gap={isMobile ? 2 : 4} 
@@ -1138,7 +1186,7 @@ const ProjectDetailPage = () => {
                 <Box>
                   <Typography variant="subtitle1" color="text.secondary">Start Date</Typography>
                   <Typography variant={isMobile ? 'body2' : 'body1'}>
-                    {new Date(project.createdAt).toLocaleDateString()}
+                    {project.startDate || project.createdAt ? new Date(project.startDate || project.createdAt).toLocaleDateString() : 'Not set'}
                   </Typography>
                 </Box>
               </Box>
@@ -1169,7 +1217,7 @@ const ProjectDetailPage = () => {
                   <Typography variant="h6" sx={{ mb: 2 }}>
                     Financial Overview
                   </Typography>
-                  <Box 
+                  <Box className="project-details-financials"
                     display="flex" 
                     flexDirection={isMobile ? 'column' : 'row'} 
                     gap={isMobile ? 2 : 4} 
@@ -1235,7 +1283,7 @@ const ProjectDetailPage = () => {
       )}
 
       {tabValue === 1 && (
-        <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+        <Paper className="project-workplan-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
             Work plan
           </Typography>
@@ -1243,25 +1291,36 @@ const ProjectDetailPage = () => {
             Tasks and subtasks for this project. This is separate from employees&apos; daily task logs.
           </Typography>
 
-          <Box display="flex" flexDirection={isMobile ? 'column' : 'row'} gap={1} alignItems="flex-start" sx={{ mb: 3 }}>
-            <TextField
-              size="small"
-              fullWidth={isMobile}
-              label="New task title"
-              value={newRootTaskTitle}
-              onChange={(e) => setNewRootTaskTitle(e.target.value)}
-              sx={{ minWidth: isMobile ? '100%' : 280 }}
-            />
+          <Box component="form" className="project-workplan-addbar" onSubmit={handleAddRootWorkItem} noValidate aria-busy={newRootTaskSaving}>
+            <div className="project-workplan-field">
+              <label htmlFor="project-root-task-title">New task title</label>
+              <input
+                ref={newRootTaskInput}
+                id="project-root-task-title"
+                type="text"
+                placeholder="e.g. Review project requirements"
+                value={newRootTaskTitle}
+                maxLength={500}
+                readOnly={newRootTaskSaving}
+                aria-required="true"
+                aria-invalid={Boolean(newRootTaskError)}
+                aria-describedby={newRootTaskError ? 'project-root-task-error' : undefined}
+                onChange={(event) => {
+                  setNewRootTaskTitle(event.target.value);
+                  if (newRootTaskError) setNewRootTaskError('');
+                }}
+              />
+              {newRootTaskError && <p id="project-root-task-error" role="alert">{newRootTaskError}</p>}
+            </div>
             <Button
+              type="submit"
               variant="contained"
-              startIcon={<FiPlus />}
-              onClick={handleAddRootWorkItem}
-              disabled={!newRootTaskTitle.trim()}
-              size={isMobile ? 'medium' : 'medium'}
+              startIcon={newRootTaskSaving ? <CircularProgress size={15} color="inherit" /> : <FiPlus />}
+              disabled={newRootTaskSaving}
             >
-              Add task
+              {newRootTaskSaving ? 'Adding…' : 'Add task'}
             </Button>
-            <Button variant="outlined" startIcon={<FiRefreshCw />} onClick={loadWorkPlan} size="small">
+            <Button type="button" variant="outlined" startIcon={<FiRefreshCw />} onClick={loadWorkPlan} disabled={newRootTaskSaving || workPlanLoading}>
               Refresh
             </Button>
           </Box>
@@ -1275,9 +1334,12 @@ const ProjectDetailPage = () => {
               {workPlanError}
             </Alert>
           ) : workPlanTree.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No work items yet. Add a task above, or create tasks when you add a new project.
-            </Typography>
+            <Box className="project-workplan-empty">
+              <span aria-hidden="true"><FiPlus /></span>
+              <Typography variant="body2" color="text.secondary">
+                No work items yet. Add a task above, or create tasks when you add a new project.
+              </Typography>
+            </Box>
           ) : (
             <Box>{workPlanTree.map((node) => renderWorkItem(node, 0))}</Box>
           )}
@@ -1285,12 +1347,18 @@ const ProjectDetailPage = () => {
       )}
 
       {tabValue === 2 && (
-        <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>Daily task logs</Typography>
+        <Paper className="project-team-logs-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" gap={2} mb={2}>
+            <Typography variant="h6">Team daily updates & logs</Typography>
+            <Box display="flex" gap={1} flexWrap="wrap">
+              {canPostDailyUpdates && <Button variant="contained" color="success" startIcon={<FiMessageSquare />} onClick={() => { setNewUpdate({ ...newUpdate, status: project.status, updateDate: new Date().toISOString().split('T')[0] }); setUpdateDialog(true); }}>Post Update</Button>}
+              <Button startIcon={<FiRefreshCw />} disabled={tasksStatus === 'loading' || loadingUpdates} onClick={() => { dispatch(fetchProjectTasks(project._id)); fetchProjectUpdates(); }}>Refresh logs</Button>
+            </Box>
+          </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Per-day work entries logged by team members (not the project work breakdown).
+            Daily updates from everyone on this project. Use Post Update to share your work, blockers, and next steps with the team.
           </Typography>
-          
+          {loadingUpdates ? <Box display="flex" justifyContent="center" py={2}><CircularProgress /></Box> : updatesError ? <Alert severity="error">{updatesError}</Alert> : updates.length > 0 ? <Box mb={3}><ProjectUpdateFeed updates={updates} /></Box> : null}
           {tasksStatus === 'loading' ? (
             <Box display="flex" justifyContent="center">
               <CircularProgress />
@@ -1300,13 +1368,11 @@ const ProjectDetailPage = () => {
               {tasksError}
             </Alert>
           ) : projectTasks.length === 0 ? (
-            <Typography variant="body1" color="text.secondary">
-              No tasks found for this project.
-            </Typography>
+            !loadingUpdates && !updatesError && updates.length === 0 ? <Typography variant="body1" color="text.secondary">No team updates or daily task logs yet. Post your first update above.</Typography> : null
           ) : (
             <Box display="flex" flexDirection="column" gap={2}>
               {projectTasks.map(task => (
-                <Paper key={task._id} elevation={2} sx={{ p: 2 }}>
+                <Paper className="project-team-log" key={task._id} elevation={2} sx={{ p: 2 }}>
                   <Box display="flex" justifyContent="space-between" alignItems="center">
                     <Box>
                       <Typography variant="subtitle1">{task.taskDescription}</Typography>
@@ -1314,7 +1380,7 @@ const ProjectDetailPage = () => {
                         {task.employee?.name} • {new Date(task.date).toLocaleDateString()}
                       </Typography>
                       {task.comments && (
-                        <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                        <Typography className="project-team-log-note" variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
                           {task.comments}
                         </Typography>
                       )}
@@ -1337,8 +1403,8 @@ const ProjectDetailPage = () => {
       )}
 
       {tabValue === 3 && (
-        <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Paper className="project-daily-panel" elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+          <Box className="project-daily-header" display="flex" justifyContent="space-between" alignItems="center" mb={3}>
             <Typography variant="h6">Daily Updates</Typography>
             {canPostDailyUpdates && (
               <Button
@@ -1364,6 +1430,8 @@ const ProjectDetailPage = () => {
             <Box display="flex" justifyContent="center" py={4}>
               <CircularProgress />
             </Box>
+          ) : updatesError ? (
+            <Alert severity="error">{updatesError}</Alert>
           ) : updates.length === 0 ? (
             <Box textAlign="center" py={4}>
               <Typography variant="body1" color="text.secondary" mb={2}>
@@ -1387,83 +1455,7 @@ const ProjectDetailPage = () => {
               )}
             </Box>
           ) : (
-            <Box display="flex" flexDirection="column" gap={2}>
-              {updates.map((update) => (
-                <Card key={update._id} elevation={2}>
-                  <CardContent>
-                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                      <Box display="flex" alignItems="center" gap={1.5}>
-                        <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}>
-                          {update.postedBy?.name?.charAt(0) || 'U'}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="subtitle1" fontWeight={600}>
-                            {update.postedBy?.name || 'Unknown'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="flex" alignItems="center" gap={0.5}>
-                            <FiCalendar size={12} />
-                            {format(new Date(update.updateDate), 'MMM dd, yyyy')}
-                            {' • '}
-                            {format(new Date(update.createdAt), 'h:mm a')}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Chip
-                        label={update.status}
-                        size="small"
-                        color={
-                          update.status === 'completed' ? 'success' :
-                          update.status === 'in-progress' ? 'primary' :
-                          update.status === 'on-hold' ? 'warning' : 'default'
-                        }
-                      />
-                    </Box>
-                    
-                    <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-wrap' }}>
-                      {update.update}
-                    </Typography>
-
-                    {update.progress !== undefined && (
-                      <Box mb={2}>
-                        <Box display="flex" justifyContent="space-between" mb={0.5}>
-                          <Typography variant="caption" color="text.secondary">Progress</Typography>
-                          <Typography variant="caption" fontWeight={600}>{update.progress}%</Typography>
-                        </Box>
-                        <Slider
-                          value={update.progress}
-                          min={0}
-                          max={100}
-                          disabled
-                          sx={{ pointerEvents: 'none' }}
-                        />
-                      </Box>
-                    )}
-
-                    {update.blockers && (
-                      <Box mb={1}>
-                        <Typography variant="caption" fontWeight={600} color="error.main">
-                          Blockers:
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                          {update.blockers}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {update.nextSteps && (
-                      <Box>
-                        <Typography variant="caption" fontWeight={600} color="primary.main">
-                          Next Steps:
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                          {update.nextSteps}
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
+            <ProjectUpdateFeed updates={updates} />
           )}
         </Paper>
       )}
@@ -1478,8 +1470,8 @@ const ProjectDetailPage = () => {
         <DialogTitle>Update Project Status</DialogTitle>
         <DialogContent>
             <FormControl fullWidth sx={{ mt: 2 }}>
-            <InputLabel>New Status</InputLabel>
-            <Select
+            <InputLabel id="project-status-update-label">New Status</InputLabel>
+            <Select labelId="project-status-update-label"
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value)}
               label="New Status"
@@ -1509,52 +1501,66 @@ const ProjectDetailPage = () => {
       </Dialog>
 
       {/* Daily Update Dialog */}
-      <Dialog 
-        open={updateDialog} 
+      <Dialog
+        className="project-update-dialog"
+        open={updateDialog}
         onClose={() => setUpdateDialog(false)}
+        aria-labelledby="project-update-dialog-title"
+        aria-describedby="project-update-dialog-description"
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Post Daily Update</DialogTitle>
+        <DialogTitle id="project-update-dialog-header" className="project-update-dialog-header">
+          <span className="project-update-dialog-icon"><FiMessageSquare /></span>
+          <span className="project-update-dialog-heading">
+            <span id="project-update-dialog-title">Post Daily Update</span>
+            <span id="project-update-dialog-description">Share your progress and keep your project team in sync.</span>
+          </span>
+          <IconButton aria-label="Close daily update" onClick={() => setUpdateDialog(false)}><FiX /></IconButton>
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+          <Box className="project-update-dialog-fields">
+            <Box className="project-update-dialog-row">
+              <TextField
+                label="Update Date"
+                type="date"
+                value={newUpdate.updateDate}
+                onChange={(e) => setNewUpdate({ ...newUpdate, updateDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <FormControl fullWidth>
+                <InputLabel id="project-daily-status-label">Status</InputLabel>
+                <Select labelId="project-daily-status-label"
+                  value={newUpdate.status}
+                  onChange={(e) => setNewUpdate({ ...newUpdate, status: e.target.value })}
+                  label="Status"
+                >
+                  <MenuItem value="pending">Pending</MenuItem>
+                  <MenuItem value="in-progress">In Progress</MenuItem>
+                  <MenuItem value="completed">Completed</MenuItem>
+                  <MenuItem value="on-hold">On Hold</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
             <TextField
-              label="Update Date"
-              type="date"
-              value={newUpdate.updateDate}
-              onChange={(e) => setNewUpdate({ ...newUpdate, updateDate: e.target.value })}
+              label="Update"
               InputLabelProps={{ shrink: true }}
-              fullWidth
-            />
-            
-            <TextField
-              label="Update *"
               multiline
               rows={4}
               value={newUpdate.update}
               onChange={(e) => setNewUpdate({ ...newUpdate, update: e.target.value })}
-              placeholder="Describe today's progress, achievements, and any important updates..."
+              placeholder="What did you work on today? Share progress, achievements, or important updates…"
               fullWidth
               required
             />
-
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={newUpdate.status}
-                onChange={(e) => setNewUpdate({ ...newUpdate, status: e.target.value })}
-                label="Status"
-              >
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="in-progress">In Progress</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="on-hold">On Hold</MenuItem>
-              </Select>
-            </FormControl>
-
-            <Box>
-              <Typography gutterBottom>Progress: {newUpdate.progress}%</Typography>
+            <Box className="project-update-dialog-progress">
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography id="project-update-progress-label">Progress</Typography>
+                <Typography component="span" className="project-update-progress-value">{newUpdate.progress}%</Typography>
+              </Box>
               <Slider
+                aria-labelledby="project-update-progress-label"
                 value={newUpdate.progress}
                 onChange={(e, value) => setNewUpdate({ ...newUpdate, progress: value })}
                 min={0}
@@ -1566,33 +1572,37 @@ const ProjectDetailPage = () => {
                 ]}
               />
             </Box>
-
-            <TextField
-              label="Blockers / Challenges"
-              multiline
-              rows={2}
-              value={newUpdate.blockers}
-              onChange={(e) => setNewUpdate({ ...newUpdate, blockers: e.target.value })}
-              placeholder="Any blockers or challenges faced..."
-              fullWidth
-            />
-
-            <TextField
-              label="Next Steps"
-              multiline
-              rows={2}
-              value={newUpdate.nextSteps}
-              onChange={(e) => setNewUpdate({ ...newUpdate, nextSteps: e.target.value })}
-              placeholder="Planned next steps..."
-              fullWidth
-            />
+            <Box className="project-update-dialog-row">
+              <TextField
+                label="Blockers / Challenges"
+                InputLabelProps={{ shrink: true }}
+                multiline
+                rows={3}
+                value={newUpdate.blockers}
+                onChange={(e) => setNewUpdate({ ...newUpdate, blockers: e.target.value })}
+                placeholder="Anything slowing you down?"
+                fullWidth
+              />
+              <TextField
+                label="Next Steps"
+                InputLabelProps={{ shrink: true }}
+                multiline
+                rows={3}
+                value={newUpdate.nextSteps}
+                onChange={(e) => setNewUpdate({ ...newUpdate, nextSteps: e.target.value })}
+                placeholder="What will you focus on next?"
+                fullWidth
+              />
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
+          <Typography component="span">Your project team can see this update.</Typography>
           <Button onClick={() => setUpdateDialog(false)}>Cancel</Button>
-          <Button 
-            onClick={handleSubmitUpdate} 
-            variant="contained" 
+          <Button
+            onClick={handleSubmitUpdate}
+            variant="contained"
+            startIcon={submittingUpdate ? <CircularProgress size={16} color="inherit" /> : <FiMessageSquare />}
             disabled={!newUpdate.update.trim() || submittingUpdate}
           >
             {submittingUpdate ? 'Posting...' : 'Post Update'}
@@ -1626,8 +1636,8 @@ const ProjectDetailPage = () => {
               fullWidth
             />
             <FormControl fullWidth size="small">
-              <InputLabel>Priority</InputLabel>
-              <Select
+              <InputLabel id="work-item-edit-priority-label">Priority</InputLabel>
+              <Select labelId="work-item-edit-priority-label"
                 label="Priority"
                 value={workItemEditForm.priority}
                 onChange={(e) => setWorkItemEditForm((f) => ({ ...f, priority: e.target.value }))}
@@ -1639,8 +1649,8 @@ const ProjectDetailPage = () => {
               </Select>
             </FormControl>
             <FormControl fullWidth size="small">
-              <InputLabel>Status</InputLabel>
-              <Select
+              <InputLabel id="work-item-edit-status-label">Status</InputLabel>
+              <Select labelId="work-item-edit-status-label"
                 label="Status"
                 value={workItemEditForm.status}
                 onChange={(e) => setWorkItemEditForm((f) => ({ ...f, status: e.target.value }))}
