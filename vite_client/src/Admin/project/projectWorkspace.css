@@ -122,3 +122,25 @@
 @media (max-width:1100px) { .creation-layout { grid-template-columns:minmax(0,1fr) 260px; gap:18px; } .project-create { padding:20px; } }
 @media (max-width:900px) { .creation-layout { grid-template-columns:minmax(0,1fr); } .creation-sidebar { position:static; margin-top:0; display:grid; grid-template-columns:1fr 1fr; } .creation-tip { grid-column:1 / -1; } }
 @media (max-width:600px) { .project-create { padding:16px 12px; } .creation-hero { padding:24px 20px; } .creation-hero-icon { display:none; } .creation-hero h1 { font-size:25px; } .creation-sidebar { display:flex; } .project-create .creation-form-card { padding:18px; } .project-create .project-identity { grid-template-columns:minmax(0,1fr); gap:6px; } .project-create .project-create-form > .creation-actions { margin:20px -18px -18px; padding:16px 18px; } .creation-page-title { font-size:19px; } }
+
+/* Export confirmation is portalled outside the project page. */
+.project-export-dialog .MuiBackdrop-root { background:rgba(15,35,43,.4); backdrop-filter:blur(4px); }
+.project-export-dialog .MuiDialog-paper { margin:16px; width:calc(100% - 32px); border:1px solid #e0eae5; border-radius:18px; overflow:hidden; box-shadow:0 24px 70px #16382c30; background:#fff; }
+.project-export-dialog .MuiDialogTitle-root { display:flex; align-items:center; gap:14px; padding:26px 26px 17px; color:#1c4038; font-size:21px; font-weight:650; line-height:1.35; letter-spacing:-.4px; }
+.project-export-icon { display:grid; place-items:center; flex-shrink:0; width:44px; height:44px; border:1px solid #d5ece2; border-radius:13px; background:#ebf8f1; color:#0b9473; font-size:22px; }
+.project-export-dialog .MuiDialogContent-root { padding:0 26px 24px; }
+.project-export-dialog #project-export-description { color:#7b8e92; font-size:13px; line-height:1.8; }
+.project-export-summary { display:flex; align-items:center; gap:12px; margin-top:18px; padding:16px; border:1px solid #e1ece6; border-radius:12px; background:linear-gradient(110deg,#f5faf7,#fbfdfc); }
+.project-export-file { display:grid; place-items:center; width:38px; height:42px; border:1px solid #e0eae5; border-radius:9px; background:white; color:#489c82; font-size:20px; }
+.project-export-summary > div { flex:1; min-width:0; }
+.project-export-summary strong { display:block; margin-bottom:4px; color:#3c5c51; font-size:14px; font-weight:650; }
+.project-export-summary > div > span { display:block; color:#91a299; font-size:11px; }
+.project-export-format { padding:5px 8px; border:1px solid #cce6d9; border-radius:6px; background:#e9f5ed; color:#288366; font-size:10px; font-weight:700; letter-spacing:.6px; }
+.project-export-dialog .MuiDialogActions-root { gap:10px; padding:18px 26px; border-top:1px solid #edf2ef; background:#f9fbfa; }
+.project-export-dialog .MuiDialogActions-root .MuiButton-root { flex:1; min-height:42px; margin:0; border-radius:8px; padding:9px 15px; text-transform:none; font-size:13px; font-weight:600; box-shadow:none; }
+.project-export-dialog .MuiDialogActions-root .MuiButton-outlined { border-color:#d8e4de; background:white; color:#647a70; }
+.project-export-dialog .MuiDialogActions-root .MuiButton-contained { background:#098c6d; color:white; box-shadow:0 3px 7px #087e6415; }
+.project-export-dialog .MuiDialogActions-root .MuiButton-contained:hover { background:#08775e; }
+.project-export-dialog .MuiDialogActions-root .MuiButton-outlined:hover { border-color:#bad2c5; background:#f2f8f5; }
+.project-export-dialog .MuiButton-root:focus-visible { outline:3px solid #77d4b3; outline-offset:2px; }
+@media(max-width:480px) { .project-export-dialog .MuiDialogTitle-root { padding:22px 20px 15px; font-size:20px; gap:12px; }.project-export-dialog .MuiDialogContent-root { padding:0 20px 20px; }.project-export-dialog .MuiDialogActions-root { padding:16px 20px; }.project-export-summary { padding:14px; } }

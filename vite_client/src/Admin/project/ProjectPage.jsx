@@ -1021,14 +1021,35 @@ const ProjectsPageEnhanced = () => {
       </Menu>
 
       {/* Export Dialog */}
-      <Dialog open={exportDialog} onClose={() => setExportDialog(false)}>
-        <DialogTitle>Export Projects</DialogTitle>
+      <Dialog
+        className="project-export-dialog"
+        open={exportDialog}
+        onClose={() => setExportDialog(false)}
+        maxWidth="xs"
+        fullWidth
+        aria-labelledby="project-export-title"
+        aria-describedby="project-export-description"
+      >
+        <DialogTitle id="project-export-title">
+          <span className="project-export-icon" aria-hidden="true"><FiDownload /></span>
+          Export Projects
+        </DialogTitle>
         <DialogContent>
-          <Typography>Export {paginatedProjects.length} projects to CSV?</Typography>
+          <Typography id="project-export-description">
+            Export {paginatedProjects.length} {paginatedProjects.length === 1 ? 'project' : 'projects'} to CSV?
+          </Typography>
+          <div className="project-export-summary">
+            <span className="project-export-file" aria-hidden="true"><FiFileText /></span>
+            <div>
+              <strong>{paginatedProjects.length} {paginatedProjects.length === 1 ? 'project' : 'projects'}</strong>
+              <span>From the current page</span>
+            </div>
+            <span className="project-export-format">CSV</span>
+          </div>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setExportDialog(false)}>Cancel</Button>
-          <Button onClick={() => handleExport()} variant="contained">Export</Button>
+          <Button onClick={() => setExportDialog(false)} variant="outlined">Cancel</Button>
+          <Button onClick={() => handleExport()} variant="contained" startIcon={<FiDownload />}>Export CSV</Button>
         </DialogActions>
       </Dialog>
 
