@@ -6,9 +6,12 @@ const MAX_REASON_LEN = 500;
 
 export function toDateKey(value) {
   if (value === null || value === undefined || value === '') return null;
-  const d = value instanceof Date ? value : new Date(value);
+  const source = typeof value === 'string' ? value.trim() : value;
+  const d = source instanceof Date ? source : new Date(source);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  const key = d.toISOString().slice(0, 10);
+  if (typeof source === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source) && key !== source) return null;
+  return key;
 }
 
 export function dueDatesEqual(a, b) {
@@ -29,7 +32,7 @@ export function applyDueDateChange(item, {
   const previousDueDate = item.dueDate || null;
   const nextDueDate = dueDate ? new Date(dueDate) : null;
 
-  if (nextDueDate && Number.isNaN(nextDueDate.getTime())) {
+  if (nextDueDate && (Number.isNaN(nextDueDate.getTime()) || !toDateKey(dueDate))) {
     return { ok: false, error: 'Invalid due date' };
   }
 

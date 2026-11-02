@@ -1,3 +1,4 @@
+import { parsePagination } from '../../helpers/paginationHelper.js';
 import Project from "../../models/project.model.js";
 import ProjectUpdate from "../../models/projectUpdate.model.js";
 import ProjectWorkItem from "../../models/projectWorkItem.model.js";
@@ -5,7 +6,7 @@ import Employee from "../../models/employee.model.js";
 import { createWorkItemsForProject } from "./projectWorkItemController.js";
 import { PROJECT_TEMPLATES } from "../../constants/projectTemplates.js";
 import logger from "../../helpers/logger.js";
-import { getOrganizationId } from "../../helpers/organizationHelper.js";
+import { getOrganizationId, addOrganizationFilter } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
 import { shouldApplyLineManagerScope } from "../../helpers/projectManagerHelper.js";
 import {
@@ -305,9 +306,12 @@ export const updateProject = async (req, res) => {
             memberCount: projectMembers?.length || 0
         });
 
+        const currentProject = await Project.findOne({ _id: id, organizationId: getOrganizationId(req) });
+        if (!currentProject) return res.status(404).json({ error: 'Project not found' });
+
         // Validate leader if being updated
         if (projectLeader) {
-            const leaderExists = await Employee.exists({ _id: projectLeader });
+            const leaderExists = await Employee.exists({ _id: projectLeader, organizationId: getOrganizationId(req) });
             logger.debug('Leader exists check', { leaderExists, projectLeader });
             if (!leaderExists) {
                 logger.warn('New project leader not found', { projectLeader });
@@ -324,8 +328,11 @@ export const updateProject = async (req, res) => {
             
             // Check if all project members exist and are active
             // Check both status field and active field for compatibility
-            const existingMembers = await Employee.find({ 
-                _id: { $in: projectMembers },
+            const existingIdsInProject = (currentProject.projectMembers || []).map(member => String(member?._id || member));
+            const newMemberIds = projectMembers.filter(member => !existingIdsInProject.includes(String(member)));
+            const existingMembers = await Employee.find({
+                organizationId: getOrganizationId(req),
+                _id: { $in: newMemberIds },
                 $or: [
                     { status: 'active' },
                     { active: true }
@@ -337,13 +344,14 @@ export const updateProject = async (req, res) => {
                 memberIds: existingMembers.map(emp => emp._id.toString())
             });
             
-            const existingIds = existingMembers.map(emp => emp._id.toString());
+            const existingIds = [...existingIdsInProject, ...existingMembers.map(emp => emp._id.toString())];
             const invalidIds = projectMembers.filter(id => !existingIds.includes(id.toString()));
             
             if (invalidIds.length > 0) {
                 logger.warn('Invalid project member IDs', { invalidIds });
                 // Get details of invalid employees for better error message
-                const invalidEmployees = await Employee.find({ 
+                const invalidEmployees = await Employee.find({
+                    organizationId: getOrganizationId(req),
                     _id: { $in: invalidIds } 
                 }).select('_id name email position status');
                 
@@ -376,10 +384,10 @@ export const updateProject = async (req, res) => {
             updatedAt: Date.now()
         };
 
-        const updatedProject = await Project.findByIdAndUpdate(
-            id,
+        const updatedProject = await Project.findOneAndUpdate(
+            { _id: id, organizationId: getOrganizationId(req) },
             updateData,
-            { new: true }
+            { new: true, runValidators: true }
         ).populate('projectLeader', 'name email position department')
          .populate('projectMembers', 'name email position department');
 
@@ -404,13 +412,13 @@ export const updateProject = async (req, res) => {
 export const deleteProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const deletedProject = await Project.findByIdAndDelete(id);
+        const deletedProject = await Project.findOneAndDelete({ _id: id, organizationId: getOrganizationId(req) });
         
         if (!deletedProject) {
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        await ProjectWorkItem.deleteMany({ projectId: id });
+        await ProjectWorkItem.deleteMany(addOrganizationFilter(req, { projectId: id }));
 
         res.status(200).json({ 
             success: true,
@@ -449,7 +457,7 @@ export const getProjectById = async (req, res) => {
     try {
         const { id } = req.params;
         
-        const project = await Project.findById(id)
+        const project = await Project.findOne({ _id: id, organizationId: getOrganizationId(req) })
             .populate('projectLeader', 'name email position department employeeId')
             .populate('projectMembers', 'name email position department employeeId');
 
@@ -528,7 +536,7 @@ export const updateProjectStatus = async (req, res) => {
         }
 
         // Get project
-        const project = await Project.findById(id);
+        const project = await Project.findOne({ _id: id, organizationId: getOrganizationId(req) });
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -545,7 +553,7 @@ export const updateProjectStatus = async (req, res) => {
         await project.save();
 
         // Return populated project
-        const updatedProject = await Project.findById(id)
+        const updatedProject = await Project.findOne({ _id: id, organizationId: getOrganizationId(req) })
             .populate('projectLeader', 'name email position department employeeId')
             .populate('projectMembers', 'name email position department employeeId');
 
@@ -583,12 +591,12 @@ export const createProjectUpdate = async (req, res) => {
             });
         }
 
-        if (!update || !update.trim()) {
+        if (typeof update !== 'string' || !update.trim()) {
             return res.status(400).json({ error: 'Update content is required' });
         }
 
         // Get project
-        const project = await Project.findById(id);
+        const project = await Project.findOne({ _id: id, organizationId: getOrganizationId(req) });
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -600,7 +608,7 @@ export const createProjectUpdate = async (req, res) => {
         }
 
         // Validate progress if provided
-        if (progress !== undefined && (progress < 0 || progress > 100)) {
+        if (progress !== undefined && (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0 || progress > 100)) {
             return res.status(400).json({ error: 'Progress must be between 0 and 100' });
         }
 
@@ -612,13 +620,22 @@ export const createProjectUpdate = async (req, res) => {
             }
         }
 
+        if (update.trim().length > 5000 || [blockers, nextSteps].some(value => value != null && (typeof value !== 'string' || value.trim().length > 1000))) {
+            return res.status(400).json({ error: 'Update must be at most 5000 characters; blockers and next steps must be text of at most 1000 characters' });
+        }
+        const dateValue = typeof updateDate === 'string' ? updateDate.trim() : updateDate;
+        const parsedDate = dateValue === undefined ? new Date() : new Date(dateValue);
+        if ((dateValue !== undefined && (typeof dateValue !== 'string' || !dateValue)) || Number.isNaN(parsedDate.getTime()) || (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue) && parsedDate.toISOString().slice(0, 10) !== dateValue)) {
+            return res.status(400).json({ error: 'A valid update date is required' });
+        }
+
         // Create project update (postedBy must be Employee id)
         const projectUpdate = new ProjectUpdate({
             organizationId,
             projectId: id,
             postedBy: employeeId,
             update: update.trim(),
-            updateDate: updateDate ? new Date(updateDate) : new Date(),
+            updateDate: parsedDate,
             status: status || project.status,
             progress: progress !== undefined ? progress : undefined,
             blockers: blockers?.trim() || undefined,
@@ -656,37 +673,34 @@ export const createProjectUpdate = async (req, res) => {
 export const getProjectUpdates = async (req, res) => {
     try {
         const { id } = req.params;
-        const { page = 1, limit = 20 } = req.query;
+        const { page, limit: limitNum, skip } = parsePagination(req, { defaultLimit: 20, maxLimit: 100 });
         
         // Verify project exists
-        const project = await Project.findById(id);
+        const project = await Project.findOne({ _id: id, organizationId: getOrganizationId(req) });
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        // Parse pagination
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const limitNum = parseInt(limit);
-
         // Get updates with pagination
         const [updates, total] = await Promise.all([
-            ProjectUpdate.find({ projectId: id })
+            ProjectUpdate.find(addOrganizationFilter(req, { projectId: id }))
                 .populate('postedBy', 'name email position department employeeId')
                 .sort({ updateDate: -1, createdAt: -1 })
                 .skip(skip)
                 .limit(limitNum)
                 .lean(),
-            ProjectUpdate.countDocuments({ projectId: id })
+            ProjectUpdate.countDocuments(addOrganizationFilter(req, { projectId: id }))
         ]);
 
         res.status(200).json({
             success: true,
             updates,
             pagination: {
-                page: parseInt(page),
+                page,
                 limit: limitNum,
                 total,
-                pages: Math.ceil(total / limitNum)
+                pages: Math.ceil(total / limitNum),
+                hasNext: page * limitNum < total
             }
         });
     } catch (error) {

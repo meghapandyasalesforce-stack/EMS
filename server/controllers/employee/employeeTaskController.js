@@ -358,10 +358,13 @@ export const getProjectTasks = async (req, res) => {
         const { projectId } = req.params;
         const { date, employeeId, status } = req.query;
 
-        const filter = { project: projectId };
+        const project = await Project.findOne({ _id: projectId, organizationId: getOrganizationId(req) }).select('_id').lean();
+        if (!project) return sendError(res, 'Project not found', 404);
+        const filter = addOrganizationFilter(req, { project: projectId });
 
         if (date) {
             const selectedDate = new Date(date);
+            if (Number.isNaN(selectedDate.getTime())) return sendError(res, 'Invalid log date', 400);
             selectedDate.setHours(0, 0, 0, 0);
             const nextDay = new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000);
             

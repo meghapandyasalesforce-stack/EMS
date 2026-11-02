@@ -1,6 +1,6 @@
 import { setAllProjects } from '../context/projectSlice'
 import axios from '../utils/axios'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { ADMIN_PROJECT_ENDPOINT } from './../utils/constant';
 
@@ -21,6 +21,8 @@ function extractProjectsPage(res) {
 
 const useGetAllProjects = () => {
     const dispatch = useDispatch();
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         const fetchAllProjects = async () => {
@@ -52,13 +54,18 @@ const useGetAllProjects = () => {
                 }
 
                 dispatch(setAllProjects(aggregated));
-            } catch {
+            } catch (error) {
+                setError(error.response?.data?.message || error.response?.data?.error || 'Failed to load projects');
                 dispatch(setAllProjects([]));
+            } finally {
+                setLoading(false);
             }
         };
 
         fetchAllProjects();
     }, [dispatch]);
+
+    return { loading, error };
 };
 
 export default useGetAllProjects;

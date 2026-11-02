@@ -67,7 +67,7 @@ const ProjectDetailPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
-  useGetAllProjects();
+  const { loading: projectsLoading, error: projectsError } = useGetAllProjects();
   
   // Memoized selectors to prevent unnecessary re-renders
   const project = useSelector(store => 
@@ -99,7 +99,7 @@ const ProjectDetailPage = () => {
   const canCommentOnWorkPlan = useMemo(() => {
     const me = resolveEmployeeId(user, employee);
     if (!project) return false;
-    if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner || user?.role === 'admin') {
+    if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner || permissionFlags.isHrManager || user?.role === 'admin') {
       return Boolean(me);
     }
     if (!me) return false;
@@ -143,6 +143,7 @@ const ProjectDetailPage = () => {
   // Daily updates state
   const [updates, setUpdates] = useState([]);
   const [loadingUpdates, setLoadingUpdates] = useState(false);
+  const [updatesError, setUpdatesError] = useState(null);
   const [updateDialog, setUpdateDialog] = useState(false);
   const [newUpdate, setNewUpdate] = useState({
     update: '',
@@ -262,8 +263,14 @@ const ProjectDetailPage = () => {
 
   const handleUpdate = useCallback(async () => {
     try {
-      // Validate that all project members are active employees
+      if (!editedProject.name.trim() || !editedProject.projectLeader) {
+        toast.error('Project name and project leader are required');
+        return;
+      }
+      // Existing inactive members may remain; only new assignments must be active.
+      const existingMemberIds = (project.projectMembers || []).map(member => String(member?._id || member));
       const invalidMembers = editedProject.projectMembers.filter(memberId => {
+        if (existingMemberIds.includes(String(memberId))) return false;
         const member = employees.find(emp => emp._id === memberId);
         return !member || (member.status !== 'active' && member.active !== true);
       });
@@ -274,7 +281,7 @@ const ProjectDetailPage = () => {
       }
 
       const projectData = {
-        name: editedProject.name,
+        name: editedProject.name.trim(),
         status: mapStatusToBackend(editedProject.status),
         projectLeader: editedProject.projectLeader,
         projectMembers: editedProject.projectMembers,
@@ -332,11 +339,6 @@ const ProjectDetailPage = () => {
     setTabValue(newValue);
   }, []);
 
-  const handleBackToProject = useCallback(() => {
-    navigate('/projects', { replace: true });
-    useGetAllProjects();
-  }, [navigate]);
-
   const loadWorkPlan = useCallback(async () => {
     if (!project?._id) return;
     setWorkPlanLoading(true);
@@ -362,8 +364,8 @@ const ProjectDetailPage = () => {
       setEditedProject({
         name: project.name,
         status: project.status || 'pending',
-        projectLeader: project.projectLeader?._id || '',
-        projectMembers: project.projectMembers?.map(m => m._id) || [],
+        projectLeader: project.projectLeader?._id || project.projectLeader || '',
+        projectMembers: (project.projectMembers || []).filter(Boolean).map(m => m._id || m),
         budget: project.budget || '',
         actualCost: project.actualCost || '',
         revenue: project.revenue || '',
@@ -626,8 +628,8 @@ const ProjectDetailPage = () => {
             </Box>
             <Box display="flex" flexWrap="wrap" gap={1} alignItems="center">
               <FormControl size="small" sx={{ minWidth: 130 }}>
-                <InputLabel>Status</InputLabel>
-                <Select
+                <InputLabel id={`work-item-status-${item._id}`}>Status</InputLabel>
+                <Select labelId={`work-item-status-${item._id}`}
                   label="Status"
                   value={item.status || 'todo'}
                   onChange={(e) => handleWorkItemStatusChange(item._id, e.target.value)}
@@ -733,18 +735,24 @@ const ProjectDetailPage = () => {
     
     try {
       setLoadingUpdates(true);
-      const response = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/${project._id}/updates`, {
-        withCredentials: true
-      });
-      
-      if (response.data?.success) {
-        setUpdates(response.data.updates || []);
+      setUpdatesError(null);
+      const collected = [];
+      let page = 1;
+      let hasNext = true;
+      while (hasNext) {
+        const response = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/${project._id}/updates`, {
+          withCredentials: true,
+          params: { page, limit: 100 },
+        });
+        if (!response.data?.success) throw new Error(response.data?.error || 'Failed to load project updates');
+        collected.push(...(response.data.updates || []));
+        const pagination = response.data.pagination;
+        hasNext = pagination?.hasNext ?? (page < Number(pagination?.pages || 1));
+        page += 1;
       }
+      setUpdates(collected);
     } catch (error) {
-      // Don't show error toast if updates don't exist yet
-      if (error.response?.status !== 404) {
-        toast.error('Failed to load project updates');
-      }
+      setUpdatesError(error.response?.data?.error || error.message || 'Failed to load project updates');
     } finally {
       setLoadingUpdates(false);
     }
@@ -813,6 +821,12 @@ const ProjectDetailPage = () => {
   }, [newUpdate, project?._id, fetchProjectUpdates]);
 
   // Conditional return after all hooks
+  if (!project && projectsLoading) {
+    return <Box p={4} display="flex" justifyContent="center"><CircularProgress aria-label="Loading project" /></Box>;
+  }
+  if (!project && projectsError) {
+    return <Alert severity="error">{projectsError}</Alert>;
+  }
   if (!project) {
     return (
       <Box p={4} textAlign="center">
@@ -885,7 +899,7 @@ const ProjectDetailPage = () => {
                 </>
               )}
               <Button 
-                onClick={() => setIsEditing(true)}
+                onClick={() => { setIsEditing(true); setTabValue(0); }}
                 startIcon={<FiEdit2 />}
                 variant="contained"
                 color="primary"
@@ -957,8 +971,8 @@ const ProjectDetailPage = () => {
                 />
                 
                 <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                  <InputLabel>Status</InputLabel>
-                  <Select
+                  <InputLabel id="project-details-status-label">Status</InputLabel>
+                  <Select labelId="project-details-status-label"
                     name="status"
                     value={editedProject.status}
                     onChange={handleInputChange}
@@ -973,8 +987,8 @@ const ProjectDetailPage = () => {
                 </FormControl>
 
                 <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                  <InputLabel>Project Leader</InputLabel>
-                  <Select
+                  <InputLabel id="project-details-leader-label">Project Leader</InputLabel>
+                  <Select labelId="project-details-leader-label"
                     name="projectLeader"
                     value={editedProject.projectLeader}
                     onChange={handleInputChange}
@@ -990,8 +1004,8 @@ const ProjectDetailPage = () => {
                 </FormControl>
 
                 <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                  <InputLabel>Project Members</InputLabel>
-                  <Select
+                  <InputLabel id="project-details-members-label">Project Members</InputLabel>
+                  <Select labelId="project-details-members-label"
                     multiple
                     name="projectMembers"
                     value={editedProject.projectMembers}
@@ -1077,8 +1091,8 @@ const ProjectDetailPage = () => {
                         }}
                       />
                       <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                        <InputLabel>Currency</InputLabel>
-                        <Select
+                        <InputLabel id="project-details-currency-label">Currency</InputLabel>
+                        <Select labelId="project-details-currency-label"
                           name="currency"
                           value={editedProject.currency}
                           onChange={handleInputChange}
@@ -1139,7 +1153,7 @@ const ProjectDetailPage = () => {
                 <Box>
                   <Typography variant="subtitle1" color="text.secondary">Start Date</Typography>
                   <Typography variant={isMobile ? 'body2' : 'body1'}>
-                    {new Date(project.createdAt).toLocaleDateString()}
+                    {project.startDate || project.createdAt ? new Date(project.startDate || project.createdAt).toLocaleDateString() : 'Not set'}
                   </Typography>
                 </Box>
               </Box>
@@ -1365,6 +1379,8 @@ const ProjectDetailPage = () => {
             <Box display="flex" justifyContent="center" py={4}>
               <CircularProgress />
             </Box>
+          ) : updatesError ? (
+            <Alert severity="error">{updatesError}</Alert>
           ) : updates.length === 0 ? (
             <Box textAlign="center" py={4}>
               <Typography variant="body1" color="text.secondary" mb={2}>
@@ -1479,8 +1495,8 @@ const ProjectDetailPage = () => {
         <DialogTitle>Update Project Status</DialogTitle>
         <DialogContent>
             <FormControl fullWidth sx={{ mt: 2 }}>
-            <InputLabel>New Status</InputLabel>
-            <Select
+            <InputLabel id="project-status-update-label">New Status</InputLabel>
+            <Select labelId="project-status-update-label"
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value)}
               label="New Status"
@@ -1540,8 +1556,8 @@ const ProjectDetailPage = () => {
             />
 
             <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
+              <InputLabel id="project-daily-status-label">Status</InputLabel>
+              <Select labelId="project-daily-status-label"
                 value={newUpdate.status}
                 onChange={(e) => setNewUpdate({ ...newUpdate, status: e.target.value })}
                 label="Status"
@@ -1627,8 +1643,8 @@ const ProjectDetailPage = () => {
               fullWidth
             />
             <FormControl fullWidth size="small">
-              <InputLabel>Priority</InputLabel>
-              <Select
+              <InputLabel id="work-item-edit-priority-label">Priority</InputLabel>
+              <Select labelId="work-item-edit-priority-label"
                 label="Priority"
                 value={workItemEditForm.priority}
                 onChange={(e) => setWorkItemEditForm((f) => ({ ...f, priority: e.target.value }))}
@@ -1640,8 +1656,8 @@ const ProjectDetailPage = () => {
               </Select>
             </FormControl>
             <FormControl fullWidth size="small">
-              <InputLabel>Status</InputLabel>
-              <Select
+              <InputLabel id="work-item-edit-status-label">Status</InputLabel>
+              <Select labelId="work-item-edit-status-label"
                 label="Status"
                 value={workItemEditForm.status}
                 onChange={(e) => setWorkItemEditForm((f) => ({ ...f, status: e.target.value }))}
