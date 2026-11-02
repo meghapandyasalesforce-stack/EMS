@@ -144,3 +144,67 @@
 .project-export-dialog .MuiDialogActions-root .MuiButton-outlined:hover { border-color:#bad2c5; background:#f2f8f5; }
 .project-export-dialog .MuiButton-root:focus-visible { outline:3px solid #77d4b3; outline-offset:2px; }
 @media(max-width:480px) { .project-export-dialog .MuiDialogTitle-root { padding:22px 20px 15px; font-size:20px; gap:12px; }.project-export-dialog .MuiDialogContent-root { padding:0 20px 20px; }.project-export-dialog .MuiDialogActions-root { padding:16px 20px; }.project-export-summary { padding:14px; } }
+
+/* Keep project filters aligned even when the shared shell styles MUI inputs. */
+#root .project-workspace .project-filters {
+  padding: 22px !important;
+  border-radius: 16px;
+  border-color: #dce7ed;
+}
+.project-filters .project-filter-tabs { padding-bottom: 18px; border-bottom: 1px solid #edf1f5; gap: 8px; }
+#root .project-filters .project-filter-tabs .MuiButton-root {
+  min-height: 38px; padding: 8px 18px; border-radius: 9px;
+  font-size: 13px; line-height: 20px; color: #617487; border-color: #e1e8ee;
+  background: #fff; white-space: nowrap;
+}
+#root .project-filters .project-filter-tabs .MuiButton-root[aria-pressed="true"] {
+  color: #fff; background: #07866d; border-color: #07866d;
+  box-shadow: 0 3px 8px #07866d18;
+}
+#root .project-filters .project-filter-tabs .MuiButton-root[aria-pressed="false"]:hover { background: #eff7f4; border-color: #b8d9ce; color: #08755e; }
+#root .project-filters .project-filter-search-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 170px auto;
+  gap: 12px; align-items: end;
+}
+#root .project-filters .project-filter-search-row > *,
+#root .project-filters .project-filter-options > *,
+#root .project-filters .project-filter-advanced > * { min-width: 0; width: auto; margin: 0; }
+#root .project-filters .MuiFormControl-root { padding-top: 20px; position: relative; }
+#root .project-filters .MuiInputLabel-root {
+  position: absolute; top: 0; left: 0; transform: none;
+  font-size: 12px; line-height: 16px; font-weight: 500;
+  color: #708397; max-width: 100%;
+}
+#root .project-filters .MuiOutlinedInput-root {
+  height: 46px; min-height: 46px; padding: 0 13px; border-radius: 9px;
+  background: #fff; color: #254758; font-size: 14px; margin: 0;
+}
+#root .project-filters .MuiOutlinedInput-input {
+  height: 22px; min-height: 0; padding: 12px 0; margin: 0;
+  line-height: 22px; box-sizing: content-box; border: 0; border-radius: 0;
+  background: transparent; box-shadow: none; font: inherit;
+}
+#root .project-filters .MuiSelect-select { height: 22px; min-height: 22px; padding: 12px 24px 12px 0; line-height: 22px; box-sizing: content-box; }
+#root .project-filters .MuiOutlinedInput-notchedOutline { top: 0; border-color: #dbe5ec; }
+#root .project-filters .MuiOutlinedInput-notchedOutline legend { display: none; }
+#root .project-filters .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline { border-color: #07866d; border-width: 1px; }
+#root .project-filters .MuiOutlinedInput-root.Mui-focused { box-shadow: 0 0 0 3px #07866d12; }
+#root .project-filters .project-filter-search-row > .MuiButton-root { height: 46px; padding: 10px 16px; border-radius: 9px; white-space: nowrap; font-size: 13px; }
+#root .project-filters .project-filter-date-toggle[aria-expanded="true"] { background: #edf8f3; border-color: #9fcfbd; color: #08755e; }
+#root .project-filters .project-filter-options { display: grid; grid-template-columns: 160px 160px 210px auto; gap: 12px; align-items: end; }
+#root .project-filters .project-filter-options > .MuiButton-root { justify-self: start; min-height: 46px; }
+#root .project-filters .project-filter-advanced { display: grid; grid-template-columns: repeat(3, minmax(0, 210px)); gap: 16px; }
+@media (max-width: 1050px) {
+  #root .project-filters .project-filter-search-row { grid-template-columns: minmax(0, 1fr) auto; }
+  #root .project-filters .project-filter-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  #root .project-workspace .project-filters { padding: 16px !important; }
+  #root .project-filters .project-filter-tabs { gap: 7px; }
+  #root .project-filters .project-filter-tabs .MuiButton-root { flex: 1 0 27%; padding: 7px 10px; font-size: 12px; }
+  #root .project-filters .project-filter-search-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #root .project-filters .project-filter-search { grid-column: 1 / -1; }
+  #root .project-filters .project-filter-options,
+  #root .project-filters .project-filter-advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  #root .project-filters .project-filter-options > :nth-child(3) { grid-column: 1 / -1; }
+}

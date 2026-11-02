@@ -545,7 +545,7 @@ const ProjectsPageEnhanced = () => {
             {/* Search and Filters Section */}
             <Paper className="project-filters" sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Box className="project-filter-tabs" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   {[
                     { id: 'all', label: 'All' },
                     { id: 'active', label: 'Active' },
@@ -558,6 +558,7 @@ const ProjectsPageEnhanced = () => {
                     return (
                       <Button
                         key={tab.id}
+                        aria-pressed={active}
                         size="small"
                         onClick={() => setStatusFilter(tab.id)}
                         sx={{
@@ -581,9 +582,10 @@ const ProjectsPageEnhanced = () => {
                 </Box>
 
                 {/* Main Search Bar */}
-                <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Box className="project-filter-search-row" sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
                   <TextField
                     size="small"
+                    className="project-filter-search"
                     label="Search projects"
                     variant="outlined"
                     placeholder="Search projects..."
@@ -598,7 +600,7 @@ const ProjectsPageEnhanced = () => {
                       ),
                       endAdornment: searchTerm && (
                         <InputAdornment position="end">
-                          <IconButton onClick={() => setSearchTerm('')} size="small">
+                          <IconButton aria-label="Clear project search" onClick={() => setSearchTerm('')} size="small">
                             <FiX />
                           </IconButton>
                         </InputAdornment>
@@ -609,6 +611,8 @@ const ProjectsPageEnhanced = () => {
                   <Button
                     variant="outlined"
                     startIcon={<FiCalendar />}
+                    aria-expanded={showAdvancedSearch}
+                    className="project-filter-date-toggle"
                     onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
                     sx={{ textTransform: 'none', width: { xs: '100%', sm: 'auto' } }}
                   >
@@ -643,7 +647,7 @@ const ProjectsPageEnhanced = () => {
                 </Box>
 
                 {/* Quick Filters */}
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Box className="project-filter-options" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
                     <InputLabel>Status</InputLabel>
                     <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} label="Status">
@@ -699,7 +703,7 @@ const ProjectsPageEnhanced = () => {
 
                 {/* Advanced Search */}
                 {showAdvancedSearch && (
-                  <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                  <Box className="project-filter-advanced" sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', pt: 2, borderTop: 1, borderColor: 'divider' }}>
                     <TextField
                       size="small"
                       label="Start Date From"
