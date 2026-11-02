@@ -1,45 +1,70 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  FiPlus, 
-  FiSave, 
-  FiEdit3, 
-  FiCheck, 
-  FiClock, 
-  FiPause, 
-  FiPlay,
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import {
+  FiPlus,
+  FiSave,
+  FiEdit3,
   FiArrowLeft,
   FiCalendar,
   FiUser,
   FiMessageSquare,
-  FiClipboard
-} from 'react-icons/fi';
-import { useDispatch, useSelector } from 'react-redux';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
+  FiClipboard,
+  FiRefreshCw,
+  FiUsers,
+  FiFlag,
+  FiCheckCircle,
+} from "react-icons/fi";
+import { useDispatch, useSelector } from "react-redux";
+import { useParams, useNavigate } from "react-router-dom";
+import {
   fetchMyProjects,
-  fetchMyTasks, 
-  createNewTask, 
+  fetchMyTasks,
+  createNewTask,
   updateExistingTask,
   fetchEmployeeWorkPlan,
   updateEmployeeWorkItem,
   addEmployeeWorkItemComment,
-} from '../../context/employeeTaskSlice';
+} from "../../context/employeeTaskSlice";
+import EmployeeWorkPlanSection from "./EmployeeWorkPlanSection";
+import "./employeeProjectWorkspace.css";
 
-const projectStatusDisplay = (status) => {
-  const s = String(status || '').toLowerCase();
-  if (s === 'completed') return { label: 'Completed', className: 'bg-theme-primary/10 text-theme-primary' };
-  if (s === 'in-progress') return { label: 'In Progress', className: 'bg-theme-secondary/10 text-theme-secondary' };
-  if (s === 'on-hold') return { label: 'On Hold', className: 'bg-yellow-100 text-yellow-800' };
-  if (s === 'pending') return { label: 'Pending', className: 'bg-gray-100 text-gray-800' };
-  return { label: status || 'Active', className: 'bg-gray-100 text-gray-800' };
+const employeeIdOf = (value) => String(value?._id || value || "");
+const formatDate = (value) => {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Not set"
+    : date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
 };
-import EmployeeWorkPlanSection from './EmployeeWorkPlanSection';
+const isToday = (value) =>
+  new Date(value).toDateString() === new Date().toDateString();
+const statusLabel = (value) =>
+  ({
+    "in-progress": "In Progress",
+    "on-hold": "On Hold",
+    pending: "Pending",
+    completed: "Completed",
+  })[value] ||
+  value ||
+  "Pending";
+const badgeClass = (status) =>
+  `employee-project-badge employee-project-badge--${String(status || "pending")
+    .toLowerCase()
+    .replaceAll(" ", "-")}`;
 
-const EmployeeTasks = () => {
+export default function EmployeeTasks() {
   const { projectId } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
   const {
     myProjects,
     myTasks,
@@ -47,54 +72,90 @@ const EmployeeTasks = () => {
     workPlanProgress,
     workPlanStatus,
     workPlanError,
-    status,
     error,
   } = useSelector((state) => state.employeeTask);
-  const employee = useSelector(
-    (state) => state.employeeDetails?.employee || state.auth?.user
-  );
-  const [activeTab, setActiveTab] = useState('plan');
-  const [taskDescription, setTaskDescription] = useState('');
-  const [taskStatus, setTaskStatus] = useState('Not Started');
+  const employee = useSelector((state) => state.employeeDetails?.employee);
+  const user = useSelector((state) => state.auth?.user);
+  const currentEmployeeId =
+    employee?._id || user?.employeeProfileId || user?._id;
+  const [activeTab, setActiveTab] = useState("details");
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskStatus, setTaskStatus] = useState("Not Started");
+  const [comments, setComments] = useState("");
   const [editingTaskId, setEditingTaskId] = useState(null);
-  const [comments, setComments] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(true);
+  const logRequest = useRef(0);
+  const [formError, setFormError] = useState("");
   const [updatingWorkItemId, setUpdatingWorkItemId] = useState(null);
   const [commentingWorkItemId, setCommentingWorkItemId] = useState(null);
-  const [projectsLoaded, setProjectsLoaded] = useState(false);
-
+  const descriptionInput = useRef(null);
+  const savingRef = useRef(false);
   const currentProject = useMemo(
     () => myProjects.find((p) => String(p._id) === String(projectId)),
-    [myProjects, projectId]
+    [myProjects, projectId],
   );
+  const projectLogs = useMemo(
+    () =>
+      myTasks.filter(
+        (task) =>
+          employeeIdOf(task.project) === String(projectId) &&
+          employeeIdOf(task.employee) === String(currentEmployeeId),
+      ),
+    [myTasks, projectId, currentEmployeeId],
+  );
+  const todayTask = projectLogs.find((task) => isToday(task.date));
 
-  const projectStatus = useMemo(
-    () => projectStatusDisplay(currentProject?.status),
-    [currentProject?.status]
-  );
+  const loadDailyLogs = useCallback(async () => {
+    const requestId = ++logRequest.current;
+    setLogsLoading(true);
+    try {
+      await dispatch(fetchMyTasks({ projectId, scope: "mine" }));
+    } finally {
+      if (requestId === logRequest.current) setLogsLoading(false);
+    }
+  }, [dispatch, projectId]);
 
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
-    (async () => {
-      await dispatch(fetchMyProjects());
+    setProjectsLoaded(false);
+    setActiveTab("details");
+    setEditingTaskId(null);
+    setTaskDescription("");
+    setTaskStatus("Not Started");
+    setComments("");
+    setFormError("");
+    dispatch(fetchMyProjects()).then(() => {
       if (!cancelled) setProjectsLoaded(true);
-    })();
-    dispatch(fetchMyTasks({ projectId }));
+    });
+    loadDailyLogs();
     dispatch(fetchEmployeeWorkPlan(projectId));
     return () => {
       cancelled = true;
     };
-  }, [projectId, dispatch]);
+  }, [projectId, dispatch, loadDailyLogs]);
+
+  useEffect(() => {
+    if (todayTask) {
+      setEditingTaskId(todayTask._id);
+      setTaskDescription(todayTask.taskDescription);
+      setTaskStatus(todayTask.status);
+      setComments(todayTask.comments || "");
+    }
+  }, [todayTask?._id, projectId]);
 
   const handleWorkItemStatusChange = useCallback(
     async (workItemId, newStatus) => {
       setUpdatingWorkItemId(workItemId);
-      await dispatch(updateEmployeeWorkItem(workItemId, projectId, { status: newStatus }));
+      await dispatch(
+        updateEmployeeWorkItem(workItemId, projectId, { status: newStatus }),
+      );
       setUpdatingWorkItemId(null);
     },
-    [dispatch, projectId]
+    [dispatch, projectId],
   );
-
   const handleWorkItemDueDateChange = useCallback(
     async (workItemId, dueDate, dueDateChangeReason) => {
       setUpdatingWorkItemId(workItemId);
@@ -102,410 +163,481 @@ const EmployeeTasks = () => {
         updateEmployeeWorkItem(workItemId, projectId, {
           dueDate,
           dueDateChangeReason,
-        })
+        }),
       );
       setUpdatingWorkItemId(null);
       return result?.success;
     },
-    [dispatch, projectId]
+    [dispatch, projectId],
   );
-
   const handleWorkItemComment = useCallback(
     async (workItemId, text) => {
       setCommentingWorkItemId(workItemId);
-      const result = await dispatch(addEmployeeWorkItemComment(workItemId, projectId, text));
+      const result = await dispatch(
+        addEmployeeWorkItemComment(workItemId, projectId, text),
+      );
       setCommentingWorkItemId(null);
       return result?.success;
     },
-    [dispatch, projectId]
+    [dispatch, projectId],
   );
 
-  const handleCreateTask = async () => {
-    if (!taskDescription.trim()) return;
-
-    const taskData = {
-      projectId,
-      taskDescription: taskDescription.trim(),
-      status: taskStatus,
-      comments: comments.trim()
-    };
-
-    const result = await dispatch(createNewTask(taskData));
-    if (result?.success) {
-      setTaskDescription('');
-      setTaskStatus('Not Started');
-      setComments('');
-      dispatch(fetchMyTasks({ projectId }));
+  const openDailyLog = () => {
+    setActiveTab("daily");
+    loadDailyLogs();
+  };
+  const handleSave = async (event) => {
+    event.preventDefault();
+    if (savingRef.current || logsLoading) return;
+    if (!taskDescription.trim()) {
+      setFormError("Describe what you worked on today.");
+      descriptionInput.current?.focus();
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    setFormError("");
+    try {
+      const data = {
+        taskDescription: taskDescription.trim(),
+        status: taskStatus,
+        comments: comments.trim(),
+      };
+      const taskId = editingTaskId || todayTask?._id;
+      const result = await dispatch(
+        taskId
+          ? updateExistingTask(taskId, data)
+          : createNewTask({ projectId, ...data }),
+      );
+      if (result?.success) {
+        if (result.task?._id) setEditingTaskId(result.task._id);
+        await loadDailyLogs();
+      } else {
+        setFormError(
+          "Your daily log could not be saved. Review the error above and try again.",
+        );
+      }
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
-  const handleUpdateTask = async (taskId) => {
-    if (!taskDescription.trim()) return;
-
-    const updateData = {
-      taskDescription: taskDescription.trim(),
-      status: taskStatus,
-      comments: comments.trim()
-    };
-
-    const result = await dispatch(updateExistingTask(taskId, updateData));
-    if (result?.success) {
-      setEditingTaskId(null);
-      setTaskDescription('');
-      setTaskStatus('Not Started');
-      setComments('');
-      dispatch(fetchMyTasks({ projectId }));
-    }
-  };
-
-  const handleEditTask = (task) => {
-    setEditingTaskId(task._id);
-    setTaskDescription(task.taskDescription);
-    setTaskStatus(task.status);
-    setComments(task.comments || '');
-  };
-
-  const handleCancelEdit = () => {
-    setEditingTaskId(null);
-    setTaskDescription('');
-    setTaskStatus('Not Started');
-    setComments('');
-  };
-
-  if (!projectsLoaded) {
+  if (!projectsLoaded)
     return (
-      <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary" />
-      </div>
+      <main className="employee-project-workspace">
+        <div
+          className="employee-project-panel employee-project-empty"
+          role="status"
+        >
+          Loading your project…
+        </div>
+      </main>
     );
-  }
-
-  if (!currentProject) {
+  if (!currentProject)
     return (
-      <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-md p-8 text-center max-w-md w-full border border-gray-200">
-          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FiUser size={28} className="text-red-600" />
-          </div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">
-            Project Not Found
-          </h2>
-          <p className="text-sm text-gray-600 mb-6">
-            The project you're looking for doesn't exist or you don't have access to it.
+      <main className="employee-project-workspace">
+        <div
+          className="employee-project-panel employee-project-empty"
+          role={error ? "alert" : undefined}
+        >
+          <FiClipboard />
+          <h1>{error ? "Unable to load project" : "Project not available"}</h1>
+          <p>
+            {error ||
+              "This project is not currently assigned to you. Ask your project lead to check your membership."}
           </p>
-          <button 
-            onClick={() => navigate('/employee/projects')} 
-            className="bg-theme-secondary hover:bg-theme-primary text-white font-medium px-4 py-2 rounded-lg transition shadow flex items-center gap-2 mx-auto text-sm"
-          >
-            <FiArrowLeft size={16} />
+          <button onClick={() => dispatch(fetchMyProjects())}>Try again</button>
+          <button onClick={() => navigate("/employee/projects")}>
             Back to Projects
           </button>
         </div>
-      </div>
+      </main>
     );
-  }
 
+  const progress = Math.min(
+    100,
+    Math.max(0, Number(currentProject.progress) || 0),
+  );
+  const members = currentProject.projectMembers || [];
+  const tabs = [
+    ["details", "Project Details", FiClipboard],
+    ["plan", "Work plan", FiCheckCircle],
+    ["daily", "My daily logs", FiMessageSquare],
+  ];
   return (
-    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
-      <div className="w-full">
-        {/* Header Section */}
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <button 
-                onClick={() => navigate('/employee/projects')}
-                className="border border-theme-secondary text-theme-secondary hover:bg-theme-secondary/10 font-medium px-3 py-1.5 rounded-lg transition flex items-center gap-2 text-sm"
-              >
-                <FiArrowLeft size={16} />
-                Back
-              </button>
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900 mb-0.5">
-                  {currentProject.name}
-                </h1>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <FiCalendar size={14} className="text-gray-500" />
-                  <span className="text-gray-600 text-xs">
-                    {currentProject.progress != null
-                      ? `Progress ${currentProject.progress}%`
-                      : 'Project workspace'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className={`inline-flex items-center px-3 py-1 rounded-lg font-medium text-sm ${projectStatus.className}`}>
-              {projectStatus.label}
-            </div>
+    <main className="employee-project-workspace">
+      <div className="employee-project-toolbar">
+        <button
+          className="employee-project-secondary"
+          onClick={() => navigate("/employee/projects")}
+        >
+          <FiArrowLeft /> Back to Projects
+        </button>
+        <button className="employee-project-primary" onClick={openDailyLog}>
+          <FiPlus /> {todayTask ? "Update daily task" : "Add daily task"}
+        </button>
+      </div>
+      <header className="employee-project-hero">
+        <div className="employee-project-eyebrow">
+          MY WORKSPACE <span>/</span> ASSIGNED PROJECT
+        </div>
+        <div className="employee-project-heading">
+          <div>
+            <h1>{currentProject.name}</h1>
+            <p>Your project, your team, and the work moving it forward.</p>
+          </div>
+          <span className={badgeClass(currentProject.status)}>
+            {statusLabel(currentProject.status)}
+          </span>
+        </div>
+        <div className="employee-project-summary">
+          <div>
+            <FiUser />
+            <span>
+              Project lead
+              <strong>
+                {currentProject.projectLeader?.name || "Not assigned"}
+              </strong>
+            </span>
+          </div>
+          <div>
+            <FiUsers />
+            <span>
+              Team members<strong>{members.length}</strong>
+            </span>
+          </div>
+          <div>
+            <FiCalendar />
+            <span>
+              Due date<strong>{formatDate(currentProject.endDate)}</strong>
+            </span>
+          </div>
+          <div className="employee-project-progress">
+            <span>
+              Overall progress<strong>{progress}%</strong>
+            </span>
+            <progress
+              value={progress}
+              max="100"
+              aria-label="Overall project progress"
+            />
           </div>
         </div>
-
+      </header>
+      <nav
+        className="employee-project-tabs"
+        role="tablist"
+        aria-label="Project workspace"
+      >
+        {tabs.map(([key, label, Icon]) => (
+          <button
+            key={key}
+            id={`employee-project-tab-${key}`}
+            role="tab"
+            aria-selected={activeTab === key}
+            aria-controls={`employee-project-panel-${key}`}
+            onClick={() =>
+              key === "daily" ? openDailyLog() : setActiveTab(key)
+            }
+          >
+            <Icon />
+            {label}
+          </button>
+        ))}
+      </nav>
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-2 rounded-lg mb-4 font-medium text-sm">
+        <div className="employee-project-error" role="alert">
           {error}
         </div>
       )}
-
-      {/* Tabs */}
-      <div className="flex gap-2 mb-5 border-b border-gray-200">
-        <button
-          type="button"
-          onClick={() => setActiveTab('plan')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-2 ${
-            activeTab === 'plan'
-              ? 'border-theme-secondary text-theme-secondary'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <FiClipboard size={16} />
-          Work plan
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('daily')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-2 ${
-            activeTab === 'daily'
-              ? 'border-theme-secondary text-theme-secondary'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <FiMessageSquare size={16} />
-          Today's log
-        </button>
-      </div>
-
-      {activeTab === 'plan' && (
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 bg-theme-primary rounded-lg flex items-center justify-center">
-              <FiClipboard size={18} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Project work plan</h2>
-              <p className="text-gray-600 text-xs">
-                Tasks from your manager — update items assigned to you or under your assigned tasks
-              </p>
-            </div>
-          </div>
-          <EmployeeWorkPlanSection
-            workPlan={workPlan}
-            workPlanProgress={workPlanProgress}
-            workPlanStatus={workPlanStatus}
-            workPlanError={workPlanError}
-            currentEmployeeId={employee?._id}
-            onStatusChange={handleWorkItemStatusChange}
-            onDueDateChange={handleWorkItemDueDateChange}
-            updatingId={updatingWorkItemId}
-            onAddComment={handleWorkItemComment}
-            commentingId={commentingWorkItemId}
-            canComment={Boolean(employee?._id)}
-          />
-        </div>
-      )}
-
-      {activeTab === 'daily' && (
-        <>
-      {/* Task Input Form */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 bg-theme-secondary rounded-lg flex items-center justify-center">
-            {editingTaskId ? <FiEdit3 size={18} className="text-white" /> : <FiPlus size={18} className="text-white" />}
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-gray-900 mb-0.5">
-              {editingTaskId ? 'Update log' : "Today's work log"}
-            </h2>
-            <p className="text-gray-600 text-xs">
-              {editingTaskId
-                ? 'Modify what you logged for today'
-                : 'Record what you worked on today (separate from the work plan)'}
-            </p>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="lg:col-span-2">
-            <label className="block text-xs font-semibold text-gray-700 mb-2">
-              Task Description
-            </label>
-            <input
-              type="text"
-              value={taskDescription}
-              onChange={(e) => setTaskDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition text-sm"
-              placeholder="Describe what needs to be done..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-2">
-              Status
-            </label>
-            <select
-              value={taskStatus}
-              onChange={(e) => setTaskStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition text-sm"
-            >
-              <option value="Not Started">
-                <div className="flex items-center gap-2">
-                  <FiClock size={16} />
-                  Not Started
-                </div>
-              </option>
-              <option value="In Progress">
-                <div className="flex items-center gap-2">
-                  <FiPlay size={16} />
-                  In Progress
-                </div>
-              </option>
-              <option value="Completed">
-                <div className="flex items-center gap-2">
-                  <FiCheck size={16} />
-                  Completed
-                </div>
-              </option>
-              <option value="On Hold">
-                <div className="flex items-center gap-2">
-                  <FiPause size={16} />
-                  On Hold
-                </div>
-              </option>
-            </select>
-          </div>
-
-          <div className="lg:col-span-2">
-            <label className="block text-xs font-semibold text-gray-700 mb-2">
-              Comments (Optional)
-            </label>
-            <textarea
-              value={comments}
-              onChange={(e) => setComments(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition resize-none text-sm"
-              placeholder="Add any additional notes or comments..."
-            />
-          </div>
-
-          <div className="lg:col-span-2 flex justify-end gap-3 mt-3">
-            {editingTaskId && (
-              <button
-                onClick={handleCancelEdit}
-                className="px-4 py-2 border border-red-500 text-red-500 hover:bg-red-50 font-medium rounded-lg transition text-sm"
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              onClick={editingTaskId ? 
-                () => handleUpdateTask(editingTaskId) : 
-                handleCreateTask}
-              disabled={!taskDescription.trim() || status === 'loading'}
-              className="bg-theme-secondary hover:bg-theme-primary disabled:bg-gray-300 text-white font-medium px-4 py-2 rounded-lg transition shadow disabled:shadow-none flex items-center gap-2 text-sm"
-            >
-              {editingTaskId ? <FiSave size={16} /> : <FiPlus size={16} />}
-              {editingTaskId ? 'Update Task' : '+ Add Task'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Tasks List Section */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 border border-gray-200">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-theme-primary rounded-lg flex items-center justify-center">
-              <FiCheck size={18} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900 mb-0.5">
-                My daily logs
-              </h2>
-              <p className="text-gray-600 text-xs">
-                Your per-day entries for this project
-              </p>
-            </div>
-          </div>
-          <div className="relative">
-            <div className="bg-theme-secondary text-white px-3 py-1 rounded-lg font-medium text-sm">
-              {myTasks.length} Tasks
-            </div>
-          </div>
-        </div>
-        
-        {status === 'loading' ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary"></div>
-          </div>
-        ) : myTasks.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-            <FiMessageSquare size={40} className="text-gray-400 mx-auto mb-3" />
-            <h3 className="text-base font-semibold text-gray-600 mb-1">
-              No tasks found
-            </h3>
-            <p className="text-sm text-gray-500">
-              Start by adding your first task above
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {myTasks.map((task) => (
-              <div 
-                key={task._id}
-                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-theme-secondary transition"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <h3 className="text-sm font-semibold text-gray-900 flex-1 mr-2 leading-tight">
-                    {task.taskDescription}
-                  </h3>
-                  <span className={`px-2 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${
-                    task.status === 'Completed' ? 'bg-theme-primary/10 text-theme-primary' :
-                    task.status === 'In Progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
-                    task.status === 'On Hold' ? 'bg-yellow-100 text-yellow-800' : 
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {task.status}
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-2 mb-3">
-                  <FiCalendar size={14} className="text-gray-500" />
-                  <span className="text-xs text-gray-600">
-                    {new Date(task.date).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    })}
-                  </span>
-                </div>
-                
-                {task.comments && (
-                  <div className="bg-gray-50 rounded-lg p-3 mb-3 border border-gray-200">
-                    <p className="text-xs text-gray-600 italic leading-relaxed">
-                      "{task.comments}"
-                    </p>
-                  </div>
-                )}
-                
-                <div className="border-t border-gray-200 pt-3">
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => handleEditTask(task)}
-                      className="w-8 h-8 bg-theme-secondary hover:bg-theme-primary text-white rounded-lg flex items-center justify-center transition shadow-sm hover:shadow-md"
-                      title="Edit Task"
-                    >
-                      <FiEdit3 size={14} />
-                    </button>
-                  </div>
+      <section
+        id={`employee-project-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`employee-project-tab-${activeTab}`}
+      >
+        {activeTab === "details" && (
+          <div className="employee-project-detail-grid">
+            <section className="employee-project-panel">
+              <div className="employee-project-section-heading">
+                <span>
+                  <FiClipboard />
+                </span>
+                <div>
+                  <h2>Project overview</h2>
+                  <p>The details behind your shared goals.</p>
                 </div>
               </div>
-            ))}
+              <h3>Description</h3>
+              <p className="employee-project-description">
+                {currentProject.description ||
+                  "No project description has been added yet."}
+              </p>
+              <dl className="employee-project-facts">
+                {[
+                  ["Category", currentProject.category || "General"],
+                  ["Priority", currentProject.priority || "Medium"],
+                  ["Start date", formatDate(currentProject.startDate)],
+                  ["End date", formatDate(currentProject.endDate)],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {currentProject.tags?.length > 0 && (
+                <div className="employee-project-tags">
+                  {currentProject.tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+              )}
+            </section>
+            <aside className="employee-project-panel">
+              <div className="employee-project-section-heading">
+                <span>
+                  <FiUsers />
+                </span>
+                <div>
+                  <h2>Team & ownership</h2>
+                  <p>The people behind this project.</p>
+                </div>
+              </div>
+              <h3>Project lead</h3>
+              <div className="employee-project-person">
+                <span>
+                  {(currentProject.projectLeader?.name || "?").charAt(0)}
+                </span>
+                <div>
+                  <strong>
+                    {currentProject.projectLeader?.name || "Not assigned"}
+                  </strong>
+                  <small>{currentProject.projectLeader?.email}</small>
+                </div>
+              </div>
+              <h3>Project members · {members.length}</h3>
+              {members.length ? (
+                members.map((member) => (
+                  <div
+                    className="employee-project-person"
+                    key={employeeIdOf(member)}
+                  >
+                    <span>{(member.name || "?").charAt(0)}</span>
+                    <div>
+                      <strong>{member.name || "Team member"}</strong>
+                      <small>{member.email}</small>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p>No additional team members.</p>
+              )}
+              <div className="employee-project-callout">
+                <FiMessageSquare />
+                <p>
+                  Share what you worked on today. Your entry appears in this
+                  project's Team daily logs.
+                </p>
+                <button onClick={openDailyLog}>Write today's log →</button>
+              </div>
+            </aside>
           </div>
         )}
-      </div>
-        </>
-      )}
-      </div>
-    </div>
+        {activeTab === "plan" && (
+          <div className="employee-project-panel employee-project-work-plan">
+            <div className="employee-project-section-heading">
+              <span>
+                <FiCheckCircle />
+              </span>
+              <div>
+                <h2>Work plan</h2>
+                <p>
+                  Update the tasks assigned to you and keep your team on track.
+                </p>
+              </div>
+            </div>
+            <EmployeeWorkPlanSection
+              workPlan={workPlan}
+              workPlanProgress={workPlanProgress}
+              workPlanStatus={workPlanStatus}
+              workPlanError={workPlanError}
+              currentEmployeeId={currentEmployeeId}
+              onStatusChange={handleWorkItemStatusChange}
+              onDueDateChange={handleWorkItemDueDateChange}
+              updatingId={updatingWorkItemId}
+              onAddComment={handleWorkItemComment}
+              commentingId={commentingWorkItemId}
+              canComment={Boolean(currentEmployeeId)}
+            />
+          </div>
+        )}
+        {activeTab === "daily" && (
+          <div className="employee-project-daily-grid">
+            <form
+              className="employee-project-panel employee-project-log-form"
+              onSubmit={handleSave}
+            >
+              <div className="employee-project-section-heading">
+                <span>
+                  <FiEdit3 />
+                </span>
+                <div>
+                  <h2>
+                    {editingTaskId || todayTask
+                      ? "Update today's log"
+                      : "Today's work log"}
+                  </h2>
+                  <p>
+                    {formatDate(new Date())} · Shared with your project team
+                  </p>
+                </div>
+              </div>
+              <div className="employee-project-callout">
+                <FiMessageSquare />
+                <p>
+                  Write your daily task update here. It appears in Team daily
+                  logs for {currentProject.name}. You can update today's entry
+                  throughout the day.
+                </p>
+              </div>
+              <label htmlFor="employee-task-description">
+                Task description <span>*</span>
+              </label>
+              <textarea
+                id="employee-task-description"
+                ref={descriptionInput}
+                value={taskDescription}
+                onChange={(event) => {
+                  setTaskDescription(event.target.value);
+                  setFormError("");
+                }}
+                rows={4}
+                placeholder="What did you work on today?"
+                readOnly={saving}
+                aria-invalid={Boolean(formError)}
+                aria-describedby={formError ? "employee-task-error" : undefined}
+              />
+              <label htmlFor="employee-task-status">Status</label>
+              <select
+                id="employee-task-status"
+                value={taskStatus}
+                onChange={(event) => setTaskStatus(event.target.value)}
+                disabled={saving}
+              >
+                {["Not Started", "In Progress", "Completed", "On Hold"].map(
+                  (value) => (
+                    <option key={value}>{value}</option>
+                  ),
+                )}
+              </select>
+              <label htmlFor="employee-task-comments">
+                Comments <small>(optional)</small>
+              </label>
+              <textarea
+                id="employee-task-comments"
+                value={comments}
+                onChange={(event) => setComments(event.target.value)}
+                rows={3}
+                placeholder="Add context, blockers, or a handover note…"
+                readOnly={saving}
+              />
+              {formError && (
+                <p
+                  id="employee-task-error"
+                  className="employee-project-error"
+                  role="alert"
+                >
+                  {formError}
+                </p>
+              )}
+              <div className="employee-project-form-footer">
+                <small>One log per day, per project.</small>
+                <button
+                  className="employee-project-primary"
+                  type="submit"
+                  disabled={saving || logsLoading}
+                >
+                  <FiSave />
+                  {saving
+                    ? "Saving…"
+                    : editingTaskId || todayTask
+                      ? "Update daily task"
+                      : "Save daily task"}
+                </button>
+              </div>
+            </form>
+            <section className="employee-project-panel">
+              <div className="employee-project-section-heading">
+                <span>
+                  <FiCalendar />
+                </span>
+                <div>
+                  <h2>
+                    My daily logs <small>({projectLogs.length})</small>
+                  </h2>
+                  <p>Your work history for this project.</p>
+                </div>
+                <button
+                  className="employee-project-icon-button"
+                  aria-label="Refresh my daily logs"
+                  onClick={loadDailyLogs}
+                  disabled={saving || logsLoading}
+                >
+                  <FiRefreshCw />
+                </button>
+              </div>
+              {logsLoading && !saving ? (
+                <p role="status">Loading daily logs…</p>
+              ) : !projectLogs.length ? (
+                <div className="employee-project-empty">
+                  <FiClipboard />
+                  <h3>Your first update starts here</h3>
+                  <p>
+                    Save today's work using the form. Your project team will be
+                    able to see it in Team daily logs.
+                  </p>
+                </div>
+              ) : (
+                <div className="employee-project-log-list">
+                  {projectLogs.map((task) => (
+                    <article
+                      className="employee-project-log-card"
+                      key={task._id}
+                    >
+                      <div className="employee-project-log-meta">
+                        <span>
+                          <FiCalendar />
+                          {formatDate(task.date)}
+                        </span>
+                        <span className={badgeClass(task.status)}>
+                          {task.status}
+                        </span>
+                      </div>
+                      <h3>{task.taskDescription}</h3>
+                      {task.comments && <p>{task.comments}</p>}
+                      {isToday(task.date) && (
+                        <button
+                          className="employee-project-text-button"
+                          onClick={() => {
+                            setEditingTaskId(task._id);
+                            setTaskDescription(task.taskDescription);
+                            setTaskStatus(task.status);
+                            setComments(task.comments || "");
+                            descriptionInput.current?.focus();
+                          }}
+                        >
+                          <FiEdit3 /> Edit today's entry
+                        </button>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+      </section>
+    </main>
   );
-};
-
-export default EmployeeTasks;
+}

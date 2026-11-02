@@ -1,4 +1,4 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, nanoid } from "@reduxjs/toolkit";
 import axios from "../utils/axios";
 import { toast } from "react-toastify";
 import { BOTH_TASK_ENDPOINT } from "../utils/constant";
@@ -22,8 +22,14 @@ const employeeTaskSlice = createSlice({
       state.myProjects = action.payload;
     },
     setMyTasks: (state, action) => {
+      if (action.meta?.requestId && action.meta.requestId !== state.tasksRequestId) return;
       state.myTasks = action.payload;
       state.status = 'succeeded';
+      state.error = null;
+    },
+    setMyTasksLoading: (state, action) => {
+      state.tasksRequestId = action.payload;
+      state.status = 'loading';
       state.error = null;
     },
     setWorkPlan: (state, action) => {
@@ -52,6 +58,7 @@ const employeeTaskSlice = createSlice({
       state.status = 'loading';
     },
     setError: (state, action) => {
+      if (action.meta?.requestId && action.meta.requestId !== state.tasksRequestId) return;
       state.error = action.payload;
       state.status = 'failed';
     },
@@ -81,18 +88,21 @@ export const fetchMyProjects = () => async (dispatch) => {
   }
 };
 
-export const fetchMyTasks = (filters = {}) => async (dispatch) => {
+export const fetchMyTasks = (filters = {}) => async (dispatch, getState) => {
+  const requestId = nanoid();
   try {
-    dispatch(setLoading());
+    dispatch(employeeTaskSlice.actions.setMyTasksLoading(requestId));
     const queryString = new URLSearchParams(filters).toString();
     const res = await axios.get(`${BOTH_TASK_ENDPOINT}/all-tasks?${queryString}`, { 
       withCredentials: true 
     });
     const tasks = res.data?.tasks ?? res.data?.data?.tasks ?? [];
-    dispatch(setMyTasks(tasks));
+    dispatch({ ...setMyTasks(tasks), meta: { requestId } });
   } catch (error) {
-    dispatch(setError(error.response?.data?.error || 'Failed to fetch tasks'));
-    toast.error(error.response?.data?.error || 'Failed to fetch tasks');
+    if (getState().employeeTask.tasksRequestId !== requestId) return;
+    const message = error.response?.data?.message || error.response?.data?.error || 'Failed to fetch tasks';
+    dispatch({ ...setError(message), meta: { requestId } });
+    toast.error(message);
   }
 };
 

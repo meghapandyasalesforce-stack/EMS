@@ -1343,7 +1343,7 @@ const ProjectDetailPage = () => {
             <Button startIcon={<FiRefreshCw />} disabled={tasksStatus === 'loading'} onClick={() => dispatch(fetchProjectTasks(project._id))}>Refresh logs</Button>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Work entries employees save under ME → Projects → this project → Today's log.
+            Work entries employees save under ME → Projects → this project → My daily logs.
           </Typography>
           <Alert severity="info" role="status" sx={{ mb: 3 }} action={<Button color="inherit" size="small" onClick={() => setTabValue(3)}>View Daily Updates</Button>}>
             Updates posted with the Daily Update button appear in the Daily Updates tab. Team membership alone does not create a daily task log.
@@ -1358,7 +1358,7 @@ const ProjectDetailPage = () => {
             </Alert>
           ) : projectTasks.length === 0 ? (
             <Typography variant="body1" color="text.secondary">
-              No daily task logs yet. Ask team members to save their work in this project's Today's log tab, then refresh logs.
+              No daily task logs yet. Ask team members to save their work in this project's My daily logs tab, then refresh logs.
             </Typography>
           ) : (
             <Box display="flex" flexDirection="column" gap={2}>

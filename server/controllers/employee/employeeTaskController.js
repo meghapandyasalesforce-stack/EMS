@@ -140,12 +140,20 @@ export const createTodayTask = async (req, res) => {
             return sendError(res, 'Organization ID is required', 400, 'ORG_ID_MISSING');
         }
 
+        if (typeof taskDescription !== 'string' || !taskDescription.trim()) {
+            return sendError(res, 'Task description is required', 400);
+        }
+        if (comments !== undefined && typeof comments !== 'string') {
+            return sendError(res, 'Comments must be text', 400);
+        }
+
         const allowedStatuses = ['Not Started', 'In Progress', 'Completed', 'On Hold'];
         const initialStatus = allowedStatuses.includes(status) ? status : 'Not Started';
 
         // Validate the employee is part of the project
         const project = await Project.findOne({
             _id: projectId,
+            organizationId,
             $or: [
                 { projectLeader: employeeId },
                 { projectMembers: employeeId }
@@ -161,6 +169,7 @@ export const createTodayTask = async (req, res) => {
 
         // Check if task already exists for today
         const existingTask = await Task.findOne({
+            organizationId,
             employee: employeeId,
             project: projectId,
             date: {
@@ -177,7 +186,7 @@ export const createTodayTask = async (req, res) => {
             organizationId,
             employee: employeeId,
             project: projectId,
-            taskDescription,
+            taskDescription: taskDescription.trim(),
             status: initialStatus,
             ...(comments?.trim() && { comments: comments.trim() })
         });
@@ -188,19 +197,18 @@ export const createTodayTask = async (req, res) => {
             .populate('project', 'name')
             .populate('employee', 'name email');
 
-        // Send notification for task creation
-        const employee = await Employee.findById(employeeId);
-        if (employee) {
-            const project = await Project.findById(populatedTask.project).select('name').lean();
-            await notify({
-                type: 'task_created',
-                organizationId: employee.organizationId,
-                data: {
-                    task: populatedTask,
-                    employee,
-                    project
-                }
-            });
+        // A saved log remains successful even if notification delivery fails.
+        try {
+            const employee = await Employee.findById(employeeId);
+            if (employee) {
+                await notify({
+                    type: 'task_created',
+                    organizationId,
+                    data: { task: populatedTask, employee, project }
+                });
+            }
+        } catch (notificationError) {
+            logger.warn('Task saved but notification failed', { taskId: newTask._id, error: notificationError.message });
         }
 
         return sendSuccess(res, { task: populatedTask }, 'Task created successfully', 201);
@@ -214,11 +222,14 @@ export const createTodayTask = async (req, res) => {
 export const updateTask = async (req, res) => {
     try {
         const employeeId = req.employee._id;
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) return sendError(res, 'Organization ID is required', 400);
         const { taskId } = req.params;
         const { taskDescription, status, comments } = req.body;
 
         const task = await Task.findOne({
             _id: taskId,
+            organizationId,
             employee: employeeId
         });
 
@@ -246,9 +257,18 @@ export const updateTask = async (req, res) => {
             comments: task.comments
         };
 
-        if (taskDescription) task.taskDescription = taskDescription;
-        if (status) task.status = status;
-        if (comments) task.comments = comments;
+        if (taskDescription !== undefined) {
+            if (typeof taskDescription !== 'string' || !taskDescription.trim()) return sendError(res, 'Task description is required', 400);
+            task.taskDescription = taskDescription.trim();
+        }
+        if (status !== undefined) {
+            if (!['Not Started', 'In Progress', 'Completed', 'On Hold'].includes(status)) return sendError(res, 'Invalid task status', 400);
+            task.status = status;
+        }
+        if (comments !== undefined) {
+            if (typeof comments !== 'string') return sendError(res, 'Comments must be text', 400);
+            task.comments = comments.trim();
+        }
 
         await task.save();
 
@@ -256,21 +276,18 @@ export const updateTask = async (req, res) => {
             .populate('project', 'name')
             .populate('employee', 'name email');
 
-        // Send notification for task update
-        const employee = await Employee.findById(employeeId);
-        if (employee) {
-            const project = await Project.findById(populatedTask.project).select('name').lean();
-            const updateType = status === 'Completed' ? 'task_completed' : 'task_updated';
-            await notify({
-                type: updateType,
-                organizationId: employee.organizationId,
-                data: {
-                    task: populatedTask,
-                    employee,
-                    project,
-                    oldTask
-                }
-            });
+        try {
+            const employee = await Employee.findById(employeeId);
+            if (employee) {
+                const project = await Project.findById(task.project).select('name').lean();
+                await notify({
+                    type: status === 'Completed' ? 'task_completed' : 'task_updated',
+                    organizationId,
+                    data: { task: populatedTask, employee, project, oldTask }
+                });
+            }
+        } catch (notificationError) {
+            logger.warn('Task updated but notification failed', { taskId: task._id, error: notificationError.message });
         }
 
         return sendSuccess(res, { task: populatedTask }, 'Task updated successfully');
@@ -301,7 +318,7 @@ export const getMyTasks = async (req, res) => {
         
         // Check if user is a manager (not admin or HR)
         // Example: Manager "Arun Kumar" sees tasks for employees with manager="Arun Kumar" or "Arun"
-        const isManager = shouldScopeDataToManagedTeam(req);
+        const isManager = req.query.scope !== 'mine' && shouldScopeDataToManagedTeam(req);
         
         if (isManager && req.employee) {
             // Manager: Get tasks from all employees linked to them

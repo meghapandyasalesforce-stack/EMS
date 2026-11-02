@@ -64,3 +64,11 @@ Account: `meghapandyasalesforce-stack` · Repository: `EMS` · Branch: `main`
 git switch main
 git pull https://github.com/meghapandyasalesforce-stack/EMS.git main
 ```
+
+## Assigned employee daily logging
+
+The assigned employee route (`/employee/projects/:projectId`) now uses the current green project workspace style and shows project description, category, priority, dates, progress, lead, and members. A persistent **Add daily task / Update daily task** action opens **My daily logs**. Logging is available to project members and the project lead without a work-plan item assignment. Today's existing entry is loaded for editing; historical entries remain read only. One entry per employee, project, and day remains the existing rule.
+
+Employee logs save to `tasks` through `/both/project-task/create-task` and `/task-status/:taskId`; the HR/admin **Team daily logs** endpoint reads that same project and organization. The project toolbar's **Daily Update** remains the separate project progress update workflow. Team log guidance now uses the current employee tab name.
+
+Validation includes controller tests for two assigned employees creating logs for the same project, HR reading both records, ownership/organization checks, same-day edits and duplicate prevention, clearing comments, and notification failures after successful writes. Employee component tests cover a newly assigned member with no work-plan tasks, saving and updating today's log, validation/retry, loading existing logs before saving, and read-only history. Request-order regression tests prevent older responses from hiding a newer log. Browser checks exercise save/update and HR display using HTTP fixtures, plus all employee tabs at desktop, tablet, 390px, and 320px. These checks do not use live tenant data.
