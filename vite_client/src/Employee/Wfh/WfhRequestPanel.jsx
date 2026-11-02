@@ -398,11 +398,11 @@ const WfhRequestPanel = () => {
               <table className="wfh-ui__table">
                 <thead>
                   <tr>
-                    <th>WFH period</th>
+                    <th>WFH date(s)</th>
                     <th>Type</th>
                     <th>Reason</th>
                     <th>Remarks</th>
-                    <th>Submitted</th>
+                    <th>Submitted on</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -443,6 +443,7 @@ const WfhRequestPanel = () => {
                 <article key={r._id} className="wfh-ui__card">
                   <div className="wfh-ui__card-row">
                     <div>
+                      <p className="text-xs text-slate-500 mb-1">WFH date(s)</p>
                       <p className="text-sm font-semibold text-[var(--wfh-navy)]">
                         {formatWfhDateRange(r.wfhDate, r.wfhDateTo)}
                       </p>
@@ -464,7 +465,7 @@ const WfhRequestPanel = () => {
                       <dd>{r.remarks || '—'}</dd>
                     </div>
                     <div className="col-span-2">
-                      <dt>Submitted</dt>
+                      <dt>Submitted on</dt>
                       <dd className="inline-flex items-center gap-1">
                         <FiClock className="h-3 w-3 text-slate-400" />
                         {formatDate(r.createdAt)}
