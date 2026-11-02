@@ -409,6 +409,7 @@ const BenefitsLearningHub = () => {
                             {isLearningTab ? <FaBook /> : <FaHeart />}
                         </div>
                         <div className="min-w-0">
+                            <span className="bl-hub__eyebrow">YOUR WELLBEING &amp; GROWTH</span>
                             <h1 className="bl-hub__title">
                                 {isLearningTab ? 'Learning & Development' : 'Benefits & Learning'}
                             </h1>
@@ -462,9 +463,18 @@ const BenefitsLearningHub = () => {
 
                 {activeTab === 'benefits' ? (
                     <>
-                    <section className="bl-hub__card bl-hub__section">
+                    <div className="bl-hub__benefit-stats" aria-label="Benefits overview">
+                        {[
+                            ['Available programs', benefits.filter(plan => plan.isActive).length, 'Explore support for every stage', <FaHeart />],
+                            ['Active enrollments', myActiveOrPendingBenefits.filter(item => item.status !== 'Pending').length, 'Your benefits, all in one place', <FaCheckCircle />],
+                            ['Pending requests', myActiveOrPendingBenefits.filter(item => item.status === 'Pending').length, 'Stay up to date on your requests', <FaClock />],
+                        ].map(([label, value, note, icon]) => <div className="bl-hub__benefit-stat" key={label}><span className="bl-hub__stat-icon" aria-hidden="true">{icon}</span><div><span>{label}</span><strong>{value}</strong><small>{note}</small></div></div>)}
+                    </div>
+                    <div className="bl-hub__benefits-layout">
+                    <section className="bl-hub__card bl-hub__section bl-hub__personal">
                         <div className="bl-hub__section-head">
                             <div>
+                                <span className="bl-hub__section-eyebrow">YOUR COVERAGE</span>
                                 <h2 className="bl-hub__section-title">My Benefits</h2>
                                 <p className="bl-hub__section-sub">Your enrollments, pending requests, and dependents.</p>
                             </div>
@@ -472,7 +482,8 @@ const BenefitsLearningHub = () => {
                         {myActiveOrPendingBenefits.length === 0 ? (
                             <div className="bl-hub__empty">
                                 <span className="bl-hub__empty-ico" aria-hidden="true"><FaHeart /></span>
-                                You have no active or pending benefit enrollments yet.
+                                <h3>Your benefits start here</h3>
+                                <p>You have no active or pending benefit enrollments yet. Explore the available programs and choose what works for you.</p>
                             </div>
                         ) : (
                             <div className="bl-hub__mine">
@@ -528,7 +539,7 @@ const BenefitsLearningHub = () => {
                                                         </p>
                                                     ))}
                                                     {dependentDraft.enrollmentId === enrollment._id ? (
-                                                        <div className="flex flex-col sm:flex-row gap-2">
+                                                        <div className="bl-hub__dependent-form flex flex-col sm:flex-row gap-2">
                                                             <input
                                                                 type="text"
                                                                 value={dependentDraft.name}
@@ -579,9 +590,10 @@ const BenefitsLearningHub = () => {
                         )}
                     </section>
 
-                    <section className="bl-hub__card bl-hub__section">
+                    <section className="bl-hub__card bl-hub__section bl-hub__catalog">
                         <div className="bl-hub__section-head">
                             <div>
+                                <span className="bl-hub__section-eyebrow">EXPLORE YOUR OPTIONS</span>
                                 <h2 className="bl-hub__section-title">Core Benefits</h2>
                                 <p className="bl-hub__section-sub">Active plans and wellness subsidies for this quarter.</p>
                             </div>
@@ -590,7 +602,7 @@ const BenefitsLearningHub = () => {
                                 onClick={() => navigate('/benefits')}
                                 className="bl-hub__link"
                             >
-                                View All Programs
+                                View All Programs <FaArrowRight aria-hidden="true" />
                             </button>
                         </div>
 
@@ -651,6 +663,7 @@ const BenefitsLearningHub = () => {
                             </div>
                         )}
                     </section>
+                    </div>
                     </>
                 ) : (
                     <section className="bl-hub__card bl-hub__section">
