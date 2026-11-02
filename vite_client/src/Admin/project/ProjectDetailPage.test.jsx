@@ -442,4 +442,72 @@ describe("Four project detail tabs", () => {
     );
     expect(toast.error).toHaveBeenCalledWith("Status update rejected");
   });
+  it("keeps Add task available and explains an empty title without sending a request", async () => {
+    mount();
+    await tab("Work plan");
+    await screen.findByText("Architecture task");
+    const button = screen.getByRole("button", {
+      name: "Add task",
+      exact: true,
+    });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Enter a task title to continue.",
+    );
+    expect(screen.getByLabelText("New task title")).toHaveFocus();
+    expect(axios.post).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("New task title"), {
+      target: { value: "Review scope" },
+    });
+    expect(
+      screen.queryByText("Enter a task title to continue."),
+    ).not.toBeInTheDocument();
+  });
+  it("prevents duplicate task creation while saving and restores the composer afterwards", async () => {
+    let finish;
+    axios.post.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    mount();
+    await tab("Work plan");
+    await screen.findByText("Architecture task");
+    const input = screen.getByLabelText("New task title");
+    fireEvent.change(input, { target: { value: "One task" } });
+    fireEvent.submit(input.closest("form"));
+    expect(screen.getByRole("button", { name: "Adding…" })).toBeDisabled();
+    fireEvent.submit(input.closest("form"));
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    finish({ data: { success: true } });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Add task", exact: true }),
+      ).toBeEnabled(),
+    );
+    expect(input).toHaveValue("");
+    expect(input).toHaveFocus();
+  });
+  it("keeps the title and allows a retry when creating a task fails", async () => {
+    axios.post.mockRejectedValueOnce({
+      response: { data: { error: "Task could not be saved" } },
+    });
+    mount();
+    await tab("Work plan");
+    await screen.findByText("Architecture task");
+    const input = screen.getByLabelText("New task title");
+    fireEvent.change(input, { target: { value: "Retry this task" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add task", exact: true }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Task could not be saved",
+    );
+    expect(input).toHaveValue("Retry this task");
+    expect(
+      screen.getByRole("button", { name: "Add task", exact: true }),
+    ).toBeEnabled();
+  });
 });

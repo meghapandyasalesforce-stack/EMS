@@ -1,6 +1,6 @@
 import './projectDailyUpdates.css';
 import './projectDetailWorkspace.css';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Button,
   TextField,
@@ -161,6 +161,10 @@ const ProjectDetailPage = () => {
   const [workPlanLoading, setWorkPlanLoading] = useState(false);
   const [workPlanError, setWorkPlanError] = useState(null);
   const [newRootTaskTitle, setNewRootTaskTitle] = useState('');
+  const [newRootTaskError, setNewRootTaskError] = useState('');
+  const [newRootTaskSaving, setNewRootTaskSaving] = useState(false);
+  const newRootTaskInput = useRef(null);
+  const rootTaskRequestInFlight = useRef(false);
   const [workItemEditOpen, setWorkItemEditOpen] = useState(false);
   const [workItemEditSaving, setWorkItemEditSaving] = useState(false);
   const [workItemEditForm, setWorkItemEditForm] = useState({
@@ -421,19 +425,34 @@ const ProjectDetailPage = () => {
     [loadWorkPlan]
   );
 
-  const handleAddRootWorkItem = useCallback(async () => {
-    if (!newRootTaskTitle.trim() || !project?._id) return;
+  const handleAddRootWorkItem = useCallback(async (event) => {
+    event?.preventDefault();
+    if (rootTaskRequestInFlight.current || !project?._id) return;
+    const title = newRootTaskTitle.trim();
+    if (!title) {
+      setNewRootTaskError('Enter a task title to continue.');
+      newRootTaskInput.current?.focus();
+      return;
+    }
+    setNewRootTaskError('');
+    rootTaskRequestInFlight.current = true;
+    setNewRootTaskSaving(true);
     try {
-      await axios.post(
+      const response = await axios.post(
         `${ADMIN_PROJECT_ENDPOINT}/${project._id}/work-items`,
-        { items: [{ title: newRootTaskTitle.trim() }] },
+        { items: [{ title }] },
         { withCredentials: true }
       );
+      if (response.data?.success === false) throw new Error(response.data?.error || response.data?.message || 'Failed to add task');
       toast.success('Task added');
       setNewRootTaskTitle('');
-      loadWorkPlan();
+      await loadWorkPlan();
+      newRootTaskInput.current?.focus();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to add task');
+      setNewRootTaskError(err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to add task');
+    } finally {
+      rootTaskRequestInFlight.current = false;
+      setNewRootTaskSaving(false);
     }
   }, [newRootTaskTitle, project?._id, loadWorkPlan]);
 
@@ -1259,25 +1278,36 @@ const ProjectDetailPage = () => {
             Tasks and subtasks for this project. This is separate from employees&apos; daily task logs.
           </Typography>
 
-          <Box className="project-workplan-addbar" display="flex" flexDirection={isMobile ? 'column' : 'row'} gap={1} alignItems="flex-start" sx={{ mb: 3 }}>
-            <TextField
-              size="small"
-              fullWidth={isMobile}
-              label="New task title"
-              value={newRootTaskTitle}
-              onChange={(e) => setNewRootTaskTitle(e.target.value)}
-              sx={{ minWidth: isMobile ? '100%' : 280 }}
-            />
+          <Box component="form" className="project-workplan-addbar" onSubmit={handleAddRootWorkItem} noValidate aria-busy={newRootTaskSaving}>
+            <div className="project-workplan-field">
+              <label htmlFor="project-root-task-title">New task title</label>
+              <input
+                ref={newRootTaskInput}
+                id="project-root-task-title"
+                type="text"
+                placeholder="e.g. Review project requirements"
+                value={newRootTaskTitle}
+                maxLength={500}
+                readOnly={newRootTaskSaving}
+                aria-required="true"
+                aria-invalid={Boolean(newRootTaskError)}
+                aria-describedby={newRootTaskError ? 'project-root-task-error' : undefined}
+                onChange={(event) => {
+                  setNewRootTaskTitle(event.target.value);
+                  if (newRootTaskError) setNewRootTaskError('');
+                }}
+              />
+              {newRootTaskError && <p id="project-root-task-error" role="alert">{newRootTaskError}</p>}
+            </div>
             <Button
+              type="submit"
               variant="contained"
-              startIcon={<FiPlus />}
-              onClick={handleAddRootWorkItem}
-              disabled={!newRootTaskTitle.trim()}
-              size={isMobile ? 'medium' : 'medium'}
+              startIcon={newRootTaskSaving ? <CircularProgress size={15} color="inherit" /> : <FiPlus />}
+              disabled={newRootTaskSaving}
             >
-              Add task
+              {newRootTaskSaving ? 'Adding…' : 'Add task'}
             </Button>
-            <Button variant="outlined" startIcon={<FiRefreshCw />} onClick={loadWorkPlan} size="small">
+            <Button type="button" variant="outlined" startIcon={<FiRefreshCw />} onClick={loadWorkPlan} disabled={newRootTaskSaving || workPlanLoading}>
               Refresh
             </Button>
           </Box>
@@ -1291,9 +1321,12 @@ const ProjectDetailPage = () => {
               {workPlanError}
             </Alert>
           ) : workPlanTree.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No work items yet. Add a task above, or create tasks when you add a new project.
-            </Typography>
+            <Box className="project-workplan-empty">
+              <span aria-hidden="true"><FiPlus /></span>
+              <Typography variant="body2" color="text.secondary">
+                No work items yet. Add a task above, or create tasks when you add a new project.
+              </Typography>
+            </Box>
           ) : (
             <Box>{workPlanTree.map((node) => renderWorkItem(node, 0))}</Box>
           )}

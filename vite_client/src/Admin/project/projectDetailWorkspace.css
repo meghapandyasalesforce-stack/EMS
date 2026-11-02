@@ -265,10 +265,6 @@
   gap: 10px;
   margin-bottom: 22px;
 }
-.project-detail-workspace .project-workplan-addbar > .MuiTextField-root {
-  flex: 1;
-  min-width: 0;
-}
 .project-detail-workspace .project-work-item {
   border-color: #e1e9ef;
   border-radius: 12px;
@@ -447,4 +443,120 @@
   color: #9aaab2;
   box-shadow: none;
   border-color: #e4eaee;
+}
+
+/* Keep the task composer usable under both MUI and the application shell styles. */
+.project-detail-workspace .project-workplan-addbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 12px;
+  padding: 18px;
+  background: linear-gradient(110deg, #f5faf7, #f9fcfb);
+  border-color: #dce9e3;
+  border-radius: 12px;
+}
+.project-workplan-field {
+  min-width: 0;
+}
+.project-workplan-field > label {
+  display: block;
+  margin-bottom: 8px;
+  color: #365b55;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.project-detail-workspace .project-workplan-field > input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 46px !important;
+  min-height: 46px !important;
+  padding: 11px 14px;
+  border: 1px solid #cddfd8;
+  border-radius: 8px;
+  background: #fff;
+  color: #294d46;
+  font: inherit;
+  font-size: 13px;
+  line-height: 22px;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.project-detail-workspace .project-workplan-field > input::placeholder {
+  color: #99aaa4;
+}
+.project-detail-workspace .project-workplan-field > input:focus {
+  border-color: #28a584;
+  box-shadow: 0 0 0 3px #18a67d12;
+}
+.project-detail-workspace .project-workplan-field > input[aria-invalid="true"] {
+  border-color: #d78089;
+}
+.project-workplan-field > p {
+  margin: 8px 0 0;
+  color: #bd4354;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.project-detail-workspace .project-workplan-addbar > .MuiButton-root {
+  margin-top: 24px;
+  height: 46px;
+  padding-inline: 18px;
+  white-space: nowrap;
+}
+.project-detail-workspace .project-workplan-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 24px;
+  border: 1px dashed #d8e6df;
+  border-radius: 12px;
+  background: #fcfefd;
+}
+.project-workplan-empty > span {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #e9f6ef;
+  color: #399a7f;
+  font-size: 23px;
+}
+.project-detail-workspace .project-workplan-empty .MuiTypography-root {
+  max-width: 450px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #879b94;
+}
+@media (max-width: 700px) {
+  .project-detail-workspace .project-workplan-addbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 15px;
+  }
+  .project-workplan-field {
+    grid-column: 1 / -1;
+  }
+  .project-detail-workspace .project-workplan-addbar > .MuiButton-root {
+    margin-top: 0;
+    width: 100%;
+    padding-inline: 10px;
+  }
+  .project-detail-workspace .project-workplan-empty {
+    flex-direction: column;
+    text-align: center;
+    padding: 26px 18px;
+  }
+}
+#root
+  .project-detail-workspace
+  .project-daily-tabs
+  [role="tab"][aria-selected="true"] {
+  color: #fff !important;
 }
