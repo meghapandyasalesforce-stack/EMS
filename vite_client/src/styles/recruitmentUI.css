@@ -11622,6 +11622,10 @@
   padding: 1rem;
 }
 
+.ats-ui .ats-gov-suite__modal-overlay--front {
+  z-index: 1300;
+}
+
 .ats-ui .ats-gov-suite__modal {
   width: min(32rem, 100%);
   border-radius: 1rem;

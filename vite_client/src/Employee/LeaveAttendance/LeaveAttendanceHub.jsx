@@ -25,7 +25,6 @@ import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import * as XLSX from 'xlsx';
 import {
   getLeaveTypeDisplayName,
-  getLeaveDisplayLabel,
   getLeaveWidgetStats,
   getLeaveTypeCards,
   formatLeaveDurationDisplay,
@@ -155,6 +154,7 @@ const statusPill = (status) => {
   if (s.includes('present')) return 'bg-[#DCFCE7] text-[#15803D]';
   if (s.includes('late')) return 'bg-[#FEF3C7] text-[#92400E]';
   if (s.includes('absent')) return 'bg-[#FEE2E2] text-[#B91C1C]';
+  if (s.includes('leave')) return 'bg-[#EDE9FE] text-[#5B21B6]';
   if (s.includes('weekend') || s.includes('holiday')) return 'bg-[#E5E7EB] text-[#374151]';
   return 'bg-[#E5E7EB] text-[#374151]';
 };
@@ -176,10 +176,54 @@ const heatmapCellClass = (status) => {
   if (s === 'present') return 'bg-[#DDF7F1] text-[#0F766E]';
   if (s === 'late') return 'bg-[#FFF3D6] text-[#92400E]';
   if (s === 'absent') return 'bg-[#FDECEC] text-[#B91C1C]';
+  if (s === 'leave' || s === 'half_leave') return 'bg-[#EDE9FE] text-[#5B21B6]';
+  if (s === 'holiday') return 'bg-[#E5E7EB] text-[#374151]';
+  if (s === 'weekend') return 'bg-[#F3F4F6] text-[#6B7280]';
   return 'bg-[#F3F4F6] text-[#9CA3AF]';
 };
 
-const buildMonthMatrix = (cursor, sessionsByDate) => {
+const dayStatusLabel = (status) => {
+  if (status === 'weekend') return 'Weekend';
+  if (status === 'leave') return 'Leave';
+  if (status === 'half_leave') return 'Half leave';
+  if (status === 'holiday') return 'Holiday';
+  if (status === 'absent') return 'Absent';
+  return '--';
+};
+
+const dayStatusNote = (cell) => {
+  if (cell?.status === 'weekend') return 'Weekend. No attendance is required.';
+  if (cell?.status === 'leave') return 'Approved leave. No punch is required.';
+  if (cell?.status === 'half_leave') return 'Approved half-day leave. The working half has no punch.';
+  if (cell?.status === 'holiday') {
+    return cell.note ? `Holiday (${cell.note}). No attendance is required.` : 'Holiday. No attendance is required.';
+  }
+  if (cell?.status === 'absent') return 'No punch on this working day.';
+  return 'No attendance for this date yet.';
+};
+
+const holidayDateKey = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '';
+  const iso = dt.toISOString();
+  if (iso.endsWith('T00:00:00.000Z')) return iso.slice(0, 10);
+  return toDateInput(dt);
+};
+
+const leaveCoversDate = (leave, dateKey) => {
+  if (String(leave?.status || '').toLowerCase() !== 'approved' || !leave?.startDate) return false;
+  const start = toDateInput(leave.startDate);
+  const end = toDateInput(leave.endDate || leave.startDate);
+  if (!start || !end) return false;
+  return dateKey >= start && dateKey <= end;
+};
+
+const buildMonthMatrix = (cursor, sessionsByDate, leaves = [], holidayByDate = new Map(), todayKey = '') => {
   const first = startOfMonthDate(cursor);
   const last = endOfMonthDate(cursor);
   const startWeekday = (first.getDay() + 6) % 7; // monday-first
@@ -194,14 +238,34 @@ const buildMonthMatrix = (cursor, sessionsByDate) => {
     const dateKey = toDateInput(dt);
     const session = sessionsByDate.get(dateKey);
     const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
-    let status = isWeekend ? 'weekend' : 'empty';
-    if (session) {
+    const hasPunch = Boolean(session?.clockIn || session?.clockOut || session?.grossHours || session?.effectiveHours);
+    let status = 'empty';
+    let note = '';
+
+    if (hasPunch) {
       const s = String(session.status || '').toLowerCase();
-      if (s.includes('late')) status = 'late';
-      else if (s.includes('absent')) status = 'absent';
-      else status = 'present';
+      status = s.includes('late') ? 'late' : 'present';
+    } else if (isWeekend) {
+      status = 'weekend';
+    } else if (todayKey && dateKey > todayKey) {
+      status = 'empty';
+    } else {
+      const covering = leaves.filter((leave) => leaveCoversDate(leave, dateKey));
+      const fullLeave = covering.some((leave) => !leave.isHalfDay);
+      const halfCount = covering.filter((leave) => leave.isHalfDay).length;
+      const holidayName = holidayByDate.get(dateKey);
+      if (fullLeave || halfCount >= 2) {
+        status = 'leave';
+      } else if (halfCount === 1) {
+        status = 'half_leave';
+      } else if (holidayName) {
+        status = 'holiday';
+        note = holidayName;
+      } else if (todayKey && dateKey < todayKey) {
+        status = 'absent';
+      }
     }
-    cells.push({ key: dateKey, day, status, session });
+    cells.push({ key: dateKey, day, status, session, note });
   }
 
   while (cells.length % 7 !== 0) {
@@ -431,16 +495,18 @@ const LeaveAttendanceHub = () => {
         return {
           id: leave._id,
           type: leave.leaveType || 'unknown',
+          typeLabel: getLeaveTypeDisplayName(leave.leaveType, leaveBalance?.policy?.leaveTypes),
           startDate,
           endDate,
           duration: Number(leave.duration || 0),
           durationLabel: formatLeaveDurationDisplay(leave),
           status: String(leave.status || 'pending').toLowerCase(),
+          isHalfDay: halfDay,
           approvalStage: leave.approvalStage || '',
           displayStatus: getLeaveDisplayStatus(leave),
         };
       });
-  }, [leaveState.myLeaves]);
+  }, [leaveState.myLeaves, leaveBalance]);
 
   const sessionsByDate = useMemo(() => {
     const map = new Map();
@@ -451,7 +517,34 @@ const LeaveAttendanceHub = () => {
     return map;
   }, [sessions]);
 
-  const monthMatrix = useMemo(() => buildMonthMatrix(calendarCursor, sessionsByDate), [calendarCursor, sessionsByDate]);
+  const calendarYear = calendarCursor.getFullYear();
+  const [holidayByDate, setHolidayByDate] = useState(() => new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    axios.get(`/v1/employee/calendar/${calendarYear}`)
+      .then((response) => {
+        if (cancelled) return;
+        const map = new Map();
+        (response.data?.holidays || []).forEach((holiday) => {
+          if (holiday?.isActive === false) return;
+          const key = holidayDateKey(holiday?.date);
+          if (key && !map.has(key)) map.set(key, holiday.name || 'Holiday');
+        });
+        setHolidayByDate(map);
+      })
+      .catch(() => {
+        if (!cancelled) setHolidayByDate(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [calendarYear]);
+
+  const monthMatrix = useMemo(
+    () => buildMonthMatrix(calendarCursor, sessionsByDate, leaveRows, holidayByDate, toDateInput(new Date())),
+    [calendarCursor, sessionsByDate, leaveRows, holidayByDate]
+  );
   const selectedMobileCell = useMemo(
     () => monthMatrix.find((cell) => cell.day && cell.key === selectedMobileDateKey) || null,
     [monthMatrix, selectedMobileDateKey]
@@ -1010,9 +1103,9 @@ const LeaveAttendanceHub = () => {
                     const hasSessionDetails = Boolean(session?.clockIn || session?.clockOut || session?.grossHours || session?.effectiveHours);
                     const cellTitle = !cell.day
                       ? ''
-                      : session
+                      : hasSessionDetails
                         ? `${new Date(session.date || `${calendarCursor.getFullYear()}-${String(calendarCursor.getMonth() + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`).toLocaleDateString()} | In: ${inTime} | Out: ${outTime} | Hours: ${worked}${isLate ? ' | Late check-in' : ''}${notPunchedOut ? ' | Not punched out' : ''}`
-                        : `${new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), cell.day).toLocaleDateString()} | ${cell.status === 'weekend' ? 'Weekend' : 'No attendance record'}`;
+                        : `${new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), cell.day).toLocaleDateString()} | ${dayStatusNote(cell)}`;
 
                     return (
                       <div
@@ -1053,7 +1146,7 @@ const LeaveAttendanceHub = () => {
                               </div>
                             ) : (
                               <p className="mt-auto hidden text-[9px] leading-tight text-[#94A3B8] sm:block sm:text-[10px]">
-                                {cell.status === 'weekend' ? 'Weekend' : '--'}
+                                {dayStatusLabel(cell.status)}
                               </p>
                             )}
 
@@ -1093,6 +1186,8 @@ const LeaveAttendanceHub = () => {
                       const showRegularizeAction =
                         selectedMobileCell.status !== 'weekend' &&
                         selectedMobileCell.status !== 'holiday' &&
+                        selectedMobileCell.status !== 'leave' &&
+                        selectedMobileCell.status !== 'empty' &&
                         selectedDateKey <= todayKey;
                       return (
                         <>
@@ -1102,8 +1197,8 @@ const LeaveAttendanceHub = () => {
                       </p>
                       <div className="flex flex-col items-end gap-1">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusPill(selectedMobileCell.status)}`}>
-                          {selectedMobileCell.status === 'weekend'
-                            ? 'Weekend'
+                          {['weekend', 'leave', 'half_leave', 'holiday', 'absent'].includes(selectedMobileCell.status)
+                            ? dayStatusLabel(selectedMobileCell.status)
                             : formatAttendanceStatusLabel(selectedMobileCell.status)}
                         </span>
                         {mobileIsLate && (
@@ -1118,7 +1213,7 @@ const LeaveAttendanceHub = () => {
                         )}
                       </div>
                     </div>
-                    {selectedMobileCell.session ? (
+                    {selectedMobileCell.session && (selectedMobileCell.status === 'present' || selectedMobileCell.status === 'late') ? (
                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-[#475569]">
                         <div className="rounded-md bg-[#F8FAFC] px-2 py-1.5">
                           <p className="text-[10px] text-[#64748B]">In</p>
@@ -1137,7 +1232,7 @@ const LeaveAttendanceHub = () => {
                       </div>
                     ) : (
                       <p className="mt-2 text-xs text-[#64748B]">
-                        {selectedMobileCell.status === 'weekend' ? 'Weekend - no attendance required.' : 'No attendance data for this date.'}
+                        {dayStatusNote(selectedMobileCell)}
                       </p>
                     )}
                     {showRegularizeAction && (
@@ -1154,6 +1249,8 @@ const LeaveAttendanceHub = () => {
                   <span className="rounded-full bg-[#DDF7F1] px-3 py-1 text-[#0F766E]">{presentCount} Present</span>
                   <span className="rounded-full bg-[#FDECEC] px-3 py-1 text-[#B91C1C]">{absentCount} Absent</span>
                   <span className="rounded-full bg-[#FFF3D6] px-3 py-1 text-[#92400E]">{lateCount} Late</span>
+                  <span className="rounded-full bg-[#EDE9FE] px-3 py-1 text-[#5B21B6]">Leave</span>
+                  <span className="rounded-full bg-[#E5E7EB] px-3 py-1 text-[#374151]">Holiday</span>
                 </div>
               </div>
 
@@ -1821,7 +1918,7 @@ const LeaveAttendanceHub = () => {
                     <div key={row.id} className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-sm font-semibold text-[#1E293B]">
-                          {getLeaveDisplayLabel()}
+                          {row.typeLabel}
                         </p>
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${leaveStatusPill(row.displayStatus)}`}>
                           {formatStatusLabel(row.displayStatus)}
@@ -1866,7 +1963,7 @@ const LeaveAttendanceHub = () => {
                         </tr>
                       ) : leaveRows.slice(0, 8).map((row) => (
                         <tr key={row.id} className="border-b border-[#F1F5F9] text-sm text-[#1E293B] last:border-b-0">
-                          <td className="px-4 py-3">{getLeaveDisplayLabel()}</td>
+                          <td className="px-4 py-3">{row.typeLabel}</td>
                           <td className="px-4 py-3">{row.startDate ? row.startDate.toLocaleDateString() : '--'}</td>
                           <td className="px-4 py-3">{row.endDate ? row.endDate.toLocaleDateString() : '--'}</td>
                           <td className="px-4 py-3">{row.durationLabel}</td>

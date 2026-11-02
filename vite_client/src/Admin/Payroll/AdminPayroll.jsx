@@ -11,6 +11,7 @@ const AdminPayroll = () => {
     const dispatch = useDispatch();
     const payrollData = useSelector((state) => state.payroll.data) || [];
     const payrollPagination = useSelector((state) => state.payroll.pagination);
+    const payrollSummary = useSelector((state) => state.payroll.summary);
     const loading = useSelector((state) => state.payroll.status === 'loading');
     const error = useSelector((state) => state.payroll.error);
 
@@ -371,6 +372,28 @@ const AdminPayroll = () => {
         }).format(amount || 0);
     };
 
+    const formatCompactInr = (amount) => {
+        const value = Number(amount) || 0;
+        const abs = Math.abs(value);
+        if (abs >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
+        if (abs >= 100000) return `₹${(value / 100000).toFixed(2)} L`;
+        return formatCurrency(value);
+    };
+
+    const payrollChangeLabel = () => {
+        const change = payrollSummary?.payrollChangePercent;
+        if (change == null || Number.isNaN(Number(change))) return 'No payroll last month';
+        const rounded = Number(change);
+        const sign = rounded > 0 ? '+' : '';
+        return `${sign}${rounded.toFixed(1)}% from last month`;
+    };
+
+    const complianceLabel = () => {
+        if (!payrollSummary || !payrollSummary.generatedCount) return 'No payroll generated';
+        if (payrollSummary.compliancePercent === 100) return 'All runs closed';
+        return `${payrollSummary.closedCount} of ${payrollSummary.generatedCount} closed`;
+    };
+
     return (
         <div className="p-5 transition-all duration-300 ease-in-out min-h-screen bg-gray-50">
             {/* Mobile header - only shown on small screens */}
@@ -590,6 +613,49 @@ const AdminPayroll = () => {
                         period.
                     </div>
                 )}
+
+                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                        {
+                            label: 'Total payroll',
+                            value: payrollSummary ? formatCompactInr(payrollSummary.totalPayroll) : '—',
+                            exact: payrollSummary ? formatCurrency(payrollSummary.totalPayroll) : '',
+                            detail: payrollChangeLabel(),
+                            detailClass: Number(payrollSummary?.payrollChangePercent) < 0 ? 'text-rose-600' : 'text-emerald-700',
+                        },
+                        {
+                            label: 'EPF / ESI deductions',
+                            value: payrollSummary ? formatCompactInr(payrollSummary.epfEsi) : '—',
+                            exact: payrollSummary ? formatCurrency(payrollSummary.epfEsi) : '',
+                            detail: 'Employee PF and ESI',
+                            detailClass: 'text-slate-500',
+                        },
+                        {
+                            label: 'Net disbursement',
+                            value: payrollSummary ? formatCompactInr(payrollSummary.netDisbursement) : '—',
+                            exact: payrollSummary ? formatCurrency(payrollSummary.netDisbursement) : '',
+                            detail: payrollSummary?.periodEndLabel
+                                ? `Period ends ${payrollSummary.periodEndLabel}`
+                                : 'Selected month',
+                            detailClass: 'text-slate-500',
+                        },
+                        {
+                            label: 'Compliance status',
+                            value: payrollSummary?.compliancePercent == null ? '—' : `${payrollSummary.compliancePercent}%`,
+                            exact: payrollSummary?.generatedCount
+                                ? `${payrollSummary.closedCount} of ${payrollSummary.generatedCount} processed or paid`
+                                : '',
+                            detail: complianceLabel(),
+                            detailClass: payrollSummary?.compliancePercent === 100 ? 'text-emerald-700' : 'text-slate-500',
+                        },
+                    ].map((card) => (
+                        <div key={card.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
+                            <p className="mt-1 text-2xl font-semibold text-slate-900" title={card.exact}>{card.value}</p>
+                            <p className={`mt-1 text-xs font-medium ${card.detailClass}`}>{card.detail}</p>
+                        </div>
+                    ))}
+                </div>
 
                 {loading ? (
                     <div className="text-center text-gray-500 py-6">Loading payroll data...</div>

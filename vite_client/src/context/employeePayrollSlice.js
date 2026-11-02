@@ -59,6 +59,7 @@ export const fetchCurrentMonthPayroll = createAsyncThunk(
             const response = await axios.get(`/v1/employee/payroll/current`);
             return response.data;
         } catch (error) {
+            if (error.response?.status === 404) return null;
             return rejectWithValue(error.response?.data?.message || 'Failed to fetch current month payroll');
         }
     }

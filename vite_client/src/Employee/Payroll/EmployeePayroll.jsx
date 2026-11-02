@@ -116,12 +116,22 @@ const EmployeePayroll = () => {
     const [viewMonth, setViewMonth] = useState(new Date().toLocaleString('default', { month: 'long' }));
     const [viewYear, setViewYear] = useState(currentCalendarYear);
 
+    const hasPayrollRecord = (payroll) => Boolean(payroll && (payroll._id || payroll.payrollId));
+
     const featured = useMemo(() => {
-        if (selectedMonthPayroll && (selectedMonthPayroll._id || selectedMonthPayroll.payrollId)) {
-            return selectedMonthPayroll;
-        }
-        return currentMonthPayroll;
-    }, [selectedMonthPayroll, currentMonthPayroll]);
+        if (hasPayrollRecord(selectedMonthPayroll)) return selectedMonthPayroll;
+        if (hasPayrollRecord(currentMonthPayroll)) return currentMonthPayroll;
+        const latest = (payrollHistory?.payrolls || []).find(
+            (row) => hasPayrollRecord(row) && row.status !== 'Cancelled'
+        );
+        return latest || null;
+    }, [selectedMonthPayroll, currentMonthPayroll, payrollHistory]);
+
+    const showingLatestPayslip = Boolean(
+        featured
+        && !hasPayrollRecord(selectedMonthPayroll)
+        && !hasPayrollRecord(currentMonthPayroll)
+    );
 
     const earningsTotal = Number(featured?.earnings?.totalEarnings) || 0;
     const deductionsTotal = Number(featured?.deductions?.total) || 0;
@@ -258,7 +268,7 @@ const EmployeePayroll = () => {
         return null;
     }, [featured]);
 
-    if (loading && !currentMonthPayroll && !selectedMonthPayroll) {
+    if ((loading || historyLoading) && !hasPayrollRecord(currentMonthPayroll) && !hasPayrollRecord(selectedMonthPayroll) && !featured) {
         return (
             <div className="page-shell flex min-h-screen items-center justify-center" style={{ background: PAGE_BG }}>
                 <div className="page-shell-inner text-center">
@@ -309,6 +319,11 @@ const EmployeePayroll = () => {
                                         {statusHeroLabel(featured.status)}
                                     </span>
                                 </div>
+                                {showingLatestPayslip ? (
+                                    <p className="mt-2 text-sm text-white/90">
+                                        {new Date().toLocaleString('default', { month: 'long' })} payroll is not published yet. Showing your latest payslip.
+                                    </p>
+                                ) : null}
                                 <p className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
                                     {formatCurrency(featured.inHandSalary)}
                                 </p>
@@ -319,13 +334,13 @@ const EmployeePayroll = () => {
                                     </p>
                                 )}
                                 <div className="mt-6 flex flex-wrap gap-3">
-                                    <div className="rounded-xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-sm">
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Gross</p>
-                                        <p className="text-lg font-semibold">{formatCurrency(earningsTotal)}</p>
+                                    <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/40">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/80">Gross</p>
+                                        <p className="text-lg font-semibold text-white">{formatCurrency(earningsTotal)}</p>
                                     </div>
-                                    <div className="rounded-xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-sm">
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Deductions</p>
-                                        <p className="text-lg font-semibold">{formatCurrency(deductionsTotal)}</p>
+                                    <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/40">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/80">Deductions</p>
+                                        <p className="text-lg font-semibold text-white">{formatCurrency(deductionsTotal)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -365,7 +380,11 @@ const EmployeePayroll = () => {
                     <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
                         <FiCalendar className="mx-auto mb-3 h-12 w-12 text-slate-300" />
                         <h2 className="text-lg font-semibold text-slate-800">No payroll published yet</h2>
-                        <p className="mt-1 text-sm text-slate-500">Once your organization publishes payroll, it will show here.</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                            {historyLoading
+                                ? 'Checking your payroll history…'
+                                : 'Once your organization publishes payroll, it will show here.'}
+                        </p>
                     </section>
                 )}
 

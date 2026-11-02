@@ -3,6 +3,14 @@ import { createPortal } from 'react-dom';
 import { FiX, FiCheckCircle, FiXCircle, FiClock, FiUser, FiAlertTriangle } from 'react-icons/fi';
 import { auditActionLabel, formatAuditTimelineEvent } from '../../utils/approvalStatusDisplay';
 import { AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
+import { getLeaveTypeDisplayName } from '../../constants/leaveConstants';
+
+const formatLeaveMetaDate = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
 
 const stepTone = (status = '') => {
   const s = String(status).toLowerCase();
@@ -94,7 +102,11 @@ const ApprovalDetailModal = ({ approval, onClose, onAction, canAct = true }) => 
       >
         <header className="ats-approval-modal__header">
           <div className="ats-approval-modal__header-main">
-            <p className="ats-approval-modal__eyebrow">{approval.entityType || 'Request'}</p>
+            <p className="ats-approval-modal__eyebrow">
+              {approval.entityType === 'Leave'
+                ? getLeaveTypeDisplayName(approval.metadata?.leaveType)
+                : approval.entityType || 'Request'}
+            </p>
             <h2 id="approval-detail-title" className="ats-approval-modal__title">
               Approval Details
             </h2>
@@ -146,6 +158,24 @@ const ApprovalDetailModal = ({ approval, onClose, onAction, canAct = true }) => 
                 />
               ) : (
                 <InfoItem label="Current step" value={pendingStep?.stepName} />
+              )}
+              {approval.entityType === 'Leave' && (
+                <>
+                  <InfoItem
+                    label="Leave type"
+                    value={getLeaveTypeDisplayName(approval.metadata?.leaveType)}
+                  />
+                  <InfoItem label="From" value={formatLeaveMetaDate(approval.metadata?.startDate)} />
+                  <InfoItem label="To" value={formatLeaveMetaDate(approval.metadata?.endDate)} />
+                  <InfoItem
+                    label="Days"
+                    value={
+                      approval.metadata?.duration != null && approval.metadata?.duration !== ''
+                        ? String(approval.metadata.duration)
+                        : ''
+                    }
+                  />
+                </>
               )}
               {approval.entityType === 'TaxRegimeChange' && (
                 <>

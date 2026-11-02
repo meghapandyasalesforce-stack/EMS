@@ -16,11 +16,14 @@ import { AtsPage } from '../../components/recruitment/atsUi';
 import ApprovalDetailModal from './ApprovalDetailModal';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { BOTH_EMPLOYEE_DOCUMENT_REQUEST_ENDPOINT } from '../../utils/constant';
+import { getLeaveTypeDisplayName } from '../../constants/leaveConstants';
 
 /** Category tabs for the pending approvals inbox. */
 const TABS = [
+  { id: 'all', label: 'All' },
   { id: 'leave', label: 'Leave' },
   { id: 'regularization', label: 'Regularization' },
+  { id: 'wfh', label: 'WFH' },
   { id: 'documents', label: 'Documents' },
 ];
 
@@ -41,6 +44,29 @@ const categoryFromEntityType = (entityType) => {
 
 const humanizeEntity = (entityType) =>
   String(entityType || 'Request').replace(/([a-z])([A-Z])/g, '$1 $2');
+
+const formatApprovalDate = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const leaveRequestCopy = (approval) => {
+  const meta = approval?.metadata || {};
+  const start = formatApprovalDate(meta.startDate);
+  const end = formatApprovalDate(meta.endDate);
+  const range = start && end && start !== end ? `${start} – ${end}` : start || end;
+  const days = Number(meta.duration);
+  const duration = Number.isFinite(days) && meta.duration != null && meta.duration !== ''
+    ? `${days} day${days === 1 ? '' : 's'}`
+    : '';
+  const step = approval?.currentPendingStep?.stepName || '';
+  return {
+    title: getLeaveTypeDisplayName(meta.leaveType),
+    details: [range, duration, step].filter(Boolean).join(' · '),
+  };
+};
 
 const requesterNameOf = (person) => {
   if (!person) return 'Unknown requester';
@@ -98,8 +124,11 @@ const normalizeWorkflow = (approval) => {
   const entityType = approval.entityType || 'Other';
   const category = categoryFromEntityType(entityType);
   if (!category) return null;
-  const title = humanizeEntity(entityType);
-  const details = approval.currentPendingStep?.stepName || approval.priority || '';
+  const leaveCopy = entityType === 'Leave' ? leaveRequestCopy(approval) : null;
+  const title = leaveCopy?.title || humanizeEntity(entityType);
+  const details = leaveCopy
+    ? leaveCopy.details
+    : approval.currentPendingStep?.stepName || approval.priority || '';
   return {
     ...approval,
     rowId: `wf-${approval._id}`,
@@ -126,7 +155,7 @@ const normalizeWfh = (request) => {
     ...request,
     rowId: `wfh-${request._id}`,
     source: 'wfh',
-    category: 'regularization',
+    category: 'wfh',
     entityType: 'WFH',
     displayName: name,
     displayRole: employee.designation || employee.role || '',
@@ -191,7 +220,7 @@ const PendingApprovals = () => {
   const { isOrgOwner } = useAuthPermissions();
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('leave');
+  const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('All Departments');
   const [urgency, setUrgency] = useState('All');
@@ -261,15 +290,6 @@ const PendingApprovals = () => {
       ];
       setApprovals(merged);
       setSelectedIds([]);
-      setTab((current) => {
-        const counts = Object.fromEntries(TABS.map((item) => [item.id, 0]));
-        merged.forEach((item) => {
-          if (counts[item.category] != null) counts[item.category] += 1;
-        });
-        if (counts[current] > 0) return current;
-        const firstWithItems = TABS.find((item) => counts[item.id] > 0);
-        return firstWithItems?.id || current;
-      });
     } catch {
       toast.error('Failed to fetch pending approvals');
     } finally {
@@ -295,13 +315,14 @@ const PendingApprovals = () => {
     approvals.forEach((item) => {
       if (counts[item.category] != null) counts[item.category] += 1;
     });
+    counts.all = approvals.length;
     return counts;
   }, [approvals]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return approvals.filter((item) => {
-      if (item.category !== tab) return false;
+      if (tab !== 'all' && item.category !== tab) return false;
       if (escalatedOnly && !item.slaBreached) return false;
       if (department !== 'All Departments' && item.displayDepartment !== department) return false;
       if (urgency === 'Overdue' && !item.slaBreached) return false;
@@ -660,7 +681,11 @@ const PendingApprovals = () => {
               <FiCheckCircle />
             </div>
             <h2>Nothing waiting for you</h2>
-            <p>There are no pending requests in this category right now.</p>
+            <p>
+              {tab === 'all'
+                ? 'There are no pending requests right now.'
+                : 'There are no pending requests in this category right now.'}
+            </p>
             <button
               type="button"
               className="ats-gov-suite__btn ats-gov-suite__btn--primary"
@@ -931,8 +956,9 @@ const PendingApprovals = () => {
           )
         : null}
 
-      {modal === 'reject' ? (
-        <div className="ats-gov-suite__modal-overlay" role="presentation" onClick={() => setModal(null)}>
+      {modal === 'reject' ? createPortal(
+        <div className="cm-hrms ats-ui ats-gov-suite">
+        <div className="ats-gov-suite__modal-overlay ats-gov-suite__modal-overlay--front" role="presentation" onClick={() => setModal(null)}>
           <div
             className="ats-gov-suite__modal"
             role="dialog"
@@ -973,10 +999,13 @@ const PendingApprovals = () => {
             </div>
           </div>
         </div>
+        </div>,
+        document.body
       ) : null}
 
-      {modal === 'delegate' ? (
-        <div className="ats-gov-suite__modal-overlay" role="presentation" onClick={() => setModal(null)}>
+      {modal === 'delegate' ? createPortal(
+        <div className="cm-hrms ats-ui ats-gov-suite">
+        <div className="ats-gov-suite__modal-overlay ats-gov-suite__modal-overlay--front" role="presentation" onClick={() => setModal(null)}>
           <div
             className="ats-gov-suite__modal"
             role="dialog"
@@ -1033,6 +1062,8 @@ const PendingApprovals = () => {
             </div>
           </div>
         </div>
+        </div>,
+        document.body
       ) : null}
 
       {showDetail && selectedApproval ? (
