@@ -254,6 +254,7 @@ const Header = () => {
             if (useLightEmployeeNav) {
                 return isMeSectionActive(path, location.pathname);
             }
+            if (path === '/organization/subscription' && ['/organization/billing', '/organization/checkout'].includes(location.pathname)) return true;
             return path === '/profile-details'
                 ? ['/profile-details', '/contact-details', '/education-qualifications', '/professional-experience', '/family-details', '/job-details', '/financial-details', '/profile-security', '/view-profile'].includes(location.pathname)
                 : path === '/'
