@@ -26,10 +26,10 @@ import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { fetchEmployees } from '../../context/employeeSlice';
 
 const SETTINGS_GROUPS = [
-    { id: 'workforce', name: 'Workforce', sections: ['attendance-rules', 'shift-settings', 'leave-policy', 'payroll-settings'] },
-    { id: 'communication', name: 'Communication', sections: ['notifications', 'email'] },
-    { id: 'access', name: 'Access & security', sections: ['security', 'permissions'] },
-    { id: 'organization', name: 'Organization', sections: ['general', 'document-settings', 'theme', 'reports'] },
+    { id: 'workforce', name: 'Workforce', icon: <FaUserCheck />, sections: ['attendance-rules', 'shift-settings', 'leave-policy', 'payroll-settings'] },
+    { id: 'communication', name: 'Communication', icon: <FaEnvelope />, sections: ['notifications', 'email'] },
+    { id: 'access', name: 'Access & security', icon: <FaLock />, sections: ['security', 'permissions'] },
+    { id: 'organization', name: 'Organization', icon: <FaCog />, sections: ['general', 'document-settings', 'theme', 'reports'] },
 ];
 
 const AdminSettings = () => {
@@ -139,7 +139,7 @@ const AdminSettings = () => {
                                 <button key={group.id} type="button" aria-pressed={activeGroup.id === group.id}
                                     aria-controls="admin-settings-sections admin-settings-content"
                                     onClick={() => { if (activeGroup.id !== group.id) setActiveTab(group.sections[0]); }}>
-                                    {group.name}
+                                    <span aria-hidden="true">{group.icon}</span><span>{group.name}</span>
                                 </button>
                             ))}
                         </nav>
