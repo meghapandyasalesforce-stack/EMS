@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import '../../styles/adminSettings.css';
+import SettingsSectionPicker from './SettingsSectionPicker';
 import { useDispatch, useSelector } from 'react-redux';
 import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave, FaUserCheck, FaFileAlt, FaClock } from 'react-icons/fa';
 import { FiToggleLeft, FiToggleRight, FiX } from 'react-icons/fi';
@@ -120,17 +121,7 @@ const AdminSettings = () => {
                         <h1>Admin Settings</h1>
                         <p>Organization preferences and policies</p>
                     </div>
-                    <div className="admin-settings__selector">
-                        <label htmlFor="admin-settings-section">Settings section</label>
-                        <select id="admin-settings-section" value={activeTab} onChange={event => setActiveTab(event.target.value)} aria-controls="admin-settings-content">
-                            {SETTINGS_GROUPS.map(group => <optgroup key={group.id} label={group.name}>
-                                {group.sections.map(id => {
-                                    const tab = settingsTabs.find(item => item.id === id);
-                                    return <option key={id} value={id}>{tab.name}</option>;
-                                })}
-                            </optgroup>)}
-                        </select>
-                    </div>
+                    <SettingsSectionPicker groups={SETTINGS_GROUPS} sections={settingsTabs} value={activeTab} onChange={setActiveTab} />
                 </header>
                 <div className="admin-settings__layout">
                     <div id="admin-settings-content" className="admin-settings__panel" role="region" aria-label={activeSection.name}>
