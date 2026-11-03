@@ -15,7 +15,7 @@ const employee = { _id: 'one', organizationId: 'org', role: 'employee' };
 const homes = ['/dashboard-admin', '/dashboard-hr', '/dashboard-manager', '/dashboard-employee', '/dashboard-finance', '/dashboard-administration', '/organization/dashboard'];
 function Page({ name }) {
   const location = useLocation();
-  return <><h1>{name}</h1><output>{location.pathname + location.search + location.hash}</output><Link to="/attendance">Attendance</Link><Link to="/leave">Leave Management</Link></>;
+  return <><h1>{name}</h1><output>{location.pathname + location.search + location.hash}</output><Link to="/dashboard-admin">Dashboard</Link><Link to="/attendance">Attendance</Link><Link to="/leave">Leave Management</Link></>;
 }
 function mount(path, user = employee, overrides = {}) {
   const store = configureStore({ reducer: () => ({
@@ -47,7 +47,7 @@ describe('first dashboard navigation', () => {
   });
 
   it.each([
-    ['admin', '/organization/dashboard'], ['hr_manager', '/dashboard-hr'], ['employee', '/dashboard-employee'],
+    ['admin', '/dashboard-admin'], ['hr_manager', '/dashboard-hr'], ['employee', '/dashboard-employee'],
   ])('opens the selected %s profile instead of the account manager role', async (portal, home) => {
     axios.get.mockResolvedValue({ data: { success: true, dashboardRoute: '/dashboard-manager' } });
     mount('/attendance', owner, ownerPortal(portal));
@@ -59,7 +59,7 @@ describe('first dashboard navigation', () => {
 
   it('opens each profile dashboard once and preserves subsequent page navigation', async () => {
     let app = mount('/attendance', owner, ownerPortal('admin'));
-    await screen.findByText('/organization/dashboard'); app.unmount();
+    await screen.findByText('/dashboard-admin'); app.unmount();
     app = mount('/attendance', owner, ownerPortal('hr_manager'));
     await screen.findByText('/dashboard-hr'); app.unmount();
     app = mount('/leave', owner, ownerPortal('admin'));
@@ -72,7 +72,15 @@ describe('first dashboard navigation', () => {
   it('corrects an already-open manager dashboard while Admin is selected', async () => {
     markInitialDashboardRedirect(owner, 'admin');
     mount('/dashboard-manager', owner, ownerPortal('admin'));
+    await screen.findByText('/dashboard-admin');
+  });
+
+  it('opens the Admin dashboard when Dashboard is clicked and keeps organization overview reachable', async () => {
+    markInitialDashboardRedirect(owner, 'admin');
+    mount('/organization/dashboard', owner, ownerPortal('admin'));
     await screen.findByText('/organization/dashboard');
+    fireEvent.click(screen.getByRole('link', { name: 'Dashboard', exact: true }));
+    await screen.findByText('/dashboard-admin');
   });
 
   it.each([
@@ -95,7 +103,7 @@ describe('first dashboard navigation', () => {
   it('uses the selected workspace when explicitly opening the generic dashboard route', async () => {
     markInitialDashboardRedirect(owner, 'admin');
     mount('/dashboard', owner, ownerPortal('admin'));
-    await screen.findByText('/organization/dashboard');
+    await screen.findByText('/dashboard-admin');
     expect(axios.get).not.toHaveBeenCalled();
   });
 

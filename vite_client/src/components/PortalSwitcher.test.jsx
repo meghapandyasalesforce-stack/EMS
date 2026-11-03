@@ -39,6 +39,6 @@ describe('admin navbar portal navigation', () => {
         fireEvent.click(screen.getByRole('tab', { name: 'HR', exact: true }));
         expect(screen.getByTestId('path')).toHaveTextContent('/dashboard-hr');
         fireEvent.click(screen.getByRole('tab', { name: 'Admin', exact: true }));
-        expect(screen.getByTestId('path')).toHaveTextContent('/organization/dashboard');
+        expect(screen.getByTestId('path')).toHaveTextContent('/dashboard-admin');
     });
 });
