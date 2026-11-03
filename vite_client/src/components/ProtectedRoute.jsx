@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import LoadingSpinner from './LoadingSpinner';
+import InitialDashboardRedirect from './InitialDashboardRedirect';
 import { isManager, isHR } from '../utils/managerHelper';
 import { isProjectManager } from '../utils/projectManagerHelper';
 import { isExecutive } from '../utils/navigationConfig';
@@ -116,7 +117,7 @@ const ProtectedRoute = ({
     );
   }
 
-  return <>{children}</>;
+  return <InitialDashboardRedirect>{children}</InitialDashboardRedirect>;
 };
 
 export default ProtectedRoute;

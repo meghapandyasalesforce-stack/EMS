@@ -1,3 +1,4 @@
+import { endDashboardSession } from '../../utils/initialDashboardSession';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../../utils/axios';
 import { ADMIN_AUTH_ENDPOINT, EMPLOYEE_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from './../../utils/constant';
@@ -75,6 +76,8 @@ export const logoutUser = createAsyncThunk(
     } catch (error) {
       // Removed console.error for production
       return rejectWithValue(error.response?.data?.message || 'Logout failed');
+    } finally {
+      endDashboardSession();
     }
   }
 );

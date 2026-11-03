@@ -1,3 +1,4 @@
+import { beginDashboardSession } from '../utils/initialDashboardSession';
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
@@ -285,6 +286,7 @@ const OrganizationRegister = () => {
             });
 
             if (response.data.success) {
+                beginDashboardSession();
                 if (response.data.organization?.id) {
                     localStorage.setItem('organizationId', response.data.organization.id);
                 }
