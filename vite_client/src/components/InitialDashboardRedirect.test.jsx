@@ -7,7 +7,7 @@ import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom
 import ProtectedRoute from './ProtectedRoute';
 import RoleBasedDashboard from './RoleBasedDashboard';
 import axios from '../utils/axios';
-import { beginDashboardSession, endDashboardSession, hasInitialDashboardRedirect } from '../utils/initialDashboardSession';
+import { beginDashboardSession, endDashboardSession, hasInitialDashboardRedirect, markInitialDashboardRedirect } from '../utils/initialDashboardSession';
 
 vi.mock('../utils/axios', () => ({ default: { get: vi.fn() } }));
 vi.mock('./FirstLoginPermissionRequest', () => ({ default: () => null }));
@@ -39,6 +39,66 @@ beforeEach(() => {
 });
 
 describe('first dashboard navigation', () => {
+  const owner = { ...employee, role: 'admin', assignedRole: { dashboardRoute: '/dashboard-manager' }, functionalRoles: ['manager'] };
+  const ownerPortal = (activePortal) => ({
+    activePortal, permissionFlags: { isOrgOwner: true, jwtRole: 'admin' }, roleBuckets: ['org_owner', 'line_manager'],
+    // Reproduce stale persisted home URLs for every profile.
+    availablePortals: ['admin', 'hr_manager', 'employee'].map(id => ({ id, home: '/dashboard-manager' })),
+  });
+
+  it.each([
+    ['admin', '/organization/dashboard'], ['hr_manager', '/dashboard-hr'], ['employee', '/dashboard-employee'],
+  ])('opens the selected %s profile instead of the account manager role', async (portal, home) => {
+    axios.get.mockResolvedValue({ data: { success: true, dashboardRoute: '/dashboard-manager' } });
+    mount('/attendance', owner, ownerPortal(portal));
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    expect(screen.getByText(home)).toBeInTheDocument();
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(hasInitialDashboardRedirect(owner, portal)).toBe(true);
+  });
+
+  it('opens each profile dashboard once and preserves subsequent page navigation', async () => {
+    let app = mount('/attendance', owner, ownerPortal('admin'));
+    await screen.findByText('/organization/dashboard'); app.unmount();
+    app = mount('/attendance', owner, ownerPortal('hr_manager'));
+    await screen.findByText('/dashboard-hr'); app.unmount();
+    app = mount('/leave', owner, ownerPortal('admin'));
+    await screen.findByRole('heading', { name: 'Leave page' }); app.unmount();
+    mount('/attendance?month=11#history', owner, ownerPortal('hr_manager'));
+    await screen.findByRole('heading', { name: 'Attendance page' });
+    expect(screen.getByText('/attendance?month=11#history')).toBeInTheDocument();
+  });
+
+  it('corrects an already-open manager dashboard while Admin is selected', async () => {
+    markInitialDashboardRedirect(owner, 'admin');
+    mount('/dashboard-manager', owner, ownerPortal('admin'));
+    await screen.findByText('/organization/dashboard');
+  });
+
+  it.each([
+    [{ isHrManager: true }, 'hr_manager', '/dashboard-hr'],
+    [{ isHrExecutive: true }, 'hr_manager', '/dashboard-hr'],
+    [{ isLineManager: true }, 'line_manager', '/dashboard-manager'],
+    [{ isProjectManager: true }, 'project_manager', '/dashboard-manager'],
+    [{ isPayrollAdmin: true }, 'payroll_admin', '/dashboard-finance'],
+    [{ isExecutive: true }, 'executive', '/dashboard-administration'],
+    [{}, 'employee', '/dashboard-employee'],
+  ])('uses verified staff entitlements for %s despite stale saved portals', async (permissionFlags, portal, home) => {
+    mount('/attendance', employee, {
+      permissionFlags, activePortal: 'admin',
+      availablePortals: [{ id: portal, home: '/dashboard-manager' }],
+    });
+    await screen.findByText(home);
+    expect(hasInitialDashboardRedirect(employee, portal)).toBe(true);
+  });
+
+  it('uses the selected workspace when explicitly opening the generic dashboard route', async () => {
+    markInitialDashboardRedirect(owner, 'admin');
+    mount('/dashboard', owner, ownerPortal('admin'));
+    await screen.findByText('/organization/dashboard');
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
   it.each(homes)('uses the existing server dashboard resolver for %s', async home => {
     axios.get.mockResolvedValue({ data: { success: true, dashboardRoute: home } });
     mount('/attendance', { ...employee, assignedRole: { dashboardRoute: home } });

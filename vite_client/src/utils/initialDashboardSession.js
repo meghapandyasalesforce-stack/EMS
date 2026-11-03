@@ -29,11 +29,11 @@ function readSession() {
   return memorySession;
 }
 
-export function dashboardSessionUserKey(user) {
+export function dashboardSessionUserKey(user, portalId = null) {
   const id = user?._id ?? user?.id;
   if (!id) return null;
   const organization = user.organizationId?._id ?? user.organizationId ?? '';
-  return JSON.stringify([String(organization), String(id)]);
+  return JSON.stringify([String(organization), String(id), ...(portalId ? [portalId] : [])]);
 }
 
 /** Call only after a successful login, never during session restoration or profile updates. */
@@ -50,13 +50,13 @@ export function endDashboardSession() {
   }
 }
 
-export function hasInitialDashboardRedirect(user) {
-  const key = dashboardSessionUserKey(user);
+export function hasInitialDashboardRedirect(user, portalId = null) {
+  const key = dashboardSessionUserKey(user, portalId);
   return Boolean(key && readSession()?.users[key]);
 }
 
-export function markInitialDashboardRedirect(user) {
-  const key = dashboardSessionUserKey(user);
+export function markInitialDashboardRedirect(user, portalId = null) {
+  const key = dashboardSessionUserKey(user, portalId);
   if (!key) return;
   const session = readSession() || newSession();
   session.users[key] = true;
