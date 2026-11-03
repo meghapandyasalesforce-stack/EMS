@@ -73,7 +73,7 @@ const EmailSettings = () => {
             
             {emailStatus && (
                 <div className="mb-6">
-                    <div className={`mb-4 rounded-lg p-3 sm:p-4 ${emailStatus.validated ? 'bg-theme-primary/10 border border-theme-primary' : emailStatus.configured ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'}`}>
+                    <div className={`settings-email__status mb-4 rounded-lg p-3 sm:p-4 ${emailStatus.validated ? 'bg-theme-primary/10 border border-theme-primary' : emailStatus.configured ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'}`}>
                         <div className="mb-2 flex items-center">
                             <span className={`font-semibold ${emailStatus.validated ? 'text-theme-primary' : emailStatus.configured ? 'text-yellow-800' : 'text-red-800'}`}>
                                 Status: {emailStatus.validated ? '✓ Validated & Working' : emailStatus.configured ? '⚠ Configured (Not Validated)' : '✗ Not Configured'}
@@ -89,7 +89,7 @@ const EmailSettings = () => {
                                 <strong>Recommendation:</strong> {emailStatus.validationRecommendation}
                             </div>
                         )}
-                        <div className="space-y-1 break-words text-sm text-gray-600">
+                        <div className="settings-email__details break-words text-sm text-gray-600">
                             <p><strong>Provider:</strong> {emailStatus.provider}</p>
                             <p><strong>Host:</strong> {emailStatus.emailHost}</p>
                             <p><strong>Port:</strong> {emailStatus.emailPort}</p>
@@ -140,8 +140,8 @@ const EmailSettings = () => {
                 </form>
             </div>
 
-            <div className="mt-6 rounded-lg bg-gray-50 p-3 sm:p-4">
-                <h4 className="mb-2 font-semibold text-gray-800">Troubleshooting</h4>
+            <details className="settings-email__help">
+                <summary>Troubleshooting</summary>
                 <ul className="list-disc space-y-1 pl-5 text-sm text-gray-600">
                     <li>Check server logs for detailed error messages</li>
                     <li>Verify environment variables are set correctly</li>
@@ -149,7 +149,7 @@ const EmailSettings = () => {
                     <li>For Outlook: Ensure EMAIL_HOST is set to smtp.office365.com</li>
                     <li>Check firewall/network allows SMTP connections</li>
                 </ul>
-            </div>
+            </details>
         </div>
     );
 };
