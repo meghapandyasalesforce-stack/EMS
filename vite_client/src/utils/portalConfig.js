@@ -12,7 +12,7 @@ export const PORTAL_ORDER = [
 ];
 
 export const PORTAL_META = {
-  admin: { label: 'Admin', home: '/organization/dashboard', theme: 'admin' },
+  admin: { label: 'Admin', home: '/dashboard-admin', theme: 'admin' },
   executive: { label: 'Executive', home: '/dashboard-administration', theme: 'admin' },
   hr_manager: { label: 'HR', home: '/dashboard-hr', theme: 'admin' },
   payroll_admin: { label: 'Finance', home: '/dashboard-finance', theme: 'admin' },
@@ -381,7 +381,7 @@ export const getSessionPortalDashboard = (ctx = {}) => {
 };
 
 export const isDashboardPath = (pathname = '') =>
-  pathname === '/organization/dashboard' || /^\/dashboard(?:[-/][a-z]+)?\/?$/.test(pathname);
+  /^\/dashboard(?:[-/][a-z]+)?\/?$/.test(pathname);
 
 export const isPortalSwitchAllowed = (
   portalId,
