@@ -111,48 +111,28 @@ const AdminSettings = () => {
     ];
 
     const activeSection = settingsTabs.find(tab => tab.id === activeTab) || settingsTabs[5];
-    const activeGroup = SETTINGS_GROUPS.find(group => group.sections.includes(activeSection.id));
-    const visibleSections = activeGroup.sections.map(id => settingsTabs.find(tab => tab.id === id));
 
     return (
         <div className="page-shell admin-settings">
             <div className="page-shell-inner admin-settings__workspace">
                 <header className="admin-settings__header">
-                    <h1>Admin Settings</h1>
-                    <p>Manage attendance, policies, access, and organization preferences.</p>
+                    <div>
+                        <h1>Admin Settings</h1>
+                        <p>Organization preferences and policies</p>
+                    </div>
+                    <div className="admin-settings__selector">
+                        <label htmlFor="admin-settings-section">Settings section</label>
+                        <select id="admin-settings-section" value={activeTab} onChange={event => setActiveTab(event.target.value)} aria-controls="admin-settings-content">
+                            {SETTINGS_GROUPS.map(group => <optgroup key={group.id} label={group.name}>
+                                {group.sections.map(id => {
+                                    const tab = settingsTabs.find(item => item.id === id);
+                                    return <option key={id} value={id}>{tab.name}</option>;
+                                })}
+                            </optgroup>)}
+                        </select>
+                    </div>
                 </header>
                 <div className="admin-settings__layout">
-                    <aside className="admin-settings__sidebar">
-                        <div className="admin-settings__mobile-nav">
-                            <label htmlFor="admin-settings-section">Settings section</label>
-                            <select id="admin-settings-section" value={activeTab} onChange={event => setActiveTab(event.target.value)} aria-controls="admin-settings-content">
-                                {SETTINGS_GROUPS.map(group => <optgroup key={group.id} label={group.name}>
-                                    {group.sections.map(id => {
-                                        const tab = settingsTabs.find(item => item.id === id);
-                                        return <option key={id} value={id}>{tab.name}</option>;
-                                    })}
-                                </optgroup>)}
-                            </select>
-                        </div>
-                        <nav className="admin-settings__categories" aria-label="Settings categories">
-                            {SETTINGS_GROUPS.map(group => (
-                                <button key={group.id} type="button" aria-pressed={activeGroup.id === group.id}
-                                    aria-controls="admin-settings-sections admin-settings-content"
-                                    onClick={() => { if (activeGroup.id !== group.id) setActiveTab(group.sections[0]); }}>
-                                    <span aria-hidden="true">{group.icon}</span><span>{group.name}</span>
-                                </button>
-                            ))}
-                        </nav>
-                        <nav id="admin-settings-sections" className="admin-settings__nav" aria-label={`${activeGroup.name} settings sections`}>
-                            {visibleSections.map(tab => (
-                                <button key={tab.id} type="button" aria-current={activeTab === tab.id ? 'page' : undefined}
-                                    onClick={() => setActiveTab(tab.id)} className={`admin-settings__nav-item ${activeTab === tab.id ? 'is-active' : ''}`}
-                                    aria-controls="admin-settings-content">
-                                    <span aria-hidden="true">{tab.icon}</span><span>{tab.name}</span>
-                                </button>
-                            ))}
-                        </nav>
-                    </aside>
                     <div id="admin-settings-content" className="admin-settings__panel" role="region" aria-label={activeSection.name}>
                         {activeSection.component}
                     </div>
