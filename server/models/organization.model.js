@@ -312,6 +312,10 @@ const organizationSchema = new mongoose.Schema({
     subscriptionEndDate: {
         type: Date
     },
+    cancelAtPeriodEnd: {
+        type: Boolean,
+        default: false
+    },
     /** Period end we already emailed a 3-day renewal reminder for */
     billingRenewalReminderFor: {
         type: Date,

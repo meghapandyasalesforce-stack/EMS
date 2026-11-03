@@ -303,6 +303,7 @@ export const organizationRoutes = [
   { path: '/organization/chart', component: lazy(() => import('../Admin/Organization/OrganizationChartPage')), message: 'Loading organization chart...', allowedRoles: ['admin', 'hr', 'manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.employees },
   { path: '/organization/onboarding', component: lazy(() => import('../Admin/Organization/OrganizationOnboarding')), message: 'Loading onboarding...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/subscription', component: lazy(() => import('../Admin/Organization/SubscriptionManagement')), message: 'Loading subscription...', allowedRoles: ['admin', 'executive'] },
+  { path: '/organization/billing', component: lazy(() => import('../Admin/Organization/BillingManagement')), message: 'Loading billing...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/checkout', component: lazy(() => import('../Admin/Organization/CheckoutPaymentPage')), message: 'Loading checkout...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/verification', component: lazy(() => import('../Admin/Organization/OrganizationVerification')), message: 'Loading verification...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/analytics', component: lazy(() => import('../Admin/Organization/OrganizationAnalytics')), message: 'Loading analytics...', allowedRoles: ['admin', 'executive'] },
