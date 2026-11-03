@@ -25,6 +25,13 @@ import { setUser } from '../../context/Auth/authSlice';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { fetchEmployees } from '../../context/employeeSlice';
 
+const SETTINGS_GROUPS = [
+    { id: 'workforce', name: 'Workforce', sections: ['attendance-rules', 'shift-settings', 'leave-policy', 'payroll-settings'] },
+    { id: 'communication', name: 'Communication', sections: ['notifications', 'email'] },
+    { id: 'access', name: 'Access & security', sections: ['security', 'permissions'] },
+    { id: 'organization', name: 'Organization', sections: ['general', 'document-settings', 'theme', 'reports'] },
+];
+
 const AdminSettings = () => {
     const [activeTab, setActiveTab] = useState('email'); // Default to email settings for troubleshooting
 
@@ -104,6 +111,8 @@ const AdminSettings = () => {
     ];
 
     const activeSection = settingsTabs.find(tab => tab.id === activeTab) || settingsTabs[5];
+    const activeGroup = SETTINGS_GROUPS.find(group => group.sections.includes(activeSection.id));
+    const visibleSections = activeGroup.sections.map(id => settingsTabs.find(tab => tab.id === id));
 
     return (
         <div className="page-shell admin-settings">
@@ -117,11 +126,25 @@ const AdminSettings = () => {
                         <div className="admin-settings__mobile-nav">
                             <label htmlFor="admin-settings-section">Settings section</label>
                             <select id="admin-settings-section" value={activeTab} onChange={event => setActiveTab(event.target.value)} aria-controls="admin-settings-content">
-                                {settingsTabs.map(tab => <option key={tab.id} value={tab.id}>{tab.name}</option>)}
+                                {SETTINGS_GROUPS.map(group => <optgroup key={group.id} label={group.name}>
+                                    {group.sections.map(id => {
+                                        const tab = settingsTabs.find(item => item.id === id);
+                                        return <option key={id} value={id}>{tab.name}</option>;
+                                    })}
+                                </optgroup>)}
                             </select>
                         </div>
-                        <nav className="admin-settings__nav" aria-label="Admin settings sections">
-                            {settingsTabs.map(tab => (
+                        <nav className="admin-settings__categories" aria-label="Settings categories">
+                            {SETTINGS_GROUPS.map(group => (
+                                <button key={group.id} type="button" aria-pressed={activeGroup.id === group.id}
+                                    aria-controls="admin-settings-sections admin-settings-content"
+                                    onClick={() => { if (activeGroup.id !== group.id) setActiveTab(group.sections[0]); }}>
+                                    {group.name}
+                                </button>
+                            ))}
+                        </nav>
+                        <nav id="admin-settings-sections" className="admin-settings__nav" aria-label={`${activeGroup.name} settings sections`}>
+                            {visibleSections.map(tab => (
                                 <button key={tab.id} type="button" aria-current={activeTab === tab.id ? 'page' : undefined}
                                     onClick={() => setActiveTab(tab.id)} className={`admin-settings__nav-item ${activeTab === tab.id ? 'is-active' : ''}`}
                                     aria-controls="admin-settings-content">
