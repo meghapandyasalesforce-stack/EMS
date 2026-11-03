@@ -7,6 +7,7 @@ import axios from '../../utils/axios';
 import { ORGANIZATION_SUBSCRIPTION_ENDPOINT as ENDPOINT } from '../../utils/constant';
 import { formatBillingDate as date, formatBillingMoney as money, downloadBillingInvoice } from '../../utils/billingDisplay';
 import { checkAuthSession } from '../../context/Auth/authSlice';
+import '../../styles/billingPages.css';
 
 export default function BillingManagement() {
   const dispatch = useDispatch();
@@ -57,23 +58,23 @@ export default function BillingManagement() {
     finally { setDownloading(null); }
   };
 
-  const button = 'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50';
+  const button = 'billing-button';
   return (
-    <div className="page-shell min-h-screen bg-gray-50">
-      <div className="page-shell-inner hrms-stack space-y-6">
-        <header className="flex flex-wrap items-center justify-between gap-4">
+    <div className="page-shell billing-page">
+      <div className="page-shell-inner billing-page__content">
+        <header className="billing-page__header">
           <div><h1 className="text-3xl font-bold text-slate-900">Billing management</h1><p className="mt-2 text-slate-600">Manage renewals, review payments, and download your invoices.</p></div>
           <Link className={button} to="/organization/subscription"><FiArrowLeft /> Back to subscription</Link>
         </header>
         {loading ? <p role="status" className="rounded-xl bg-white p-6">Loading billing details…</p> : error ? (
           <div role="alert" className="rounded-xl border border-red-200 bg-white p-6"><p>{error}</p><button type="button" className={`${button} mt-4`} onClick={load}>Try again</button></div>
         ) : subscription && <>
-          <section aria-labelledby="billing-plan" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div><h2 id="billing-plan" className="text-lg font-semibold">Current plan</h2><p className="mt-1 text-2xl font-bold capitalize">{subscription.planName || subscription.subscriptionPlan}</p><p className="mt-1 text-slate-600">{money(subscription.planPrice, subscription.currency)}/month</p></div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold capitalize">{subscription.subscriptionStatus}</span>
+          <section aria-labelledby="billing-plan" className="billing-panel">
+            <div className="billing-summary__heading">
+              <div><h2 id="billing-plan" className="text-lg font-semibold">Current plan</h2><p className="billing-summary__plan">{subscription.planName || subscription.subscriptionPlan}</p><p className="mt-1 text-slate-600">{money(subscription.planPrice, subscription.currency)}/month</p></div>
+              <span className={`billing-badge billing-badge--${subscription.subscriptionStatus}`}>{subscription.subscriptionStatus}</span>
             </div>
-            <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <dl className="billing-metrics">
               {[
                 ['Employee seats', `${subscription.usage?.employees?.current ?? 0} / ${subscription.maxEmployees || 'Unlimited'}`],
                 ['Period ends', date(subscription.subscriptionEndDate)],
@@ -82,14 +83,14 @@ export default function BillingManagement() {
               ].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-4"><dt className="text-sm text-slate-500">{label}</dt><dd className="mt-2 font-semibold">{value}</dd></div>)}
             </dl>
             {subscription.billingMode === 'mock' && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Development billing: payments here are simulated. No real money is charged.</p>}
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link className={button} to="/organization/subscription"><FiCreditCard /> Change plan</Link>
+            <div className="billing-summary__actions">
+              <Link className={`${button} billing-button--primary`} to="/organization/subscription"><FiCreditCard /> Change plan</Link>
               {subscription.subscriptionPlan !== 'free' && ['expired', 'cancelled', 'past_due'].includes(subscription.subscriptionStatus) && (
                 <Link className={button} to={`/organization/subscription?startCheckout=${encodeURIComponent(subscription.subscriptionPlan)}`}>Renew plan</Link>
               )}
             </div>
           </section>
-          <section aria-labelledby="billing-renewal" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <section aria-labelledby="billing-renewal" className="billing-panel">
             <h2 id="billing-renewal" className="text-lg font-semibold">Renewal settings</h2>
             <p className="mt-2 text-sm text-slate-600">{subscription.cancelAtPeriodEnd
               ? `Auto-renewal is stopped. Your plan remains available until ${date(subscription.subscriptionEndDate)}.`
@@ -105,12 +106,12 @@ export default function BillingManagement() {
               )
             )}
           </section>
-          <section aria-labelledby="billing-payments" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <section aria-labelledby="billing-payments" className="billing-panel">
             <h2 id="billing-payments" className="text-lg font-semibold">Payment history &amp; invoices</h2>
             {payments.length === 0 ? <p className="mt-4 text-sm text-slate-500">No payments yet. Your invoices will appear here after a successful payment.</p> : <>
               <p className="mt-2 text-sm text-slate-500">Your latest {payments.length} {payments.length === 1 ? 'payment' : 'payments'}.</p>
-              <div className="mt-4 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b text-xs uppercase text-slate-500">{['Invoice', 'Plan', 'Amount', 'Status', 'Date', 'Receipt'].map(label => <th key={label} className="whitespace-nowrap py-3 pr-5">{label}</th>)}</tr></thead><tbody>
-                {payments.map(payment => <tr key={payment.id} className="border-b border-slate-100"><td className="whitespace-nowrap py-3 pr-5">{payment.invoiceNumber || '—'}</td><td className="pr-5 capitalize">{payment.planId}</td><td className="whitespace-nowrap pr-5">{money(payment.amount, payment.currency || subscription.currency)}</td><td className="pr-5 capitalize">{payment.status}{payment.failureReason && <p className="text-xs text-red-700">{payment.failureReason}</p>}</td><td className="whitespace-nowrap pr-5">{date(payment.createdAt)}</td><td>{payment.status === 'succeeded' ? <button type="button" className="inline-flex items-center gap-1 font-semibold text-emerald-700 underline disabled:opacity-50" disabled={downloading !== null} onClick={() => download(payment)} aria-label={`Download invoice ${payment.invoiceNumber || payment.id}`}><FiDownload />{downloading === payment.id ? 'Downloading…' : 'Download PDF'}</button> : '—'}</td></tr>)}
+              <div className="billing-table-wrap"><table className="billing-table"><thead><tr className="border-b text-xs uppercase text-slate-500">{['Invoice', 'Plan', 'Amount', 'Status', 'Date', 'Receipt'].map(label => <th scope="col" key={label} className="whitespace-nowrap py-3 pr-5">{label}</th>)}</tr></thead><tbody>
+                {payments.map(payment => <tr key={payment.id} className="border-b border-slate-100"><td data-label="Invoice" className="whitespace-nowrap py-3 pr-5">{payment.invoiceNumber || '—'}</td><td data-label="Plan" className="pr-5 capitalize">{payment.planId}</td><td data-label="Amount" className="whitespace-nowrap pr-5">{money(payment.amount, payment.currency || subscription.currency)}</td><td data-label="Status"><span className={`billing-badge billing-badge--${payment.status}`}>{payment.status}</span>{payment.failureReason && <p className="text-xs text-red-700">{payment.failureReason}</p>}</td><td data-label="Date" className="whitespace-nowrap pr-5">{date(payment.createdAt)}</td><td data-label="Receipt">{payment.status === 'succeeded' ? <button type="button" className="billing-download" disabled={downloading !== null} onClick={() => download(payment)} aria-label={`Download invoice ${payment.invoiceNumber || payment.id}`}><FiDownload />{downloading === payment.id ? 'Downloading…' : 'Download PDF'}</button> : '—'}</td></tr>)}
               </tbody></table></div>
             </>}
           </section>

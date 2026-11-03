@@ -15,6 +15,7 @@ import {
   FiSettings,
 } from 'react-icons/fi';
 import logger from '../../utils/logger';
+import '../../styles/billingPages.css';
 import { formatBillingDate as formatDate, formatBillingMoney as formatMoney, downloadBillingInvoice } from '../../utils/billingDisplay';
 
 const loadRazorpayScript = () =>
@@ -296,21 +297,20 @@ const SubscriptionManagement = () => {
     .filter(Boolean);
 
   return (
-    <div className="page-shell min-h-screen bg-gray-50">
-      <div className="page-shell-inner hrms-stack space-y-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="page-shell billing-page">
+      <div className="page-shell-inner billing-page__content">
+        <div className="billing-page__header">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Subscription & billing</h1>
             <p className="mt-2 text-gray-600">
-              View your plan, seats, renewal dates, and upgrade with Razorpay checkout
-              {subscription?.billingMode === 'mock' ? ' (development / mock mode)' : ''}.
+              Choose the right plan for your team and keep track of your subscription.
             </p>
           </div>
           <button
             type="button"
             onClick={() => navigate('/organization/billing')}
             disabled={!!busyPlan}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+            className="billing-button billing-button--primary"
           >
             <FiSettings /> Manage billing
           </button>
@@ -330,11 +330,11 @@ const SubscriptionManagement = () => {
         )}
 
         {subscription && (
-          <div className="rounded-xl border border-theme-secondary/30 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="billing-panel billing-summary">
+            <div className="billing-summary__heading">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Current subscription</h2>
-                <p className="mt-1 text-2xl font-bold text-theme-secondary">
+                <p className="billing-summary__plan">
                   {subscription.planName || currentPlan}
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
@@ -345,7 +345,7 @@ const SubscriptionManagement = () => {
                 </p>
               </div>
               <span
-                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusTone(
+                className={`billing-badge ${statusTone(
                   subscription.subscriptionStatus
                 )}`}
               >
@@ -353,7 +353,7 @@ const SubscriptionManagement = () => {
               </span>
             </div>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="billing-metrics">
               <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                   <FiUsers /> Seats
@@ -391,7 +391,9 @@ const SubscriptionManagement = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <section aria-labelledby="subscription-plans" className="billing-plan-section">
+          <div className="billing-section-heading"><h2 id="subscription-plans">Choose your plan</h2><p>Find the features and capacity your team needs.</p></div>
+        <div className="billing-plans">
           {sortedPlans.map((plan) => {
             const isCurrent = currentPlan === plan.id;
             const currentIdx = planOrder.indexOf(currentPlan);
@@ -403,20 +405,18 @@ const SubscriptionManagement = () => {
             return (
               <div
                 key={plan.id}
-                className={`relative overflow-hidden rounded-lg border-2 bg-white shadow-lg ${
-                  isCurrent ? 'border-theme-secondary ring-2 ring-blue-200' : 'border-gray-200'
-                }`}
+                className={`billing-plan ${isCurrent ? 'is-current' : ''}`}
               >
                 {isCurrent && (
-                  <div className="absolute left-0 right-0 top-0 bg-theme-primary py-1 text-center text-sm font-semibold text-white">
+                  <div className="billing-plan__ribbon">
                     Current plan
                   </div>
                 )}
-                <div className={`p-6 ${isCurrent ? 'pt-10' : ''}`}>
-                  <div className="mb-6 text-center">
+                <div className="billing-plan__body">
+                  <div className="billing-plan__heading">
                     <h3 className="mb-2 text-2xl font-bold text-gray-900">{plan.name}</h3>
                     <div className="mb-4">
-                      <span className="text-4xl font-bold text-gray-900">
+                      <span className="billing-plan__price">
                         {formatMoney(plan.price, planCurrency)}
                       </span>
                       <span className="text-gray-600">/month</span>
@@ -427,7 +427,7 @@ const SubscriptionManagement = () => {
                     </div>
                   </div>
 
-                  <ul className="mb-6 space-y-3">
+                  <ul className="billing-plan__features">
                     {(plan.features || []).map((feature) => (
                       <li key={feature} className="flex items-start">
                         <FiCheck className="mr-2 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
@@ -436,12 +436,12 @@ const SubscriptionManagement = () => {
                     ))}
                   </ul>
 
-                  <div className="mt-6">
+                  <div className="billing-plan__action">
                     {isCurrent ? (
                       <button
                         type="button"
                         disabled
-                        className="w-full cursor-not-allowed rounded-md bg-gray-200 px-4 py-2 text-gray-600"
+                        className="billing-button billing-button--current"
                       >
                         Current plan
                       </button>
@@ -450,13 +450,7 @@ const SubscriptionManagement = () => {
                         type="button"
                         onClick={() => handleSelectPlan(plan.id)}
                         disabled={!!busyPlan}
-                        className={`flex w-full items-center justify-center rounded-md px-4 py-2 text-white disabled:opacity-50 ${
-                          isUpgrade
-                            ? 'bg-theme-primary hover:opacity-90'
-                            : isDowngrade
-                              ? 'bg-amber-600 hover:bg-amber-700'
-                              : 'bg-gray-700 hover:bg-gray-800'
-                        }`}
+                        className={`billing-button ${isUpgrade ? 'billing-button--primary' : isDowngrade ? 'billing-button--secondary' : ''}`}
                       >
                         {busyPlan === plan.id ? (
                           'Please wait…'
@@ -482,12 +476,13 @@ const SubscriptionManagement = () => {
             );
           })}
         </div>
+        </section>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="billing-panel billing-help">
           <h2 className="text-lg font-semibold text-gray-900">How billing works</h2>
           <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-gray-600">
             <li>
-              Paid access lasts until the period end date. A daily job emails you about 3 days before it ends, then locks paid features if you do not renew. A receipt is emailed after each successful payment.
+              Your plan remains active until the period end date. We’ll email a reminder before renewal and a receipt after successful payment.
             </li>
             <li>Open Manage billing to review payment history, download invoices, and manage auto-renewal.</li>
             <li>Plan changes are applied after successful payment through secure checkout.</li>
@@ -495,37 +490,37 @@ const SubscriptionManagement = () => {
         </div>
 
         {payments.length > 0 && (
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="billing-panel">
             <h2 className="text-lg font-semibold text-gray-900">Payment history</h2>
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
+            <div className="billing-table-wrap">
+              <table className="billing-table">
                 <thead className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
                   <tr>
-                    <th className="py-2 pr-4">Invoice</th>
-                    <th className="py-2 pr-4">Plan</th>
-                    <th className="py-2 pr-4">Amount</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Date</th>
-                    <th className="py-2">PDF</th>
+                    <th scope="col" className="py-2 pr-4">Invoice</th>
+                    <th scope="col" className="py-2 pr-4">Plan</th>
+                    <th scope="col" className="py-2 pr-4">Amount</th>
+                    <th scope="col" className="py-2 pr-4">Status</th>
+                    <th scope="col" className="py-2 pr-4">Date</th>
+                    <th scope="col" className="py-2">PDF</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map((p) => (
                     <tr key={p.id} className="border-b border-gray-100">
-                      <td className="py-2.5 pr-4 font-mono text-xs text-gray-700">
+                      <td data-label="Invoice" className="py-2.5 pr-4 font-mono text-xs text-gray-700">
                         {p.invoiceNumber || '—'}
                       </td>
-                      <td className="py-2.5 pr-4 capitalize">{p.planId}</td>
-                      <td className="py-2.5 pr-4">
+                      <td data-label="Plan" className="py-2.5 pr-4 capitalize">{p.planId}</td>
+                      <td data-label="Amount" className="py-2.5 pr-4">
                         {formatMoney(p.amount, p.currency || currency)}
                       </td>
-                      <td className="py-2.5 pr-4 capitalize">{p.status}</td>
-                      <td className="py-2.5">{formatDate(p.createdAt)}</td>
-                      <td className="py-2.5">
+                      <td data-label="Status"><span className={`billing-badge billing-badge--${p.status}`}>{p.status}</span></td>
+                      <td data-label="Date" className="py-2.5">{formatDate(p.createdAt)}</td>
+                      <td data-label="Receipt" className="py-2.5">
                         {p.status === 'succeeded' ? (
                           <button
                             type="button"
-                            className="text-xs font-semibold text-indigo-700 underline"
+                            className="billing-download"
                             onClick={() => downloadInvoice(p)}
                           >
                             Download
