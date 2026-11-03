@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { updateLeave } from '../../context/leaveSlice';
 import { BOTH_CELEBRATION_ENDPOINT } from '../../utils/constant';
+import AddEmployee from '../../Admin/Employee/AddEmployee';
 import '../../styles/dashboardOverlays.css';
 
 const initials = (name = '') =>
@@ -1133,104 +1134,11 @@ export function ProfilePeekModal({ open, user, onClose }) {
     );
 }
 
-export function AddEmployeeModal({ open, onClose, onContinueFull }) {
-    const [form, setForm] = useState({
-        name: '',
-        jobTitle: '',
-        department: '',
-        workLocation: '',
-        joiningDate: '',
-    });
-
-    useEffect(() => {
-        if (open) {
-            setForm({
-                name: '',
-                jobTitle: '',
-                department: '',
-                workLocation: '',
-                joiningDate: '',
-            });
-        }
-    }, [open]);
-
+export function AddEmployeeModal({ open, onClose }) {
     if (!open) return null;
-
-    const setField = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
-
     return (
-        <ModalShell
-            wide
-            eyebrow="Quick onboarding provision"
-            title="Add New Employee"
-            onClose={onClose}
-            footer={
-                <>
-                    <button type="button" className="hr-ov-btn hr-ov-btn--ghost" onClick={onClose}>
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        className="hr-ov-btn hr-ov-btn--primary"
-                        onClick={() => onContinueFull?.(form)}
-                    >
-                        Save
-                    </button>
-                </>
-            }
-        >
-            <div className="hr-ov-grid-2">
-                <div>
-                    <label className="hr-ov-label" htmlFor="hr-add-name">Full Legal Name *</label>
-                    <input
-                        id="hr-add-name"
-                        className="hr-ov-input"
-                        placeholder="e.g. Rahul Sharma"
-                        value={form.name}
-                        onChange={setField('name')}
-                    />
-                </div>
-                <div>
-                    <label className="hr-ov-label" htmlFor="hr-add-title">Designation</label>
-                    <input
-                        id="hr-add-title"
-                        className="hr-ov-input"
-                        placeholder="e.g. Lead Systems Architect"
-                        value={form.jobTitle}
-                        onChange={setField('jobTitle')}
-                    />
-                </div>
-                <div>
-                    <label className="hr-ov-label" htmlFor="hr-add-dept">Department</label>
-                    <input
-                        id="hr-add-dept"
-                        className="hr-ov-input"
-                        placeholder="e.g. Engineering"
-                        value={form.department}
-                        onChange={setField('department')}
-                    />
-                </div>
-                <div>
-                    <label className="hr-ov-label" htmlFor="hr-add-loc">Campus Hub</label>
-                    <input
-                        id="hr-add-loc"
-                        className="hr-ov-input"
-                        placeholder="e.g. Bengaluru HQ"
-                        value={form.workLocation}
-                        onChange={setField('workLocation')}
-                    />
-                </div>
-                <div>
-                    <label className="hr-ov-label" htmlFor="hr-add-doj">Date of Joining</label>
-                    <input
-                        id="hr-add-doj"
-                        type="date"
-                        className="hr-ov-input"
-                        value={form.joiningDate}
-                        onChange={setField('joiningDate')}
-                    />
-                </div>
-            </div>
+        <ModalShell wide eyebrow="Employee onboarding" title="Add New Employee" onClose={onClose}>
+            <AddEmployee embedded onClose={onClose} onCreated={onClose} />
         </ModalShell>
     );
 }
