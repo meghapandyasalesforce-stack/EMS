@@ -5,12 +5,12 @@
 .admin-settings__header p { margin-top: 5px; font-size: 13px; color: #738390; }
 .admin-settings__layout { display: block; }
 .admin-settings__sidebar { min-width: 0; padding: 0 24px; border-bottom: 1px solid #e8edf0; }
-.admin-settings__nav { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; }
-.admin-settings .admin-settings__nav-item { display: flex; align-items: center; gap: 9px; width: auto; min-height: 32px; padding: 6px 10px; border: 1px solid transparent; border-radius: 3px; background: transparent; text-align: left; font-size: 12px; line-height: 1.4; font-weight: 500; color: #647684; cursor: pointer; }
+.admin-settings__nav { display: flex; flex-wrap: wrap; gap: 18px; padding: 0; }
+.admin-settings .admin-settings__nav-item { display: flex; align-items: center; gap: 9px; width: auto; min-height: 44px; padding: 10px 3px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; text-align: left; font-size: 12px; line-height: 1.4; font-weight: 500; color: #647684; cursor: pointer; }
 .admin-settings__nav-item > span:first-child { flex-shrink: 0; font-size: 13px; }
 .admin-settings__nav-item > span:last-child { min-width: 0; overflow-wrap: anywhere; }
-.admin-settings .admin-settings__nav-item:hover { background: #f5f8f7; color: #1c6652; }
-.admin-settings .admin-settings__nav-item.is-active { background: #edf7f2; border-color: #d5ebe1; color: #12795e; font-weight: 650; }
+.admin-settings .admin-settings__nav-item:hover { background: transparent; color: #1c6652; }
+.admin-settings .admin-settings__nav-item.is-active { background: transparent; border-bottom-color: #13876a; color: #12795e; font-weight: 650; }
 .admin-settings__mobile-nav { display: none; }
 .admin-settings__panel { min-width: 0; }
 .admin-settings__panel > div { min-height: 0; padding: 22px 24px; }
@@ -95,8 +95,12 @@
 .admin-settings__panel input.pr-10 { --settings-input-end: 40px; }
 .admin-settings__panel .border-t { border-top-color: #e8edf0; }
 
-.admin-settings__categories { display: flex; gap: 24px; border-bottom: 1px solid #edf1f3; }
-.admin-settings__categories button { min-height: 43px; padding: 10px 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #7a8b97; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
-.admin-settings__categories button:hover { color: #13876a; }
-.admin-settings__categories button[aria-pressed='true'] { color: #12795e; border-bottom-color: #13876a; font-weight: 650; }
-@media (max-width: 767px) { .admin-settings__categories { display: none; } }
+/* Primary category control and secondary section links have distinct visual roles. */
+.admin-settings__categories { display: flex; width: fit-content; max-width: 100%; gap: 4px; padding: 5px; margin: 12px 0 6px; border-radius: 8px; background: #123044; }
+.admin-settings__categories button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 9px 16px; border: 0; border-radius: 5px; background: transparent; color: #bed0da; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background 140ms, color 140ms; }
+.admin-settings__categories button svg { width: 13px; height: 13px; }
+.admin-settings__categories button:hover { background: #244256; color: #fff; }
+.admin-settings__categories button[aria-pressed='true'] { background: #fff; color: #173d4d; font-weight: 650; box-shadow: 0 1px 3px #0002; }
+.admin-settings__categories button[aria-pressed='true'] svg { color: #13876a; }
+@media (max-width: 767px) { .admin-settings__categories { display: none; } .admin-settings__mobile-nav select { background: #f4faf7; border-color: #b9d7cb; } }
+@media (prefers-reduced-motion: reduce) { .admin-settings__categories button { transition: none; } }
