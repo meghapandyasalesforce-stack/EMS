@@ -363,14 +363,14 @@ const SubscriptionManagement = () => {
                   {subscription.maxEmployees || '∞'}
                 </div>
               </div>
-              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+              {subscription.trialEndDate && <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                   <FiCalendar /> Trial ends
                 </div>
                 <div className="mt-2 text-lg font-semibold text-gray-900">
                   {formatDate(subscription.trialEndDate)}
                 </div>
-              </div>
+              </div>}
               <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                   <FiCalendar /> Period ends
@@ -427,6 +427,8 @@ const SubscriptionManagement = () => {
                     </div>
                   </div>
 
+                  <details className="billing-plan__details">
+                    <summary>View features</summary>
                   <ul className="billing-plan__features">
                     {(plan.features || []).map((feature) => (
                       <li key={feature} className="flex items-start">
@@ -435,6 +437,7 @@ const SubscriptionManagement = () => {
                       </li>
                     ))}
                   </ul>
+                  </details>
 
                   <div className="billing-plan__action">
                     {isCurrent ? (
@@ -478,8 +481,8 @@ const SubscriptionManagement = () => {
         </div>
         </section>
 
-        <div className="billing-panel billing-help">
-          <h2 className="text-lg font-semibold text-gray-900">How billing works</h2>
+        <details className="billing-panel billing-help">
+          <summary>How billing works</summary>
           <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-gray-600">
             <li>
               Your plan remains active until the period end date. We’ll email a reminder before renewal and a receipt after successful payment.
@@ -487,12 +490,12 @@ const SubscriptionManagement = () => {
             <li>Open Manage billing to review payment history, download invoices, and manage auto-renewal.</li>
             <li>Plan changes are applied after successful payment through secure checkout.</li>
           </ul>
-        </div>
+        </details>
 
         {payments.length > 0 && (
           <div className="billing-panel">
             <h2 className="text-lg font-semibold text-gray-900">Payment history</h2>
-            <div className="billing-table-wrap">
+            <p className="billing-scroll-hint">Scroll to view all payment details.</p><div className="billing-table-wrap" tabIndex={0} role="region" aria-label="Payment history table">
               <table className="billing-table">
                 <thead className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
                   <tr>
