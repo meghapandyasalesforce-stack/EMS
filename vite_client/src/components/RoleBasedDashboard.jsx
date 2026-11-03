@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import axios from '../utils/axios';
@@ -7,13 +7,16 @@ import { handleApiError } from '../utils/errorHandler';
 import { mergeSessionProfile } from '../utils/profileUtils';
 import FirstLoginPermissionRequest from './FirstLoginPermissionRequest';
 import { resolveDashboardFromAccessProfile } from '../utils/resolveDashboardFromAccess';
+import { getSessionPortalDashboard } from '../utils/portalConfig';
 
 const RoleBasedDashboard = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
-    const profile = mergeSessionProfile(user, employee);
+    const auth = useSelector((state) => state.auth);
+    const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
+    const portalHome = getSessionPortalDashboard({ ...auth, employee })?.home;
     const [dashboardRoute, setDashboardRoute] = useState(null);
     const [loading, setLoading] = useState(true);
     
@@ -23,7 +26,8 @@ const RoleBasedDashboard = () => {
      * Fallback when server route API unavailable.
      * SaaS: functionalRoles / assignedRole — not department name.
      */
-    const getComprehensiveFallback = () => {
+    const getComprehensiveFallback = useCallback(() => {
+        if (portalHome) return portalHome;
         if (!profile) {
             return '/dashboard-employee';
         }
@@ -43,12 +47,20 @@ const RoleBasedDashboard = () => {
             role: profile.role,
             allowLegacyJobStrings: true,
         });
-    };
+    }, [portalHome, profile, user?.email]);
     
     useEffect(() => {
         // Honor one-time Job Details redirect if login sent user to /dashboard first
         if (sessionStorage.getItem('redirectToOfferLetterOnLogin') === '1') {
             navigate('/job-details', { replace: true });
+            return;
+        }
+
+        // Workspace selection takes precedence over the linked employee's job role.
+        if (portalHome && (location.pathname === '/dashboard' || location.pathname === '/')) {
+            setDashboardRoute(portalHome);
+            setLoading(false);
+            navigate(portalHome, { replace: true });
             return;
         }
 
@@ -120,7 +132,7 @@ const RoleBasedDashboard = () => {
         };
         
         fetchDashboardRoute();
-    }, [userRole, navigate, location, user, employee, profile]);
+    }, [userRole, navigate, location, user, employee, profile, portalHome, getComprehensiveFallback]);
 
     // Render appropriate dashboard - only redirect, don't render directly
     const renderDashboard = () => {

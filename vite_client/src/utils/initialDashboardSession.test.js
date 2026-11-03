@@ -16,6 +16,16 @@ describe('initial dashboard session', () => {
     expect(hasInitialDashboardRedirect(null)).toBe(false);
   });
 
+  it('tracks each selected profile independently within the same user session', () => {
+    markInitialDashboardRedirect(user, 'admin');
+    expect(hasInitialDashboardRedirect(user, 'admin')).toBe(true);
+    expect(hasInitialDashboardRedirect(user, 'hr_manager')).toBe(false);
+    expect(hasInitialDashboardRedirect(user, 'employee')).toBe(false);
+    markInitialDashboardRedirect(user, 'hr_manager');
+    expect(hasInitialDashboardRedirect(user, 'admin')).toBe(true);
+    expect(hasInitialDashboardRedirect(user, 'hr_manager')).toBe(true);
+  });
+
   it('survives module reloads/refreshes but resets on a new login or logout', async () => {
     beginDashboardSession();
     markInitialDashboardRedirect(user);

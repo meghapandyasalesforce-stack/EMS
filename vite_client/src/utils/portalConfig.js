@@ -111,7 +111,7 @@ export const canSwitchPortals = (
 ) => {
   const sessionRole = resolveSessionRole(user, permissionFlags);
   if (sessionRole !== 'admin') return false;
-  if (Boolean(permissionFlags.isOrgOwner)) return true;
+  if (permissionFlags.isOrgOwner) return true;
   if (Array.isArray(roleBuckets) && roleBuckets.includes('org_owner')) return true;
   return false;
 };
@@ -369,6 +369,19 @@ export const resolveInitialPortal = (portals, routeHint = '', options = {}) => {
 };
 
 export const isEmployeePortalTheme = (portalId) => portalId === 'employee';
+
+/** Resolve the selected workspace from current entitlements, never cached home URLs. */
+export const getSessionPortalDashboard = (ctx = {}) => {
+  // Before session hydration, retain the server/assigned-role dashboard fallback.
+  if (!ctx.availablePortals?.length) return null;
+  const portals = deriveAvailablePortals(ctx);
+  const id = getEffectiveActivePortal({ ...ctx, availablePortals: portals });
+  const home = PORTAL_META[id]?.home;
+  return home ? { id, home } : null;
+};
+
+export const isDashboardPath = (pathname = '') =>
+  pathname === '/organization/dashboard' || /^\/dashboard(?:[-/][a-z]+)?\/?$/.test(pathname);
 
 export const isPortalSwitchAllowed = (
   portalId,
