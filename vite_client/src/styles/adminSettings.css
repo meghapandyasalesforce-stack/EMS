@@ -1,0 +1,96 @@
+/* All overrides stay inside Admin Settings; standalone policy screens are unaffected. */
+.admin-settings .admin-settings__workspace { max-width: 1400px; border: 1px solid #e1e7ec; border-radius: 10px; background: #fff; overflow: clip; }
+.admin-settings__header { padding: 20px 24px; border-bottom: 1px solid #e8edf0; }
+.admin-settings__header h1 { font-size: 23px; line-height: 1.3; font-weight: 700; letter-spacing: -0.4px; color: #193447; }
+.admin-settings__header p { margin-top: 5px; font-size: 13px; color: #738390; }
+.admin-settings__layout { display: block; }
+.admin-settings__sidebar { min-width: 0; padding: 8px 12px; border-bottom: 1px solid #e8edf0; }
+.admin-settings__nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 6px; }
+.admin-settings .admin-settings__nav-item { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 8px 10px; border: 0; border-left: 2px solid transparent; border-radius: 3px; background: transparent; text-align: left; font-size: 12px; line-height: 1.4; font-weight: 500; color: #647684; cursor: pointer; }
+.admin-settings__nav-item > span:first-child { flex-shrink: 0; font-size: 13px; }
+.admin-settings__nav-item > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.admin-settings .admin-settings__nav-item:hover { background: #f5f8f7; color: #1c6652; }
+.admin-settings .admin-settings__nav-item.is-active { background: #edf7f2; border-left-color: #13876a; color: #12795e; font-weight: 650; }
+.admin-settings__mobile-nav { display: none; }
+.admin-settings__panel { min-width: 0; }
+.admin-settings__panel > div { min-height: 0; padding: 22px 24px; }
+.admin-settings__panel :is(h1, h2) { font-size: 18px; line-height: 1.4; font-weight: 650; color: #203d4e; }
+.admin-settings__panel h3 { font-size: 14px; line-height: 1.5; font-weight: 600; color: #304b5c; }
+.admin-settings__panel h4 { font-size: 13px; font-weight: 600; }
+.admin-settings__panel :is(p, li) { font-size: 12px; line-height: 1.6; }
+.admin-settings__panel label { font-size: 12px; line-height: 1.5; }
+.admin-settings__panel h2 svg { width: 16px; height: 16px; margin-right: 8px; }
+.admin-settings__panel :is(.mb-6, .sm\:mb-6) { margin-bottom: 16px; }
+.admin-settings__panel :is(.mt-6, .sm\:mt-6) { margin-top: 16px; }
+.admin-settings__panel :is(.space-y-5, .space-y-6, .space-y-8) > :not([hidden]) ~ :not([hidden]) { margin-top: 14px; margin-bottom: 0; }
+.admin-settings__panel .grid { gap: 14px; min-width: 0; }
+.admin-settings__panel .grid > * { min-width: 0; }
+/* Neutral groups become sections with dividers; colored status messages stay visible. */
+.admin-settings__panel :is(div, section, fieldset):is(.bg-gray-50, .bg-white.shadow-sm, .border-gray-200.rounded-lg) {
+  border: 0; border-bottom: 1px solid #e8edf0; border-radius: 0; background: transparent; box-shadow: none;
+  padding: 14px 0;
+}
+.admin-settings__panel :is(div, section).bg-white.shadow-sm { padding: 8px 0; border-bottom: 0; }
+.admin-settings__panel :is(.shadow-md, .shadow-lg) { box-shadow: none; }
+.admin-settings__panel :is(.h-96, .h-64) { height: 100px; }
+.admin-settings__panel :is(.overflow-x-auto, .overflow-auto) { max-width: 100%; overscroll-behavior-inline: contain; }
+.admin-settings__panel table { width: 100%; font-size: 12px; }
+.admin-settings__panel th { font-size: 10px; letter-spacing: 0.2px; }
+.admin-settings__panel :is(th, td) { padding: 10px 12px; }
+.admin-settings__panel :is(input, select, textarea):not([type='checkbox']):not([type='radio']):not([type='color']):not([type='range']):not([type='file']) {
+  min-width: 0; max-width: 100%; min-height: 36px; border: 1px solid #d8e2e8; border-radius: 5px;
+  padding: 8px 10px; padding-right: var(--settings-input-end, 10px); background: #fff; font-size: 13px; line-height: 1.4; color: #304b5c;
+}
+.admin-settings__panel input[type='color'] { flex-shrink: 0; }
+.admin-settings__panel textarea { min-height: 90px; resize: vertical; }
+.admin-settings__panel button:is(.px-4, .px-6), .admin-settings__panel .settings-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 36px; padding: 8px 12px; border-radius: 5px; font-size: 12px; line-height: 1.4; text-decoration: none;
+}
+.admin-settings__panel :is(button, a):is(.bg-theme-primary, .bg-theme-secondary) { background-color: var(--color-primary, #13876a); }
+.admin-settings :is(button, a, select, input, textarea):focus-visible { outline: 3px solid #80cbb7; outline-offset: 2px; }
+.admin-settings__panel :is(p, li, label, code) { overflow-wrap: anywhere; }
+.admin-settings__panel .fixed { z-index: 120; }
+@media (min-width: 768px) and (max-width: 1199px) {
+  .admin-settings__layout { grid-template-columns: minmax(0, 1fr); }
+  .admin-settings__sidebar { border-bottom: 1px solid #e8edf0; padding: 8px 12px; }
+  .admin-settings__nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 6px; }
+  .admin-settings__panel { border-left: 0; }
+}
+@media (max-width: 767px) {
+  .admin-settings__header { padding: 16px; }
+  .admin-settings__header h1 { font-size: 21px; }
+  .admin-settings__header p { font-size: 12px; }
+  .admin-settings__layout { grid-template-columns: minmax(0, 1fr); }
+  .admin-settings__sidebar { padding: 12px 16px; border-bottom: 1px solid #e8edf0; }
+  .admin-settings__nav { display: none; }
+  .admin-settings__mobile-nav { display: grid; gap: 6px; }
+  .admin-settings__mobile-nav label { font-size: 11px; color: #738390; }
+  .admin-settings__mobile-nav select { width: 100%; min-height: 42px; border: 1px solid #d8e2e8; border-radius: 5px; padding: 8px 10px; background: #fff; color: #304b5c; font-size: 16px; }
+  .admin-settings__panel { border-left: 0; }
+  .admin-settings__panel > div { padding: 16px; }
+  .admin-settings__panel :is(h1, h2) { font-size: 17px; }
+  .admin-settings__panel .grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-settings__panel .grid > [class*='col-span-'] { grid-column: auto; }
+  .admin-settings__panel :is(input, select, textarea):not([type='checkbox']):not([type='radio']):not([type='color']):not([type='range']):not([type='file']) { font-size: 16px; min-height: 42px; }
+  .admin-settings__panel button:is(.px-4, .px-6), .admin-settings__panel .settings-action { min-height: 42px; }
+  .admin-settings__panel .flex:has(> input[type='color']) { flex-wrap: wrap; }
+  .admin-settings__panel .flex:has(> input[type='color']) input[type='text'] { flex: 1; width: 0; min-width: 120px; }
+}
+@media (prefers-reduced-motion: reduce) { .admin-settings * { scroll-behavior: auto; transition-duration: 0.01ms; } }
+
+.admin-settings__panel input.peer:checked + div { background-color: var(--color-primary, #13876a); }
+.admin-settings__panel button[role='switch'][aria-checked='true'] { background-color: var(--color-primary, #13876a); }
+.admin-settings__panel .settings-email__status { border-color: #e1e7ec; background: transparent; border-radius: 6px; padding: 14px; }
+.admin-settings__panel .settings-email__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 18px; }
+.admin-settings__panel .settings-email__details p { margin: 0; min-width: 0; }
+.admin-settings__panel .settings-email__help { margin-top: 18px; padding: 12px 0; border-top: 1px solid #e8edf0; }
+.settings-email__help summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #647684; }
+.settings-email__help ul { margin-top: 10px; }
+@media (max-width: 767px) { .admin-settings__panel .settings-email__details { grid-template-columns: minmax(0, 1fr); } }
+
+@media (min-width: 1600px) { .admin-settings__nav { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+.admin-settings__panel form.bg-white { border: 0; border-bottom: 1px solid #e8edf0; border-radius: 0; background: transparent; box-shadow: none; padding: 14px 0; }
+.admin-settings__panel input.pr-10 { --settings-input-end: 40px; }
+.admin-settings__panel .border-t { border-top-color: #e8edf0; }
