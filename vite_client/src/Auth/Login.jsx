@@ -13,6 +13,7 @@ import { syncPortalsForSession, canSwitchPortals } from '../utils/portalConfig';
 import { resolveLoginSessionRole, getSafeCareerReturnTo } from '../utils/authSessionUtils';
 import { saveOrgAdminCredentials } from '../utils/orgAdminCredentials';
 import logger from '../utils/logger';
+import { beginDashboardSession } from '../utils/initialDashboardSession';
 
 const PERSONAL_EMAIL_DOMAINS = new Set([
     'gmail.com',
@@ -162,6 +163,8 @@ function Login() {
                 toast.error(data?.message || 'Login failed. Please try again.');
                 return;
             }
+
+            beginDashboardSession();
 
             const sessionRole = data.sessionRole || data.user?.role || 'employee';
             const permissionFlags = data.permissionFlags || {};

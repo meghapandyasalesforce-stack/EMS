@@ -7,6 +7,7 @@ import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { hrRoutes, renderProtectedRoutes } from '../routes';
 import SurveyDetailPage from '../HR/Engagement/SurveyDetailPage';
 import axios from '../utils/axios';
+import { markInitialDashboardRedirect } from '../utils/initialDashboardSession';
 vi.mock('../utils/axios', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 const id = 'survey-one';
 const employee = { _id: 'employee-one', role: 'employee' };
@@ -16,6 +17,8 @@ const ownerMe = { user: { role: 'admin' }, permissions: ['*'], activePortal: 'em
 const managementRoutes = hrRoutes.filter(r => r.engagementAccess).map(r => ({ ...r, component: () => <p>HR workspace rendered</p> }));
 function Location() { const l = useLocation(); return <output data-testid="path">{l.pathname}</output>; }
 function setup(auth, path, detail = false) {
+    // These tests exercise workspace permissions after the initial dashboard visit.
+    markInitialDashboardRedirect(auth.user);
     const store = configureStore({ reducer: () => ({ auth: { authChecked: true, permissionFlags: {}, ...auth }, employeeDetails: { employee } }) });
     return render(<Provider store={store}><MemoryRouter initialEntries={[path]}><Routes>
         {detail ? <><Route path="/engagement/surveys/:surveyId" element={<SurveyDetailPage />} /><Route path="/employee/engagement/surveys/:surveyId" element={<SurveyDetailPage />} /></> : renderProtectedRoutes(managementRoutes)}
