@@ -60,6 +60,7 @@ const serializeBilling = (org, usage = null) => {
     billingMode: getBillingMode(),
     razorpayConfigured: isRazorpayConfigured(),
     recurring: Boolean(org.razorpaySubscriptionId),
+    cancelAtPeriodEnd: Boolean(org.cancelAtPeriodEnd),
     pendingPlan: org.pendingPlan || null,
     usage: usage || null,
   };
@@ -471,13 +472,21 @@ export const cancelRecurringSubscription = asyncHandler(async (req, res) => {
   if (!org) return sendNotFound(res, 'Organization not found');
 
   const atCycleEnd = req.body?.atCycleEnd !== false;
+  if (!org.razorpaySubscriptionId) {
+    return sendError(res, 'This subscription has no automatic renewal to cancel', 400, 'NO_RECURRING_SUBSCRIPTION');
+  }
+  if (atCycleEnd && org.cancelAtPeriodEnd) {
+    return sendSuccess(res, { subscription: serializeBilling(org) }, 'Auto-renewal is already stopped');
+  }
 
   if (org.razorpaySubscriptionId) {
     await cancelRazorpaySubscription(org.razorpaySubscriptionId, {
       cancelAtCycleEnd: atCycleEnd,
+      strict: true,
     });
   }
 
+  org.cancelAtPeriodEnd = atCycleEnd;
   org.subscriptionStatus = atCycleEnd ? org.subscriptionStatus : 'cancelled';
   if (!atCycleEnd) {
     // Immediate cancel → free at end of grace; mark cancelled now

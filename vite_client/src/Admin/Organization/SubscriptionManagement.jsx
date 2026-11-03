@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -12,35 +12,10 @@ import {
   FiCreditCard,
   FiCalendar,
   FiUsers,
-  FiExternalLink,
+  FiSettings,
 } from 'react-icons/fi';
 import logger from '../../utils/logger';
-
-const formatDate = (value) => {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return '—';
-  }
-};
-
-const formatMoney = (amount, currency = 'INR') => {
-  const n = Number(amount || 0);
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(n);
-  } catch {
-    return `${currency} ${n}`;
-  }
-};
+import { formatBillingDate as formatDate, formatBillingMoney as formatMoney, downloadBillingInvoice } from '../../utils/billingDisplay';
 
 const loadRazorpayScript = () =>
   new Promise((resolve) => {
@@ -59,7 +34,7 @@ const loadRazorpayScript = () =>
     script.async = true;
     script.dataset.razorpayCheckout = '1';
     script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
+    script.onerror = () => { script.remove(); resolve(false); };
     document.body.appendChild(script);
   });
 
@@ -81,15 +56,18 @@ const statusTone = (status) => {
 
 const SubscriptionManagement = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const checkoutStarted = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [plans, setPlans] = useState([]);
   const [subscription, setSubscription] = useState(null);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [busyPlan, setBusyPlan] = useState(null);
 
   const load = useCallback(async () => {
+    setLoadError('');
     try {
       const res = await axios.get(`${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/current`, {
         withCredentials: true,
@@ -98,6 +76,7 @@ const SubscriptionManagement = () => {
       setPlans(res.data.availablePlans || []);
       setPayments(res.data.recentPayments || []);
     } catch (error) {
+      setLoadError(error.response?.data?.message || 'Could not load subscription details.');
       logger.error('Failed to load subscription', { error: error.message });
       toast.error(error.response?.data?.message || 'Failed to load subscription');
     } finally {
@@ -116,18 +95,8 @@ const SubscriptionManagement = () => {
 
   const downloadInvoice = async (payment) => {
     try {
-      const res = await axios.get(
-        `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/payments/${payment.id}/invoice`,
-        { withCredentials: true, responseType: 'blob' }
-      );
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${payment.invoiceNumber || 'invoice'}.pdf`;
-      link.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
+      await downloadBillingInvoice(payment);
+    } catch {
       toast.error('Could not download invoice');
     }
   };
@@ -173,7 +142,7 @@ const SubscriptionManagement = () => {
     const ok = await loadRazorpayScript();
     if (!ok || !window.Razorpay) {
       toast.error('Could not load Razorpay Checkout. Check your network.');
-      return;
+      return false;
     }
 
     const planId = checkout.planId;
@@ -238,6 +207,7 @@ const SubscriptionManagement = () => {
       setBusyPlan(null);
     });
     rzp.open();
+    return true;
   };
 
   const handleSelectPlan = async (planId) => {
@@ -274,7 +244,8 @@ const SubscriptionManagement = () => {
             ? 'Opening Razorpay subscription checkout…'
             : 'Opening Razorpay Checkout…'
         );
-        await openRazorpayCheckout(checkout);
+        const opened = await openRazorpayCheckout(checkout);
+        if (!opened) setBusyPlan(null);
         return;
       }
 
@@ -304,26 +275,6 @@ const SubscriptionManagement = () => {
     handleSelectPlan(plan);
   }, [loading, searchParams, setSearchParams]);
 
-  const openPortal = async () => {
-    try {
-      setBusyPlan('portal');
-      const res = await axios.post(
-        `${ORGANIZATION_SUBSCRIPTION_ENDPOINT}/portal`,
-        {},
-        { withCredentials: true }
-      );
-      const url = res.data.portal?.url;
-      if (url) {
-        window.location.href = url;
-        return;
-      }
-      toast.info(res.data.portal?.message || 'Portal unavailable');
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to open billing portal');
-    } finally {
-      setBusyPlan(null);
-    }
-  };
 
   if (loading) {
     return (
@@ -331,6 +282,10 @@ const SubscriptionManagement = () => {
         <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-theme-secondary" />
       </div>
     );
+  }
+
+  if (loadError) {
+    return <div className="page-shell"><div role="alert" className="page-shell-inner rounded-xl border border-red-200 bg-white p-6"><h1 className="text-xl font-bold">Subscription &amp; billing</h1><p className="mt-3">{loadError}</p><button type="button" className="mt-4 rounded-lg border px-4 py-2" onClick={() => { setLoading(true); load(); }}>Try again</button></div></div>;
   }
 
   const currentPlan = subscription?.subscriptionPlan;
@@ -353,11 +308,11 @@ const SubscriptionManagement = () => {
           </div>
           <button
             type="button"
-            onClick={openPortal}
+            onClick={() => navigate('/organization/billing')}
             disabled={!!busyPlan}
             className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
           >
-            <FiExternalLink /> Manage billing
+            <FiSettings /> Manage billing
           </button>
         </div>
 
@@ -534,18 +489,8 @@ const SubscriptionManagement = () => {
             <li>
               Paid access lasts until the period end date. A daily job emails you about 3 days before it ends, then locks paid features if you do not renew. A receipt is emailed after each successful payment.
             </li>
-            <li>
-              Webhooks (<code className="text-xs">subscription.charged</code>, etc.) are the source of
-              truth for renewals and failures. Client verify unlocks access immediately after checkout.
-            </li>
-            <li>
-              Without API keys, local <strong>mock</strong> checkout uses card{' '}
-              <code className="text-xs">4242 4242 4242 4242</code>.
-            </li>
-            <li>
-              Free plan cancels any active Razorpay subscription. Configure webhook:{' '}
-              <code className="text-xs">POST /api/v1/webhooks/razorpay</code>.
-            </li>
+            <li>Open Manage billing to review payment history, download invoices, and manage auto-renewal.</li>
+            <li>Plan changes are applied after successful payment through secure checkout.</li>
           </ul>
         </div>
 
