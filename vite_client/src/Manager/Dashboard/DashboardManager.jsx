@@ -1,3 +1,4 @@
+import './DashboardManager.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -6,7 +7,7 @@ import { toast } from 'react-toastify';
 import { 
     FaUsers, FaTasks, FaCheckCircle,
     FaCalendarAlt, FaBirthdayCake,
-    FaBell, FaPlus, FaSearch, FaVideo, FaHeadset
+    FaBell, FaPlus, FaVideo, FaHeadset
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
@@ -824,40 +825,34 @@ const DashboardManager = () => {
         <div className="min-h-screen bg-[#f6f8fb] transition-all duration-300">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
-            <div className="page-shell !px-3 sm:!px-4 lg:!px-5">
-            <div className="page-shell-inner w-full min-w-0">
+            <div className="page-shell manager-dashboard-shell">
+            <div className="page-shell-inner manager-dashboard-inner w-full min-w-0">
             <div className="hrms-stack w-full min-w-0">
                 <AnnouncementBanner />
 
-                <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
-                    <div className="flex w-full min-w-0 flex-col gap-4">
-                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-5 sm:py-4 md:px-6">
+                <div className="manager-dashboard-grid">
+                    <div className="manager-dashboard-group">
+                        <div className="manager-welcome rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-5 sm:py-4 md:px-6">
                             <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
                                 <div className="min-w-0">
-                                    <h1 className="truncate text-xl font-semibold text-slate-900 sm:text-2xl">
-                                        Good morning, {user?.name || user?.username || 'Manager'} 👋
+                                    <p className="manager-eyebrow">Your workspace</p>
+                                    <h1 className="break-words text-xl font-semibold text-slate-900 sm:text-2xl">
+                                        Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name || user?.username || 'Manager'} 👋
                                     </h1>
                                     <p className="text-sm text-slate-500">{format(new Date(), 'dd MMM yyyy')}</p>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <div className="hidden min-w-[260px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 lg:flex">
-                                        <FaSearch className="text-slate-400" />
-                                        <input
-                                            readOnly
-                                            value=""
-                                            placeholder="Search..."
-                                            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                                        />
-                                    </div>
                                     <button
                                         className="rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
                                         onClick={() => navigate('/helpdesk')}
                                         title="HR Helpdesk"
+                                        aria-label="HR Helpdesk"
                                     >
                                         <FaHeadset />
                                     </button>
                                     <button
                                         className="relative rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
+                                        aria-label="Notifications"
                                         onClick={() => navigate('/notifications')}
                                     >
                                         <FaBell />
@@ -865,6 +860,7 @@ const DashboardManager = () => {
                                     </button>
                                     <button
                                         className="h-10 w-10 rounded-full bg-slate-100 text-sm font-semibold text-slate-700"
+                                        aria-label="View profile"
                                         onClick={() => navigate('/view-profile')}
                                     >
                                         {(user?.name || 'M').charAt(0).toUpperCase()}
@@ -873,48 +869,11 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <AttendanceBox variant="dashboard" />
+                        <div className="manager-attendance"><AttendanceBox variant="dashboard" /></div>
 
-                        {/* Mobile only: celebrations directly under punch-in */}
-                        <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:hidden">
-                            <div
-                                className="rounded-t-xl px-3 py-2"
-                                style={{ background: 'linear-gradient(90deg, #20C997 0%, #17a67d 100%)' }}
-                            >
-                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                                    <FaBirthdayCake className="h-3 w-3" />
-                                    Upcoming celebrations
-                                </h3>
-                            </div>
-                            <div className="p-3">
-                                {dashboardStats.celebrations == null ? (
-                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-500">Loading upcoming celebrations...</div>
-                                ) : dashboardStats.celebrations.length === 0 ? (
-                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
-                                ) : (
-                                    <ul className="space-y-2">
-                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
-                                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
-                                            return (
-                                                <CelebrationDashboardCard
-                                                    key={`mobile-${item.type || 'birthday'}_${item.employeeId || idx}`}
-                                                    item={item}
-                                                    isSelf={false}
-                                                    event={celebrationEvents[itemKey]}
-                                                    reacting={celebrationReacting}
-                                                    onReact={handleCelebrationReact}
-                                                    onWishes={handleOpenCelebrationWishes}
-                                                />
-                                            );
-                                        })}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
+                        <div className="manager-personal"><PersonalDashboardKpiRow compact /></div>
 
-                        <PersonalDashboardKpiRow />
-
-                        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="manager-team grid grid-cols-2 gap-3 sm:grid-cols-4">
                             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
                                 <div className="mb-2 flex items-center justify-between sm:mb-3">
                                     <p className={UI_FORM_LABEL_CLASS}>Team size</p>
@@ -945,7 +904,7 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                        <div className="manager-health w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
                             <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
                                 <h3 className="text-lg font-semibold text-slate-900 sm:text-2xl">Attendance Health</h3>
                                 <div className="flex items-center gap-4 text-xs text-slate-500">
@@ -1001,7 +960,7 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                        <div className="manager-approvals w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
                             <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Team approvals</h3>
                             <div className="space-y-3 sm:space-y-4">
                                 {teamPendingLeaves.slice(0, 2).map((leave, index) => (
@@ -1087,8 +1046,8 @@ const DashboardManager = () => {
                         </div>
                     </div>
 
-                    <div className="flex w-full min-w-0 flex-col gap-4">
-                        <div className="hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4 lg:block">
+                    <div className="manager-dashboard-group">
+                        <div className="manager-celebrations w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                             <div
                                 className="rounded-t-xl px-3 py-2"
                                 style={{ background: 'linear-gradient(90deg, #20C997 0%, #17a67d 100%)' }}
@@ -1124,9 +1083,9 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <LeaveBalanceCard />
+                        <div className="manager-leave"><LeaveBalanceCard /></div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                        <div className="manager-meetings w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
                             <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Upcoming meetings</h3>
                             <div className="space-y-3">
                                 {meetingsLoading ? (
@@ -1186,7 +1145,7 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                        <div className="manager-projects w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
                             <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Active projects</h3>
                             <div className="space-y-3 sm:space-y-4">
                                 {managerProjects.slice(0, 2).map((project, index) => {
@@ -1220,6 +1179,7 @@ const DashboardManager = () => {
             </div>
 
             <button
+                aria-label="Apply for leave"
                 className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
                 onClick={() => navigate('/leave-management')}
             >
