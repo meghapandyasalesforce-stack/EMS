@@ -1,8 +1,13 @@
+import '../../styles/attendanceHistory.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
   FiSearch,
+  FiCalendar,
+  FiUsers,
+  FiCheckCircle,
+  FiFilter,
   FiDownload,
   FiActivity,
   FiChevronLeft,
@@ -776,7 +781,7 @@ const AllAttendanceStatsComponent = () => {
   if (showEmployeeDetails && employeeDetails) {
     const recordsFull = employeeStats?.recentRecords || [];
     return (
-      <div className="page-shell min-h-screen bg-[#f4f7f6]">
+      <div className="attendance-history page-shell min-h-screen">
         <div className="page-shell-inner hrms-stack">
           <button
             type="button"
@@ -874,10 +879,10 @@ const AllAttendanceStatsComponent = () => {
   };
 
   return (
-    <div className="page-shell min-h-screen bg-[#f4f7f6]">
+    <div className="attendance-history page-shell min-h-screen">
       <div className="page-shell-inner hrms-stack">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Attendance History</h1>
+        <header className="attendance-history-header">
+          <div><p className="attendance-history-eyebrow">Team workspace</p><h1>Attendance history</h1><p className="attendance-history-subtitle">Track your team’s time, attendance and work locations.</p></div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -905,15 +910,16 @@ const AllAttendanceStatsComponent = () => {
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{errMsg}</div>
         ) : null}
 
-        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm lg:p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <section className="attendance-history-filters" aria-label="Attendance filters"><div className="attendance-history-section-title"><FiFilter /><h2>Filter attendance</h2><span>Refine your team’s records</span></div>
+          <div className="attendance-history-search-range">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+              <label htmlFor="attendance-member-search" className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
                 Search team member
               </label>
               <div className="relative">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                 <input
+                  id="attendance-member-search"
                   type="search"
                   placeholder="Search by name or email…"
                   value={search}
@@ -924,18 +930,20 @@ const AllAttendanceStatsComponent = () => {
             </div>
             <div className="grid grid-cols-2 gap-3 items-end">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">From</label>
+                <label htmlFor="attendance-startDate" className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">From</label>
                 <input
                   type="date"
+                  id="attendance-startDate"
                   value={startDate}
                   onChange={(e) => setRange({ startDate: e.target.value, endDate })}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">To</label>
+                <label htmlFor="attendance-endDate" className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">To</label>
                 <input
                   type="date"
+                  id="attendance-endDate"
                   value={endDate}
                   onChange={(e) => setRange({ startDate, endDate: e.target.value })}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
@@ -944,9 +952,10 @@ const AllAttendanceStatsComponent = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="attendance-history-period"><div className="attendance-history-year">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-2">Year</span>
             <select
+              aria-label="Attendance year"
               value={filterYear}
               onChange={(e) => selectYear(Number(e.target.value))}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -959,11 +968,12 @@ const AllAttendanceStatsComponent = () => {
             </select>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="attendance-history-months">
             {MONTH_SHORT.map((label, idx) => (
               <button
                 key={label}
                 type="button"
+                aria-pressed={activeMonth === idx}
                 onClick={() => selectMonth(idx)}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                   activeMonth === idx ? 'text-white shadow' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
@@ -977,7 +987,8 @@ const AllAttendanceStatsComponent = () => {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mb-4">
+          </div>
+          <div className="attendance-history-status" aria-label="Attendance status">
             {[
               { id: 'all', label: 'All' },
               { id: 'present', label: 'Present' },
@@ -990,6 +1001,7 @@ const AllAttendanceStatsComponent = () => {
               <button
                 key={chip.id}
                 type="button"
+                aria-pressed={statusFilter === chip.id}
                 onClick={() => setStatusFilter(chip.id)}
                 className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
                   statusFilter === chip.id
@@ -1011,10 +1023,11 @@ const AllAttendanceStatsComponent = () => {
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-4 items-center">
+          <div className="attendance-history-selects">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-2">Department</label>
+              <label htmlFor="attendance-departmentFilter" className="block text-xs font-semibold text-slate-500 mb-2">Department</label>
               <select
+                id="attendance-departmentFilter"
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-0 w-full sm:min-w-[200px] max-w-full"
@@ -1028,8 +1041,9 @@ const AllAttendanceStatsComponent = () => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-2">Sort by</label>
+              <label htmlFor="attendance-sortBy" className="block text-xs font-semibold text-slate-500 mb-2">Sort by</label>
               <select
+                id="attendance-sortBy"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-0 w-full sm:min-w-[200px]"
@@ -1041,52 +1055,51 @@ const AllAttendanceStatsComponent = () => {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="attendance-history-metrics">
           {[
             {
               title: 'Avg attendance %',
               value: `${kpis.avgAttendancePct ?? 0}%`,
               sub: 'Days with a record, not absent',
-              accent: TEAL,
+              accent: TEAL, icon: FiCheckCircle,
             },
             {
               title: 'Total late days',
               value: String(kpis.totalLateDays ?? 0).padStart(2, '0'),
               sub: 'In selected range',
-              accent: ORANGE,
+              accent: ORANGE, icon: FiClock,
             },
             {
               title: 'Total absent days',
               value: String(kpis.totalAbsentDays ?? 0).padStart(2, '0'),
               sub: 'Unplanned absence',
-              accent: RED,
+              accent: RED, icon: FiAlertTriangle,
             },
             {
               title: 'WFH days',
               value: String(kpis.wfhDays ?? 0),
               sub: 'Remote',
-              accent: SKY,
+              accent: SKY, icon: FiHome,
             },
           ].map((card) => (
             <div
               key={card.title}
-              className="relative overflow-hidden rounded-2xl bg-white border border-slate-100 p-5 shadow-sm"
+              className="attendance-history-metric"
+              style={{ '--metric-accent': card.accent }}
             >
-              <div
-                className="absolute -right-6 -bottom-6 h-24 w-24 rounded-full opacity-10 pointer-events-none"
-                style={{ background: card.accent }}
-              />
+              <span className="attendance-history-metric-icon"><card.icon /></span>
+              <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{card.title}</p>
               <p className="text-3xl font-bold text-slate-900">{card.value}</p>
-              <p className="text-sm text-slate-500 mt-1">{card.sub}</p>
+              <p className="text-sm text-slate-500 mt-1">{card.sub}</p></div>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Daily attendance %</h3>
-            <div className="h-[280px] w-full">
+        <div className="attendance-history-charts">
+          <div className="attendance-history-chart">
+            <div className="attendance-history-panel-heading"><h3><FiActivity />Daily attendance</h3><span>Attendance rate · %</span></div>
+            <div className={dailyData.length ? 'attendance-history-chart-content' : 'attendance-history-chart-empty'}>
               {dailyData.length ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
@@ -1099,16 +1112,15 @@ const AllAttendanceStatsComponent = () => {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-500 text-sm">
-                  No trend data for this filter
+                <div className="attendance-history-empty"><span><FiActivity /></span><strong>No attendance trend yet</strong><p>Try another date range or adjust your filters.</p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Status distribution (by member)</h3>
-            <div className="h-[280px] w-full">
+          <div className="attendance-history-chart">
+            <div className="attendance-history-panel-heading"><h3><FiUsers />Status by team member</h3><span>Days by status</span></div>
+            <div className={memberData.length ? 'attendance-history-chart-content' : 'attendance-history-chart-empty'}>
               {memberData.length ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -1129,15 +1141,14 @@ const AllAttendanceStatsComponent = () => {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-500 text-sm">
-                  No member breakdown yet
+                <div className="attendance-history-empty"><span><FiUsers /></span><strong>No member breakdown yet</strong><p>Team attendance records will appear here.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+        <section className="attendance-history-records"><div className="attendance-history-panel-heading"><h3><FiCalendar />Attendance records</h3><span>{team.total || 0} records</span></div>
           <div className="overflow-x-auto">
             <table className="min-w-[760px] w-full text-sm">
               <thead>
@@ -1279,7 +1290,7 @@ const AllAttendanceStatsComponent = () => {
           </div>
 
           {!team.records?.length && !team.loading ? (
-            <p className="py-8 sm:py-10 text-center text-slate-500 text-sm">No attendance rows match your filters.</p>
+            <div className="attendance-history-empty attendance-history-records-empty"><span><FiSearch /></span><strong>No matching attendance records</strong><p>Adjust the filters above to find your team’s attendance.</p></div>
           ) : null}
 
           <footer className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
@@ -1325,7 +1336,7 @@ const AllAttendanceStatsComponent = () => {
               </button>
             </div>
           </footer>
-        </div>
+        </section>
 
         {/* Break Details Modal */}
         {showBreaksModal && selectedBreaksRow && (
