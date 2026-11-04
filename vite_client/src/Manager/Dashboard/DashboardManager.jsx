@@ -1,3 +1,4 @@
+import '../../styles/dashboardHR.css';
 import './DashboardManager.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -822,7 +823,7 @@ const DashboardManager = () => {
         return dueDate < new Date() && task.status !== 'Completed' && task.status !== 'completed';
     }).length;
     return (
-        <div className="min-h-screen bg-[#f6f8fb] transition-all duration-300">
+        <div className="hr-dash manager-dashboard min-h-screen">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
             <div className="page-shell manager-dashboard-shell">
@@ -831,19 +832,18 @@ const DashboardManager = () => {
                 <AnnouncementBanner />
 
                 <div className="manager-dashboard-grid">
-                    <div className="manager-dashboard-group">
-                        <div className="manager-welcome rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-5 sm:py-4 md:px-6">
+                    <div className="manager-welcome hr-dash__header">
                             <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
                                 <div className="min-w-0">
-                                    <p className="manager-eyebrow">Your workspace</p>
-                                    <h1 className="break-words text-xl font-semibold text-slate-900 sm:text-2xl">
-                                        Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name || user?.username || 'Manager'} 👋
+                                    <p className="hr-dash__eyebrow">Manager Workspace</p>
+                                    <h1 className="hr-dash__title">
+                                        Team dashboard
                                     </h1>
-                                    <p className="text-sm text-slate-500">{format(new Date(), 'dd MMM yyyy')}</p>
+                                    <p className="hr-dash__subtitle">{user?.name || user?.username || 'Manager'} · {format(new Date(), 'EEEE, dd MMM yyyy')}</p>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button
-                                        className="rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
+                                        className="hr-dash__icon-btn"
                                         onClick={() => navigate('/helpdesk')}
                                         title="HR Helpdesk"
                                         aria-label="HR Helpdesk"
@@ -851,7 +851,7 @@ const DashboardManager = () => {
                                         <FaHeadset />
                                     </button>
                                     <button
-                                        className="relative rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
+                                        className="hr-dash__icon-btn relative"
                                         aria-label="Notifications"
                                         onClick={() => navigate('/notifications')}
                                     >
@@ -869,7 +869,7 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="manager-attendance"><AttendanceBox variant="dashboard" /></div>
+                        <section className="manager-attendance hr-dash__punch"><h3>Punch in / punch out</h3><AttendanceBox variant="dashboard" /></section>
 
                         <div className="manager-personal"><PersonalDashboardKpiRow compact /></div>
 
@@ -904,9 +904,10 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="manager-health w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+                        <div className="manager-dashboard-group manager-main">
+                        <div className="manager-health hr-dash__panel">
                             <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
-                                <h3 className="text-lg font-semibold text-slate-900 sm:text-2xl">Attendance Health</h3>
+                                <h3 className="hr-dash__panel-title">Attendance Health</h3>
                                 <div className="flex items-center gap-4 text-xs text-slate-500">
                                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600"></span>Good</span>
                                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Needs attention</span>
@@ -960,8 +961,8 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="manager-approvals w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
-                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Team approvals</h3>
+                        <div className="manager-approvals hr-dash__panel">
+                            <h3 className="hr-dash__panel-title mb-3">Team approvals</h3>
                             <div className="space-y-3 sm:space-y-4">
                                 {teamPendingLeaves.slice(0, 2).map((leave, index) => (
                                     <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
@@ -1046,11 +1047,12 @@ const DashboardManager = () => {
                         </div>
                     </div>
 
-                    <div className="manager-dashboard-group">
+                    <div className="manager-dashboard-group manager-side">
+                        <div className="manager-leave"><LeaveBalanceCard /></div>
                         <div className="manager-celebrations w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                             <div
                                 className="rounded-t-xl px-3 py-2"
-                                style={{ background: 'linear-gradient(90deg, #20C997 0%, #17a67d 100%)' }}
+                                style={{ background: '#0e2b3d' }}
                             >
                                 <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
                                     <FaBirthdayCake className="h-3 w-3" />
@@ -1083,10 +1085,9 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="manager-leave"><LeaveBalanceCard /></div>
 
-                        <div className="manager-meetings w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
-                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Upcoming meetings</h3>
+                        <div className="manager-meetings hr-dash__panel">
+                            <h3 className="hr-dash__panel-title mb-3">Upcoming meetings</h3>
                             <div className="space-y-3">
                                 {meetingsLoading ? (
                                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
@@ -1145,8 +1146,8 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="manager-projects w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
-                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Active projects</h3>
+                        <div className="manager-projects hr-dash__panel">
+                            <h3 className="hr-dash__panel-title mb-3">Active projects</h3>
                             <div className="space-y-3 sm:space-y-4">
                                 {managerProjects.slice(0, 2).map((project, index) => {
                                     const progress = Number(project?.progress || project?.completion || 40 + index * 25);
@@ -1178,13 +1179,7 @@ const DashboardManager = () => {
             </div>
             </div>
 
-            <button
-                aria-label="Apply for leave"
-                className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
-                onClick={() => navigate('/leave-management')}
-            >
-                <FaPlus />
-            </button>
+
         </div>
     );
 };
