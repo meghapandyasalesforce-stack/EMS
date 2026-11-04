@@ -834,26 +834,13 @@ const DashboardManager = () => {
                 <div className="manager-dashboard-grid">
                     <header className="manager-welcome manager-hero">
                         <div className="manager-hero-copy">
-                            <p className="manager-hero-eyebrow"><span /> Manager workspace</p>
+                            <p className="manager-hero-eyebrow">Manager workspace</p>
+                            <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0] || user?.username || 'Manager'}</h1>
                             <p className="manager-hero-date">{format(new Date(), 'EEEE, dd MMM yyyy')}</p>
-                            <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0] || user?.username || 'Manager'} <span className="manager-wave">✦</span></h1>
-                            <p className="manager-hero-description">Your people. Your priorities. All in one place.</p>
-                            <div className="manager-hero-actions">
-                                <button type="button" onClick={() => navigate('/projects')}>Explore projects <FaArrowRight /></button>
-                                <button type="button" onClick={() => navigate('/one-on-one')}>View 1:1 meetings <FaVideo /></button>
-                            </div>
                         </div>
-                        <div className="manager-hero-pulse">
-                            <div className="manager-pulse-heading"><span>Team snapshot</span><FaUsers /></div>
-                            <div className="manager-pulse-content">
-                                <div className="manager-attendance-ring" style={{ '--score': `${teamAttendance}%` }}>
-                                    <div><strong>{teamAttendance}%</strong><span>Attendance</span></div>
-                                </div>
-                                <div className="manager-pulse-numbers">
-                                    <p><strong>{teamSize}</strong><span>Team members</span></p>
-                                    <p><strong>{pendingApprovals}</strong><span>Leave requests pending</span></p>
-                                </div>
-                            </div>
+                        <div className="manager-hero-actions">
+                            <button type="button" onClick={() => navigate('/projects')}>Projects <FaArrowRight /></button>
+                            <button type="button" onClick={() => navigate('/one-on-one')}>1:1 meetings <FaVideo /></button>
                         </div>
                         <div className="manager-hero-tools">
                             <button type="button" aria-label="HR Helpdesk" onClick={() => navigate('/helpdesk')}><FaHeadset /></button>
