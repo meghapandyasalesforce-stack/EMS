@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 import { 
     FaUsers, FaTasks, FaCheckCircle,
     FaCalendarAlt, FaBirthdayCake,
-    FaBell, FaPlus, FaVideo, FaHeadset
+    FaBell, FaPlus, FaVideo, FaHeadset, FaArrowRight, FaProjectDiagram
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
@@ -832,48 +832,41 @@ const DashboardManager = () => {
                 <AnnouncementBanner />
 
                 <div className="manager-dashboard-grid">
-                    <div className="manager-welcome hr-dash__header">
-                            <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
-                                <div className="min-w-0">
-                                    <p className="hr-dash__eyebrow">Manager Workspace</p>
-                                    <h1 className="hr-dash__title">
-                                        Team dashboard
-                                    </h1>
-                                    <p className="hr-dash__subtitle">{user?.name || user?.username || 'Manager'} · {format(new Date(), 'EEEE, dd MMM yyyy')}</p>
+                    <header className="manager-welcome manager-hero">
+                        <div className="manager-hero-copy">
+                            <p className="manager-hero-eyebrow"><span /> Manager workspace</p>
+                            <p className="manager-hero-date">{format(new Date(), 'EEEE, dd MMM yyyy')}</p>
+                            <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0] || user?.username || 'Manager'} <span className="manager-wave">✦</span></h1>
+                            <p className="manager-hero-description">Your people. Your priorities. All in one place.</p>
+                            <div className="manager-hero-actions">
+                                <button type="button" onClick={() => navigate('/projects')}>Explore projects <FaArrowRight /></button>
+                                <button type="button" onClick={() => navigate('/one-on-one')}>View 1:1 meetings <FaVideo /></button>
+                            </div>
+                        </div>
+                        <div className="manager-hero-pulse">
+                            <div className="manager-pulse-heading"><span>Team snapshot</span><FaUsers /></div>
+                            <div className="manager-pulse-content">
+                                <div className="manager-attendance-ring" style={{ '--score': `${teamAttendance}%` }}>
+                                    <div><strong>{teamAttendance}%</strong><span>Attendance</span></div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        className="hr-dash__icon-btn"
-                                        onClick={() => navigate('/helpdesk')}
-                                        title="HR Helpdesk"
-                                        aria-label="HR Helpdesk"
-                                    >
-                                        <FaHeadset />
-                                    </button>
-                                    <button
-                                        className="hr-dash__icon-btn relative"
-                                        aria-label="Notifications"
-                                        onClick={() => navigate('/notifications')}
-                                    >
-                                        <FaBell />
-                                        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-orange-500"></span>
-                                    </button>
-                                    <button
-                                        className="h-10 w-10 rounded-full bg-slate-100 text-sm font-semibold text-slate-700"
-                                        aria-label="View profile"
-                                        onClick={() => navigate('/view-profile')}
-                                    >
-                                        {(user?.name || 'M').charAt(0).toUpperCase()}
-                                    </button>
+                                <div className="manager-pulse-numbers">
+                                    <p><strong>{teamSize}</strong><span>Team members</span></p>
+                                    <p><strong>{pendingApprovals}</strong><span>Leave requests pending</span></p>
                                 </div>
                             </div>
                         </div>
+                        <div className="manager-hero-tools">
+                            <button type="button" aria-label="HR Helpdesk" onClick={() => navigate('/helpdesk')}><FaHeadset /></button>
+                            <button type="button" aria-label="Notifications" onClick={() => navigate('/notifications')}><FaBell /></button>
+                            <button type="button" aria-label="View profile" onClick={() => navigate('/view-profile')}>{(user?.name || 'M').charAt(0).toUpperCase()}</button>
+                        </div>
+                    </header>
 
-                        <section className="manager-attendance hr-dash__punch"><h3>Punch in / punch out</h3><AttendanceBox variant="dashboard" /></section>
+                        <section className="manager-attendance hr-dash__punch"><AttendanceBox variant="dashboard" /></section>
 
-                        <div className="manager-personal"><PersonalDashboardKpiRow compact /></div>
+                        <div className="manager-personal"><div className="manager-section-heading"><h2>Your month at a glance</h2><span>Personal overview</span></div><PersonalDashboardKpiRow compact /></div>
 
-                        <div className="manager-team grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div className="manager-team-wrap"><div className="manager-section-heading"><h2>Team performance</h2><span>Stay ahead of what matters</span></div><div className="manager-team grid grid-cols-2 gap-3 sm:grid-cols-4">
                             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
                                 <div className="mb-2 flex items-center justify-between sm:mb-3">
                                     <p className={UI_FORM_LABEL_CLASS}>Team size</p>
@@ -904,25 +897,26 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
+                        </div>
                         <div className="manager-dashboard-group manager-main">
                         <div className="manager-health hr-dash__panel">
                             <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
-                                <h3 className="hr-dash__panel-title">Attendance Health</h3>
+                                <div><p className="manager-panel-eyebrow">People insights</p><h3 className="hr-dash__panel-title">Attendance health</h3></div>
                                 <div className="flex items-center gap-4 text-xs text-slate-500">
                                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600"></span>Good</span>
                                     <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Needs attention</span>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <p className={UI_FORM_LABEL_CLASS}>On-time score</p>
+                                <div className="manager-score-card manager-score-card--green">
+                                    <FaCheckCircle className="manager-score-icon" /><p className={UI_FORM_LABEL_CLASS}>On-time score</p>
                                     <p className="mt-2 text-3xl font-bold text-emerald-700">{attendanceHealth.onTimeScore}%</p>
                                     <div className="mt-3 h-2 rounded-full bg-slate-200">
                                         <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${attendanceHealth.onTimeScore}%` }}></div>
                                     </div>
                                 </div>
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <p className={UI_FORM_LABEL_CLASS}>Absence risk</p>
+                                <div className="manager-score-card manager-score-card--amber">
+                                    <FaCalendarAlt className="manager-score-icon" /><p className={UI_FORM_LABEL_CLASS}>Absence risk</p>
                                     <p className="mt-2 text-3xl font-bold text-orange-500">{attendanceHealth.absenceRisk}%</p>
                                     <div className="mt-3 h-2 rounded-full bg-slate-200">
                                         <div className="h-2 rounded-full bg-orange-400" style={{ width: `${attendanceHealth.absenceRisk}%` }}></div>
@@ -1040,7 +1034,7 @@ const DashboardManager = () => {
                                 ))}
                                 {teamPendingLeaves.length === 0 && (
                                     <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
-                                        No pending approvals right now.
+                                        <span className="manager-empty-icon"><FaCheckCircle /></span><strong>You’re all caught up</strong><span>No pending team approvals right now.</span>
                                     </div>
                                 )}
                             </div>
@@ -1063,7 +1057,7 @@ const DashboardManager = () => {
                                 {dashboardStats.celebrations == null ? (
                                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-500">Loading upcoming celebrations...</div>
                                 ) : dashboardStats.celebrations.length === 0 ? (
-                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
+                                    <div className="manager-celebration-empty"><span>🎉</span><div><strong>Every milestone matters</strong><p>No upcoming celebrations.</p></div></div>
                                 ) : (
                                     <ul className="space-y-2">
                                         {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
@@ -1099,7 +1093,7 @@ const DashboardManager = () => {
                                     </div>
                                 ) : upcomingMeetings.length === 0 ? (
                                     <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
-                                        No upcoming meetings scheduled.
+                                        <span className="manager-empty-icon"><FaVideo /></span><strong>Make time for your team</strong><span>No upcoming meetings scheduled.</span><button type="button" className="manager-text-action" onClick={() => navigate('/one-on-one')}>View meetings <FaArrowRight /></button>
                                     </div>
                                 ) : (
                                     upcomingMeetings.map((meeting) => {
@@ -1168,7 +1162,7 @@ const DashboardManager = () => {
                                 })}
                                 {managerProjects.length === 0 && (
                                     <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
-                                        No active projects found.
+                                        <span className="manager-empty-icon"><FaProjectDiagram /></span><strong>A clear view of your projects</strong><span>No active projects found.</span><button type="button" className="manager-text-action" onClick={() => navigate('/projects')}>Explore projects <FaArrowRight /></button>
                                     </div>
                                 )}
                             </div>
