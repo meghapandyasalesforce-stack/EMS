@@ -443,3 +443,73 @@
     grid-row: 3;
   }
 }
+
+/* Use the actual card width, including narrow panes in a wider browser. */
+.attendance-history--manager .attendance-history-records {
+  container: attendance-records / inline-size;
+}
+@container attendance-records (max-width: 600px) {
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: stretch;
+    gap: 12px 20px;
+    padding: 12px 16px;
+    font-size: 11px;
+    line-height: 18px;
+  }
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination .text-sm,
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination label {
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    line-height: 18px;
+    margin: 0;
+  }
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination > p {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: left;
+    color: #64748b;
+  }
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination > div:first-child {
+    grid-column: 2;
+    grid-row: 1;
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination select.text-sm {
+    width: 54px;
+    height: 32px;
+    min-height: 32px;
+    padding: 4px 6px;
+    font-size: 12px;
+    line-height: 18px;
+    background: #fff;
+    border-radius: 6px;
+  }
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination > div:last-child {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: center;
+    gap: 18px;
+    padding-top: 8px;
+    border-top: 1px solid #e8edf3;
+  }
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 6px;
+    border-radius: 6px;
+  }
+  .attendance-history--manager .attendance-history-records .attendance-history-pagination button svg {
+    width: 14px;
+    height: 14px;
+  }
+}

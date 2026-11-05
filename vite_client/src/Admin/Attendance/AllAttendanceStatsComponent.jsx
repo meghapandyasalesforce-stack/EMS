@@ -1314,10 +1314,12 @@ const AllAttendanceStatsComponent = () => {
             <div className="attendance-history-empty attendance-history-records-empty"><span><FiSearch /></span><strong>No matching attendance records</strong><p>Adjust the filters above to find your team’s attendance.</p></div>
           ) : null}
 
-          <footer className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+          <footer className="attendance-history-pagination flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
             <div className="flex items-center gap-2 text-sm text-slate-600">
-              <span>Rows per page</span>
+              <label htmlFor="attendance-page-size">{isManagerView ? 'Rows' : 'Rows per page'}</label>
               <select
+                id="attendance-page-size"
+                aria-label="Rows per page"
                 value={rowsPerPage}
                 onChange={(e) => setRowsPerPage(Number(e.target.value))}
                 className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
@@ -1338,6 +1340,7 @@ const AllAttendanceStatsComponent = () => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                aria-label="Previous page"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
@@ -1349,6 +1352,7 @@ const AllAttendanceStatsComponent = () => {
               </span>
               <button
                 type="button"
+                aria-label="Next page"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
                 className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
