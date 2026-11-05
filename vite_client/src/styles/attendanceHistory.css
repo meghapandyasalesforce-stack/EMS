@@ -387,3 +387,59 @@
     min-width: 32px;
   }
 }
+
+@media (max-width: 639px) {
+  .attendance-history--manager .attendance-history-records footer {
+    column-gap: 20px;
+    row-gap: 10px;
+    padding: 12px 14px;
+    line-height: 1.5;
+  }
+  .attendance-history--manager .attendance-history-records footer .text-sm {
+    font-size: 11px;
+    letter-spacing: 0.01em;
+  }
+  .attendance-history--manager .attendance-history-records footer > div:first-child {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .attendance-history--manager .attendance-history-records footer > div:first-child > span,
+  .attendance-history--manager .attendance-history-records footer > div:last-child > span {
+    white-space: nowrap;
+  }
+  .attendance-history--manager .attendance-history-records footer select.text-sm {
+    width: 58px;
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .attendance-history--manager .attendance-history-records footer > div:last-child {
+    gap: 8px;
+  }
+  .attendance-history--manager .attendance-history-records footer > div:last-child button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-height: 36px;
+    padding: 6px;
+  }
+  .attendance-history--manager .attendance-history-records footer button svg {
+    width: 15px;
+    height: 15px;
+  }
+  .attendance-history--manager .attendance-history-records footer > p {
+    margin-top: 2px;
+    color: #728097;
+  }
+}
+@media (max-width: 359px) {
+  .attendance-history--manager .attendance-history-records footer {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    row-gap: 12px;
+  }
+  .attendance-history--manager .attendance-history-records footer > p {
+    grid-row: 3;
+  }
+}
