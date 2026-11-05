@@ -163,3 +163,102 @@
     margin-bottom: 0;
   }
 }
+
+@media (max-width: 639px) {
+  .attendance-history--manager .attendance-history-header > div:last-child {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .attendance-history--manager .attendance-history-header button,
+  .attendance-history--manager .attendance-history-months button,
+  .attendance-history--manager .attendance-history-status button,
+  .attendance-history--manager .attendance-history-records button {
+    min-height: 44px;
+  }
+  .attendance-history--manager .attendance-history-status {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .attendance-history--manager .attendance-history-records table {
+    min-width: 0;
+    display: block;
+  }
+  .attendance-history--manager .attendance-history-records thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .attendance-history--manager .attendance-history-records tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+  .attendance-history--manager .attendance-history-records tbody:empty {
+    padding: 0;
+  }
+  .attendance-history--manager .attendance-history-records tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid #e1e8f1;
+    border-radius: 12px;
+    padding: 12px;
+    gap: 12px;
+  }
+  .attendance-history--manager .attendance-history-records td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+  .attendance-history--manager .attendance-history-records td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #52657c;
+  }
+  .attendance-history--manager .attendance-history-records td:nth-child(1),
+  .attendance-history--manager .attendance-history-records td:nth-child(4),
+  .attendance-history--manager .attendance-history-records td:nth-child(6),
+  .attendance-history--manager .attendance-history-records td:last-child {
+    grid-column: 1 / -1;
+  }
+  .attendance-history--manager .attendance-history-records td > .flex {
+    flex-wrap: wrap;
+  }
+  .attendance-history--manager .attendance-history-records td:last-child button {
+    min-width: 44px;
+    justify-content: center;
+    align-items: center;
+  }
+  .attendance-history--manager .attendance-history-records footer select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .attendance-history--manager .attendance-history-breaks-modal {
+    max-height: calc(100dvh - 32px);
+  }
+  .attendance-history--manager .attendance-history-breaks-modal > div:first-child {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+  }
+  .attendance-history--manager .attendance-history-breaks-modal > div:first-child > div:last-child {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .attendance-history--manager .attendance-history-breaks-modal button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 380px) {
+  .attendance-history--manager .attendance-history-search-range > .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

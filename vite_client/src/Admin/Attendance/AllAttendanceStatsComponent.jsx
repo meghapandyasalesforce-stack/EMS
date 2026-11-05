@@ -1188,7 +1188,7 @@ const AllAttendanceStatsComponent = () => {
 
                   return (
                     <tr key={row._id} className="hover:bg-[#fafcfc] transition-colors">
-                      <td className="px-4 py-4 pl-6 whitespace-nowrap">
+                      <td data-label="Team member" className="px-4 py-4 pl-6 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <RowAvatar employee={emp} />
                           <div>
@@ -1197,13 +1197,13 @@ const AllAttendanceStatsComponent = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-700">
+                      <td data-label="Shift" className="px-4 py-4 whitespace-nowrap text-slate-700">
                         {row.shiftName || emp?.shiftName || '—'}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-700">
+                      <td data-label="Date" className="px-4 py-4 whitespace-nowrap text-slate-700">
                         {formatRowDate(row)}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                      <td data-label="Check in / out" className="px-4 py-4 text-slate-700 whitespace-nowrap">
                         {hasPunch ? (
                           <div className="text-xs sm:text-sm">
                             <span className="font-medium text-slate-900">IN:</span> {formatTime(row.clockIn)}
@@ -1214,14 +1214,14 @@ const AllAttendanceStatsComponent = () => {
                           <span className="text-slate-400 italic">No entry recorded</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                      <td data-label="Hours" className="px-4 py-4 text-slate-700 whitespace-nowrap">
                         {!hasPunch && row.uiStatus === 'absent' ? (
                           <span className="text-slate-400">0h 0m</span>
                         ) : (
                           formatHours(row.effectiveHours)
                         )}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                      <td data-label="Break" className="px-4 py-4 text-slate-700 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className="font-semibold text-slate-800">
                             {formatBreakMinutes(toBreakMinutes(row))}
@@ -1238,8 +1238,8 @@ const AllAttendanceStatsComponent = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">{statusBadge(row.uiStatus)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-600">
+                      <td data-label="Status" className="px-4 py-4 whitespace-nowrap">{statusBadge(row.uiStatus)}</td>
+                      <td data-label="Location" className="px-4 py-4 whitespace-nowrap text-slate-600">
                         {locMeta && LocIcon ? (
                           <span className="inline-flex items-center gap-1">
                             <LocIcon className="h-4 w-4 shrink-0" />
@@ -1249,7 +1249,7 @@ const AllAttendanceStatsComponent = () => {
                           '—'
                         )}
                       </td>
-                      <td className="px-4 py-4 pr-6 text-right whitespace-nowrap">
+                      <td data-label="Actions" className="px-4 py-4 pr-6 text-right whitespace-nowrap">
                         {ActionIcon ? (
                           <button
                             type="button"
@@ -1346,7 +1346,7 @@ const AllAttendanceStatsComponent = () => {
         {/* Break Details Modal */}
         {showBreaksModal && selectedBreaksRow && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="attendance-history-breaks-modal bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
               <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-[#ecfdf5] flex items-center justify-center shrink-0">
@@ -1382,6 +1382,7 @@ const AllAttendanceStatsComponent = () => {
                   <button
                     type="button"
                     onClick={handleCloseBreaksModal}
+                    aria-label="Close break details"
                     className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
                   >
                     <FiX className="h-6 w-6" />

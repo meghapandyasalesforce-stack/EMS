@@ -210,3 +210,43 @@
     display: none;
   }
 }
+
+@media (max-width: 639px) {
+  .manager-calendar > .page-shell-inner,
+  .manager-calendar .hrms-main-rail,
+  .manager-calendar .manager-calendar-sidebar {
+    gap: 12px;
+  }
+  .manager-calendar .manager-calendar-header,
+  .manager-calendar .manager-calendar-panel,
+  .manager-calendar .manager-calendar-upcoming {
+    padding: 12px;
+  }
+  .manager-calendar .manager-calendar-header button,
+  .manager-calendar .manager-calendar-panel button,
+  .manager-calendar select {
+    min-height: 44px;
+  }
+  .manager-calendar .manager-calendar-days > button {
+    min-height: 48px;
+  }
+  .manager-calendar .manager-calendar-panel > .space-y-3 > .flex {
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+  .manager-calendar .manager-calendar-panel > .space-y-3 > .flex > button {
+    scroll-snap-align: start;
+  }
+  .manager-calendar .manager-calendar-sidebar p,
+  .manager-calendar [role='dialog'] p {
+    overflow-wrap: anywhere;
+  }
+  .manager-calendar [role='dialog'] {
+    max-height: 85dvh;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .manager-calendar [role='dialog'] button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
