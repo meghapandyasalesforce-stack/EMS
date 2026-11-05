@@ -470,7 +470,7 @@ const getFinanceNavigation = () => [
     { path: "/onboarding", name: "Employee lifecycle", icon: <FaUserCheck /> },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
     { path: "/salary-structure", name: "Salary structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
-    { path: "/admin/reports", name: "Financial reports", icon: <FaChartBar /> },
+    { path: "/admin/reports/payroll", name: "Financial reports", icon: <FaChartBar /> },
     { path: "/employees", name: "Employees", icon: <FaUsers /> },
     { path: "/my-leave", name: "My leave", icon: <FaCalendarAlt /> },
     { path: "/my-attendance-regularization", name: "WFH & Regularization", icon: <FaClock /> },

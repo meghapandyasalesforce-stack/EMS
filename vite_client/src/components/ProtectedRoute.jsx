@@ -72,7 +72,7 @@ const ProtectedRoute = ({
   if (userIsProjectManager) effectiveRoles.push('project_manager');
   if (userIsHR) effectiveRoles.push('hr');
   if (userIsExecutive) effectiveRoles.push('executive');
-  if (isFinanceDept) effectiveRoles.push('finance');
+  if (isFinanceDept || permissionFlags.isPayrollAdmin) effectiveRoles.push('finance');
   if (isTechDept) effectiveRoles.push('tech');
   effectiveRoles.push('employee');
 

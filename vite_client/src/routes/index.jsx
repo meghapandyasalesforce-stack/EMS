@@ -378,7 +378,7 @@ export const hrRoutes = [
   { path: '/workforce', component: lazy(() => import('../HR/Workforce/WorkforcePage')), message: 'Loading workforce planning...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/workforce/:id', component: lazy(() => import('../HR/Workforce/WorkforceDetailPage')), message: 'Loading workforce plan details...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/helpdesk', component: lazy(() => import('../HR/Helpdesk/HelpdeskPage')), message: 'Loading helpdesk...', allowedRoles: [] },
-  { path: '/admin/reports/*', component: lazy(() => import('../HR/Reports/HRReportsLayout')), message: 'Loading HR reports...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/admin/reports/*', component: lazy(() => import('../HR/Reports/HRReportsLayout')), message: 'Loading reports...', allowedRoles: ['admin', 'hr', 'executive', 'finance'] },
   { path: '/hr/analytics', component: lazy(() => import('../HR/Analytics/HRAnalyticsPage')), message: 'Loading HR analytics...', allowedRoles: ['admin', 'hr', 'executive'] }
 ];
 
