@@ -127,3 +127,86 @@
     padding: 5px 3px;
   }
 }
+
+/* Balance the calendar and supporting cards without a vacant column below. */
+@media (min-width: 1024px) {
+  .manager-calendar .hrms-main-rail {
+    align-items: stretch;
+  }
+  .manager-calendar .hrms-main-rail > div:first-child {
+    display: flex;
+    flex-direction: column;
+  }
+  .manager-calendar .manager-calendar-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .manager-calendar .manager-calendar-days {
+    flex: 1;
+    grid-auto-rows: minmax(48px, 1fr);
+    gap: 6px;
+  }
+  .manager-calendar .manager-calendar-days > button {
+    min-height: 48px;
+    padding: 6px 8px;
+  }
+  .manager-calendar .manager-calendar-sidebar {
+    grid-template-rows: 1fr auto;
+    gap: 12px;
+  }
+  .manager-calendar .manager-calendar-upcoming {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+  }
+  .manager-calendar .manager-calendar-upcoming > div:first-child {
+    margin-bottom: 12px;
+  }
+  .manager-calendar .manager-calendar-upcoming button {
+    padding: 10px 12px;
+  }
+  .manager-calendar .manager-calendar-upcoming button > p:nth-child(2) {
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .manager-calendar .manager-calendar-upcoming button > div {
+    margin-top: 4px;
+  }
+  .manager-calendar .manager-calendar-upcoming > div:last-child {
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .manager-calendar .manager-calendar-sidebar > div {
+    padding: 16px;
+  }
+  .manager-calendar .manager-calendar-sidebar > div h3 {
+    margin-bottom: 10px;
+  }
+  .manager-calendar .manager-calendar-sidebar > div > .grid > div {
+    padding: 10px 12px;
+  }
+  .manager-calendar .manager-calendar-sidebar > div h4 {
+    margin-bottom: 4px;
+    font-size: 10px;
+  }
+}
+.manager-calendar .manager-calendar-header {
+  padding: 16px 20px;
+}
+.manager-calendar .manager-calendar-controls {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+.manager-calendar .manager-calendar-panel {
+  padding: 16px;
+}
+.manager-calendar .manager-calendar-panel > div:last-child {
+  margin-top: 12px;
+}
+@media (min-width: 1024px) {
+  .manager-calendar .manager-calendar-upcoming > div:last-child {
+    display: none;
+  }
+}
