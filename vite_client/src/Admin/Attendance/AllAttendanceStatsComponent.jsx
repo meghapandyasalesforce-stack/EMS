@@ -264,6 +264,7 @@ const AllAttendanceStatsComponent = () => {
     ...monthRange(now.getFullYear(), now.getMonth()),
   }));
   const [search, setSearch] = useState('');
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -957,6 +958,20 @@ const AllAttendanceStatsComponent = () => {
             </div>
           </div>
 
+          {isManagerView && (
+            <button
+              type="button"
+              className="attendance-history-filter-toggle"
+              aria-expanded={showMoreFilters}
+              aria-controls="attendance-history-advanced-filters"
+              onClick={() => setShowMoreFilters((visible) => !visible)}
+            >
+              <FiFilter />
+              {showMoreFilters ? 'Hide extra filters' : 'Month, status & department'}
+              <span aria-hidden="true">{showMoreFilters ? '−' : '+'}</span>
+            </button>
+          )}
+          <div id="attendance-history-advanced-filters" className="attendance-history-advanced" data-expanded={showMoreFilters}>
           <div className="attendance-history-period"><div className="attendance-history-year">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-2">Year</span>
             <select
@@ -1057,6 +1072,7 @@ const AllAttendanceStatsComponent = () => {
                 <option value="date_asc">Date ascending</option>
               </select>
             </div>
+          </div>
           </div>
         </section>
 
