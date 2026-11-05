@@ -87,3 +87,43 @@
     font-size: 16px;
   }
 }
+
+/* Keep sparse months compact and group supporting details beside the grid. */
+.manager-calendar .manager-calendar-controls {
+  padding: 0 0 16px;
+  margin-bottom: 16px;
+  border: 0;
+  border-bottom: 1px solid #e1e8f1;
+  border-radius: 0;
+  box-shadow: none;
+}
+.manager-calendar .manager-calendar-sidebar {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.manager-calendar .manager-calendar-sidebar > div {
+  border-radius: 16px;
+}
+.manager-calendar .manager-calendar-sidebar > div > .grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.manager-calendar .manager-calendar-days > button {
+  min-height: 64px;
+  padding: 8px;
+}
+.manager-calendar .manager-calendar-panel > div:last-child {
+  margin-top: 16px;
+}
+@media (min-width: 1024px) {
+  .manager-calendar .hrms-main-rail {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+@media (max-width: 639px) {
+  .manager-calendar .manager-calendar-days > button {
+    min-height: 44px;
+    padding: 5px 3px;
+  }
+}
