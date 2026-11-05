@@ -16,6 +16,7 @@ import { featureKeyForPath, isSaasFeatureEnabled } from '../constants/saasFeatur
 const ProtectedRoute = ({
   children,
   allowedRoles = [],
+  requireRoleMatch = false,
   requiredPermissions = [],
   redirectTo,
   orgOwnerOnly = false,
@@ -83,6 +84,7 @@ const ProtectedRoute = ({
     isOrgOwner: !!permissionFlags.isOrgOwner,
     allowedRoles,
     effectiveRoles,
+    requireRoleMatch,
   });
 
   const isHrOnlyRoute =
