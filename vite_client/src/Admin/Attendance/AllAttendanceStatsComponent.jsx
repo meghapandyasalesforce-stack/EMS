@@ -237,6 +237,11 @@ const AllAttendanceStatsComponent = () => {
   const { employeeDetails, employeeStats } = attendanceState;
   const team = attendanceState.teamAttendanceHistory ?? EMPTY_TEAM_HISTORY;
   const orgTimezone = useSelector((s) => s.timezone?.timezone) || 'UTC';
+  const isManagerView = useSelector((s) =>
+    s.auth?.activePortal
+      ? s.auth.activePortal === 'line_manager'
+      : s.auth?.user?.role === 'manager'
+  );
 
   const formatRowDate = useCallback(
     (row) => formatAttendanceDateKey(resolveAttendanceDateKeyFromRow(row, orgTimezone), 'd MMM yyyy', orgTimezone),
@@ -879,7 +884,7 @@ const AllAttendanceStatsComponent = () => {
   };
 
   return (
-    <div className="attendance-history page-shell min-h-screen">
+    <div className={`attendance-history page-shell min-h-screen${isManagerView ? ' attendance-history--manager' : ''}`}>
       <div className="page-shell-inner hrms-stack">
         <header className="attendance-history-header">
           <div><p className="attendance-history-eyebrow">Team workspace</p><h1>Attendance history</h1><p className="attendance-history-subtitle">Track your team’s time, attendance and work locations.</p></div>

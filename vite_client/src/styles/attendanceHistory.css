@@ -80,3 +80,86 @@
  .attendance-history-metric p:nth-child(2) { font-size:23px; }
  .attendance-history-chart { padding:12px; }
 }
+
+/* Keep manager workspace refinements local to this page and portal. */
+.attendance-history--manager .attendance-history-subtitle {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #52657c;
+}
+.attendance-history--manager .attendance-history-filters label,
+.attendance-history--manager .attendance-history-metric p:first-child {
+  font-size: 12px;
+  color: #52657c;
+  line-height: 1.5;
+}
+.attendance-history--manager .attendance-history-filters input,
+.attendance-history--manager .attendance-history-filters select {
+  min-height: 42px;
+  height: 42px;
+  font-size: 14px;
+}
+.attendance-history--manager .attendance-history-status button,
+.attendance-history--manager .attendance-history-months button {
+  min-height: 36px;
+  font-size: 12px;
+}
+.attendance-history--manager .attendance-history-metric p:last-child,
+.attendance-history--manager .attendance-history-empty p {
+  font-size: 12px;
+  color: #52657c;
+  line-height: 1.5;
+}
+.attendance-history--manager .attendance-history-metric p:nth-child(2) {
+  margin-top: 4px;
+}
+.attendance-history--manager .attendance-history-records th {
+  font-size: 12px;
+  color: #52657c;
+}
+.attendance-history--manager .attendance-history-records td {
+  font-size: 13px;
+}
+.attendance-history--manager .attendance-history-records footer {
+  flex-wrap: wrap;
+}
+@media (min-width: 640px) and (max-width: 1099px) {
+  .attendance-history--manager .attendance-history-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .attendance-history--manager .attendance-history-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 639px) {
+  .attendance-history--manager .attendance-history-header > div:first-child {
+    width: 100%;
+  }
+  .attendance-history--manager .attendance-history-header button {
+    min-height: 42px;
+  }
+  .attendance-history--manager .attendance-history-filters input,
+  .attendance-history--manager .attendance-history-filters select {
+    font-size: 16px;
+  }
+  .attendance-history--manager .attendance-history-months {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    overflow: visible;
+    gap: 4px;
+  }
+  .attendance-history--manager .attendance-history-months button {
+    min-width: 0;
+    padding: 7px 2px;
+  }
+  .attendance-history--manager .attendance-history-selects {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .attendance-history--manager .attendance-history-metric {
+    flex-direction: column;
+  }
+  .attendance-history--manager .attendance-history-metric p:first-child {
+    min-height: 36px;
+    margin-bottom: 0;
+  }
+}
