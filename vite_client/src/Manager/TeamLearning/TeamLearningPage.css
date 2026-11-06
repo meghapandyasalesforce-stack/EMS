@@ -1,0 +1,104 @@
+.team-learning-workspace {
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.team-learning-header {
+    padding: 20px 24px;
+}
+
+.team-learning-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0 24px;
+    padding: 16px 0;
+    border-top: 1px solid #f1f5f9;
+}
+
+.team-learning-filters {
+    overflow-x: auto;
+    padding: 0 24px;
+    border-top: 1px solid #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.team-learning-filter {
+    flex-shrink: 0;
+    padding: 14px 0 12px;
+    border-bottom: 2px solid transparent;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 600;
+    transition: color 150ms, border-color 150ms;
+}
+
+.team-learning-filter:hover,
+.team-learning-filter--active {
+    color: var(--color-primary, #0d9d80);
+}
+
+.team-learning-filter--active {
+    border-bottom-color: currentColor;
+}
+
+.team-learning-filter:focus-visible,
+.team-learning-action:focus-visible {
+    outline: 2px solid var(--color-primary, #0d9d80);
+    outline-offset: -2px;
+}
+
+.team-learning-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 44px 24px;
+}
+
+.team-learning-empty-icon {
+    display: flex;
+    flex: 0 0 48px;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    border-radius: 12px;
+}
+
+.team-learning-resources {
+    padding: 0 24px;
+}
+
+.team-learning-resource {
+    padding: 20px 0;
+    overflow-wrap: anywhere;
+}
+
+.team-learning-resource + .team-learning-resource {
+    border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 639px) {
+    .team-learning-header {
+        padding: 16px;
+    }
+
+    .team-learning-filters,
+    .team-learning-resources {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    .team-learning-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin: 0 16px;
+    }
+
+    .team-learning-empty {
+        align-items: flex-start;
+        padding: 28px 16px;
+        gap: 12px;
+    }
+}
