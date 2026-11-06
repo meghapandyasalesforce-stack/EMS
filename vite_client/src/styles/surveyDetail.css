@@ -118,7 +118,7 @@
 }
 
 /* Personal response form: one surface and compact question rows. */
-#root .survey-detail--employee > .page-shell-inner { max-width: 1100px; gap: 0; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; overflow: hidden; }
+#root .survey-detail--employee > .page-shell-inner { width: 100%; max-width: none; min-height: calc(100dvh - 112px); gap: 0; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; overflow: hidden; }
 #root .survey-detail--employee > .page-shell-inner > section { border: 0; border-radius: 0 !important; box-shadow: none; padding: 24px 32px; }
 #root .survey-detail--employee > .page-shell-inner > .survey-detail-hero { padding: 0; }
 #root .survey-detail--employee .survey-detail-title-row { min-height: 0; padding: 28px 116px 20px 32px; background: #fff; align-items: flex-start; }
