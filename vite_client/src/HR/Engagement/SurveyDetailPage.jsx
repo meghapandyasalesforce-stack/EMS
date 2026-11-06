@@ -458,23 +458,30 @@ const SurveyDetailPage = () => {
             const max = question.type === 'Rating' ? 5 : 10;
             const min = question.type === 'eNPS' ? 0 : 1;
             return (
-                <div>
+                <fieldset className="survey-rating" aria-label={question.question}>
                     {question.type === 'eNPS' && (
                         <p className="mb-2 text-xs text-slate-500">
                             How likely are you to recommend this workplace? (0 = not at all, 10 =
                             extremely likely)
                         </p>
                     )}
-                    <input
-                        type="number"
-                        min={min}
-                        max={max}
-                        value={value}
-                        aria-label={question.question}
-                        onChange={(e) => setAnswer(qid, Number(e.target.value))}
-                        className="w-full max-w-[120px] rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                    />
-                </div>
+                    <div className="survey-rating-options">
+                        {Array.from({ length: max - min + 1 }, (_, index) => min + index).map((score) => (
+                            <label key={score} className="survey-rating-option">
+                                <input
+                                    type="radio"
+                                    name={`rating-${qid}`}
+                                    value={score}
+                                    checked={value === score}
+                                    required={question.required}
+                                    onChange={() => setAnswer(qid, score)}
+                                />
+                                <span>{score}</span>
+                            </label>
+                        ))}
+                    </div>
+                    <p className="survey-rating-hint">Select a score from {min} to {max}.</p>
+                </fieldset>
             );
         }
 
