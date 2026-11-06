@@ -305,7 +305,7 @@ const TeamLearningPage = () => {
                     )}
 
                     <nav className="team-learning-filters" aria-label="Learning categories">
-                        <div className="flex gap-5">
+                        <div className="team-learning-filter-options">
                             {['all', 'MERN', 'Technical', 'Soft Skills', 'Leadership', 'Other'].map((category) => (
                                 <button
                                     key={category}
@@ -329,12 +329,40 @@ const TeamLearningPage = () => {
                             <div className="team-learning-empty-icon bg-theme-primary/10 text-theme-primary">
                                 <FaBook className="h-5 w-5" aria-hidden="true" />
                             </div>
-                            <div>
-                                <h2 className="text-base font-semibold text-slate-900">{filterCategory === 'all' ? 'Build your team’s learning library' : `No ${filterCategory} resources yet`}</h2>
+                            <div className="team-learning-empty-copy">
+                                <h2 className="text-xl font-semibold tracking-tight text-slate-900">{filterCategory === 'all' ? 'Build your team’s learning library' : `No ${filterCategory} resources yet`}</h2>
                                 <p className="mt-1 text-sm leading-6 text-slate-500">
                                     {isManagerUser ? 'Use Create Resource to share a guide, video, or course with your team.' : 'Learning materials shared with your team will appear here.'}
                                 </p>
+                                <div className="team-learning-empty-actions">
+                                    {isManagerUser && (
+                                        <button
+                                            type="button"
+                                            className="team-learning-action inline-flex items-center gap-2 rounded-lg bg-theme-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95"
+                                            onClick={() => {
+                                                setSelectedLearning(null);
+                                                resetForm();
+                                                setFormData((previous) => ({ ...previous, category: filterCategory === 'all' ? 'Other' : filterCategory }));
+                                                setShowCreateModal(true);
+                                            }}
+                                        >
+                                            <FaPlus aria-hidden="true" /> Create your first resource
+                                        </button>
+                                    )}
+                                    {filterCategory !== 'all' && (
+                                        <button type="button" className="team-learning-action rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50" onClick={() => setFilterCategory('all')}>
+                                            View all resources
+                                        </button>
+                                    )}
+                                </div>
                             </div>
+                            {isManagerUser && (
+                                <ol className="team-learning-getting-started" aria-label="How team learning works">
+                                    <li><span>1</span><div><strong>Share knowledge</strong><p>Add a guide, video, or course.</p></div></li>
+                                    <li><span>2</span><div><strong>Assign to your team</strong><p>Choose who should learn.</p></div></li>
+                                    <li><span>3</span><div><strong>Follow their progress</strong><p>Track completion in one place.</p></div></li>
+                                </ol>
+                            )}
                         </div>
                     ) : (
                         <div className="team-learning-resources">
