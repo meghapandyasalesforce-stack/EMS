@@ -11,7 +11,8 @@ import {
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { filterEmployeesByManager, isManager } from '../../utils/managerHelper';
-import { formatStatusLabel, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
+import { formatStatusLabel } from '../../utils/textFormat.js';
+import './TeamLearningPage.css';
 
 const TeamLearningPage = () => {
     const navigate = useNavigate();
@@ -247,16 +248,16 @@ const TeamLearningPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F3F7F5]">
-            <div className="page-shell-inner hrms-stack">
-                <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-theme-primary/10 text-xl text-theme-primary">
+        <div className="page-shell team-learning-page">
+            <div className="page-shell-inner team-learning-workspace">
+                <header className="team-learning-header">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-theme-primary/10 text-lg text-theme-primary">
                                 <FaGraduationCap />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Team Learning</h1>
+                                <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">Team Learning</h1>
                                 <p className="mt-1 text-sm text-slate-500">Share learning materials and track team completion</p>
                             </div>
                         </div>
@@ -264,7 +265,7 @@ const TeamLearningPage = () => {
                             <button
                                 type="button"
                                 onClick={() => navigate('/employee/benefits-learning?tab=learning')}
-                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                className="team-learning-action inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                             >
                                 <FaGraduationCap />
                                 My Learning
@@ -277,7 +278,7 @@ const TeamLearningPage = () => {
                                         resetForm();
                                         setShowCreateModal(true);
                                     }}
-                                    className="inline-flex items-center gap-2 rounded-xl bg-theme-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-theme-primary"
+                                    className="team-learning-action inline-flex items-center gap-2 rounded-lg bg-theme-primary px-3 py-2 text-sm font-semibold text-white transition hover:brightness-95"
                                 >
                                     <FaPlus />
                                     Create Resource
@@ -288,59 +289,55 @@ const TeamLearningPage = () => {
                 </header>
 
                     {isManagerUser && overallStats.totalAssigned > 0 && (
-                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <dl className="team-learning-stats">
                             {[
                                 { label: 'Total assignments', value: overallStats.totalAssigned },
                                 { label: 'Completed', value: overallStats.completed },
                                 { label: 'In progress', value: overallStats.inProgress },
                                 { label: 'Not started', value: overallStats.notStarted }
                             ].map((stat) => (
-                                <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                                    <p className={UI_FORM_LABEL_CLASS}>{stat.label}</p>
-                                    <p className="mt-1 text-2xl font-bold text-slate-900">{stat.value}</p>
+                                <div key={stat.label}>
+                                    <dt className="text-xs text-slate-500">{stat.label}</dt>
+                                    <dd className="mt-1 text-lg font-semibold text-slate-900">{stat.value}</dd>
                                 </div>
                             ))}
-                        </div>
+                        </dl>
                     )}
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-                        <div className="flex flex-wrap gap-2">
+                    <nav className="team-learning-filters" aria-label="Learning categories">
+                        <div className="flex gap-5">
                             {['all', 'MERN', 'Technical', 'Soft Skills', 'Leadership', 'Other'].map((category) => (
                                 <button
                                     key={category}
                                     type="button"
+                                    aria-pressed={filterCategory === category}
                                     onClick={() => setFilterCategory(category)}
-                                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                                    className={`team-learning-filter ${
                                         filterCategory === category
-                                            ? 'bg-theme-primary text-white shadow-sm'
-                                            : 'text-slate-600 hover:bg-slate-50'
+                                            ? 'team-learning-filter--active'
+                                            : ''
                                     }`}
                                 >
                                     {category === 'all' ? 'All' : category}
                                 </button>
                             ))}
                         </div>
-                    </div>
+                    </nav>
 
                     {learnings.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center shadow-sm">
-                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-primary/10 text-theme-primary">
-                                <FaBook className="h-7 w-7" />
+                        <div className="team-learning-empty">
+                            <div className="team-learning-empty-icon bg-theme-primary/10 text-theme-primary">
+                                <FaBook className="h-5 w-5" aria-hidden="true" />
                             </div>
-                            <h3 className="text-lg font-semibold text-slate-900">No learning resources found</h3>
-                            <p className="mt-1 text-sm text-slate-500">Share a guide, video, or course with your team.</p>
-                            {isManagerUser && (
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCreateModal(true)}
-                                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-theme-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-theme-primary"
-                                >
-                                    <FaPlus /> Create Your First Resource
-                                </button>
-                            )}
+                            <div>
+                                <h2 className="text-base font-semibold text-slate-900">{filterCategory === 'all' ? 'Build your team’s learning library' : `No ${filterCategory} resources yet`}</h2>
+                                <p className="mt-1 text-sm leading-6 text-slate-500">
+                                    {isManagerUser ? 'Use Create Resource to share a guide, video, or course with your team.' : 'Learning materials shared with your team will appear here.'}
+                                </p>
+                            </div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="team-learning-resources">
                             {learnings.map((learning) => {
                                 const stats = learning.completionStats || {};
                                 const isAssignedToMe = (learning.assignedTo || []).some(
@@ -349,7 +346,7 @@ const TeamLearningPage = () => {
                                 return (
                                 <div
                                     key={learning._id}
-                                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-theme-primary/30 hover:shadow-md"
+                                    className="team-learning-resource"
                                 >
                                     <div className="flex justify-between items-start mb-3">
                                         <div className="flex-1">
@@ -368,6 +365,7 @@ const TeamLearningPage = () => {
                                         {isManagerUser && (
                                             <div className="flex gap-2">
                                                 <button
+                                                    aria-label={`Edit ${learning.title}`}
                                                     onClick={() => {
                                                         setSelectedLearning(learning);
                                                         setFormData({
@@ -388,6 +386,7 @@ const TeamLearningPage = () => {
                                                     <FaEdit />
                                                 </button>
                                                 <button
+                                                    aria-label={`Delete ${learning.title}`}
                                                     onClick={() => handleDelete(learning._id)}
                                                     className="p-2 text-red-500 hover:bg-red-50 rounded"
                                                 >
