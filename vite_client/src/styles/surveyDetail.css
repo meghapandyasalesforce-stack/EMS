@@ -116,3 +116,42 @@
   #root .survey-detail-page .survey-management-controls > div:last-child { flex-wrap: wrap; }
   #root .survey-detail-page .survey-management-controls .survey-detail-metadata { width: 100%; margin: 0; padding: 10px 0; }
 }
+
+/* Personal response form: one surface and compact question rows. */
+#root .survey-detail--employee > .page-shell-inner { max-width: 1100px; gap: 0; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; overflow: hidden; }
+#root .survey-detail--employee > .page-shell-inner > section { border: 0; border-radius: 0 !important; box-shadow: none; padding: 24px 32px; }
+#root .survey-detail--employee > .page-shell-inner > .survey-detail-hero { padding: 0; }
+#root .survey-detail--employee .survey-detail-title-row { min-height: 0; padding: 28px 116px 20px 32px; background: #fff; align-items: flex-start; }
+#root .survey-detail--employee .survey-detail-title-row > div:first-child { width: 38px; height: 38px; flex-basis: 38px; border-radius: 10px; }
+#root .survey-detail--employee .survey-hero-art { display: none; }
+#root .survey-detail--employee .survey-detail-hero h1 { font-size: 23px; }
+#root .survey-detail--employee .survey-detail-back { top: 24px; right: 24px; border-color: #e2e8f0; }
+#root .survey-detail--employee .survey-detail-metadata { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 0; padding: 12px 32px; background: #f8fafc; border-radius: 0; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 11px; }
+#root .survey-detail--employee .survey-detail-metadata > span + span { border: 0; padding: 0; }
+#root .survey-detail--employee .survey-detail-metadata svg { font-size: 13px; color: #94a3b8; }
+#root .survey-detail--employee .survey-response-question { padding: 20px 0 20px 36px; border: 0; border-bottom: 1px solid #e2e8f0; border-radius: 0; background: #fff !important; }
+#root .survey-detail--employee .survey-question-number { left: 0; top: 20px; width: 24px; height: 24px; background: #f1f5f9; color: #64748b; font-size: 12px; }
+#root .survey-detail--employee .survey-response-question > p:first-child { font-size: 14px; }
+#root .survey-detail--employee form > .survey-response-question + .survey-response-question { margin-top: 0; }
+#root .survey-detail--employee form > button[type='submit'] { margin-top: 20px; border-radius: 8px; background: #008e73 !important; }
+#root .survey-detail--employee form textarea { max-width: 720px; min-height: 90px; }
+#root .survey-detail-page .survey-rating { border: 0; padding: 0; margin: 0; }
+#root .survey-detail-page .survey-rating-options { display: flex; flex-wrap: wrap; gap: 8px; }
+#root .survey-detail-page .survey-rating-option { position: relative; display: inline-flex; cursor: pointer; }
+#root .survey-detail-page .survey-rating-option input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+#root .survey-detail-page .survey-rating-option span { display: grid; place-items: center; width: 44px; height: 42px; border: 1px solid #dbe5ee; border-radius: 8px; color: #475569; background: white; font-size: 14px; font-weight: 600; }
+#root .survey-detail-page .survey-rating-option input:checked + span { border-color: #008e73; background: #e4f8f0; color: #00876e; }
+#root .survey-detail-page .survey-rating-option input:focus-visible + span { outline: 2px solid #008e73; outline-offset: 3px; }
+#root .survey-detail-page .survey-rating-option:hover span { border-color: #008e73; }
+#root .survey-detail-page .survey-rating-hint { margin-top: 10px; font-size: 11px; color: #94a3b8; }
+@media (max-width: 639px) {
+  #root .survey-detail--employee > .page-shell-inner > section { padding: 20px 16px; }
+  #root .survey-detail--employee .survey-detail-back { margin: 12px 16px 0; top: auto; right: auto; }
+  #root .survey-detail--employee .survey-detail-title-row { padding: 16px; }
+  #root .survey-detail--employee .survey-detail-hero h1 { font-size: 20px; }
+  #root .survey-detail--employee .survey-detail-metadata { padding: 12px 16px; gap: 8px; }
+  #root .survey-detail--employee .survey-response-question { padding-left: 32px; }
+  #root .survey-detail--employee .survey-response-question textarea { font-size: 16px; }
+  #root .survey-detail-page .survey-rating-options { gap: 6px; }
+  #root .survey-detail-page .survey-rating-option span { width: 38px; height: 42px; }
+}
