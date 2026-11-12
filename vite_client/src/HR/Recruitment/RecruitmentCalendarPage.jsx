@@ -18,7 +18,6 @@ import {
 import { toast } from 'react-toastify';
 import {
     FaBriefcase,
-    FaCalendarAlt,
     FaChevronLeft,
     FaChevronRight,
     FaMapMarkerAlt,
@@ -31,7 +30,6 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { AtsPage, cmInitials } from '../../components/recruitment/atsUi';
 
 const WEEKDAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const TIME_LANES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
 const STATUS_META = {
     Scheduled: { label: 'Confirmed', tone: 'confirmed' },
@@ -249,11 +247,6 @@ const RecruitmentCalendarPage = () => {
         return eachDayOfInterval({ start, end });
     }, [anchor]);
 
-    const visibleInterviewCount = useMemo(
-        () => filtered.filter((e) => e.type === 'interview').length,
-        [filtered],
-    );
-
     const stats = useMemo(() => {
         const interviews = filtered.filter((e) => e.type === 'interview');
         const completed = interviews.filter((e) => e.status === 'Completed').length;
@@ -315,10 +308,20 @@ const RecruitmentCalendarPage = () => {
                 <span className="ric-card__time">{timeLabel}</span>
                 <span className="ric-card__name">{candidateLabel(ev)}</span>
                 <span className="ric-card__topic">{topicLabel(ev)}</span>
-                {ev.jobTitle && ev.type === 'interview' ? (
-                    <span className="ric-card__job">{ev.jobTitle}</span>
-                ) : null}
                 <span className={`ric-card__status ric-card__status--${meta.tone}`}>{meta.label}</span>
+            </button>
+        );
+    };
+
+    const renderDayPill = (day, wide = false) => {
+        const selected = isSameDay(day, anchor);
+        return (
+            <button
+                type="button"
+                className={`ric-day-pill ${selected ? 'is-selected' : ''} ${wide ? 'is-wide' : ''}`}
+                onClick={() => setAnchor(day)}
+            >
+                {format(day, wide ? 'EEEE, d MMM' : 'EEE, d MMM')}
             </button>
         );
     };
@@ -327,24 +330,13 @@ const RecruitmentCalendarPage = () => {
         const key = format(day, 'yyyy-MM-dd');
         const dayEvents = eventsByDay[key] || [];
         return (
-            <div key={key} className={`ric-week__col ${wide ? 'is-wide' : ''} ${isToday(day) ? 'is-today' : ''}`}>
-                <div className="ric-week__head">
-                    <span className="ric-week__dow">{format(day, wide ? 'EEEE' : 'EEE')}</span>
-                    <span className="ric-week__date">{format(day, wide ? 'd MMMM yyyy' : 'd MMM')}</span>
-                </div>
+            <div key={key} className={`ric-week__col ${wide ? 'is-wide' : ''} ${isSameDay(day, anchor) ? 'is-selected' : ''}`}>
+                {renderDayPill(day, wide)}
                 <div className={`ric-week__body ${wide ? 'ric-week__body--day' : ''}`}>
                     {dayEvents.length > 0 ? (
                         dayEvents.map(renderInterviewCard)
                     ) : (
-                        <div className="ric-slots" aria-hidden={false}>
-                            {TIME_LANES.slice(0, wide ? 8 : 5).map((slot) => (
-                                <div key={`${key}-${slot}`} className="ric-slot">
-                                    <span className="ric-slot__time">{slot}</span>
-                                    <span className="ric-slot__line" />
-                                </div>
-                            ))}
-                            <p className="ric-week__empty">Open slot</p>
-                        </div>
+                        <p className="ric-week__empty">No interviews</p>
                     )}
                 </div>
             </div>
@@ -587,25 +579,7 @@ const RecruitmentCalendarPage = () => {
                         </div>
                     </div>
 
-                    {visibleInterviewCount === 0 && (view === 'week' || view === 'day') ? (
-                        <div className="ric-board-empty">
-                            <span className="ric-board-empty__icon"><FaCalendarAlt /></span>
-                            <div className="ric-board-empty__copy">
-                                <p className="ric-board-empty__title">No interviews in this {view}</p>
-                                <p className="ric-board-empty__hint">
-                                    Schedule from a candidate profile — slots stay visible below for planning.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                className="rec-hub__btn rec-hub__btn--mint"
-                                onClick={() => navigate('/recruitment')}
-                            >
-                                <FaPlus aria-hidden /> Schedule Interview
-                            </button>
-                        </div>
-                    ) : null}
-
+                    <div className="ric-board">
                     {view === 'week' && (
                         <div className="ric-week">
                             {weekDays.map((day) => renderDayColumn(day))}
@@ -615,16 +589,11 @@ const RecruitmentCalendarPage = () => {
                     {view === 'day' && (
                         <div className="ric-day">
                             {renderDayColumn(anchor, true)}
-                </div>
+                        </div>
                     )}
 
                     {view === 'month' && (
                         <div className="ric-month">
-                            <div className="ric-month__weekdays">
-                                {WEEKDAYS_SHORT.map((d) => (
-                                    <div key={d} className="ric-month__weekday">{d}</div>
-                                ))}
-                            </div>
                             <div className="ric-month__grid">
                                 {monthDays.map((day) => {
                                     const key = format(day, 'yyyy-MM-dd');
@@ -634,20 +603,14 @@ const RecruitmentCalendarPage = () => {
                                             key={key}
                                             className={[
                                                 'ric-month__cell',
-                                                isToday(day) ? 'is-today' : '',
+                                                isSameDay(day, anchor) ? 'is-selected' : '',
                                                 !isSameMonth(day, anchor) ? 'is-muted' : '',
                                             ].filter(Boolean).join(' ')}
                                         >
-                                            <button
-                                                type="button"
-                                                className="ric-month__date"
-                                                onClick={() => { setAnchor(day); setView('day'); }}
-                                            >
-                                                {format(day, 'd')}
-                                            </button>
+                                            {renderDayPill(day)}
                                             <div className="ric-month__events">
                                                 {dayEvents.length === 0 ? (
-                                                    <div className="ric-month__slot" aria-hidden />
+                                                    <p className="ric-week__empty">No interviews</p>
                                                 ) : (
                                                     <>
                                                         {dayEvents.slice(0, 3).map(renderInterviewCard)}
@@ -669,6 +632,7 @@ const RecruitmentCalendarPage = () => {
                             </div>
                         </div>
                     )}
+                    </div>
                 </section>
             </div>
         </AtsPage>

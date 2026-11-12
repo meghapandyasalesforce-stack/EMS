@@ -31,6 +31,7 @@ import '../../styles/directoryUI.css';
 const VISIBLE_STEPS = [
     { id: 'personal', label: 'Personal' },
     { id: 'job', label: 'Job details' },
+    { id: 'profile', label: 'Additional details' },
     { id: 'review', label: 'Review' },
 ];
 
@@ -56,7 +57,7 @@ function ResponsiveSelect({ name, value, onChange, required, disabled, options, 
             left: rect.left,
             width: rect.width,
             maxHeight,
-            zIndex: 60,
+            zIndex: 110,
             ...(openUp
                 ? { bottom: window.innerHeight - rect.top + gap }
                 : { top: rect.bottom + gap }),
@@ -148,12 +149,35 @@ function ResponsiveSelect({ name, value, onChange, required, disabled, options, 
     );
 }
 
-function AddEmployee() {
+function AddEmployee({ embedded = false, onClose, onCreated }) {
     const queryClient = useQueryClient();
     const [step, setStep] = useState(0);
     const [form, setForm] = useState({
         name: '',
         lastName: '',
+        joiningDate: '',
+        birthDate: '',
+        gender: '',
+        phone1: '',
+        phone2: '',
+        personalEmail: '',
+        address: '',
+        city: '',
+        maritalStatus: '',
+        spouseName: '',
+        marriageDate: '',
+        nationalIdType: '',
+        nationalId: '',
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+        emergencyContactRelationship: '',
+        bankName: '',
+        accountName: '',
+        accountNo: '',
+        ifsc: '',
+        panNumber: '',
+        epfUan: '',
+        taxRegime: '',
         department: '',
         departmentId: '',
         teamId: '',
@@ -316,6 +340,7 @@ function AddEmployee() {
             name: prefill.name ? String(prefill.name) : prev.name,
             jobTitle: prefill.jobTitle ? String(prefill.jobTitle) : prev.jobTitle,
             department: prefill.department ? String(prefill.department) : prev.department,
+            joiningDate: prefill.joiningDate ? String(prefill.joiningDate) : prev.joiningDate,
         }));
         navigate(location.pathname, { replace: true, state: {} });
         return undefined;
@@ -625,6 +650,11 @@ function AddEmployee() {
             systemRole,
             confirmReplace,
             linkAsOrgOwnerMe,
+            financialDetails: Object.fromEntries(
+                ['bankName', 'accountName', 'accountNo', 'ifsc', 'panNumber', 'epfUan', 'taxRegime']
+                    .filter((key) => form[key].trim())
+                    .map((key) => [key, form[key].trim()])
+            ),
             shiftId: form.shiftId || '',
             shiftName: form.shiftId
                 ? (shiftOptions.find((s) => s.key === form.shiftId) || {}).name || ''
@@ -640,6 +670,9 @@ function AddEmployee() {
             'jobRoleId',
             'designationId',
         ].forEach((key) => {
+            if (!payload[key]) delete payload[key];
+        });
+        ['birthDate', 'marriageDate', 'joiningDate', 'gender', 'nationalIdType'].forEach((key) => {
             if (!payload[key]) delete payload[key];
         });
         const resultAction = await dispatch(createEmployee(payload));
@@ -675,7 +708,8 @@ function AddEmployee() {
             }
 
             setExistingProfileToReplace(null);
-            navigate(getDashboardRoute);
+            if (embedded) onCreated?.(resultAction.payload.employee);
+            else navigate(getDashboardRoute);
         } else {
             const errPayload = resultAction.payload;
             const errorMsg =
@@ -817,6 +851,10 @@ function AddEmployee() {
                 <p className="emp-add__hint">Loading organization structure…</p>
             ) : null}
             <div className="emp-add__grid">
+                <div className="emp-add__field">
+                    <label className="emp-add__label" htmlFor="add-emp-joiningDate">Date of joining</label>
+                    <input id="add-emp-joiningDate" name="joiningDate" type="date" className={inputClass} value={form.joiningDate} onChange={handleChange} />
+                </div>
                 <div className="emp-add__field">
                     <span className="emp-add__label">Select department *</span>
                     <ResponsiveSelect
@@ -1051,6 +1089,53 @@ function AddEmployee() {
         </div>
     );
 
+    const renderProfileStep = () => (
+        <div className="space-y-5">
+            <p className="emp-add__hint">Add the employee’s contact, identity and payroll details now. These fields are optional and can be updated later.</p>
+            {[
+                ['Personal & contact', [
+                    ['birthDate', 'Date of birth', 'date'],
+                    ['gender', 'Gender', ['Male', 'Female', 'Other', 'Prefer not to say']],
+                    ['phone1', 'Primary phone', 'tel'], ['phone2', 'Alternate phone', 'tel'],
+                    ['personalEmail', 'Personal email', 'email'], ['address', 'Residential address'], ['city', 'City'],
+                    ['maritalStatus', 'Marital status', ['Single', 'Married', 'Divorced', 'Widowed']],
+                    ['spouseName', 'Spouse name'], ['marriageDate', 'Marriage anniversary', 'date'],
+                    ['nationalIdType', 'National ID type', ['Aadhaar', 'Voter ID (EPIC)', 'Passport', 'PAN', 'Driving License', 'Other']],
+                    ['nationalId', 'National ID number'],
+                ]],
+                ['Emergency contact', [
+                    ['emergencyContactName', 'Contact name'], ['emergencyContactPhone', 'Contact phone', 'tel'],
+                    ['emergencyContactRelationship', 'Relationship'],
+                ]],
+                ['Bank & payroll', [
+                    ['bankName', 'Bank name'], ['accountName', 'Account holder name'], ['accountNo', 'Account number'],
+                    ['ifsc', 'IFSC code'], ['panNumber', 'PAN number'], ['epfUan', 'EPF UAN'],
+                    ['taxRegime', 'Tax regime', ['old', 'new']],
+                ]],
+            ].map(([heading, fields]) => (
+                <fieldset className="emp-add__panel" key={heading}>
+                    <legend className="emp-add__label">{heading}</legend>
+                    <div className="emp-add__grid">
+                        {fields.map(([name, label, type = 'text']) => (
+                            <div className="emp-add__field" key={name}>
+                                <label className="emp-add__label" htmlFor={`add-emp-${name}`}>{label}</label>
+                                {Array.isArray(type) ? (
+                                    <select id={`add-emp-${name}`} name={name} className={inputClass} value={form[name]} onChange={handleChange}>
+                                        <option value="">Select {label.toLowerCase()}</option>
+                                        {type.map((value) => <option key={value} value={value}>{value}</option>)}
+                                    </select>
+                                ) : (
+                                    <input id={`add-emp-${name}`} name={name} type={type} className={inputClass} value={form[name]} onChange={handleChange}
+                                        max={name === 'birthDate' ? new Date().toLocaleDateString('en-CA') : undefined} />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </fieldset>
+            ))}
+        </div>
+    );
+
     const renderReviewStep = () => {
         const selected = roleCatalog.find((r) => r.id === form.systemRole);
 
@@ -1106,6 +1191,22 @@ function AddEmployee() {
                             </dd>
                         </div>
                         <div>
+                            <dt>Date of joining</dt>
+                            <dd>{form.joiningDate || 'Today (default)'}</dd>
+                        </div>
+                        <div>
+                            <dt>Primary phone</dt>
+                            <dd>{form.phone1 || '—'}</dd>
+                        </div>
+                        <div>
+                            <dt>Emergency contact</dt>
+                            <dd>{[form.emergencyContactName, form.emergencyContactPhone].filter(Boolean).join(' · ') || '—'}</dd>
+                        </div>
+                        <div>
+                            <dt>Bank account</dt>
+                            <dd>{form.accountNo ? `${form.bankName} · ending ${form.accountNo.slice(-4)}` : '—'}</dd>
+                        </div>
+                        <div>
                             <dt>Salary</dt>
                             <dd>₹{Number(form.salary).toLocaleString('en-IN')}</dd>
                         </div>
@@ -1130,11 +1231,11 @@ function AddEmployee() {
     }
 
     return (
-        <div className="emp-add min-h-screen overflow-x-hidden">
+        <div className={`emp-add overflow-x-hidden ${embedded ? 'emp-add--embedded' : 'min-h-screen'}`}>
             <div className="page-shell">
                 <div className="page-shell-inner emp-add__shell">
                     <div className="emp-add__card">
-                        <div className="emp-add__header">
+                        {!embedded && <div className="emp-add__header">
                             <div>
                                 <span className="emp-add__kicker">Talent Onboarding</span>
                                 <h1>Add New Employee Record</h1>
@@ -1143,12 +1244,13 @@ function AddEmployee() {
                                 type="button"
                                 className="emp-add__close"
                                 aria-label="Close add employee"
-                                onClick={() => navigate('/employees')}
+                                onClick={() => embedded ? onClose?.() : navigate('/employees')}
                             >
                                 ×
                             </button>
                         </div>
 
+                        }
                         {renderStepIndicator()}
 
                         <form
@@ -1169,7 +1271,8 @@ function AddEmployee() {
                                 )}
                                 {step === 0 && renderPersonalStep()}
                                 {step === 1 && renderJobStep()}
-                                {step === 2 && renderReviewStep()}
+                                {step === 2 && renderProfileStep()}
+                                {step === 3 && renderReviewStep()}
                             </div>
 
                             <div className="emp-add__footer">
@@ -1189,7 +1292,7 @@ function AddEmployee() {
                                     <button
                                         type="button"
                                         className="emp-add__btn emp-add__btn-ghost"
-                                        onClick={() => navigate('/employees')}
+                                        onClick={() => embedded ? onClose?.() : navigate('/employees')}
                                         disabled={employeeStatus === 'loading'}
                                     >
                                         Cancel

@@ -1,4 +1,5 @@
 import Calendar from '../models/calendar.model.js';
+import WfhRequest from '../models/wfhRequest.model.js';
 
 /**
  * Parse a calendar date as local midnight (avoids UTC date-string drift).
@@ -13,7 +14,9 @@ export function parseLocalDate(value) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
       const [y, m, d] = trimmed.split('-').map(Number);
       if (!y || !m || !d) return null;
-      return new Date(y, m - 1, d, 0, 0, 0, 0);
+      const parsed = new Date(y, m - 1, d, 0, 0, 0, 0);
+      if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) return null;
+      return parsed;
     }
   }
   const d = new Date(value);
@@ -36,7 +39,7 @@ export function toDateKey(value) {
 export function expandDateRange(fromValue, toValue) {
   const from = parseLocalDate(fromValue);
   const to = parseLocalDate(toValue || fromValue);
-  if (!from || !to || to < from) return [];
+  if (!from || !to || to < from || from.getFullYear() < 2020 || to.getFullYear() > 2050) return [];
   const days = [];
   const cursor = new Date(from);
   while (cursor <= to) {
@@ -83,83 +86,66 @@ export async function loadWfhEntriesByDateKey(organizationId, fromDate, toDate) 
   return map;
 }
 
-/** True when this employee cannot apply for WFH on the given calendar entry. */
-export function isEmployeeBlockedFromWfhEntry(entry, employeeId) {
-  if (!entry) return true;
-  const employeeKey = String(employeeId);
-  const selected = (entry.excludedEmployeeIds || []).map(String);
-  const inList = selected.includes(employeeKey);
-  if (entry.employeeAccess === 'only_these') {
-    // Allowlist: blocked when not on the list (empty list → nobody can apply)
-    return !inList;
-  }
-  // Default blacklist
-  return inList;
+/** Calendar coverage is a direct HR assignment, never a prerequisite to apply. */
+export function isEmployeeCoveredByWfhEntry(entry, employeeId) {
+  if (!entry || !employeeId) return false;
+  const selected = (entry.excludedEmployeeIds || []).map((id) => String(id?._id || id));
+  const inList = selected.includes(String(employeeId?._id || employeeId));
+  return entry.employeeAccess === 'only_these' ? inList : !inList;
 }
 
-/**
- * Validate that every day in [fromDate, toDate] is HR-enabled for WFH and
- * the employee is allowed by employeeAccess / selected list.
- * Does not change attendance/punch behavior (punch uses approved WFH requests).
- *
- * @returns {{ ok: true } | { ok: false, message: string, code: string, details?: object }}
- */
-export async function validateEmployeeWfhEligibility({
-  organizationId,
-  employeeId,
-  fromDate,
-  toDate,
-}) {
+/** Keep the existing inverse predicate available to callers. */
+export function isEmployeeBlockedFromWfhEntry(entry, employeeId) {
+  return !isEmployeeCoveredByWfhEntry(entry, employeeId);
+}
+
+export async function validateEmployeeWfhEligibility({ organizationId, employeeId, fromDate, toDate }) {
   const days = expandDateRange(fromDate, toDate);
-  if (!days.length) {
-    return {
-      ok: false,
-      message: 'A valid WFH date range is required',
-      code: 'INVALID_WFH_DATE_RANGE',
-    };
-  }
-
-  const entries = await loadWfhEntriesByDateKey(organizationId, days[0], days[days.length - 1]);
-  const notEnabled = [];
-  const excluded = [];
-
-  for (const day of days) {
-    const key = toDateKey(day);
-    const entry = entries.get(key);
-    if (!entry) {
-      notEnabled.push(key);
-      continue;
-    }
-    if (isEmployeeBlockedFromWfhEntry(entry, employeeId)) {
-      excluded.push(key);
-    }
-  }
-
-  if (notEnabled.length) {
-    return {
-      ok: false,
-      message:
-        notEnabled.length === 1
-          ? `Work From Home is not enabled by HR for ${notEnabled[0]}. Please choose an HR-enabled WFH date.`
-          : `Work From Home is not enabled by HR for these dates: ${notEnabled.join(', ')}.`,
-      code: 'WFH_DATE_NOT_ENABLED',
-      details: { dates: notEnabled },
-    };
-  }
-
-  if (excluded.length) {
-    return {
-      ok: false,
-      message:
-        excluded.length === 1
-          ? `You are not eligible for Work From Home on ${excluded[0]}. Please contact HR.`
-          : `You are not eligible for Work From Home on these dates: ${excluded.join(', ')}.`,
-      code: 'WFH_EMPLOYEE_EXCLUDED',
-      details: { dates: excluded },
-    };
-  }
-
+  if (!days.length) return { ok: false, message: 'A valid WFH date range between 2020 and 2050 is required', code: 'INVALID_WFH_DATE_RANGE' };
+  const entries = await loadWfhEntriesByDateKey(organizationId, days[0], days.at(-1));
+  const dates = days.map(toDateKey).filter((key) => isEmployeeCoveredByWfhEntry(entries.get(key), employeeId));
+  if (dates.length) return {
+    ok: false,
+    message: `HR has already scheduled Work From Home for you on: ${dates.join(', ')}. The entire request was not submitted.`,
+    code: 'WFH_HR_SCHEDULE_CONFLICT',
+    details: { dates },
+  };
   return { ok: true };
+}
+
+/** Pending/legacy-submitted and approved requests reserve their complete dates. */
+export async function findWfhRequestConflicts({ organizationId, employeeId, fromDate, toDate, excludeRequestId, entries }) {
+  const days = expandDateRange(fromDate, toDate);
+  if (!days.length) return [];
+  const end = new Date(days.at(-1));
+  end.setHours(23, 59, 59, 999);
+  const filter = {
+    organizationId,
+    status: { $in: ['pending', 'submitted', 'approved'] },
+    wfhDate: { $lte: end },
+    $or: [
+      { wfhDateTo: { $gte: days[0] } },
+      { wfhDateTo: null, wfhDate: { $gte: days[0] } },
+    ],
+    ...(employeeId ? { employeeId } : {}),
+    ...(excludeRequestId ? { _id: { $ne: excludeRequestId } } : {}),
+  };
+  const requests = await WfhRequest.find(filter).select('employeeId wfhDate wfhDateTo status').lean();
+  const conflicts = [];
+  for (const request of requests) {
+    const from = toDateKey(request.wfhDate);
+    const to = toDateKey(request.wfhDateTo || request.wfhDate);
+    const dates = days.map(toDateKey).filter((key) => key >= from && key <= to &&
+      (!entries || isEmployeeCoveredByWfhEntry(entries.get(key), request.employeeId)));
+    if (dates.length) conflicts.push({ requestId: String(request._id), employeeId: String(request.employeeId), status: request.status, dates });
+  }
+  return conflicts;
+}
+
+export async function validateWfhScheduleConflicts({ organizationId, days, entry }) {
+  const entries = new Map(days.map((day) => [toDateKey(day), entry]));
+  const conflicts = await findWfhRequestConflicts({ organizationId, fromDate: days[0], toDate: days.at(-1), entries });
+  return conflicts;
 }
 
 /**

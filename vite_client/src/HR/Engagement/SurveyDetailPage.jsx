@@ -1,4 +1,5 @@
 import '../../styles/surveyUI.css';
+import '../../styles/surveyDetail.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -12,15 +13,16 @@ import {
     FaDownload,
     FaCopy,
     FaTrash,
+    FaCalendarAlt,
+    FaUsers,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { MINT_GRADIENT } from '../Reports/constants';
-import { canManageEngagement, surveyStatusStyle } from './engagementUtils';
+import { surveyStatusStyle } from './engagementUtils';
 import { getStatusHint, toastForSave } from '../../utils/publishStatusUi';
-import { PERMISSIONS } from '../../utils/permissions';
-import { useAuthPermissions } from '../../Hooks/useAuthPermissions';
+import useEngagementWorkspace from '../../Hooks/useEngagementWorkspace';
 import { downloadEngagementExport, exportFilename } from './engagementExportUtils';
 
 const TREND_RANGES = [
@@ -31,9 +33,10 @@ const TREND_RANGES = [
 ];
 
 const PrivacyBanner = ({ message }) => (
-    <p className="rounded-2xl border border-amber-100 bg-amber-50/60 px-5 py-6 text-center text-sm text-amber-900">
-        {message || 'Not enough responses to display analytics.'}
-    </p>
+    <div className="survey-analytics-empty rounded-2xl border border-amber-100 bg-amber-50/60 px-5 py-6 text-center text-sm text-amber-900">
+        <FaChartLine aria-hidden="true" />
+        <p>{message || 'Not enough responses to display analytics.'}</p>
+    </div>
 );
 
 const StatCard = ({ label, value }) => (
@@ -129,23 +132,8 @@ const QuestionAnalyticsBlock = ({ q }) => {
 const SurveyDetailPage = () => {
     const { surveyId } = useParams();
     const navigate = useNavigate();
-    const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
-    const { permissions, isOrgOwner } = useAuthPermissions();
-
-    const canManage = useMemo(() => canManageEngagement(user, employee), [user, employee]);
-    const canViewAnalytics = useMemo(() => {
-        if (canManage || isOrgOwner) return true;
-        const keys = [
-            PERMISSIONS.ENGAGEMENT_ANALYTICS_ORG,
-            PERMISSIONS.ENGAGEMENT_ANALYTICS_TEAM,
-            PERMISSIONS.ENGAGEMENT_SURVEY_MANAGE,
-            PERMISSIONS.ENGAGEMENT_MANAGE,
-        ];
-        if (!Array.isArray(permissions) || !permissions.length) return false;
-        if (permissions.includes('*')) return true;
-        return keys.some((k) => permissions.includes(k));
-    }, [canManage, isOrgOwner, permissions]);
+    const { canManageSurveys: canManage, canViewAnalytics, engagementHome } = useEngagementWorkspace();
 
     const isEmployeeActor = Boolean(employee?._id || employee?.id);
 
@@ -328,7 +316,7 @@ const SurveyDetailPage = () => {
                 withCredentials: true,
             });
             toast.success('Survey deleted');
-            navigate('/engagement');
+            navigate(engagementHome);
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to delete survey');
         } finally {
@@ -409,7 +397,7 @@ const SurveyDetailPage = () => {
                 { withCredentials: true }
             );
             toast.success('Thank you for your response!');
-            navigate(canManage ? '/engagement' : '/employee/engagement');
+            navigate(engagementHome);
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to submit response');
         } finally {
@@ -470,23 +458,30 @@ const SurveyDetailPage = () => {
             const max = question.type === 'Rating' ? 5 : 10;
             const min = question.type === 'eNPS' ? 0 : 1;
             return (
-                <div>
+                <fieldset className="survey-rating" aria-label={question.question}>
                     {question.type === 'eNPS' && (
                         <p className="mb-2 text-xs text-slate-500">
                             How likely are you to recommend this workplace? (0 = not at all, 10 =
                             extremely likely)
                         </p>
                     )}
-                    <input
-                        type="number"
-                        min={min}
-                        max={max}
-                        value={value}
-                        aria-label={question.question}
-                        onChange={(e) => setAnswer(qid, Number(e.target.value))}
-                        className="w-full max-w-[120px] rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                    />
-                </div>
+                    <div className="survey-rating-options">
+                        {Array.from({ length: max - min + 1 }, (_, index) => min + index).map((score) => (
+                            <label key={score} className="survey-rating-option">
+                                <input
+                                    type="radio"
+                                    name={`rating-${qid}`}
+                                    value={score}
+                                    checked={value === score}
+                                    required={question.required}
+                                    onChange={() => setAnswer(qid, score)}
+                                />
+                                <span>{score}</span>
+                            </label>
+                        ))}
+                    </div>
+                    <p className="survey-rating-hint">Select a score from {min} to {max}.</p>
+                </fieldset>
             );
         }
 
@@ -518,7 +513,7 @@ const SurveyDetailPage = () => {
                         <p className="text-lg font-semibold text-slate-900">Survey not found</p>
                         <button
                             type="button"
-                            onClick={() => navigate('/engagement')}
+                            onClick={() => navigate(engagementHome)}
                             className="mt-4 rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700"
                         >
                             Back to Engagement
@@ -529,23 +524,41 @@ const SurveyDetailPage = () => {
         );
     }
 
+    const surveyMetadata = survey.startDate ? (
+        <div className="survey-detail-metadata mt-4 text-xs text-slate-500">
+            <span>
+                <FaCalendarAlt aria-hidden="true" />
+                {new Date(survey.startDate).toLocaleDateString()} —{' '}
+                {survey.endDate
+                    ? new Date(survey.endDate).toLocaleDateString()
+                    : 'No end date'}
+            </span>
+            <span>
+                <FaUsers aria-hidden="true" />
+                Audience: {survey.targetAudience}
+                {survey.targetAudience === 'Department' &&
+                    survey.targetDepartments?.length > 0 &&
+                    ` (${survey.targetDepartments.join(', ')})`}
+            </span>
+        </div>
+    ) : null;
+
     const overview = analytics?.overview;
     const showAnalyticsDetail = overview?.available === true;
 
     return (
-        <div className="survey-ui survey-ui--page survey-ui--detail page-shell bg-transparent">
+        <div className={`survey-detail-page ${canManage ? 'survey-detail--hr' : 'survey-detail--employee'} survey-ui survey-ui--page survey-ui--detail page-shell bg-transparent`}>
             <div className="page-shell-inner hrms-stack max-w-6xl">
-                <button
-                    type="button"
-                    onClick={() => navigate('/engagement')}
-                    className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                    <FaArrowLeft className="text-xs" /> Back
-                </button>
-
-                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                <section className="survey-detail-hero rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5 md:p-6">
+                    <button
+                        type="button"
+                        onClick={() => navigate(engagementHome)}
+                        className="survey-detail-back inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    >
+                        <FaArrowLeft className="text-xs" /> Back
+                    </button>
                     <div className="flex flex-col gap-5">
-                        <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="survey-detail-title-row flex items-start gap-3 sm:gap-4">
                             <div
                                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white sm:h-12 sm:w-12"
                                 style={{ background: MINT_GRADIENT }}
@@ -579,10 +592,22 @@ const SurveyDetailPage = () => {
                                     )}
                                 </div>
                             </div>
+                            <svg className="survey-hero-art" viewBox="0 0 160 110" aria-hidden="true" focusable="false">
+                                <path d="M0 105C30 75 20 30 65 40S110 0 160 10V110H0Z" fill="#9aefd4" opacity=".7" />
+                                <rect x="32" y="12" width="82" height="90" rx="10" fill="white" />
+                                {[32, 51, 70].map((y) => (
+                                    <g key={y}>
+                                        <rect x="47" y={y} width="12" height="8" rx="4" fill="#68dfbf" />
+                                        <rect x="64" y={y} width="34" height="6" rx="3" fill="#b4f1e1" />
+                                    </g>
+                                ))}
+                                <circle cx="123" cy="78" r="23" fill="#009a7d" />
+                                <path d="m112 78 7 7 15-17" fill="none" stroke="white" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                         </div>
 
                         {canManage && (
-                            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+                            <div className="survey-management-controls flex flex-col gap-3 border-t border-slate-100 pt-4">
                                 <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                                     {(survey.responseCount || 0) === 0 ? (
                                         <button
@@ -655,6 +680,7 @@ const SurveyDetailPage = () => {
                                             </p>
                                         )}
                                     </div>
+                                    {surveyMetadata}
                                     <button
                                         type="button"
                                         onClick={handleStatusSave}
@@ -670,19 +696,7 @@ const SurveyDetailPage = () => {
                         )}
                     </div>
 
-                    {survey.startDate && (
-                        <p className="mt-4 text-xs text-slate-500">
-                            {new Date(survey.startDate).toLocaleDateString()} —{' '}
-                            {survey.endDate
-                                ? new Date(survey.endDate).toLocaleDateString()
-                                : 'No end date'}
-                            {' · '}
-                            Audience: {survey.targetAudience}
-                            {survey.targetAudience === 'Department' &&
-                                survey.targetDepartments?.length > 0 &&
-                                ` (${survey.targetDepartments.join(', ')})`}
-                        </p>
-                    )}
+                    {!canManage && surveyMetadata}
 
                     {canManage && metadataEditOpen && metadataForm && (
                         <div className="mt-4 space-y-3 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
@@ -745,7 +759,7 @@ const SurveyDetailPage = () => {
                 </section>
 
                 {canViewAnalytics && (
-                    <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
+                    <section className="survey-detail-analytics rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                                 <FaChartLine className="text-[#0d9488]" />
@@ -919,10 +933,10 @@ const SurveyDetailPage = () => {
                             {(survey.questions || []).map((question, idx) => (
                                 <div
                                     key={String(question._id || idx)}
-                                    className="rounded-xl border border-slate-100 p-4"
+                                    className="survey-response-question rounded-xl border border-slate-100 p-4"
                                 >
                                     <p className="text-sm font-semibold text-slate-900">
-                                        {idx + 1}. {question.question}
+                                        <span className="survey-question-number">{idx + 1}</span>{question.question}
                                         {question.required && (
                                             <span className="ml-1 text-red-500">*</span>
                                         )}
@@ -951,10 +965,10 @@ const SurveyDetailPage = () => {
                                 survey.questions.map((q, idx) => (
                                     <li
                                         key={String(q._id || idx)}
-                                        className="rounded-xl border border-slate-100 bg-slate-50/50 p-4"
+                                        className="survey-preview-question rounded-xl border border-slate-100 bg-slate-50/50 p-4"
                                     >
                                         <p className="font-medium text-slate-900">
-                                            {idx + 1}. {q.question}
+                                            <span className="survey-question-number">{idx + 1}</span>{q.question}
                                         </p>
                                         <p className="mt-1 text-xs text-slate-500">
                                             {q.type}
@@ -978,14 +992,14 @@ const SurveyDetailPage = () => {
                 </section>
 
                 {canManage && (
-                    <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
+                    <section className="survey-detail-responses rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                         <h2 className="mb-4 text-lg font-semibold text-slate-900">
-                            Responses ({responsePagination?.total ?? responses.length})
+                            <FaUsers aria-hidden="true" /> Responses ({responsePagination?.total ?? responses.length})
                         </h2>
                         {responsesLoading ? (
                             <p className="text-sm text-slate-500">Loading responses...</p>
                         ) : responses.length === 0 ? (
-                            <p className="text-sm text-slate-500">No responses submitted yet.</p>
+                            <div className="survey-responses-empty"><FaClipboardList aria-hidden="true" /><p className="text-sm text-slate-500">No responses submitted yet.</p></div>
                         ) : (
                             <>
                             <ul className="space-y-3">

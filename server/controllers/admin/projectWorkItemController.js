@@ -9,7 +9,7 @@ import {
     getWorkItemAssigneeIds,
     normalizeAssigneeInput,
 } from "../../helpers/workItemAssigneeHelper.js";
-import { applyDueDateChange } from "../../helpers/workItemDueDateHelper.js";
+import { applyDueDateChange, toDateKey } from "../../helpers/workItemDueDateHelper.js";
 import logger from "../../helpers/logger.js";
 
 const MAX_ITEMS_PER_REQUEST = 80;
@@ -116,8 +116,21 @@ async function insertWorkItemTree(req, projectId, organizationId, items, parentI
     }
 }
 
+function validateWorkItemNodes(items, depth = 0) {
+    if (!Array.isArray(items)) throw new Error('Work items must be an array');
+    if (depth > 10 && items.length) throw new Error('Work items cannot exceed 10 levels of subtasks');
+    for (const item of items) {
+        if (!item || typeof item.title !== 'string' || !item.title.trim()) throw new Error('Every work item must have a title');
+        if (item.status != null && !['todo', 'in-progress', 'completed', 'on-hold'].includes(item.status)) throw new Error('Invalid work item status');
+        if (item.priority != null && !['low', 'medium', 'high', 'critical'].includes(item.priority)) throw new Error('Invalid work item priority');
+        if (item.dueDate && !toDateKey(item.dueDate)) throw new Error('Invalid due date');
+        if (item.subtasks != null) validateWorkItemNodes(item.subtasks, depth + 1);
+    }
+}
+
 export async function createWorkItemsForProject(req, projectId, organizationId, workItems) {
     if (!workItems?.length) return;
+    validateWorkItemNodes(workItems);
     const total = countWorkItemNodes(workItems);
     if (total > MAX_ITEMS_PER_REQUEST) {
         throw new Error(`Too many work items in one request (max ${MAX_ITEMS_PER_REQUEST})`);
@@ -262,6 +275,9 @@ export const updateProjectWorkItem = async (req, res) => {
             status,
             sortOrder
         } = req.body;
+
+        if (status !== undefined && !['todo', 'in-progress', 'completed', 'on-hold'].includes(status)) return res.status(400).json({ success: false, error: 'Invalid work item status' });
+        if (priority !== undefined && !['low', 'medium', 'high', 'critical'].includes(priority)) return res.status(400).json({ success: false, error: 'Invalid work item priority' });
 
         const previousAssigneeIds = getWorkItemAssigneeIds(item);
         let assigneeChanged = false;

@@ -1,3 +1,5 @@
+import '../../styles/dashboardHR.css';
+import './DashboardManager.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -6,7 +8,7 @@ import { toast } from 'react-toastify';
 import { 
     FaUsers, FaTasks, FaCheckCircle,
     FaCalendarAlt, FaBirthdayCake,
-    FaBell, FaPlus, FaSearch, FaVideo, FaHeadset
+    FaBell, FaPlus, FaVideo, FaHeadset, FaArrowRight, FaProjectDiagram
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
@@ -30,7 +32,6 @@ import { handleApiError } from '../../utils/errorHandler';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { sanitizeMeetingLink } from '../../utils/meetingLink';
 import { formatStatusLabel, UI_BADGE_TEXT_CLASS, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
-import { getTimeGreeting } from '../../utils/timeGreeting';
 import { 
     BOTH_ATTENDANCE_ENDPOINT, 
     BOTH_TASK_ENDPOINT,
@@ -822,165 +823,63 @@ const DashboardManager = () => {
         return dueDate < new Date() && task.status !== 'Completed' && task.status !== 'completed';
     }).length;
     return (
-        <div className="min-h-screen bg-[#f6f8fb] transition-all duration-300">
+        <div className="hr-dash manager-dashboard min-h-screen">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
-            <div className="page-shell !px-3 sm:!px-4 lg:!px-5">
-            <div className="page-shell-inner w-full min-w-0">
+            <div className="page-shell manager-dashboard-shell">
+            <div className="page-shell-inner manager-dashboard-inner w-full min-w-0">
             <div className="hrms-stack w-full min-w-0">
                 <AnnouncementBanner />
 
-                <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
-                    <div className="flex w-full min-w-0 flex-col gap-4">
-                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-5 sm:py-4 md:px-6">
-                            <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
-                                <div className="min-w-0">
-                                    <h1 className="truncate text-xl font-semibold text-slate-900 sm:text-2xl">
-                                        {getTimeGreeting()}, {user?.name || user?.username || 'Manager'} 👋
-                                    </h1>
-                                    <p className="text-sm text-slate-500">{format(new Date(), 'dd MMM yyyy')}</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="hidden min-w-[260px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 lg:flex">
-                                        <FaSearch className="text-slate-400" />
-                                        <input
-                                            readOnly
-                                            value=""
-                                            placeholder="Search..."
-                                            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                                        />
-                                    </div>
-                                    <button
-                                        className="rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
-                                        onClick={() => navigate('/helpdesk')}
-                                        title="HR Helpdesk"
-                                    >
-                                        <FaHeadset />
-                                    </button>
-                                    <button
-                                        className="relative rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
-                                        onClick={() => navigate('/notifications')}
-                                    >
-                                        <FaBell />
-                                        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-orange-500"></span>
-                                    </button>
-                                    <button
-                                        className="h-10 w-10 rounded-full bg-slate-100 text-sm font-semibold text-slate-700"
-                                        onClick={() => navigate('/view-profile')}
-                                    >
-                                        {(user?.name || 'M').charAt(0).toUpperCase()}
-                                    </button>
-                                </div>
+                <div className="manager-dashboard-grid">
+                    <header className="manager-welcome manager-hero">
+                        <div className="manager-hero-copy">
+                            <h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0] || user?.username || 'Manager'}! 👋</h1>
+                            <p className="manager-hero-date">Here’s what’s happening with your work today.</p>
+                        </div>
+                        <div className="manager-hero-actions">
+                            <button type="button" onClick={() => navigate('/helpdesk')}><FaHeadset /> Helpdesk</button>
+                            <button type="button" onClick={() => navigate('/one-on-one')}><FaVideo /> 1:1 meetings</button>
+                            <button type="button" onClick={() => navigate('/projects')}><FaProjectDiagram /> Projects <FaArrowRight /></button>
+                        </div>
+                    </header>
+
+                        <section className="manager-attendance hr-dash__punch"><AttendanceBox variant="dashboard" /></section>
+
+                        <div className="manager-personal">
+                            <PersonalDashboardKpiRow compact />
+                            <div className="manager-team-size manager-metric">
+                                <span className="manager-metric-icon"><FaUsers /></span>
+                                <div><p>Team size</p><strong>{teamSize}</strong><span>In your team</span></div>
                             </div>
                         </div>
 
-                        <AttendanceBox variant="dashboard" />
-
-                        {/* Mobile only: celebrations directly under punch-in */}
-                        <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:hidden">
-                            <div
-                                className="rounded-t-xl px-3 py-2"
-                                style={{ background: 'linear-gradient(90deg, #20C997 0%, #17a67d 100%)' }}
-                            >
-                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                                    <FaBirthdayCake className="h-3 w-3" />
-                                    Upcoming celebrations
-                                </h3>
+                        <section className="manager-task-panel hr-dash__panel">
+                            <div className="manager-panel-heading"><h3><span><FaTasks /></span>Pending team tasks</h3><span className="manager-count">{pendingTasks} pending</span></div>
+                            <div className="manager-task-list">
+                                {teamTasks.filter((task) => ['Not Started', 'In Progress', 'pending'].includes(task.status)).slice(0, 3).map((task, index) => (
+                                    <div key={task._id || index} className="manager-task-item"><FaTasks /><div><strong>{task.title || task.name || 'Team task'}</strong><span>{formatStatusLabel(task.status || 'Pending')}</span></div></div>
+                                ))}
+                                {pendingTasks === 0 && <div className="manager-soft-empty"><strong>No pending team tasks</strong><span>You’re all caught up.</span></div>}
                             </div>
-                            <div className="p-3">
-                                {dashboardStats.celebrations == null ? (
-                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-500">Loading upcoming celebrations...</div>
-                                ) : dashboardStats.celebrations.length === 0 ? (
-                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
-                                ) : (
-                                    <ul className="space-y-2">
-                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
-                                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
-                                            return (
-                                                <CelebrationDashboardCard
-                                                    key={`mobile-${item.type || 'birthday'}_${item.employeeId || idx}`}
-                                                    item={item}
-                                                    isSelf={false}
-                                                    event={celebrationEvents[itemKey]}
-                                                    reacting={celebrationReacting}
-                                                    onReact={handleCelebrationReact}
-                                                    onWishes={handleOpenCelebrationWishes}
-                                                />
-                                            );
-                                        })}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-
-                        <PersonalDashboardKpiRow />
-
-                        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-                                <div className="mb-2 flex items-center justify-between sm:mb-3">
-                                    <p className={UI_FORM_LABEL_CLASS}>Team size</p>
-                                    <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600"><FaUsers /></div>
+                        </section>
+                        <div className="manager-dashboard-group manager-main">
+                        <div className="manager-health hr-dash__panel">
+                            <div className="manager-panel-heading"><h3><span><FaCalendarAlt /></span>Team attendance</h3></div>
+                            <div className="manager-attendance-summary">
+                                <div className="manager-rate-summary">
+                                    <div className="manager-rate-ring" style={{ '--score': `${teamAttendance}%` }}><div><strong>{teamAttendance}%</strong><span>Attendance</span></div></div>
+                                    <p>Team attendance rate</p>
+                                    <span>Current reporting period</span>
                                 </div>
-                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{teamSize}</p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-                                <div className="mb-2 flex items-center justify-between sm:mb-3">
-                                    <p className={UI_FORM_LABEL_CLASS}>Pending tasks</p>
-                                    <div className="rounded-lg bg-amber-50 p-2 text-amber-600"><FaTasks /></div>
-                                </div>
-                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{pendingTasks}</p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-                                <div className="mb-2 flex items-center justify-between sm:mb-3">
-                                    <p className={UI_FORM_LABEL_CLASS}>Attendance</p>
-                                    <div className="rounded-lg bg-teal-50 p-2 text-teal-600"><FaCheckCircle /></div>
-                                </div>
-                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{teamAttendance}%</p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-                                <div className="mb-2 flex items-center justify-between sm:mb-3">
-                                    <p className={UI_FORM_LABEL_CLASS}>Pending leave</p>
-                                    <div className="rounded-lg bg-slate-100 p-2 text-slate-600"><FaCalendarAlt /></div>
-                                </div>
-                                <p className="text-2xl font-bold text-slate-900 sm:text-4xl">{pendingApprovals}</p>
-                            </div>
-                        </div>
-
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
-                            <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
-                                <h3 className="text-lg font-semibold text-slate-900 sm:text-2xl">Attendance Health</h3>
-                                <div className="flex items-center gap-4 text-xs text-slate-500">
-                                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600"></span>Good</span>
-                                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Needs attention</span>
+                                <div className="manager-health-rows">
+                                    <div className="manager-health-row manager-health-row--green"><FaCheckCircle /><span>On-time score</span><strong>{attendanceHealth.onTimeScore}%</strong><div><i style={{ width: `${attendanceHealth.onTimeScore}%` }} /></div></div>
+                                    <div className="manager-health-row manager-health-row--rose"><FaCalendarAlt /><span>Absence risk</span><strong>{attendanceHealth.absenceRisk}%</strong><div><i style={{ width: `${attendanceHealth.absenceRisk}%` }} /></div></div>
+                                    <div className="manager-health-row manager-health-row--amber"><FaTasks /><span>Overdue team tasks</span><strong>{lateTasks}</strong></div>
+                                    <p className="manager-checkin">Average check-in <strong>{attendanceHealth.avgCheckInTime}</strong></p>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <p className={UI_FORM_LABEL_CLASS}>On-time score</p>
-                                    <p className="mt-2 text-3xl font-bold text-emerald-700">{attendanceHealth.onTimeScore}%</p>
-                                    <div className="mt-3 h-2 rounded-full bg-slate-200">
-                                        <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${attendanceHealth.onTimeScore}%` }}></div>
-                                    </div>
-                                </div>
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <p className={UI_FORM_LABEL_CLASS}>Absence risk</p>
-                                    <p className="mt-2 text-3xl font-bold text-orange-500">{attendanceHealth.absenceRisk}%</p>
-                                    <div className="mt-3 h-2 rounded-full bg-slate-200">
-                                        <div className="h-2 rounded-full bg-orange-400" style={{ width: `${attendanceHealth.absenceRisk}%` }}></div>
-                                    </div>
-                                </div>
-                                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <p className={UI_FORM_LABEL_CLASS}>Avg check-in time</p>
-                                    <p className="mt-2 text-2xl font-bold text-slate-900">{attendanceHealth.avgCheckInTime}</p>
-                                    <p className="text-xs text-slate-500">Estimated team median</p>
-                                </div>
-                                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <p className={UI_FORM_LABEL_CLASS}>Overdue team tasks</p>
-                                    <p className="mt-2 text-2xl font-bold text-slate-900">{lateTasks}</p>
-                                    <p className="text-xs text-slate-500">Attendance impact indicator</p>
-                                </div>
-                            </div>
-                            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                            <div className="manager-attention-footer">
                                 <h4 className={`mb-3 ${UI_FORM_LABEL_CLASS}`}>Attention needed</h4>
                                 <div className="space-y-2">
                                     {attentionLoading && attentionMembers.length === 0 ? (
@@ -1002,8 +901,8 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
-                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Team approvals</h3>
+                        <div className="manager-approvals hr-dash__panel">
+                            <div className="manager-panel-heading"><h3><span><FaCheckCircle /></span>Team approvals</h3><span className="manager-count">{pendingApprovals} pending</span></div>
                             <div className="space-y-3 sm:space-y-4">
                                 {teamPendingLeaves.slice(0, 2).map((leave, index) => (
                                     <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
@@ -1081,29 +980,22 @@ const DashboardManager = () => {
                                 ))}
                                 {teamPendingLeaves.length === 0 && (
                                     <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
-                                        No pending approvals right now.
+                                        <span className="manager-empty-icon"><FaCheckCircle /></span><strong>You’re all caught up</strong><span>No pending team approvals right now.</span>
                                     </div>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex w-full min-w-0 flex-col gap-4">
-                        <div className="hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4 lg:block">
-                            <div
-                                className="rounded-t-xl px-3 py-2"
-                                style={{ background: 'linear-gradient(90deg, #20C997 0%, #17a67d 100%)' }}
-                            >
-                                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                                    <FaBirthdayCake className="h-3 w-3" />
-                                    Upcoming celebrations
-                                </h3>
-                            </div>
+                    <div className="manager-dashboard-group manager-side">
+                        <div className="manager-leave"><LeaveBalanceCard /></div>
+                        <div className="manager-celebrations w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <div className="manager-panel-heading"><h3><span><FaBirthdayCake /></span>Upcoming celebrations</h3><button type="button" onClick={() => navigate('/celebrations')}>View all <FaArrowRight /></button></div>
                             <div className="p-3">
                                 {dashboardStats.celebrations == null ? (
                                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-500">Loading upcoming celebrations...</div>
                                 ) : dashboardStats.celebrations.length === 0 ? (
-                                    <p className="py-2 text-center text-xs text-slate-500">No upcoming celebrations.</p>
+                                    <div className="manager-celebration-empty"><span><FaBirthdayCake /></span><strong>No upcoming celebrations</strong><p>Birthdays, work anniversaries and special occasions will appear here.</p></div>
                                 ) : (
                                     <ul className="space-y-2">
                                         {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
@@ -1125,10 +1017,9 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <LeaveBalanceCard />
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
-                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Upcoming meetings</h3>
+                        <div className="manager-meetings hr-dash__panel">
+                            <div className="manager-panel-heading"><h3><span><FaVideo /></span>Upcoming meetings</h3><button type="button" onClick={() => navigate('/one-on-one')}>View all <FaArrowRight /></button></div>
                             <div className="space-y-3">
                                 {meetingsLoading ? (
                                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
@@ -1140,7 +1031,7 @@ const DashboardManager = () => {
                                     </div>
                                 ) : upcomingMeetings.length === 0 ? (
                                     <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
-                                        No upcoming meetings scheduled.
+                                        <span className="manager-empty-icon"><FaVideo /></span><strong>Make time for your team</strong><span>No upcoming meetings scheduled.</span><button type="button" className="manager-text-action" onClick={() => navigate('/one-on-one')}>View meetings <FaArrowRight /></button>
                                     </div>
                                 ) : (
                                     upcomingMeetings.map((meeting) => {
@@ -1187,8 +1078,8 @@ const DashboardManager = () => {
                             </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
-                            <h3 className={`mb-3 sm:mb-4 ${UI_FORM_LABEL_CLASS}`}>Active projects</h3>
+                        <div className="manager-projects hr-dash__panel">
+                            <div className="manager-panel-heading"><h3><span><FaProjectDiagram /></span>Active projects</h3><button type="button" onClick={() => navigate('/projects')}>View all <FaArrowRight /></button></div>
                             <div className="space-y-3 sm:space-y-4">
                                 {managerProjects.slice(0, 2).map((project, index) => {
                                     const progress = Number(project?.progress || project?.completion || 40 + index * 25);
@@ -1209,7 +1100,7 @@ const DashboardManager = () => {
                                 })}
                                 {managerProjects.length === 0 && (
                                     <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
-                                        No active projects found.
+                                        <span className="manager-empty-icon"><FaProjectDiagram /></span><strong>A clear view of your projects</strong><span>No active projects found.</span><button type="button" className="manager-text-action" onClick={() => navigate('/projects')}>Explore projects <FaArrowRight /></button>
                                     </div>
                                 )}
                             </div>
@@ -1220,12 +1111,7 @@ const DashboardManager = () => {
             </div>
             </div>
 
-            <button
-                className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
-                onClick={() => navigate('/leave-management')}
-            >
-                <FaPlus />
-            </button>
+
         </div>
     );
 };

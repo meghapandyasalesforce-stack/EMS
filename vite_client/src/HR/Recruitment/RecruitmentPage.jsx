@@ -1,3 +1,4 @@
+import useCareerPortalIdentifier from '../../Hooks/useCareerPortalIdentifier';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -43,7 +44,7 @@ const RecruitmentPage = () => {
     const [candidates, setCandidates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('jobs');
-    const [orgId, setOrgId] = useState('');
+    const careerIdentifier = useCareerPortalIdentifier();
     const [screeningDash, setScreeningDash] = useState(null);
     const [candFilter, setCandFilter] = useState({ screeningStatus: '', q: '', matchMin: '', matchMax: '', searchRejected: false });
     const [showScreeningSettings, setShowScreeningSettings] = useState(false);
@@ -73,13 +74,6 @@ const RecruitmentPage = () => {
     const [jobView, setJobView] = useState('grid');
     const [candidateCount, setCandidateCount] = useState(0);
     const [offerTemplateCount, setOfferTemplateCount] = useState(0);
-
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem('organizationId');
-            if (stored) setOrgId(stored);
-        } catch { /* ignore */ }
-    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -136,9 +130,6 @@ const RecruitmentPage = () => {
                 const response = await axios.get('/v1/admin/recruitment/jobs', { withCredentials: true });
                 const jobs = response.data?.data || [];
                 setJobPostings(jobs);
-                const rawOrg = jobs[0]?.organizationId;
-                const resolvedOrg = typeof rawOrg === 'object' && rawOrg ? (rawOrg._id || rawOrg.id) : rawOrg;
-                if (resolvedOrg) setOrgId(String(resolvedOrg));
             } else if (activeTab === 'candidates') {
                 const params = { limit: 100 };
                 if (candFilter.screeningStatus) params.screeningStatus = candFilter.screeningStatus;
@@ -329,8 +320,8 @@ const RecruitmentPage = () => {
                     <button type="button" className="rec-hub__btn" onClick={openScreeningSettings}>
                         <FaCog className="h-3.5 w-3.5" /> Screening Settings
                     </button>
-                    {orgId ? (
-                        <Link to={`/careers/${orgId}`} className="rec-hub__btn">Career Portal</Link>
+                    {careerIdentifier ? (
+                        <Link to={`/careers/${careerIdentifier}`} className="rec-hub__btn">Career Portal</Link>
                     ) : null}
                     <Link to="/recruitment/create-job" className="rec-hub__btn rec-hub__btn--primary">
                         <FaPlus className="h-3.5 w-3.5" /> Post New Job

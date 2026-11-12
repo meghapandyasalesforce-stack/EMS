@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import '../../styles/surveyCreate.css';
 import { useNavigate } from 'react-router-dom';
 import { FaPlus, FaTrash, FaSave, FaTimes, FaGripVertical } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -230,6 +231,7 @@ const CreateSurvey = () => {
     }
 
     return (
+        <div className="survey-create">
         <EngagementFormShell
             title="Create Survey"
             subtitle="Design employee engagement surveys"
@@ -247,6 +249,7 @@ const CreateSurvey = () => {
                             <input id="createsurvey-field-1"
                                 type="text"
                                 name="title"
+                                placeholder="Enter survey title"
                                 value={formData.title}
                                 onChange={handleInputChange}
                                 required
@@ -260,6 +263,7 @@ const CreateSurvey = () => {
                             </label>
                             <textarea id="createsurvey-field-2"
                                 name="description"
+                                placeholder="Enter a brief description about this survey..."
                                 value={formData.description}
                                 onChange={handleInputChange}
                                 rows="3"
@@ -677,6 +681,7 @@ const CreateSurvey = () => {
                     </div>
                 </form>
         </EngagementFormShell>
+        </div>
     );
 };
 

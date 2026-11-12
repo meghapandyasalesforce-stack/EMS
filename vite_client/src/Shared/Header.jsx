@@ -33,7 +33,6 @@ const getMeViewport = (width) => {
 const Header = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-    const [meMoreOpen, setMeMoreOpen] = useState(false);
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const location = useLocation();
@@ -61,7 +60,6 @@ const Header = () => {
             setMeViewport(getMeViewport(w));
             if (w >= 1024) {
                 setMobileMenuOpen(false);
-                setMeMoreOpen(false);
             }
         };
         window.addEventListener('resize', handleResize);
@@ -80,7 +78,6 @@ const Header = () => {
     // Close nav overlays on route change so leftover backdrops cannot block sidebar clicks
     useEffect(() => {
         setMobileMenuOpen(false);
-        setMeMoreOpen(false);
         setLogoutModalOpen(false);
         setMobileProfileDropdownOpen(false);
         document.body.style.overflow = '';
@@ -257,6 +254,7 @@ const Header = () => {
             if (useLightEmployeeNav) {
                 return isMeSectionActive(path, location.pathname);
             }
+            if (path === '/organization/subscription' && ['/organization/billing', '/organization/checkout'].includes(location.pathname)) return true;
             return path === '/profile-details'
                 ? ['/profile-details', '/contact-details', '/education-qualifications', '/professional-experience', '/family-details', '/job-details', '/financial-details', '/profile-security', '/view-profile'].includes(location.pathname)
                 : path === '/'
@@ -333,8 +331,6 @@ const Header = () => {
                     onViewProfile={() => navigate('/profile-details')}
                     drawerOpen={mobileMenuOpen}
                     setDrawerOpen={setMobileMenuOpen}
-                    moreOpen={meMoreOpen}
-                    setMoreOpen={setMeMoreOpen}
                 />
             ) : isMobile ? (
                 /* ── Mobile Header (non-Me portals) ── */

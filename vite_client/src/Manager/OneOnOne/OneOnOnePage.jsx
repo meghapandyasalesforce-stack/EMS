@@ -34,6 +34,7 @@ import { isHR } from '../../utils/managerHelper';
 import { useAuthPermissions } from '../../Hooks/useAuthPermissions';
 import MeetingNotesPanel from '../../components/MeetingNotesPanel';
 import { sanitizeMeetingLink } from '../../utils/meetingLink';
+import './OneOnOneSchedule.css';
 
 const NAVY = '#0E2B3D';
 const MINT = '#1CCA9B';

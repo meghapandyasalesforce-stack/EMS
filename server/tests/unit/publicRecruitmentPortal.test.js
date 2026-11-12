@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import sift from 'sift';
 import router from '../../routes/Public/RecruitmentPortalRoutes.js';
 import { Recruitment } from '../../models/recruitment.model.js';
+import Organization from '../../models/organization.model.js';
 
 const organizationId = new mongoose.Types.ObjectId();
 const jobId = new mongoose.Types.ObjectId();
@@ -18,6 +19,7 @@ app.use('/api/v1/public/recruitment', router);
 app.use((error, req, res, next) => res.status(500).json({ message: error.message }));
 const url = `/api/v1/public/recruitment/${organizationId}/jobs`;
 
+beforeEach(() => jest.spyOn(Organization.collection, 'findOne').mockResolvedValue({ _id: organizationId }));
 afterEach(() => jest.restoreAllMocks());
 
 describe('anonymous public recruitment visibility', () => {
@@ -74,5 +76,29 @@ describe('anonymous public recruitment visibility', () => {
         expect(sift(findOne.mock.calls[0][0])(baseJob)).toBe(true);
         expect(sift(findOne.mock.calls[0][0])({ ...baseJob, isActive: false })).toBe(false);
         expect(sift(findOne.mock.calls[0][0])({ ...baseJob, archivedAt: new Date() })).toBe(false);
+    });
+});
+
+describe('ID-only public career routes', () => {
+    it.each(['paarsiv', 'megha', 'other-company'])('rejects name-based URL %s on listings, details, and applications', async name => {
+        const find = jest.spyOn(Recruitment.collection, 'find');
+        const findOne = jest.spyOn(Recruitment.collection, 'findOne');
+        const base = `/api/v1/public/recruitment/${name}/jobs`;
+        await request(app).get(base).expect(404);
+        await request(app).get(`${base}/${jobId}`).expect(404);
+        await request(app).post(`${base}/${jobId}/apply`).send({}).expect(404);
+        expect(find).not.toHaveBeenCalled();
+        expect(findOne).not.toHaveBeenCalled();
+    });
+    it('scopes public application lookup to the URL organization ID', async () => {
+        const lookup = jest.spyOn(Recruitment.collection, 'findOne').mockResolvedValue(null);
+        await request(app).post(`${url}/${jobId}/apply`).send({ firstName: 'Candidate', email: 'candidate@example.com', consentAccepted: true }).expect(404);
+        expect(String(lookup.mock.calls[0][0].organizationId)).toBe(String(organizationId));
+    });
+    it('rejects an ID belonging to a missing or inactive organization', async () => {
+        jest.spyOn(Organization.collection, 'findOne').mockResolvedValue(null);
+        const find = jest.spyOn(Recruitment.collection, 'find');
+        await request(app).get(url).expect(404);
+        expect(find).not.toHaveBeenCalled();
     });
 });

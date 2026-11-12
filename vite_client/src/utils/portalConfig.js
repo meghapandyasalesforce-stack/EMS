@@ -1,4 +1,4 @@
-import { isExecutive, getMePortalHomePath } from './navigationConfig';
+import { isExecutive } from './navigationConfig';
 
 /** Canonical portal tab order (highest privilege first). */
 export const PORTAL_ORDER = [
@@ -12,7 +12,7 @@ export const PORTAL_ORDER = [
 ];
 
 export const PORTAL_META = {
-  admin: { label: 'Admin', home: '/organization/dashboard', theme: 'admin' },
+  admin: { label: 'Admin', home: '/dashboard-admin', theme: 'admin' },
   executive: { label: 'Executive', home: '/dashboard-administration', theme: 'admin' },
   hr_manager: { label: 'HR', home: '/dashboard-hr', theme: 'admin' },
   payroll_admin: { label: 'Finance', home: '/dashboard-finance', theme: 'admin' },
@@ -115,7 +115,7 @@ export const canSwitchPortals = (
 ) => {
   const sessionRole = resolveSessionRole(user, permissionFlags);
   if (sessionRole !== 'admin') return false;
-  if (Boolean(permissionFlags.isOrgOwner)) return true;
+  if (permissionFlags.isOrgOwner) return true;
   if (Array.isArray(roleBuckets) && roleBuckets.includes('org_owner')) return true;
   return false;
 };
@@ -220,7 +220,7 @@ const buildPortalObjects = (ids, position) => {
   }));
 };
 
-const buildOrgOwnerPortalTabs = (allPortals, position, employee = null) => {
+const buildOrgOwnerPortalTabs = (allPortals) => {
   const byId = Object.fromEntries(allPortals.map((p) => [p.id, p]));
 
   return ORG_OWNER_PORTAL_TABS.map((id) => {
@@ -231,7 +231,8 @@ const buildOrgOwnerPortalTabs = (allPortals, position, employee = null) => {
         home: PORTAL_META.employee.home,
         theme: PORTAL_META.employee.theme,
       };
-      return { ...base, home: getMePortalHomePath(employee || {}) };
+      // Me is the personal employee workspace, independent of operational roles.
+      return { ...base, home: PORTAL_META.employee.home };
     }
     if (byId[id]) return byId[id];
     return {
@@ -255,7 +256,7 @@ export const deriveAvailablePortals = (ctx = {}) => {
   const allPortals = buildPortalObjects(entitledIds, position);
 
   if (canSwitchPortals(user, permissionFlags, roleBuckets)) {
-    return buildOrgOwnerPortalTabs(allPortals, position, employee);
+    return buildOrgOwnerPortalTabs(allPortals);
   }
 
   if (isHrPortalUser(permissionFlags)) {
@@ -372,6 +373,19 @@ export const resolveInitialPortal = (portals, routeHint = '', options = {}) => {
 };
 
 export const isEmployeePortalTheme = (portalId) => portalId === 'employee';
+
+/** Resolve the selected workspace from current entitlements, never cached home URLs. */
+export const getSessionPortalDashboard = (ctx = {}) => {
+  // Before session hydration, retain the server/assigned-role dashboard fallback.
+  if (!ctx.availablePortals?.length) return null;
+  const portals = deriveAvailablePortals(ctx);
+  const id = getEffectiveActivePortal({ ...ctx, availablePortals: portals });
+  const home = PORTAL_META[id]?.home;
+  return home ? { id, home } : null;
+};
+
+export const isDashboardPath = (pathname = '') =>
+  /^\/dashboard(?:[-/][a-z]+)?\/?$/.test(pathname);
 
 export const isPortalSwitchAllowed = (
   portalId,

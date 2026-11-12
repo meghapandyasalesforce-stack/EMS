@@ -94,12 +94,10 @@ const calendarSchema = new mongoose.Schema({
         }
     }],
     /**
-     * HR-enabled Work From Home dates for this calendar year.
-     * Presence = WFH is enabled for that date.
-     * employeeAccess:
-     *   - all_except (default): everyone may apply except excludedEmployeeIds
-     *   - only_these: only excludedEmployeeIds may apply (allowlist; same field, inverted meaning)
-     * Punch rules are separate: office punch is blocked only when the employee has approved WFH.
+     * HR-assigned Work From Home dates for this calendar year.
+     * all_except covers everyone except excludedEmployeeIds; only_these covers that list.
+     * Covered employees can punch home directly and cannot submit overlapping applications.
+     * Other employees and dates remain eligible for independent applications.
      */
     wfhDates: [{
         date: {
