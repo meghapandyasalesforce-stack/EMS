@@ -20,6 +20,7 @@ import {
   syncWorkflowProbationFromEmployee,
 } from '../../helpers/employeeProbationSyncHelper.js';
 import AttendanceRule from '../../models/attendanceRule.model.js';
+import OrgLocation from '../../models/orgMasters/location.model.js';
 import { parseEmployeeShiftAssignment } from '../../helpers/shiftHelper.js';
 import {
   isTopLevelManagerLabel,
@@ -91,7 +92,7 @@ async function resolveManagerReference(organizationId, managerInput) {
 export const updateEmployeeWorkInfo = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { name, lastName, jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote, probation, shiftId, shiftName } = req.body;
+    const { name, lastName, jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote, probation, shiftId, shiftName, locationId } = req.body;
 
     // Validate employee ID
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
@@ -281,6 +282,31 @@ export const updateEmployeeWorkInfo = async (req, res) => {
             message: shiftErr.message,
           });
         }
+      }
+    }
+    if (locationId !== undefined) {
+      const rawLocationId = locationId == null ? '' : String(locationId).trim();
+      if (!rawLocationId) {
+        updateData.$unset = { ...(updateData.$unset || {}), locationId: '' };
+      } else if (!mongoose.Types.ObjectId.isValid(rawLocationId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid location',
+        });
+      } else {
+        const branch = await OrgLocation.findOne({
+          _id: rawLocationId,
+          organizationId,
+          status: 'active',
+        }).select('name address').lean();
+        if (!branch) {
+          return res.status(400).json({
+            success: false,
+            message: 'Location not found in this organization',
+          });
+        }
+        updateData.locationId = branch._id;
+        if (branch.address?.city) updateData.city = branch.address.city;
       }
     }
     if (probation !== undefined && probation !== null && typeof probation === 'object') {

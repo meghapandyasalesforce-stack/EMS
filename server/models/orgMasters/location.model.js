@@ -19,6 +19,17 @@ const locationSchema = new mongoose.Schema(
             zipCode: { type: String, trim: true },
         },
         phone: { type: String, trim: true },
+        /** Punch-in geofence. Absent coordinates fall back to the organization attendance rule pin. */
+        coordinates: {
+            latitude: { type: Number },
+            longitude: { type: Number },
+        },
+        maximumRadius: {
+            type: Number,
+            default: 500,
+            min: [50, 'Minimum radius is 50 meters'],
+            max: [1000, 'Maximum radius is 1000 meters'],
+        },
     },
     { timestamps: true }
 );

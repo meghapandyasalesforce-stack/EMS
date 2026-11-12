@@ -41,6 +41,7 @@ import {
   parseDateKeyInTimezone,
   resolveAttendanceDateKey,
 } from "../../helpers/attendanceDayHelper.js";
+import { resolveEmployeePunchSite } from "../../helpers/punchSiteHelper.js";
 import {
   runInBackground,
   invalidateAttendanceCachesAsync,
@@ -794,20 +795,38 @@ export const clockIn = async (req, res) => {
     let locationMatch = false;
     let locationDistance = null;
 
-    // Geofence: when rule applies, GPS is required; office radius is enforced only if simple punches are off
-    if (activeRule) {
+    const punchSite = await resolveEmployeePunchSite(req.employee, activeRule);
+    const siteRule = activeRule
+      ? {
+          ...activeRule,
+          coordinates: punchSite?.coordinates || activeRule.coordinates,
+          maximumRadius: punchSite?.maximumRadius || activeRule.maximumRadius || 500,
+          location: punchSite?.locationName || activeRule.location,
+          address: punchSite?.source === 'branch'
+            ? (punchSite.address || '')
+            : (punchSite?.address || activeRule.address),
+        }
+      : null;
+    if (punchSite?.source === 'branch' && punchSite.locationName) {
+      locationInfo.siteName = punchSite.locationName;
+    }
+    const siteLabel = siteRule?.location || 'the office';
+
+    // Geofence: when rule applies, GPS is required; office radius is enforced only if simple punches are off.
+    // Assigned branch pin replaces the organization pin when that branch has coordinates.
+    if (activeRule && siteRule) {
       const empDept = req.employee?.department;
       const appliesToDept = !activeRule.applicableDepartments?.length ||
         (empDept && activeRule.applicableDepartments.includes(empDept));
       const isExempt = activeRule.exceptions?.exemptEmployees?.some(
         (empId) => empId.toString() === req.employee?._id?.toString()
       ) || false;
-      const hasRuleCoords = activeRule.coordinates &&
-        typeof activeRule.coordinates.latitude === 'number' &&
-        typeof activeRule.coordinates.longitude === 'number' &&
-        !isNaN(activeRule.coordinates.latitude) &&
-        !isNaN(activeRule.coordinates.longitude) &&
-        !(activeRule.coordinates.latitude === 0 && activeRule.coordinates.longitude === 0);
+      const hasRuleCoords = siteRule.coordinates &&
+        typeof siteRule.coordinates.latitude === 'number' &&
+        typeof siteRule.coordinates.longitude === 'number' &&
+        !isNaN(siteRule.coordinates.latitude) &&
+        !isNaN(siteRule.coordinates.longitude) &&
+        !(siteRule.coordinates.latitude === 0 && siteRule.coordinates.longitude === 0);
 
       if (isWfhPunch && appliesToDept && hasRuleCoords && !isExempt) {
         // WFH punch: never block on office geofence; record distance for reference only.
@@ -819,8 +838,8 @@ export const clockIn = async (req, res) => {
           locationDistance = distanceInMeters(
             locationInfo.latitude,
             locationInfo.longitude,
-            activeRule.coordinates.latitude,
-            activeRule.coordinates.longitude
+            siteRule.coordinates.latitude,
+            siteRule.coordinates.longitude
           );
           locationInfo.locationDistance = locationDistance;
         }
@@ -885,38 +904,40 @@ export const clockIn = async (req, res) => {
         locationDistance = distanceInMeters(
           locationInfo.latitude,
           locationInfo.longitude,
-          activeRule.coordinates.latitude,
-          activeRule.coordinates.longitude
+          siteRule.coordinates.latitude,
+          siteRule.coordinates.longitude
         );
         locationInfo.locationDistance = locationDistance;
 
         if (enforceRadius) {
-          if (locationDistance > (activeRule.maximumRadius || 500)) {
+          if (locationDistance > (siteRule.maximumRadius || 500)) {
             logger.warn('Clock-in outside radius', {
               userId,
               organizationId,
               distance: Math.round(locationDistance),
-              maximumRadius: activeRule.maximumRadius,
+              maximumRadius: siteRule.maximumRadius,
+              site: siteLabel,
             });
             return res.status(400).json({
               success: false,
-              message: `You are outside the allowed check-in radius. Distance: ${Math.round(locationDistance)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
+              message: `You are outside the allowed check-in radius. Distance: ${Math.round(locationDistance)}m, Maximum allowed: ${siteRule.maximumRadius || 500}m. Please move closer to ${siteLabel}.`,
               code: 'OUTSIDE_RADIUS',
               distance: Math.round(locationDistance),
-              maximumRadius: activeRule.maximumRadius,
+              maximumRadius: siteRule.maximumRadius || 500,
               details: {
                 yourLocation: {
                   latitude: locationInfo.latitude,
                   longitude: locationInfo.longitude,
                 },
-                officeLocation: activeRule.coordinates,
+                officeLocation: siteRule.coordinates,
+                siteName: siteLabel,
               },
             });
           }
           locationMatch = true;
           locationInfo.locationMatch = true;
         } else {
-          locationMatch = locationDistance <= (activeRule.maximumRadius || 500);
+          locationMatch = locationDistance <= (siteRule.maximumRadius || 500);
           locationInfo.locationMatch = locationMatch;
         }
       }
@@ -1485,20 +1506,38 @@ export const clockOut = async (req, res) => {
       });
     }
 
-    // Geofence: same as clock-in — GPS required when rule applies; radius only if simple punches off
-    if (activeRule) {
+    const punchSiteOut = await resolveEmployeePunchSite(req.employee, activeRule);
+    const siteRuleOut = activeRule
+      ? {
+          ...activeRule,
+          coordinates: punchSiteOut?.coordinates || activeRule.coordinates,
+          maximumRadius: punchSiteOut?.maximumRadius || activeRule.maximumRadius || 500,
+          location: punchSiteOut?.locationName || activeRule.location,
+          address: punchSiteOut?.source === 'branch'
+            ? (punchSiteOut.address || '')
+            : (punchSiteOut?.address || activeRule.address),
+        }
+      : null;
+    if (punchSiteOut?.source === 'branch' && punchSiteOut.locationName) {
+      locationInfo.siteName = punchSiteOut.locationName;
+    }
+    const siteLabelOut = siteRuleOut?.location || 'the office';
+
+    // Geofence: same as clock-in — GPS required when rule applies; radius only if simple punches off.
+    // Assigned branch pin replaces the organization pin when that branch has coordinates.
+    if (activeRule && siteRuleOut) {
       const empDept = req.employee?.department;
       const appliesToDept = !activeRule.applicableDepartments?.length ||
         (empDept && activeRule.applicableDepartments.includes(empDept));
       const isExempt = activeRule.exceptions?.exemptEmployees?.some(
         (empId) => empId.toString() === req.employee?._id?.toString()
       ) || false;
-      const hasRuleCoords = activeRule.coordinates &&
-        typeof activeRule.coordinates.latitude === 'number' &&
-        typeof activeRule.coordinates.longitude === 'number' &&
-        !isNaN(activeRule.coordinates.latitude) &&
-        !isNaN(activeRule.coordinates.longitude) &&
-        !(activeRule.coordinates.latitude === 0 && activeRule.coordinates.longitude === 0);
+      const hasRuleCoords = siteRuleOut.coordinates &&
+        typeof siteRuleOut.coordinates.latitude === 'number' &&
+        typeof siteRuleOut.coordinates.longitude === 'number' &&
+        !isNaN(siteRuleOut.coordinates.latitude) &&
+        !isNaN(siteRuleOut.coordinates.longitude) &&
+        !(siteRuleOut.coordinates.latitude === 0 && siteRuleOut.coordinates.longitude === 0);
 
       if (isWfhSession && appliesToDept && hasRuleCoords && !isExempt) {
         // WFH session: never block clock-out on office geofence; record distance for reference only.
@@ -1510,8 +1549,8 @@ export const clockOut = async (req, res) => {
           locationInfo.locationDistance = distanceInMeters(
             locationInfo.latitude,
             locationInfo.longitude,
-            activeRule.coordinates.latitude,
-            activeRule.coordinates.longitude
+            siteRuleOut.coordinates.latitude,
+            siteRuleOut.coordinates.longitude
           );
         }
       } else if (appliesToDept && hasRuleCoords && !isExempt) {
@@ -1564,23 +1603,24 @@ export const clockOut = async (req, res) => {
         const dist = distanceInMeters(
           locationInfo.latitude,
           locationInfo.longitude,
-          activeRule.coordinates.latitude,
-          activeRule.coordinates.longitude
+          siteRuleOut.coordinates.latitude,
+          siteRuleOut.coordinates.longitude
         );
         locationInfo.locationDistance = dist;
         if (enforceRadius) {
-          if (dist > (activeRule.maximumRadius || 500)) {
+          if (dist > (siteRuleOut.maximumRadius || 500)) {
             return res.status(400).json({
               success: false,
-              message: `You are outside the allowed check-out radius. Distance: ${Math.round(dist)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
+              message: `You are outside the allowed check-out radius. Distance: ${Math.round(dist)}m, Maximum allowed: ${siteRuleOut.maximumRadius || 500}m. Please move closer to ${siteLabelOut}.`,
               code: 'OUTSIDE_RADIUS',
               distance: Math.round(dist),
-              maximumRadius: activeRule.maximumRadius,
+              maximumRadius: siteRuleOut.maximumRadius || 500,
+              siteName: siteLabelOut,
             });
           }
           locationInfo.locationMatch = true;
         } else {
-          locationInfo.locationMatch = dist <= (activeRule.maximumRadius || 500);
+          locationInfo.locationMatch = dist <= (siteRuleOut.maximumRadius || 500);
         }
       }
     }
@@ -3278,15 +3318,24 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
       empId => empId.toString() === req.employee?._id?.toString()
     ) || false;
 
+    // Assigned branch pin replaces the organization attendance-rule pin for this employee.
+    const punchSite = await resolveEmployeePunchSite(req.employee, activeRule);
+    const siteCoordinates = punchSite?.coordinates || activeRule.coordinates;
+    const siteRadius = punchSite?.maximumRadius || activeRule.maximumRadius || 500;
+    const siteLocationName = punchSite?.locationName || activeRule.location;
+    const siteAddress = punchSite?.source === 'branch'
+      ? (punchSite.address || '')
+      : (punchSite?.address || activeRule.address);
+
     // Location required whenever rule applies and employee must follow geofence rules (incl. simple punches).
     // Office radius is enforced only when simple punches are off.
-    const hasValidCoordinates = activeRule.coordinates &&
-                                 typeof activeRule.coordinates.latitude === 'number' &&
-                                 typeof activeRule.coordinates.longitude === 'number' &&
-                                 !isNaN(activeRule.coordinates.latitude) &&
-                                 !isNaN(activeRule.coordinates.longitude) &&
-                                 activeRule.coordinates.latitude !== 0 &&
-                                 activeRule.coordinates.longitude !== 0;
+    const hasValidCoordinates = siteCoordinates &&
+                                 typeof siteCoordinates.latitude === 'number' &&
+                                 typeof siteCoordinates.longitude === 'number' &&
+                                 !isNaN(siteCoordinates.latitude) &&
+                                 !isNaN(siteCoordinates.longitude) &&
+                                 siteCoordinates.latitude !== 0 &&
+                                 siteCoordinates.longitude !== 0;
 
     const locationRequired = appliesToDept &&
                             !isExempt &&
@@ -3294,14 +3343,15 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
 
     const enforceOfficeRadius = locationRequired && !activeRule.enableSimplePunches;
 
-    // Return public rule information
+    // Return public rule information. Coordinates are the employee's branch when that branch has a pin.
     return res.json({
       success: true,
       rule: {
-        location: activeRule.location,
-        address: activeRule.address,
-        coordinates: activeRule.coordinates,
-        maximumRadius: activeRule.maximumRadius || 500,
+        location: siteLocationName,
+        address: siteAddress,
+        coordinates: siteCoordinates,
+        maximumRadius: siteRadius,
+        punchSiteSource: punchSite?.source || null,
         enableSimplePunches: activeRule.enableSimplePunches || false,
         locationRequired,
         enforceOfficeRadius,

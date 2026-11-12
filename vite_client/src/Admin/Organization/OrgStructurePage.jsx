@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import useOrgStructureCatalog from '../../Hooks/useOrgStructureCatalog';
-import { FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
+import GoogleMapsComponent from '../../utils/GoogleMaps';
+import { FiEdit2, FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
 
 const RESOURCES = [
     { key: 'departments', label: 'Departments', nameField: 'name' },
@@ -17,6 +18,22 @@ const RESOURCES = [
 const inputClass =
     'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20';
 
+const EMPTY_LOCATION_FORM = {
+    type: 'branch',
+    city: '',
+    latitude: '',
+    longitude: '',
+    maximumRadius: 500,
+};
+
+function locationHasPunchPin(item) {
+    const lat = Number(item?.coordinates?.latitude);
+    const lng = Number(item?.coordinates?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+    if (lat === 0 && lng === 0) return false;
+    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
 function deptNameById(departments, id) {
     if (!id) return null;
     const d = (departments || []).find((x) => String(x._id) === String(id));
@@ -29,6 +46,8 @@ export default function OrgStructurePage() {
     const [newCode, setNewCode] = useState('');
     const [teamDepartmentId, setTeamDepartmentId] = useState('');
     const [jobRoleDepartmentId, setJobRoleDepartmentId] = useState('');
+    const [locationForm, setLocationForm] = useState(EMPTY_LOCATION_FORM);
+    const [editingId, setEditingId] = useState(null);
     const [saving, setSaving] = useState(false);
     const { catalog, loading, reload } = useOrgStructureCatalog();
 
@@ -57,6 +76,19 @@ export default function OrgStructurePage() {
             toast.error('Select a department for the team');
             return;
         }
+        if (activeTab === 'locations') {
+            const latRaw = String(locationForm.latitude).trim();
+            const lngRaw = String(locationForm.longitude).trim();
+            if ((latRaw && !lngRaw) || (!latRaw && lngRaw)) {
+                toast.error('Enter both latitude and longitude, or click the map');
+                return;
+            }
+            const radius = Number(locationForm.maximumRadius);
+            if (!Number.isFinite(radius) || radius < 50 || radius > 1000) {
+                toast.error('Punch radius must be between 50 and 1000 meters');
+                return;
+            }
+        }
         setSaving(true);
         try {
             const payload = { name: newName.trim(), code: newCode.trim() || undefined };
@@ -66,10 +98,29 @@ export default function OrgStructurePage() {
             if (activeTab === 'jobRoles' && jobRoleDepartmentId) {
                 payload.departmentId = jobRoleDepartmentId;
             }
-            await axios.post(`/v1/admin/org-structure/${activeTab}`, payload, { withCredentials: true });
-            toast.success('Created');
+            if (activeTab === 'locations') {
+                payload.type = locationForm.type || 'branch';
+                payload.address = { city: locationForm.city.trim() };
+                payload.maximumRadius = Number(locationForm.maximumRadius) || 500;
+                const latRaw = String(locationForm.latitude).trim();
+                const lngRaw = String(locationForm.longitude).trim();
+                if (latRaw && lngRaw) {
+                    payload.coordinates = { latitude: Number(latRaw), longitude: Number(lngRaw) };
+                } else if (editingId) {
+                    payload.clearCoordinates = true;
+                }
+            }
+            if (editingId && activeTab === 'locations') {
+                await axios.put(`/v1/admin/org-structure/${activeTab}/${editingId}`, payload, { withCredentials: true });
+                toast.success('Location updated');
+            } else {
+                await axios.post(`/v1/admin/org-structure/${activeTab}`, payload, { withCredentials: true });
+                toast.success('Created');
+            }
             setNewName('');
             setNewCode('');
+            setEditingId(null);
+            setLocationForm(EMPTY_LOCATION_FORM);
             reload();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Create failed');
@@ -89,7 +140,28 @@ export default function OrgStructurePage() {
         }
     };
 
+    const resetLocationEditor = () => {
+        setEditingId(null);
+        setNewName('');
+        setNewCode('');
+        setLocationForm(EMPTY_LOCATION_FORM);
+    };
+
+    const startEditLocation = (item) => {
+        setEditingId(item._id);
+        setNewName(item.name || '');
+        setNewCode(item.code || '');
+        setLocationForm({
+            type: item.type || 'branch',
+            city: item.address?.city || '',
+            latitude: item.coordinates?.latitude ?? '',
+            longitude: item.coordinates?.longitude ?? '',
+            maximumRadius: item.maximumRadius || 500,
+        });
+    };
+
     const activeResource = RESOURCES.find((r) => r.key === activeTab);
+    const isLocationTab = activeTab === 'locations';
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -127,7 +199,10 @@ export default function OrgStructurePage() {
                             <button
                                 key={tab.key}
                                 type="button"
-                                onClick={() => setActiveTab(tab.key)}
+                                onClick={() => {
+                                    setActiveTab(tab.key);
+                                    resetLocationEditor();
+                                }}
                                 className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
                                     activeTab === tab.key
                                         ? 'bg-emerald-600 text-white'
@@ -139,10 +214,17 @@ export default function OrgStructurePage() {
                         ))}
                     </div>
 
-                    <div className="grid gap-6 lg:grid-cols-3">
-                        <form onSubmit={handleCreate} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
+                    {isLocationTab ? (
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                            Add each office, drop a pin, and set how far from that pin an employee can punch in.
+                            Then assign the branch on the employee. A branch without a pin still uses the single pin on Attendance Rules.
+                        </div>
+                    ) : null}
+
+                    <div className={`grid gap-6 ${isLocationTab ? 'grid-cols-1' : 'lg:grid-cols-3'}`}>
+                        <form onSubmit={handleCreate} className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${isLocationTab ? '' : 'lg:col-span-1'}`}>
                             <h2 className="mb-3 text-sm font-semibold text-slate-800">
-                                Add {activeResource?.label.slice(0, -1) || 'item'}
+                                {editingId && isLocationTab ? 'Edit location' : `Add ${activeResource?.label.slice(0, -1) || 'item'}`}
                             </h2>
                             {activeTab === 'teams' ? (
                                 <select
@@ -177,21 +259,104 @@ export default function OrgStructurePage() {
                                 required
                             />
                             <input
-                                className={`${inputClass} mb-4`}
+                                className={`${inputClass} mb-3`}
                                 placeholder="Code (optional)"
                                 value={newCode}
                                 onChange={(e) => setNewCode(e.target.value)}
                             />
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                            >
-                                <FiPlus /> {saving ? 'Saving…' : 'Add'}
-                            </button>
+                            {isLocationTab ? (
+                                <div className="mb-4 space-y-3">
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <select
+                                            className={inputClass}
+                                            value={locationForm.type}
+                                            onChange={(e) => setLocationForm((prev) => ({ ...prev, type: e.target.value }))}
+                                        >
+                                            <option value="head">Head office</option>
+                                            <option value="branch">Branch</option>
+                                            <option value="remote_hub">Remote hub</option>
+                                        </select>
+                                        <input
+                                            className={inputClass}
+                                            placeholder="City"
+                                            value={locationForm.city}
+                                            onChange={(e) => setLocationForm((prev) => ({ ...prev, city: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <p className="mb-2 text-sm font-medium text-slate-700">
+                                            Punch radius: {locationForm.maximumRadius} m
+                                        </p>
+                                        <input
+                                            type="range"
+                                            min="50"
+                                            max="1000"
+                                            value={locationForm.maximumRadius}
+                                            onChange={(e) => setLocationForm((prev) => ({
+                                                ...prev,
+                                                maximumRadius: Number(e.target.value),
+                                            }))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <input
+                                            className={inputClass}
+                                            type="number"
+                                            step="any"
+                                            placeholder="Latitude"
+                                            value={locationForm.latitude}
+                                            onChange={(e) => setLocationForm((prev) => ({ ...prev, latitude: e.target.value }))}
+                                        />
+                                        <input
+                                            className={inputClass}
+                                            type="number"
+                                            step="any"
+                                            placeholder="Longitude"
+                                            value={locationForm.longitude}
+                                            onChange={(e) => setLocationForm((prev) => ({ ...prev, longitude: e.target.value }))}
+                                        />
+                                    </div>
+                                    <GoogleMapsComponent
+                                        latitude={locationForm.latitude === '' ? undefined : Number(locationForm.latitude)}
+                                        longitude={locationForm.longitude === '' ? undefined : Number(locationForm.longitude)}
+                                        onMarkerDrag={(lat, lng) => setLocationForm((prev) => ({
+                                            ...prev,
+                                            latitude: String(lat),
+                                            longitude: String(lng),
+                                        }))}
+                                        onLocationSelect={(lat, lng) => setLocationForm((prev) => ({
+                                            ...prev,
+                                            latitude: String(lat),
+                                            longitude: String(lng),
+                                        }))}
+                                    />
+                                    <p className="text-xs text-slate-500">
+                                        Click the map or drag the marker to set where this branch can punch in. Leave the pin empty to keep using the organization attendance pin.
+                                    </p>
+                                </div>
+                            ) : null}
+                            <div className="flex gap-2">
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                    <FiPlus /> {saving ? 'Saving…' : editingId && isLocationTab ? 'Save location' : 'Add'}
+                                </button>
+                                {editingId && isLocationTab ? (
+                                    <button
+                                        type="button"
+                                        onClick={resetLocationEditor}
+                                        className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                ) : null}
+                            </div>
                         </form>
 
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+                        <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${isLocationTab ? '' : 'lg:col-span-2'}`}>
                             <h2 className="mb-3 text-sm font-semibold text-slate-800">
                                 {activeResource?.label} ({items.length})
                             </h2>
@@ -209,6 +374,19 @@ export default function OrgStructurePage() {
                                             const dn = deptNameById(catalog.departments, item.departmentId);
                                             subtitle = [subtitle, dn ? `Dept: ${dn}` : null].filter(Boolean).join(' · ');
                                         }
+                                        if (isLocationTab) {
+                                            const typeLabel = item.type === 'head'
+                                                ? 'Head office'
+                                                : item.type === 'remote_hub'
+                                                    ? 'Remote hub'
+                                                    : 'Branch';
+                                            const pinLabel = locationHasPunchPin(item)
+                                                ? `punch radius ${item.maximumRadius || 500}m`
+                                                : 'no punch pin';
+                                            subtitle = [item.address?.city, typeLabel, pinLabel, item.code]
+                                                .filter(Boolean)
+                                                .join(' · ');
+                                        }
                                         if (activeTab === 'jobRoles' && Array.isArray(item.departmentIds) && item.departmentIds.length) {
                                             const names = item.departmentIds
                                                 .map((id) => deptNameById(catalog.departments, id))
@@ -225,14 +403,26 @@ export default function OrgStructurePage() {
                                                         <p className="text-xs text-slate-500">{subtitle}</p>
                                                     ) : null}
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDelete(item._id)}
-                                                    className="rounded p-2 text-red-500 hover:bg-red-50"
-                                                    title="Deactivate"
-                                                >
-                                                    <FiTrash2 />
-                                                </button>
+                                                <div className="flex items-center">
+                                                    {isLocationTab ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => startEditLocation(item)}
+                                                            className="rounded p-2 text-slate-500 hover:bg-slate-100"
+                                                            title="Edit punch pin"
+                                                        >
+                                                            <FiEdit2 />
+                                                        </button>
+                                                    ) : null}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDelete(item._id)}
+                                                        className="rounded p-2 text-red-500 hover:bg-red-50"
+                                                        title="Deactivate"
+                                                    >
+                                                        <FiTrash2 />
+                                                    </button>
+                                                </div>
                                             </li>
                                         );
                                     })}

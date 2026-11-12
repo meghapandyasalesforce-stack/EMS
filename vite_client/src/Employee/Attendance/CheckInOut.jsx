@@ -102,6 +102,7 @@ const CheckInOut = () => {
       ? attendanceRule.locationRequired
       : !attendanceRule?.enableSimplePunches)
   );
+  const punchSiteLabel = attendanceRule?.location || 'the office';
   const enforceOfficeRadiusUI = !!(
     hasRuleWithCoordinatesUI &&
     (typeof attendanceRule?.enforceOfficeRadius === 'boolean'
@@ -733,7 +734,7 @@ const CheckInOut = () => {
 
           if (locationCheck && !locationCheck.isWithinRadius) {
             showNotification(
-              `You are ${locationCheck.distance}m away from the office. Please move within ${attendanceRule.maximumRadius || 500}m radius to check in.`,
+              `You are ${locationCheck.distance}m away from ${punchSiteLabel}. Please move within ${attendanceRule.maximumRadius || 500}m radius to check in.`,
               'error'
             );
             setIsProcessing(false);
@@ -1017,7 +1018,7 @@ const CheckInOut = () => {
 
           if (locationCheck && !locationCheck.isWithinRadius) {
             showNotification(
-              `You are ${locationCheck.distance}m away from the office. Please move within ${attendanceRule.maximumRadius || 500}m radius to check out.`,
+              `You are ${locationCheck.distance}m away from ${punchSiteLabel}. Please move within ${attendanceRule.maximumRadius || 500}m radius to check out.`,
               'error'
             );
             setIsProcessing(false);
@@ -1275,12 +1276,17 @@ const CheckInOut = () => {
                           ? 'text-theme-primary' 
                           : 'text-red-600'
                       }`}>
-                        Distance: {distanceFromOffice}m from office
+                        Distance: {distanceFromOffice}m from {punchSiteLabel}
                         {attendanceRule.maximumRadius && (
                           <span className="ml-2 text-gray-600">
                             (Max: {attendanceRule.maximumRadius}m)
                           </span>
                         )}
+                      </p>
+                    )}
+                    {attendanceRule.location && attendanceRule.location !== attendanceRule.address && (
+                      <p className="text-xs text-gray-700 mt-1">
+                        Site: {attendanceRule.location}
                       </p>
                     )}
                     {attendanceRule.address && (
@@ -1302,7 +1308,7 @@ const CheckInOut = () => {
               {isWithinRadius === false && (
                 <div className="mt-3 pt-3 border-t border-red-200">
                   <p className="text-sm text-red-700">
-                    ⚠️ Please move within {attendanceRule.maximumRadius}m of the office location to check in/out.
+                    ⚠️ Please move within {attendanceRule.maximumRadius}m of {punchSiteLabel} to check in/out.
                   </p>
                 </div>
               )}
@@ -1561,7 +1567,7 @@ const CheckInOut = () => {
                           : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 hover:shadow-xl transform hover:scale-105'
                       }`}
                       title={enforceOfficeRadiusUI && !isWfhSessionUI && isWithinRadius === false 
-                        ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check out.`
+                        ? `You are ${distanceFromOffice}m away from ${punchSiteLabel}. Please move within ${attendanceRule.maximumRadius}m to check out.`
                         : 'Check Out'}
                     >
                       {loading || isProcessing ? (
@@ -1787,7 +1793,7 @@ const CheckInOut = () => {
                   punchBlockedByNonWorkingDayUI
                     ? `${nonWorkingDayLabelUI} — punch-in is not available.`
                     : enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false 
-                      ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check in.`
+                      ? `You are ${distanceFromOffice}m away from ${punchSiteLabel}. Please move within ${attendanceRule.maximumRadius}m to check in.`
                       : 'Check In'
                 }
               >

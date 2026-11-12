@@ -927,7 +927,15 @@ function AddEmployee({ embedded = false, onClose, onCreated }) {
                         value={form.locationId}
                         onChange={handleChange}
                         placeholder="Location (optional)"
-                        options={(catalog.locations || []).map((loc) => ({ value: loc._id, label: loc.name }))}
+                        options={(catalog.locations || []).map((loc) => {
+                            const lat = Number(loc.coordinates?.latitude);
+                            const lng = Number(loc.coordinates?.longitude);
+                            const hasPin = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+                            return {
+                                value: loc._id,
+                                label: hasPin ? loc.name : `${loc.name} (no punch pin)`,
+                            };
+                        })}
                     />
                 </div>
                 <div className="emp-add__field">

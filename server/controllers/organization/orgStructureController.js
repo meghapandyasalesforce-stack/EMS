@@ -5,6 +5,7 @@ import {
     seedOrgStructureFromOrganization,
     createMasterRecord,
     updateMasterRecord,
+    OrgStructureValidationError,
     deleteMasterRecord,
     listMasterRecords,
     MASTER_MODELS,
@@ -48,8 +49,15 @@ export const createOrgMaster = asyncHandler(async (req, res) => {
     if (!RESOURCES.includes(resource)) {
         return sendError(res, 'Invalid resource', 400, 'INVALID_RESOURCE');
     }
-    const item = await createMasterRecord(organizationId, resource, req.body);
-    return sendSuccess(res, { item }, 'Created', 201);
+    try {
+        const item = await createMasterRecord(organizationId, resource, req.body);
+        return sendSuccess(res, { item }, 'Created', 201);
+    } catch (error) {
+        if (error instanceof OrgStructureValidationError) {
+            return sendError(res, error.message, 400, error.code);
+        }
+        throw error;
+    }
 });
 
 export const updateOrgMaster = asyncHandler(async (req, res) => {
@@ -62,6 +70,9 @@ export const updateOrgMaster = asyncHandler(async (req, res) => {
         const item = await updateMasterRecord(organizationId, resource, id, req.body);
         return sendSuccess(res, { item }, 'Updated');
     } catch (error) {
+        if (error instanceof OrgStructureValidationError) {
+            return sendError(res, error.message, 400, error.code);
+        }
         return sendError(res, error.message, 404, 'NOT_FOUND');
     }
 });

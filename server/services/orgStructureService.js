@@ -10,6 +10,7 @@ import OrgJobFamily from '../models/orgMasters/jobFamily.model.js';
 import OrgJobRole from '../models/orgMasters/jobRole.model.js';
 import OrgDesignation from '../models/orgMasters/designation.model.js';
 import OrgLocation from '../models/orgMasters/location.model.js';
+import { hasValidPunchCoordinates } from '../helpers/punchSiteHelper.js';
 import OrgEmploymentType from '../models/orgMasters/employmentType.model.js';
 import OrgWorkMode from '../models/orgMasters/workMode.model.js';
 import {
@@ -19,6 +20,77 @@ import {
     DEFAULT_EMPLOYMENT_TYPES,
 } from '../constants/onboardingDefaults.js';
 import logger from '../helpers/logger.js';
+
+export const LOCATION_TYPES = ['head', 'branch', 'remote_hub'];
+
+export class OrgStructureValidationError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'OrgStructureValidationError';
+        this.statusCode = 400;
+        this.code = 'VALIDATION_ERROR';
+    }
+}
+
+function normalizeLocationGeofence(payload) {
+    const result = { clearCoordinates: false };
+
+    const hasCoordinatePayload = Object.prototype.hasOwnProperty.call(payload, 'coordinates')
+        || payload.clearCoordinates === true;
+    if (hasCoordinatePayload) {
+        const coordinates = payload.coordinates;
+        const lat = coordinates?.latitude;
+        const lng = coordinates?.longitude;
+        const blank = payload.clearCoordinates === true
+            || coordinates == null
+            || lat === '' || lat == null
+            || lng === '' || lng == null;
+        if (blank) {
+            result.clearCoordinates = true;
+        } else if (!hasValidPunchCoordinates(coordinates)) {
+            throw new OrgStructureValidationError('Enter a valid map pin for this branch (latitude and longitude).');
+        } else {
+            result.coordinates = {
+                latitude: Number(coordinates.latitude),
+                longitude: Number(coordinates.longitude),
+            };
+        }
+    }
+
+    if (payload.maximumRadius !== undefined && payload.maximumRadius !== null && payload.maximumRadius !== '') {
+        const radius = Number(payload.maximumRadius);
+        if (!Number.isFinite(radius) || radius < 50 || radius > 1000) {
+            throw new OrgStructureValidationError('Punch radius must be between 50 and 1000 meters.');
+        }
+        result.maximumRadius = radius;
+    }
+
+    return result;
+}
+
+function applyLocationFields(target, payload, { partial = false } = {}) {
+    if (!partial || payload.type !== undefined) {
+        const type = payload.type || 'branch';
+        if (!LOCATION_TYPES.includes(type)) {
+            throw new OrgStructureValidationError('Location type must be head office, branch, or remote hub.');
+        }
+        target.type = type;
+    }
+    if (!partial || payload.isPrimary !== undefined) {
+        target.isPrimary = Boolean(payload.isPrimary);
+    }
+    if (!partial || payload.phone !== undefined) {
+        target.phone = payload.phone || '';
+    }
+    if (!partial && payload.address === undefined) {
+        target.address = {};
+    }
+
+    const geo = normalizeLocationGeofence(payload);
+    if (geo.coordinates) target.coordinates = geo.coordinates;
+    if (geo.clearCoordinates) target._clearCoordinates = true;
+    if (geo.maximumRadius != null) target.maximumRadius = geo.maximumRadius;
+}
 
 export const MASTER_MODELS = {
     departments: OrgDepartment,
@@ -587,10 +659,12 @@ export const createMasterRecord = async (organizationId, resource, payload) => {
         data.levelOrder = payload.levelOrder || 1;
     }
     if (resource === 'locations') {
-        data.type = payload.type || 'branch';
-        data.isPrimary = Boolean(payload.isPrimary);
-        data.address = payload.address || {};
-        data.phone = payload.phone || '';
+        applyLocationFields(data, payload, { partial: false });
+        if (payload.address && typeof payload.address === 'object') {
+            data.address = payload.address;
+        }
+        delete data._clearCoordinates;
+        delete data.clearCoordinates;
     }
 
     return Model.create(data);
@@ -603,6 +677,21 @@ export const updateMasterRecord = async (organizationId, resource, id, payload) 
     const update = { ...payload };
     delete update.organizationId;
     delete update._id;
+    delete update.clearCoordinates;
+
+    let clearCoordinates = false;
+    if (resource === 'locations') {
+        if (payload.address && typeof payload.address === 'object') {
+            const existing = await Model.findOne({ _id: id, organizationId }).select('address').lean();
+            if (!existing) throw new Error('Record not found');
+            update.address = { ...(existing.address || {}), ...payload.address };
+        }
+        applyLocationFields(update, payload, { partial: true });
+        clearCoordinates = Boolean(update._clearCoordinates);
+        delete update._clearCoordinates;
+        delete update.clearCoordinates;
+        if (clearCoordinates) delete update.coordinates;
+    }
 
     const doc = await Model.findOneAndUpdate(
         { _id: id, organizationId },
@@ -610,6 +699,10 @@ export const updateMasterRecord = async (organizationId, resource, id, payload) 
         { new: true, runValidators: true }
     );
     if (!doc) throw new Error('Record not found');
+    if (clearCoordinates) {
+        await Model.updateOne({ _id: id, organizationId }, { $unset: { coordinates: 1 } });
+        doc.coordinates = undefined;
+    }
     return doc;
 };
 
