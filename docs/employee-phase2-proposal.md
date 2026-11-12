@@ -1,43 +1,58 @@
-# Employee Portal — Phase 2 Proposal
+# Employee portal — Phase 2 proposal
 
-**Status:** Awaiting confirmation (Step 1 only — no UI rebuild until explicitly approved)  
-**Date:** 2026-10-26  
-**Based on:** `docs/employee-audit.md` (Phase 1 approved)  
-**Design reuse:** Admin/shared `cm-hrms` system (`vite_client/src/styles/corporateModern.css`, `components/corporateModern`) — `docs/admin-audit.md` does not exist  
-**Parallel:** Same structure as `docs/hr-phase2-proposal.md`
+**Status:** Awaiting confirmation. This is the information architecture and design direction only. No UI rebuild until you approve it.  
+**Date:** 2026-11-10  
+**Based on:** `docs/Employee-audit.md`  
+**Design reuse:** Existing Me shell and the shared corporate styles (`vite_client/src/Shared/Header.jsx`, `vite_client/src/styles/corporateModern.css`, `vite_client/src/components/corporateModern`). No new UI framework.  
+**Parallel:** Same step as `docs/hr-phase2-proposal.md` and `docs/admin-audit.md`.
 
 ---
 
 ## Executive summary
 
-Phase 2 redesigns the **Me (Employee) portal** as a **mobile-first** self-service experience: fewer primary destinations, a clear home dashboard, merged document surfaces, and security fixes from the audit — while **preserving all existing functionality**.
+Phase 2 rebuilds the Me (Employee) portal as a phone-first self-service experience. The current sidebar lists 15 destinations. The proposal keeps every working feature, folds time and documents into two hubs, and fixes the security and dead-control findings from the 10 November audit.
 
 This document proposes:
 
-1. **Navigation** — primary + More, optional mobile bottom bar  
-2. **Dashboard** — punch, action queue, balances, pay, pulse  
-3. **Screen list** — keep / merge / add / hide / defer  
+1. **Navigation** — five primary destinations, everything else under More.
+2. **Dashboard** — punch, action queue, balances, pay, work, company pulse.
+3. **Screen list** — keep, merge, add, hide, defer.
+4. **Design direction** — one mint shell, shared components, loading / empty / error on every zone.
+5. **Permission plan** — close the URL gaps before visual polish.
 
-**Please confirm or edit this proposal (D1–D8 + checklist) before any redesign code starts.**
+Confirm the decisions and the checklist at the end before any redesign code starts.
 
 ---
 
-## Product decisions (need your yes/no)
+## Product decisions
 
-These drive nav, security commits, and scope. Recommended defaults from the audit:
+Recommended defaults come from `docs/Employee-audit.md`. Reply with D1–D10, or with “accept all recommended”.
 
 | # | Decision | Recommended default | Your choice |
-|---|----------|---------------------|-------------|
-| **D1** | Fix IDOR **before or with** first UI modules? (encashment history, attendance PDF, 360 feedback) | **With first security commit**, before polish | ☐ With UI / ☐ Security-only first |
-| **D2** | Remove `leave.view.team` from pure `EMPLOYEE_PERMS`? | **Yes** — leave-management stays Manager/HR only | ☐ Yes remove / ☐ Keep |
-| **D3** | **Documents** — one hub vs three nav entries? | **One hub** (`/employee/documents`) with tabs: My docs \| ID card \| Requests \| Policies | ☐ One hub / ☐ Keep separate |
-| **D4** | Put **Helpdesk** in primary Me nav? | **Yes** (audit: exists, undiscoverable) | ☐ Yes / ☐ More menu only |
-| **D5** | Ship **Expenses** UI in Phase 2? | **Defer** (API exists; no ESS screen today) | ☐ Defer / ☐ Build MVP |
-| **D6** | Ship **Form 16 / My Assets / Resignation / Org directory / Performance UI**? | **Defer all** except optional read-only directory later | ☐ Defer all / ☐ Pick subset: ___ |
-| **D7** | Wire **Leave encashment** into Leave hub? | **Yes** (component exists, unwired) | ☐ Wire / ☐ Defer |
-| **D8** | Mobile **bottom nav** (5–6 destinations) + desktop sidebar? | **Yes** — employees are phone-first | ☐ Bottom + sidebar / ☐ Sidebar only |
+|---|---|---|---|
+| **D1** | When to fix the three IDOR routes (encashment history, attendance PDF, 360 feedback)? | **First commit**, before any visual polish | ☐ Security first / ☐ Together with the first UI module |
+| **D2** | Remove `leave.view.team` from pure `EMPLOYEE_PERMS`? | **Yes.** Leave management and the manager dashboard stay Manager / HR only | ☐ Yes remove / ☐ Keep |
+| **D3** | Documents: one hub or the current split? | **One hub** at `/employee/documents` with tabs: My docs, ID card, Requests, Policies | ☐ One hub / ☐ Keep separate |
+| **D4** | Where does Helpdesk live? | **More menu**, plus the existing dashboard shortcut. Primary bar stays at five items | ☐ More + dashboard / ☐ Primary nav |
+| **D5** | Ship an Expenses screen in Phase 2? | **Defer.** The API exists. There is no employee screen today | ☐ Defer / ☐ Build MVP |
+| **D6** | Ship Form 16, My Assets, resignation, org directory, or performance UI? | **Defer all** | ☐ Defer all / ☐ Pick: ___ |
+| **D7** | Wire leave encashment into the Time hub? | **Yes.** `LeaveEncashment.jsx` exists and has no route. History API is fixed in the security commit | ☐ Wire / ☐ Defer |
+| **D8** | Mobile bottom bar plus desktop sidebar? | **Yes.** Five items: Home, Time, Pay, Docs, More | ☐ Bottom + sidebar / ☐ Sidebar only |
+| **D9** | How can an employee pick a coworker for recognition? | **New name-only search** scoped to the same organization. Do not grant `employee.view.all` | ☐ Name-only search / ☐ Defer recognition of others |
+| **D10** | Comp-off and regularization as their own sidebar items? | **No.** Both open from the Time hub. Old URLs redirect or stay as deep links | ☐ Inside Time / ☐ Keep separate nav items |
 
-Reply with D1–D8 choices (or **“accept all recommended”**) when confirming.
+These are fixes, not product choices. They ship with the security and Time-hub steps if you approve this proposal:
+
+- Employee attendance log reads the caller’s own logs. It stops calling `GET /v1/both/attendance/team-attendance-history`.
+- Course details stop depending on `GET /v1/admin/learning/courses/:id` when a both-route already returns the course.
+- Projects notification bell is removed or wired to `/notifications`.
+- View Profile **Download** downloads the file or the button is removed.
+- Regularization shows the limit message again (the copy is commented out today).
+- WFH list gets a withdraw action for the employee’s own pending request, if the API already supports cancel.
+- Pure employees use `/1-on-1`. `/one-on-one` (the organizer scheduler) requires an organizer permission.
+- Helpdesk **resolve** and analytics stay on HR / Admin. Employees can create, view, and comment on their own tickets.
+- `lifecycle.exit.conduct` is confirmed to apply only to the caller’s own interview. If the controller is wider, it is narrowed in the security commit.
+- Forced password reset and the Security tab use the same minimum length (8).
 
 ---
 
@@ -45,274 +60,273 @@ Reply with D1–D8 choices (or **“accept all recommended”**) when confirming
 
 ### 1.1 Principles
 
-- **Mobile-first:** ≤6 primary destinations; everything else under **More**
-- Group by **job** (Time, Pay, Me, Work), not legacy Admin paths  
-- Every non-ESS manage URL gets real `requiredPermissions` (close HR `/engagement` shell to pure employees)  
-- Preserve all current functionality; aliases redirect to canonical paths  
-- Do **not** put Manager/HR approve screens in Me nav  
-- Do **not** touch other role portals unless a shared component fix is required (call out per commit)
+- Five primary destinations. Everything else sits under More.
+- Group by the employee’s job: time, pay, documents, work, account.
+- Preserve current behavior. Old URLs redirect to the canonical screen.
+- Manager and HR approval screens stay out of Me navigation.
+- Other role portals stay as they are. A shared component change is called out in that commit.
 
-### 1.2 Primary destinations (always visible)
+### 1.2 Primary destinations
+
+| Label | Path | What it opens |
+|---|---|---|
+| Home | `/dashboard-employee` | Punch, action queue, balances, pay snapshot |
+| Time | `/employee/leave-attendance` | Attendance, leave, regularization, WFH, comp-off, encashment if D7 |
+| Pay | `/employee-payroll` | Own payslips |
+| Docs | `/employee/documents` | Merged hub if D3 |
+| More | Sheet or `/employee/more` | Secondary modules |
+
+If you choose D4 = primary nav, Help replaces Docs on the bottom bar and Docs moves under More. The recommended bar is Home, Time, Pay, Docs, More.
+
+### 1.3 More menu
 
 | Label | Path | Notes |
-|-------|------|--------|
-| Home | `/dashboard-employee` | Punch + action queue |
-| Time | `/employee/leave-attendance` | Leave + attendance + WFH + regularization (merge today’s split) |
-| Pay | `/employee-payroll` | Payslips / breakup |
-| Docs | `/employee/documents` | **Merged hub** (D3) |
-| More | `/employee/more` **or** sheet | Secondary modules |
+|---|---|---|
+| Profile | `/profile-details` | Also in the header |
+| Notifications | `/notifications` | Also the header bell |
+| Helpdesk | `/helpdesk` | Primary only if D4 says so |
+| Calendar | `/employee/calendar` | |
+| Projects | `/employee/projects` | |
+| Benefits & learning | `/employee/benefits-learning` | |
+| Engagement | `/employee/engagement` | Employee page only. The HR `/engagement` shell is closed to this role |
+| Internal jobs | `/employee/internal-jobs` | |
+| My lifecycle | `/onboarding` | Own tasks. Configure / reports / enterprise stay blocked |
+| One-on-one | `/1-on-1` | Invitee page. Organizer page is not linked for a pure employee |
+| Daily report | `/daily-report` | |
+| Celebrations | `/celebrations` | Reached from the dashboard. Not a nav row |
 
-**If D4 = Yes:** insert **Help** → `/helpdesk` in primary (e.g. 5-item bar: Home · Time · Pay · Help · More, or Home · Time · Pay · Docs · More with Help under More).
+Policies move into the Docs hub when D3 is accepted.
 
-### 1.3 “More” / secondary (permission-filtered)
-
-| Label | Path | Keep? |
-|-------|------|--------|
-| Profile | `/profile-details` | Yes (also Header) |
-| Notifications | `/notifications` | Yes |
-| Helpdesk | `/helpdesk` | Yes (primary if D4) |
-| Calendar | `/employee/calendar` | Yes |
-| Projects | `/employee/projects` | Yes |
-| Benefits & learning | `/employee/benefits-learning` | Yes |
-| Engagement | `/employee/engagement` | Yes (ESS page only — not HR `/engagement`) |
-| Internal jobs | `/employee/internal-jobs` | Yes |
-| My lifecycle | `/onboarding` | Yes |
-| One-on-One | `/1-on-1` (invitee) | Prefer `/1-on-1` for pure employees; keep `/one-on-one` for organizers |
-| Policies | → Docs hub tab | If D3 merge |
-| Celebrations | `/celebrations` | Deep-link / dashboard, not nav |
-| Daily report | `/daily-report` | More only |
-
-### 1.4 Explicitly out of Me nav
+### 1.4 Left out of Me navigation
 
 | Item | Why |
-|------|-----|
-| `/leave-management`, team attendance admin, employees list, org chart | Manager/HR |
-| HR `/engagement` manage shell | Gate with manage perms |
-| Expenses / Assets / Form 16 / Performance / Directory | Defer (D5–D6) unless overridden |
+|---|---|
+| `/leave-management`, `/dashboard-manager` | Manager / HR. D2 removes the permission that currently opens them |
+| `/engagement` HR manage shell, `/team-learning`, `/benefits/:id` admin actions | Gated with manage permissions |
+| `/one-on-one` organizer scheduler | Organizers only |
+| Expenses, assets, Form 16, performance, directory | Deferred unless you override D5 or D6 |
 
-### 1.5 IA sketch
+### 1.5 Sketch
 
 ```
-Me (Employee) — mobile bottom bar
+Me (Employee)
 ├── Home          /dashboard-employee
-├── Time          /employee/leave-attendance   ← includes WFH & regularization
+├── Time          /employee/leave-attendance
+│     attendance · leave · regularization · WFH · comp-off · encashment
 ├── Pay           /employee-payroll
-├── Docs          /employee/documents          ← merged hub
+├── Docs          /employee/documents
+│     my docs · ID card · requests · policies
 └── More
-    ├── Profile, Notifications, Helpdesk*
-    ├── Calendar, Projects
-    ├── Benefits & learning, Engagement
-    ├── Internal jobs, Lifecycle, 1:1
-    └── Daily report
-
-* Helpdesk in primary if D4 = Yes
+      Profile, Notifications, Helpdesk
+      Calendar, Projects
+      Benefits & learning, Engagement
+      Internal jobs, Lifecycle, 1:1, Daily report
 ```
 
-Desktop: same items in sidebar with **section labels** (Home · Time & pay · Documents · Work · Account), reusing `Header` + `cm-hrms` — no new design language.
+Desktop uses the same items in the existing sidebar, with section labels: Home, Time and pay, Documents, Work, Account. The current `Header` is a flat list. Phase 2 can ship section labels and the bottom bar without a new shell.
 
-Implementation note: current `Header` uses a flat list. Phase 2 can ship **flat list with section labels** + optional **bottom nav** first, then refine.
+### 1.6 Redirects
 
-### 1.6 Route cleanup (redirects, keep bookmarks)
-
-| Legacy | Canonical |
-|--------|-----------|
-| `/my-leave`, `/attendance-stats` | `/employee/leave-attendance` |
-| `/my-attendance-regularization` | Hub tab **or** keep URL but remove from primary nav (open from Time) |
-| `/employee/documents-id`, `/employee/id-card`, `/employee/my-documents`, `/employee/document-requests`, `/employee/policies` | Docs hub tabs + redirects |
+| Current URL | Canonical |
+|---|---|
 | `/dashboard/employee` | `/dashboard-employee` |
+| `/my-leave`, `/attendance-stats`, `/leave` | `/employee/leave-attendance` (apply stays a panel or a linked form) |
+| `/my-attendance-regularization`, `/my-comp-off` | Time hub tabs. Deep links kept |
+| `/employee/documents-id`, `/employee/id-card`, `/employee/my-documents`, `/employee/document-requests`, `/employee/policies` | Docs hub tabs |
+| `/attendance` | Time hub |
+| `/learning`, `/benefits` | `/employee/benefits-learning` |
 
 ---
 
-## 2. Proposed dashboard (`/dashboard-employee`)
+## 2. Proposed dashboard
 
-### 2.1 Goals
-
-One phone-first composition: **Am I punched in?** → **What needs me?** → **Balances & pay** → **Company pulse**.
-
-### 2.2 Layout (stack on mobile; 2-col on desktop)
+`/dashboard-employee`. One column on a phone. Two columns from the `lg` breakpoint.
 
 | Zone | Content | Actions |
-|------|---------|---------|
-| **Top bar** | Greeting, photo | Notifications, Helpdesk, Profile |
-| **Punch card** | Status, Office/Home, In/Out, break | Same as `AttendanceBox` (add punch-out confirm) |
-| **Action queue** | Pending leave, open regularization/WFH, lifecycle tasks due, unread policies, open helpdesk tickets | Deep links + counts |
-| **Balances** | Leave balance chips, month attendance snapshot | → Time hub |
-| **Pay snapshot** | Latest payslip status / “View payslip” | → Pay |
-| **Work** | My projects (top 3), today’s tasks | → Projects |
-| **Pulse** | Announcements feed, celebrations today | Mark read, wish/react |
-| **Shortcuts** | Apply leave, Regularize, Docs, Learning, Jobs, 1:1 | Permission-filtered |
+|---|---|---|
+| Top | Greeting, photo | Notifications, Helpdesk, Profile. Logout stays in the profile menu |
+| Punch | Status, Office / Home, in, out, break | Same rules as `AttendanceBox`. Punch-out asks for confirmation |
+| Action queue | Pending leave, regularization, WFH, comp-off, lifecycle tasks, unread policies, surveys, open tickets | Counts and deep links. Empty state: “You’re up to date.” |
+| Balances | Leave chips, this month’s attendance | Opens Time |
+| Pay | Latest payslip status | Opens Pay. Hidden amount when nothing is published |
+| Work | Up to three projects and today’s tasks | Opens Projects |
+| Pulse | Announcements and celebrations | Mark read (toast on failure), wish, react |
+| Shortcuts | Apply leave, Regularize, Docs, Learning, Jobs, 1:1 | Filtered by what the org has enabled |
 
-### 2.3 Dashboard rules (from audit)
+Rules:
 
-- Replace **localStorage-only Todo** with action queue from real APIs (or label clearly as “device-only” / remove)  
-- Loading / error / empty on every zone (no silent fail on mark-read)  
-- WCAG AA: labeled icon buttons, focus order, contrast on punch CTAs  
-- Do **not** show other employees’ salary or team admin widgets  
-
-### 2.4 What we stop doing on the dashboard
-
-- Silent notification mark-read failures  
-- Unlabeled “todo” that looks like company tasks but is browser-local only (unless explicitly labeled)  
-- Deep links to Manager/HR-only screens for pure employees  
+- The local-only todo list is labeled “On this device” or removed. The action queue is the company task list.
+- Each zone has loading, empty, and error-with-retry.
+- No other employee’s pay, and no team-admin widgets.
+- Icon buttons have accessible names. Punch actions meet WCAG AA contrast.
 
 ---
 
-## 3. Proposed screen list
+## 3. Screen list
 
-### 3.1 Keep (rebuild/polish in place — preserve all features)
+### 3.1 Keep and polish
 
 | Screen | Path | Phase 2 work |
-|--------|------|--------------|
-| Employee dashboard | `/dashboard-employee` | Zones above; mobile; a11y |
-| Leave & attendance hub | `/employee/leave-attendance` | Absorb WFH + regularization UX; wire encashment if D7 |
-| Leave apply | `/leave` | Keep; polish; optional confirm |
-| Payroll | `/employee-payroll` | Shell; empty/error already decent |
-| Profile tabs + security + photo | `/profile-details` (+ aliases) | Shell; fix password min consistency; wire NoK/Guarantor **or** drop |
-| View profile | `/view-profile` | **Fix broken Download** |
-| Engagement ESS | `/employee/engagement` | Polish; survey take |
-| Benefits & learning + course | hub + `/learning/courses/:id` | Shell |
-| Internal jobs + detail | `/employee/internal-jobs*` | Keep |
-| Projects + tasks | `/employee/projects*` | Keep |
-| Calendar | `/employee/calendar` | Keep |
-| Lifecycle | `/onboarding` | Employee ops only; clear tasks |
-| 1:1 invitee | `/1-on-1` | Prefer for pure employee |
-| Helpdesk | `/helpdesk` | Nav discoverability; cancel confirm |
-| Notifications / celebrations / policies | existing | Policies → hub if D3 |
-| Daily report | `/daily-report` | More menu |
+|---|---|---|
+| Dashboard | `/dashboard-employee` | Zones in section 2 |
+| Time hub | `/employee/leave-attendance` | Own attendance API. Show regularization limits. WFH withdraw. Encashment if D7. Comp-off tab if D10 |
+| Leave apply | Inside Time, keep `/leave` as a redirect | Same validation. Optional confirm |
+| Payroll | `/employee-payroll` | Keep the empty state and the disabled-download reason |
+| Profile | `/profile-details` and tab URLs | One password minimum. Job-document upload uses toast. Guarantor and next-of-kin: wire into Family or leave unwired and say so |
+| View profile | `/view-profile` | Fix or remove Download |
+| Engagement | `/employee/engagement` | Coworker search if D9. Drop the 500-survey fallback once my-surveys is reliable |
+| Benefits and learning | `/employee/benefits-learning`, `/learning/courses/:courseId` | Course load uses the employee endpoint |
+| Internal jobs | `/employee/internal-jobs` and `/:id` | Keep apply, refer, interview feedback |
+| Projects | `/employee/projects` and `/:projectId` | Remove the dead bell or link it to notifications. Drop the extra page header |
+| Calendar | `/employee/calendar` | Keep. Delete or stop shipping `EmployeeCalendar1.jsx` after parity |
+| Lifecycle | `/onboarding` | Own tasks only |
+| 1:1 | `/1-on-1` | Accept, decline, notes. Decline uses a dialog, not `prompt` |
+| Helpdesk | `/helpdesk` | Discoverable. Own tickets. Cancel asks for confirmation. Resolve hidden |
+| Notifications, celebrations, daily report | Existing paths | More menu or dashboard |
 
 ### 3.2 Merge
 
-| From | Into | Result |
-|------|------|--------|
-| `/employee/documents-id` + `/employee/my-documents` + `/employee/document-requests` + `/employee/policies` | **Documents hub** at `/employee/documents` | Tabs: My docs \| ID card \| Requests \| Policies; redirect old paths |
-| WFH & Regularization primary nav + hub tabs | **Time hub** | Keep deep URL `/my-attendance-regularization`; remove from primary nav |
-| Duplicate payroll / leave / calendar orphans | Delete or redirect after feature parity | Clean tree |
-| `/dashboard/employee` alias | Prefer `/dashboard-employee` | Keep alias for bookmarks |
+| From | Into |
+|---|---|
+| Documents & ID, My documents, Document requests, Policies | `/employee/documents` tabs, if D3 |
+| Regularization, WFH, Comp-off sidebar items | Time hub, if D10 |
+| `/my-leave`, `/attendance-stats`, `/attendance`, `/leave` | Time hub |
+| Unrouted payroll, attendance, and calendar copies | Removed after the live screen covers them |
 
-### 3.3 Add (IA / security — mostly existing code)
+### 3.3 Add
 
-| Screen / item | Path / work | Notes |
-|---------------|-------------|-------|
-| More menu / sheet | `/employee/more` or sheet | Secondary nav |
-| Mobile bottom nav | Shell | If D8 |
-| Backend ownership helper | Middleware | `assertSelfOrElevated` on IDOR routes (D1) |
-| Leave encashment in Time hub | Hub tab / section | If D7 |
-| Route gates | `routes/index.jsx` | Close HR manage shells to pure employees |
+| Item | Work |
+|---|---|
+| More sheet | Secondary navigation |
+| Bottom bar | If D8 |
+| `assertSelfOrElevated` (or the same checks inline) | IDOR routes in section 5 |
+| Name-only coworker search | If D9. Fields: id, name. Same organization. Active employees |
+| Own attendance read | Employee-scoped logs for the Time hub |
+| Route gates | `requiredPermissions` on manage URLs a pure employee can open today |
 
-### 3.4 Hide / remove from Me IA
+### 3.4 Hide from this role
 
 | Item | Action |
-|------|--------|
-| Separate “WFH & Regularization” top-level | Demote into Time |
-| Triple document nav entries | Merge (D3) |
-| Orphan unwired screens left dangling | Wire (encashment) or remove from tree |
-| Pure employee access to `/leave-management` | Remove via D2 |
+|---|---|
+| Leave management and manager dashboard | D2, and `canAccess` must not ignore `allowedRoles` when the permission match is only `leave.view.team` |
+| HR engagement shell, team learning, benefit-admin actions | Permission gate |
+| Organizer 1:1 | Not linked. URL gated |
+| Separate regularization and comp-off nav rows | Demoted into Time if D10 |
 
-### 3.5 Defer (not in Phase 2 rebuild unless you override D5–D6)
+### 3.5 Defer
 
 | Item | Reason |
-|------|--------|
-| Expenses UI | API only; product scope |
-| Form 16 / tax doc center | Admin statutory only today |
-| My Assets inventory | No ESS registry |
-| Resignation self-service | HR-initiated offboarding only |
-| Org directory / chart for employees | Manager+ gated |
-| Full Performance / OKR / 360 product UI | APIs without ESS routes |
-| Confidential grievances module | Helpdesk only |
-| Shift preference / swap | Admin assigns |
-| New visual brand unrelated to `cm-hrms` | Must extend Admin/shared system |
+|---|---|
+| Expenses UI | API only |
+| Form 16 and tax document center | Not on the employee payroll page today |
+| My Assets | Lifecycle has return flags only |
+| Resignation | HR starts offboarding |
+| Org directory and chart | Needs view-all or view-team |
+| Goals and performance UI | APIs exist, no employee screen |
+| Payslip dispute | No workflow |
+| A new visual framework | Stay on the current stack |
 
 ---
 
-## 4. Design system reuse (no Admin audit doc)
+## 4. Design direction
 
-Reuse and extend (do **not** duplicate):
+Use the current stack: React, the existing layout, Tailwind, and the corporate components. Do not add a component library.
 
-| Asset | Path / pattern |
-|-------|----------------|
-| Corporate Modern tokens | `vite_client/src/styles/corporateModern.css` (`.cm-hrms`, `.cm-card`, banners, labels) |
-| Shared components | `vite_client/src/components/corporateModern` (`CmButton`, `CmEmpty`, `CmBadge`, `CmStat`, …) |
-| Shared chrome | `Shared/Header.jsx`, portal switcher (`portalConfig.js`), `safe-area-*` in `index.css` |
-| Existing ESS patterns | LeaveAttendanceHub, EmployeePayroll, DocumentsAndIdPage, BenefitsLearningHub |
-| Patterns to standardize | Page header, action queue, filter chips, card lists (mobile), empty/error/loading, accessible confirm modal, permission-gated buttons |
+| Use | Where |
+|---|---|
+| Page shell | `Shared/Header.jsx`, `MePortalShell`, `SidebarNavList` |
+| Tokens already in the app | Theme primary, and the employee mint (`#0e9370` / `#20C997`) |
+| Shared pieces | `components/corporateModern` where a screen already uses them (`CmButton`, `CmEmpty`, `CmBadge`, `CmStat`) |
+| Patterns to make consistent | Page title, tabs, filter chips, tables that scroll on small screens, empty / error / loading, confirm dialog |
 
-**Visual direction:** Keep existing mint/teal ESS language (`#20C997` family from employee dashboard). Align via wrapper classes, not a new purple/cream theme.
+Visual rules for the rebuilt screens:
 
-**Accessibility (WCAG AA):** Visible focus, `aria-label` on icon buttons, keyboard for modals/drawers, sufficient contrast, responsive tables (card/stack or scroll with caption). Mobile matters most for this role.
+- One page title size. One primary button style. One destructive style.
+- Cards, tables, and forms share the same border, radius, and spacing.
+- Projects, engagement, and profile stop inventing a second header.
+- “Payroll” in the nav and “My Payroll” on the page use one name: **Pay**.
+- The profile tab that edits job documents is labeled **Job documents**, and the route can stay `/job-details`.
 
-**States:** Every list/detail screen gets loading, empty, and error+retry — no silent `[]`, no fake KPIs.
+Accessibility (WCAG AA) on rebuilt screens:
+
+- Visible focus, keyboard use for dialogs and menus, text alternatives on icon buttons.
+- Contrast on the punch button and on white-on-mint controls.
+- Tables scroll inside a labeled region or stack into cards under `sm`.
+- Confirmations are dialogs, not `window.confirm`, `prompt`, or `alert`.
+
+Every list and detail zone shows loading, an empty explanation, and an error with retry.
 
 ---
 
-## 5. Permissions & ownership enforcement plan (paired with UI)
+## 5. Permissions
 
 | Layer | Change |
-|-------|--------|
-| Backend IDOR | Attendance PDF: self **or** manager/HR **+ org**; encashment history: self **or** elevated; 360 feedback: self / manager / HR |
-| Backend helper | Shared `assertSelfOrElevated` (or equivalent) — stop ad-hoc-only ownership |
-| Permission map | Strip `LEAVE_VIEW_TEAM` from `EMPLOYEE_PERMS` if D2 approved |
-| Routes | Add `requiredPermissions` to currently open manage routes employees can hit by URL (`/engagement` HR shell, etc.) |
-| Nav | Me primary/More declare intent; filter by permissions where needed (engagement) |
-| Frontend | Never sole gate for ownership; `PermissionGate` for chrome only |
-| Docs hub | Single access pattern for tabs |
+|---|---|
+| Encashment history | `GET /history/:employeeId` returns the caller’s rows unless the caller is HR, Admin, or Executive in the same organization |
+| Attendance PDF | `GET /api/v1/both/attendance/:employeeId/export-pdf` requires self, or manager/HR, and the same `organizationId` |
+| 360 feedback | `GET /360-feedback/:employeeId` requires self, the employee’s manager, or HR in the same organization |
+| Employee permissions | Remove `LEAVE_VIEW_TEAM` from `EMPLOYEE_PERMS` if D2 is accepted. Review `LIFECYCLE_EXIT_CONDUCT` so it cannot conduct someone else’s interview |
+| Route guard | `canAccess` does not treat `leave.view.team` as a pass into `/leave-management` or `/dashboard-manager` for a pure employee |
+| Open shells | `/engagement` (HR page), `/team-learning`, `/one-on-one`, `/benefits/:id`, and helpdesk resolve get real permission checks on the route and the API |
+| Payroll handlers | Keep session scoping. Add `payroll.view.self` on the employee payroll router so the route matches the bucket |
+| Attendance hub | Own logs endpoint. Team history stays on the manager API |
+| Recognition | Name-only search if D9. `get-all-employees` stays view-all / view-team |
+| Frontend | `PermissionGate` hides buttons. The API still rejects the call |
 
-No other roles rebuilt unless a shared component change is required — call those out per commit.
+Other roles are not rebuilt. A shared middleware change is listed in that commit’s summary.
 
 ---
 
-## 6. Rebuild order (small commits after confirmation)
+## 6. Order of work after you confirm
 
 | Step | Module | Outcome |
-|------|--------|---------|
-| 0 | Proposal confirmed (this doc) | Locked IA + D1–D8 |
-| 1 | **Security** | IDOR fixes + D2 perm strip + route gates |
-| 2 | **Shell** | Me nav + optional bottom bar + More |
-| 3 | **Dashboard** | Zones; loading/empty; punch-out confirm; mark-read toasts |
-| 4 | **Time hub** | Merge regularization/WFH UX; encashment if D7 |
-| 5 | **Documents hub** | Merge four surfaces + redirects |
-| 6 | **Pay + Profile** | Shell; ViewProfile download; password min consistency |
-| 7 | **Work & engage** | Projects, Learning/Benefits, Engagement ESS, Jobs, 1:1, Lifecycle |
-| 8 | **Helpdesk + Notifications** | Nav discoverability; cancel confirm; a11y pass |
+|---|---|---|
+| 0 | This proposal | Locked navigation, screens, and D1–D10 |
+| 1 | Security | IDOR fixes, D2, route gates, own attendance read, exit-conduct check |
+| 2 | Shell | Sidebar sections, More, bottom bar if D8 |
+| 3 | Dashboard | Zones, states, punch-out confirm, mark-read toasts |
+| 4 | Time | Regularization, WFH withdraw, comp-off, encashment if D7 |
+| 5 | Documents | One hub and redirects, if D3 |
+| 6 | Pay and profile | Download fix, password length, upload toasts |
+| 7 | Work | Projects, learning, engagement and D9, jobs, 1:1, lifecycle |
+| 8 | Helpdesk and notifications | Discoverability, cancel confirm, accessible pass |
 
-Each step: one or few commits + short summary (per Phase 2 rules). Preserve **all** existing ESS functionality; add audit fixes only.
+Each step is a small commit and a short summary. Existing employee behavior stays. Unrouted duplicate files are removed only after the live screen covers them.
 
 ---
 
 ## 7. Success criteria
 
-- Pure Employee can complete daily self-service on a phone without Manager/HR screens  
-- No IDOR on attendance PDF, encashment history, or 360 feedback  
-- Pure employees cannot open Leave Management via `leave.view.team` (if D2)  
-- Documents: one place (if D3)  
-- Helpdesk discoverable (if D4)  
-- WCAG AA on rebuilt shells; loading / empty / error on core screens  
-- All pre-Phase-2 Employee features still work  
-- Other roles untouched except documented shared fixes  
+- A pure employee finishes punch, leave, pay, and documents on a phone without opening a manager or HR screen.
+- Encashment history, attendance PDF, and 360 feedback reject another employee’s id.
+- `/leave-management` and `/dashboard-manager` do not open for this role.
+- Attendance history loads the caller’s days.
+- Recognition can address a coworker if D9 is accepted, without exposing the full employee record.
+- Documents live in one hub if D3 is accepted.
+- Rebuilt screens show loading, empty, and error states and meet WCAG AA for the controls they change.
+- Every employee feature that works today still works.
+- Admin, HR, and Manager portals are unchanged except for a shared fix named in the commit.
 
 ---
 
-## 8. Confirmation checklist
+## 8. Confirmation
 
-Please reply with:
+Reply with:
 
-1. **Accept recommended D1–D8** — or list overrides  
-2. **Approve primary nav + More** — or mark items to add/remove / keep separate  
-3. **Approve dashboard zones** — or mark changes  
-4. **Approve screen keep/merge/add/defer** — or mark changes  
-5. Explicit: **“Proceed to rebuild starting with Step 1 (Security)”** (or Step 2 Shell if you prefer UI-first after a security-only PR)
+1. **Accept recommended D1–D10**, or list overrides.
+2. **Approve the primary nav and More**, or name items to add, remove, or keep separate.
+3. **Approve the dashboard zones**, or name changes.
+4. **Approve keep / merge / defer**, or name changes.
+5. **“Proceed, starting with Step 1 (Security)”** — or name a different first step.
 
-Until (5), no application code will be changed for the Employee redesign.
+Until item 5, no application code changes for this redesign.
 
 ---
 
 ## Related docs
 
 | Doc | Role |
-|-----|------|
-| `docs/employee-audit.md` | Phase 1 audit (source of truth for gaps) |
-| `docs/hr-audit.md` / `docs/hr-phase2-proposal.md` | Parallel HR work; ESS items stay in Me portal |
-| `docs/HRMS_LAUNCH_AUDIT.md` | Broader launch findings |
-
----
-
-*End of Phase 2 Step 1 proposal.*
+|---|---|
+| `docs/Employee-audit.md` | Phase 1 audit this proposal follows |
+| `docs/admin-audit.md` | Admin portal audit. Out of scope here |
+| `docs/hr-audit.md`, `docs/hr-phase2-proposal.md` | HR portal. Employee self-service stays in Me |
