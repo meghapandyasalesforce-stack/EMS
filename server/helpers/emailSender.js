@@ -1923,7 +1923,7 @@ const formatWfhType = (wfhType, halfDayType) => {
  * @param {Object} data - WFH request data
  * @returns {string} HTML content
  */
-const generateWfhRequestEmailTemplate = (data) => {
+export const generateWfhRequestEmailTemplate = (data) => {
   const wfhDate = formatWfhDateRange(data.wfhDate, data.wfhDateTo);
   const wfhType = formatWfhType(data.wfhType, data.halfDayType);
   const isRange = data.wfhDateTo
@@ -1931,9 +1931,16 @@ const generateWfhRequestEmailTemplate = (data) => {
   const wfhMessage = isRange
     ? `I would like to inform you that I plan to work from home from <strong>${wfhDate.split(' – ')[0]}</strong> to <strong>${wfhDate.split(' – ')[1]}</strong>.`
     : `I would like to inform you that I plan to work from home on <strong>${wfhDate}</strong>.`;
-  const submittedAt = data.submittedAt
-    ? new Date(data.submittedAt).toLocaleString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : new Date().toLocaleString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const submittedAt = `${new Date(data.submittedAt || Date.now()).toLocaleString('en-US', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })} IST`;
   const managerName = data.managerName || 'Manager';
 
   return `<!DOCTYPE html>
