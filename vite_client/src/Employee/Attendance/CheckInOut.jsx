@@ -1419,7 +1419,9 @@ const CheckInOut = () => {
                     <div>
                       <p className="text-xs text-theme-secondary font-medium uppercase tracking-wide">Work Location</p>
                       <p className="text-lg font-bold text-theme-secondary">
-                        {currentSession.workLocation === 'office' ? 'Office' : 'Home'}
+                        {currentSession.workLocation === 'office'
+                          ? (currentSession.clockInLocation?.siteName || 'Office')
+                          : 'Home'}
                       </p>
                     </div>
                   </div>

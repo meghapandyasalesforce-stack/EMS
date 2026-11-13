@@ -714,11 +714,13 @@ const AllAttendanceStatsComponent = () => {
         const isWfh = r.uiStatus === 'wfh' || r.workLocation === 'work_from_home';
         const hasPunch = !!r.clockIn;
         const loc =
-          r.uiStatus === 'wfh'
-            ? 'Remote'
-            : r.uiStatus === 'absent' || r.uiStatus === 'leave'
-              ? '—'
-              : 'Office';
+          r.punchSiteName
+            ? r.punchSiteName
+            : r.uiStatus === 'wfh'
+              ? 'Remote'
+              : r.uiStatus === 'absent' || r.uiStatus === 'leave'
+                ? '—'
+                : 'Office';
         const attendanceType = !hasPunch ? '—' : isWfh ? 'Work From Home' : 'Office';
         const verifiedStatus = !hasPunch || isWfh
           ? 'N/A'
@@ -843,6 +845,7 @@ const AllAttendanceStatsComponent = () => {
                     <th className="px-6 py-3">Total Hours</th>
                     <th className="px-6 py-3">Break</th>
                     <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3">Branch</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -856,6 +859,10 @@ const AllAttendanceStatsComponent = () => {
                       <td className="px-6 py-3">{formatHours(record.effectiveHours)}</td>
                       <td className="px-6 py-3 whitespace-nowrap">{formatBreakMinutes(toBreakMinutes(record))}</td>
                       <td className="px-6 py-3 capitalize">{record.status}</td>
+                      <td className="px-6 py-3 whitespace-nowrap text-slate-700">
+                        {record.clockInLocation?.siteName
+                          || (record.workLocation === 'work_from_home' ? 'Work from home' : record.clockIn ? 'Office' : '—')}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1039,11 +1046,13 @@ const AllAttendanceStatsComponent = () => {
                   const displayName = [emp?.name, emp?.lastName].filter(Boolean).join(' ').trim();
                   const hasPunch = row.clockIn || row.clockOut;
                   const locMeta =
-                    row.uiStatus === 'wfh'
-                      ? { Icon: FiHome, label: 'Remote' }
-                      : row.uiStatus === 'absent' || row.uiStatus === 'leave'
-                        ? null
-                        : { Icon: FiBriefcase, label: 'Office' };
+                    row.punchSiteName
+                      ? { Icon: row.uiStatus === 'wfh' ? FiHome : FiBriefcase, label: row.punchSiteName }
+                      : row.uiStatus === 'wfh'
+                        ? { Icon: FiHome, label: 'Remote' }
+                        : row.uiStatus === 'absent' || row.uiStatus === 'leave'
+                          ? null
+                          : { Icon: FiBriefcase, label: 'Office' };
                   const LocIcon = locMeta?.Icon;
                   const empId = emp?._id;
                   const canOpenProfile = !!empId;

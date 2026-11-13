@@ -194,6 +194,7 @@ const AttendanceStats = () => {
       workLocation: s?.workLocation ?? '',
       breakMinutes: calcBreakMinutes(s),
       autoCheckedOut: s?.autoCheckedOut ? 'yes' : 'no',
+      punchSite: s?.clockInLocation?.siteName ?? '',
       clockInAddress: s?.clockInLocation?.address ?? '',
       clockOutAddress: s?.clockOutLocation?.address ?? '',
     }));
@@ -479,7 +480,8 @@ const AttendanceStats = () => {
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
                       <div className="flex items-center">
                         <FiHome className="mr-1" />
-                        {session.workLocation === 'work_from_home' ? 'WFH' : 'Office'}
+                        {session.clockInLocation?.siteName
+                          || (session.workLocation === 'work_from_home' ? 'WFH' : 'Office')}
                       </div>
                     </td>
                   </tr>

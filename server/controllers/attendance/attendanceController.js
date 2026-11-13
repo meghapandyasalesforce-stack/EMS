@@ -807,7 +807,7 @@ export const clockIn = async (req, res) => {
             : (punchSite?.address || activeRule.address),
         }
       : null;
-    if (punchSite?.source === 'branch' && punchSite.locationName) {
+    if (punchSite?.locationName) {
       locationInfo.siteName = punchSite.locationName;
     }
     const siteLabel = siteRule?.location || 'the office';
@@ -1518,7 +1518,7 @@ export const clockOut = async (req, res) => {
             : (punchSiteOut?.address || activeRule.address),
         }
       : null;
-    if (punchSiteOut?.source === 'branch' && punchSiteOut.locationName) {
+    if (punchSiteOut?.locationName) {
       locationInfo.siteName = punchSiteOut.locationName;
     }
     const siteLabelOut = siteRuleOut?.location || 'the office';
@@ -2939,6 +2939,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
         uiStatus,
         workLocation: record.workLocation,
         locationVerified: record.clockInLocation?.locationMatch === true,
+        punchSiteName: record.clockInLocation?.siteName || null,
         isLateArrival: record.isLateArrival,
         shiftId: record.shiftId || pop.shiftId || null,
         shiftName: record.shiftName || pop.shiftName || null,
