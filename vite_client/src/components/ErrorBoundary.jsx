@@ -11,7 +11,7 @@ class ErrorBoundary extends React.Component {
         this.state = { hasError: false, error: null, errorInfo: null };
     }
 
-    static getDerivedStateFromError(error) {
+    static getDerivedStateFromError(_error) {
         // Update state so the next render will show the fallback UI
         return { hasError: true };
     }
@@ -31,11 +31,16 @@ class ErrorBoundary extends React.Component {
     }
 
     handleReset = () => {
-        this.setState({ hasError: false, error: null, errorInfo: null });
-        // Optionally reload the page
-        if (this.props.resetOnReload) {
+        // React.lazy caches rejected imports. Resetting this boundary alone would
+        // immediately throw the same rejection again; a fresh document retries it.
+        const isModuleLoadError = /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|loading (?:css )?chunk .+ failed/i.test(
+            this.state.error?.message || ''
+        );
+        if (this.props.resetOnReload || isModuleLoadError) {
             window.location.reload();
+            return;
         }
+        this.setState({ hasError: false, error: null, errorInfo: null });
     };
 
     render() {
@@ -76,7 +81,7 @@ class ErrorBoundary extends React.Component {
                         <p className="text-gray-600 text-center mb-6">
                             We're sorry, but something unexpected happened. Please try again.
                         </p>
-                        {process.env.NODE_ENV === 'development' && this.state.error && (
+                        {import.meta.env.DEV && this.state.error && (
                             <div className="mb-4 p-3 bg-red-50 rounded border border-red-200">
                                 <p className="text-sm font-mono text-red-800 break-all">
                                     {this.state.error.toString()}
