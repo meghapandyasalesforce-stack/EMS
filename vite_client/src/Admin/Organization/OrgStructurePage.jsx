@@ -117,7 +117,6 @@ export default function OrgStructurePage() {
     });
     const [editingId, setEditingId] = useState(null);
     const [saving, setSaving] = useState(false);
-    const [seeding, setSeeding] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [search, setSearch] = useState('');
 

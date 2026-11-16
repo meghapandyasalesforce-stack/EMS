@@ -65,14 +65,16 @@ describe('Organization structure catalog', () => {
         expect(screen.getByText('Engineering')).toBeInTheDocument();
     });
 
-    it('initializes the catalog from the empty state and deactivates existing entries', async () => {
+    it('deactivates existing entries and offers manual creation in the empty state', async () => {
         render(<OrgStructurePage />);
         vi.spyOn(window, 'confirm').mockReturnValue(true);
         fireEvent.click(screen.getByRole('button', { name: 'Deactivate Engineering' }));
         await waitFor(() => expect(axios.delete).toHaveBeenCalledWith('/v1/admin/org-structure/departments/engineering', { withCredentials: true }));
         fireEvent.click(screen.getByRole('button', { name: /^Work Modes/ }));
-        fireEvent.click(screen.getByRole('button', { name: /Start with defaults/ }));
-        await waitFor(() => expect(axios.post).toHaveBeenCalledWith('/v1/admin/org-structure/seed', {}, { withCredentials: true }));
+        expect(screen.queryByRole('button', { name: /defaults/i })).not.toBeInTheDocument();
+        expect(axios.post).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Create work mode' }));
+        expect(screen.getByLabelText(/Name/)).toBeInTheDocument();
         window.confirm.mockRestore();
     });
 });
