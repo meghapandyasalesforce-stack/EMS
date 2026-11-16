@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi';
 import ProfilePicture from '../../../Shared/ProfilePicture';
 import { exportToCSV } from '../../../utils/exportUtils';
+import { getAdditionalProfileDetails } from './profileExport';
 import {
   formatDate,
   formatSalary,
@@ -111,6 +112,7 @@ const EmployeeDetailsHeader = ({
       Location: location || '',
       'Joining Date': formatDate(employee.joiningDate),
       'Reports To': reportsToLabel,
+      ...getAdditionalProfileDetails(employee, hidePayrollFields),
       ...(!hidePayrollFields ? { 'Annual CTC': employee.salary ?? '' } : {}),
     };
     // Spreadsheet applications interpret leading formula characters even in quoted CSV cells.
