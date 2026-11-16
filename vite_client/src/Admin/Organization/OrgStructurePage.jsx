@@ -28,7 +28,6 @@ export default function OrgStructurePage() {
     const [teamDepartmentId, setTeamDepartmentId] = useState('');
     const [jobRoleDepartmentId, setJobRoleDepartmentId] = useState('');
     const [saving, setSaving] = useState(false);
-    const [seeding, setSeeding] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [search, setSearch] = useState('');
     const { catalog, loading, error, reload } = useOrgStructureCatalog();
@@ -37,19 +36,6 @@ export default function OrgStructurePage() {
         const list = catalog[activeTab] || [];
         return Array.isArray(list) ? list : [];
     }, [catalog, activeTab]);
-
-    const handleSeed = async () => {
-        setSeeding(true);
-        try {
-            await axios.post('/v1/admin/org-structure/seed', {}, { withCredentials: true });
-            toast.success('Organization structure initialized');
-            reload();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to initialize structure');
-        } finally {
-            setSeeding(false);
-        }
-    };
 
     const handleCreate = async (e) => {
         e.preventDefault();
@@ -116,9 +102,6 @@ export default function OrgStructurePage() {
                             <span className="os-title-icon"><FiGrid /></span>
                             <div><div className="os-eyebrow">ORGANIZATION / COMPANY CATALOG</div><h1>Organization structure</h1><p>Manage the departments, roles, and working arrangements that define your company.</p></div>
                         </div>
-                        <button type="button" onClick={handleSeed} disabled={seeding || loading} className="os-button os-button-secondary">
-                            <FiRefreshCw className={seeding ? 'os-spin' : ''} /> {seeding ? 'Initializing…' : 'Initialize defaults'}
-                        </button>
                     </header>
 
                     <div className="os-workspace">
@@ -150,7 +133,7 @@ export default function OrgStructurePage() {
 
                             <div className="os-list-panel">
                                 {loading ? <div className="os-empty" role="status"><FiRefreshCw className="os-spin" /><h3>Loading your catalog…</h3></div> : error ? <div className="os-empty" role="alert"><FiInfo /><h3>Unable to load your catalog</h3><p>Please try again to see your organization structure.</p><button type="button" className="os-text-button" onClick={reload}>Try again <FiRefreshCw /></button></div> : items.length === 0 ? (
-                                    <div className="os-empty"><span className="os-empty-icon"><ActiveIcon /></span><div><h3>No {activeResource.label.toLowerCase()} yet</h3><p>Add your first {activeResource.singular} or initialize the default catalog to get started.</p></div><button type="button" className="os-button os-button-secondary" onClick={openForm}><FiPlus />Create {activeResource.singular}</button><button type="button" className="os-text-button" onClick={handleSeed} disabled={seeding}>{seeding ? 'Initializing…' : 'Start with defaults'}<FiArrowRight /></button></div>
+                                    <div className="os-empty"><span className="os-empty-icon"><ActiveIcon /></span><div><h3>No {activeResource.label.toLowerCase()} yet</h3><p>Add your first {activeResource.singular} to get started.</p></div><button type="button" className="os-button os-button-secondary" onClick={openForm}><FiPlus />Create {activeResource.singular}</button></div>
                                 ) : <>
                                     <div className="os-table-scroll"><table className="os-table"><thead><tr><th scope="col">{activeResource.singular} name</th><th scope="col">Code</th>{hasDepartment && <th scope="col">Department</th>}<th scope="col">Status</th><th scope="col" className="os-actions-column">Actions</th></tr></thead><tbody>
                                         {filteredItems.map((item) => <tr key={item._id}><td><div className="os-name-cell"><span className="os-item-icon"><ActiveIcon /></span><strong>{item.name}</strong></div></td><td data-label="Code"><span className="os-code">{item.code || '—'}</span></td>{hasDepartment && <td data-label="Department">{departmentNames(item) || (activeTab === 'jobRoles' ? 'All departments' : '—')}</td>}<td><span className="os-status"><span />Active</span></td><td className="os-actions-column"><button type="button" onClick={() => handleDelete(item._id)} className="os-delete" aria-label={`Deactivate ${item.name}`} title={`Deactivate ${item.name}`}><FiTrash2 /></button></td></tr>)}
