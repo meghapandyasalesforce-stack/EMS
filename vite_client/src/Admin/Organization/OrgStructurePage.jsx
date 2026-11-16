@@ -233,28 +233,6 @@ export default function OrgStructurePage() {
         setShowForm(true);
     };
 
-    const handleSeed = async () => {
-        setSeeding(true);
-
-        try {
-            await axios.post(
-                '/v1/admin/org-structure/seed',
-                {},
-                { withCredentials: true }
-            );
-
-            toast.success('Organization structure initialized');
-            reload();
-        } catch (err) {
-            toast.error(
-                err.response?.data?.message ||
-                    'Failed to initialize structure'
-            );
-        } finally {
-            setSeeding(false);
-        }
-    };
-
     const handleCreate = async (event) => {
         event.preventDefault();
 
@@ -460,19 +438,6 @@ export default function OrgStructurePage() {
                             </div>
                         </div>
 
-                        <button
-                            type="button"
-                            className="os-button os-button-secondary"
-                            onClick={handleSeed}
-                            disabled={seeding || loading || saving}
-                        >
-                            <FiRefreshCw
-                                className={seeding ? 'os-spin' : ''}
-                            />
-                            {seeding
-                                ? 'Initializing…'
-                                : 'Initialize defaults'}
-                        </button>
                     </header>
 
                     <div className="os-workspace">
@@ -1048,9 +1013,7 @@ export default function OrgStructurePage() {
                                             </h3>
                                             <p>
                                                 Add your first{' '}
-                                                {activeResource.singular} or
-                                                initialize the default catalog
-                                                to get started.
+                                                {activeResource.singular} to get started.
                                             </p>
                                         </div>
                                         <button
@@ -1060,17 +1023,6 @@ export default function OrgStructurePage() {
                                         >
                                             <FiPlus />
                                             Create {activeResource.singular}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="os-text-button"
-                                            onClick={handleSeed}
-                                            disabled={seeding}
-                                        >
-                                            {seeding
-                                                ? 'Initializing…'
-                                                : 'Start with defaults'}
-                                            <FiArrowRight />
                                         </button>
                                     </div>
                                 ) : (
