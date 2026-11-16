@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import useOrgStructureCatalog from '../../Hooks/useOrgStructureCatalog';
-import { FiPlus, FiRefreshCw, FiTrash2, FiGrid, FiUsers, FiBriefcase, FiAward, FiMapPin, FiClock, FiMonitor, FiArrowRight, FiInfo, FiLayers } from 'react-icons/fi';
+import { FiPlus, FiRefreshCw, FiTrash2, FiGrid, FiUsers, FiBriefcase, FiAward, FiMapPin, FiClock, FiMonitor, FiArrowRight, FiInfo, FiSearch, FiX } from 'react-icons/fi';
 import './orgStructure.css';
 
 const RESOURCES = [
@@ -14,8 +14,6 @@ const RESOURCES = [
     { key: 'employmentTypes', label: 'Employment Types', singular: 'employment type', icon: FiClock, description: 'Set up the ways people are employed at your company.', example: 'e.g. Full-time', help: 'Define categories such as Full-time or Contract.' },
     { key: 'workModes', label: 'Work Modes', singular: 'work mode', icon: FiMonitor, description: 'Define flexible ways of working for your organization.', example: 'e.g. Hybrid', help: 'Add work arrangements such as On-site, Remote, or Hybrid.' },
 ];
-
-const inputClass = 'org-structure-input';
 
 function deptNameById(departments, id) {
     if (!id) return null;
@@ -31,6 +29,8 @@ export default function OrgStructurePage() {
     const [jobRoleDepartmentId, setJobRoleDepartmentId] = useState('');
     const [saving, setSaving] = useState(false);
     const [seeding, setSeeding] = useState(false);
+    const [showForm, setShowForm] = useState(false);
+    const [search, setSearch] = useState('');
     const { catalog, loading, error, reload } = useOrgStructureCatalog();
 
     const items = useMemo(() => {
@@ -74,6 +74,7 @@ export default function OrgStructurePage() {
             toast.success('Created');
             setNewName('');
             setNewCode('');
+            setShowForm(false);
             reload();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Create failed');
@@ -98,79 +99,67 @@ export default function OrgStructurePage() {
 
     const ActiveIcon = activeResource.icon;
     const totalItems = RESOURCES.reduce((total, resource) => total + (catalog[resource.key]?.length || 0), 0);
+    const hasDepartment = activeTab === 'teams' || activeTab === 'jobRoles';
+    const departmentNames = (item) => {
+        const ids = activeTab === 'teams' ? [item.departmentId] : item.departmentIds || [];
+        return ids.map((id) => deptNameById(catalog.departments, id)).filter(Boolean).join(', ');
+    };
+    const filteredItems = items.filter((item) => [item.name, item.code, hasDepartment ? departmentNames(item) : ''].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+    const openForm = () => setShowForm(true);
 
     return (
         <div className="org-structure-page">
             <div className="page-shell">
                 <div className="page-shell-inner org-structure-content">
-                    <div className="os-breadcrumb">Organization <span>/</span> <strong>Structure</strong></div>
                     <header className="os-header">
-                        <div>
-                            <div className="os-eyebrow">YOUR ORGANIZATION, CONNECTED</div>
-                            <h1>Organization structure</h1>
-                            <p>A clear foundation for your people, teams, and the way you work.</p>
+                        <div className="os-title-group">
+                            <span className="os-title-icon"><FiGrid /></span>
+                            <div><div className="os-eyebrow">ORGANIZATION / COMPANY CATALOG</div><h1>Organization structure</h1><p>Manage the departments, roles, and working arrangements that define your company.</p></div>
                         </div>
                         <button type="button" onClick={handleSeed} disabled={seeding || loading} className="os-button os-button-secondary">
                             <FiRefreshCw className={seeding ? 'os-spin' : ''} /> {seeding ? 'Initializing…' : 'Initialize defaults'}
                         </button>
                     </header>
 
-                    <section className="os-overview" aria-label="Structure overview">
-                        <div className="os-overview-intro"><span className="os-icon-tile"><FiLayers /></span><div><h2>Build your company blueprint</h2><p>Start with departments. Add the details as you grow.</p></div></div>
-                        <div className="os-overview-stats"><div><strong>{loading ? '—' : catalog.departments?.length || 0}</strong><span>Departments</span></div><div><strong>{loading ? '—' : catalog.teams?.length || 0}</strong><span>Teams</span></div><div><strong>{loading ? '—' : totalItems}</strong><span>Total entries</span></div></div>
-                    </section>
-
                     <div className="os-workspace">
                         <nav className="os-navigation" aria-label="Structure categories">
-                            <p className="os-nav-label">COMPANY CATALOG</p>
                             {RESOURCES.map((tab) => {
                                 const Icon = tab.icon;
-                                return <button key={tab.key} type="button" aria-current={activeTab === tab.key ? 'page' : undefined} onClick={() => { setActiveTab(tab.key); setNewName(''); setNewCode(''); }} className={`os-nav-item ${activeTab === tab.key ? 'is-active' : ''}`}><Icon /><span>{tab.label}</span><span className="os-count">{loading ? '—' : catalog[tab.key]?.length || 0}</span></button>;
+                                return <button key={tab.key} type="button" aria-current={activeTab === tab.key ? 'page' : undefined} onClick={() => { setActiveTab(tab.key); setNewName(''); setNewCode(''); setSearch(''); setShowForm(false); }} className={`os-nav-item ${activeTab === tab.key ? 'is-active' : ''}`}><Icon /><span>{tab.label}</span><span className="os-count">{loading ? '—' : catalog[tab.key]?.length || 0}</span></button>;
                             })}
-                            <div className="os-nav-note"><FiInfo /><p>These labels shape your org chart. Employee access is managed separately with System Roles.</p></div>
                         </nav>
 
                         <section className="os-main" aria-label={activeResource.label}>
-                            <div className="os-section-heading"><div><h2>{activeResource.label} <span>{loading ? '—' : items.length}</span></h2><p>{activeResource.description}</p></div><span className="os-section-icon"><ActiveIcon /></span></div>
-                            <div className="os-panels">
-                                <div className="os-list-panel">
-                                    <div className="os-panel-heading"><h3>All {activeResource.label.toLowerCase()}</h3><span>Company catalog</span></div>
-                                    {loading ? <div className="os-empty" role="status"><FiRefreshCw className="os-spin" /><h3>Loading your catalog…</h3></div> : error ? <div className="os-empty" role="alert"><FiInfo /><h3>Unable to load your catalog</h3><p>Please try again to see your organization structure.</p><button type="button" className="os-text-button" onClick={reload}>Try again <FiRefreshCw /></button></div> : items.length === 0 ? (
-                                        <div className="os-empty">
-                                            <div className="os-empty-art" aria-hidden="true"><span /><div><ActiveIcon /></div><span /></div>
-                                            <h3>No {activeResource.label.toLowerCase()} yet</h3>
-                                            <p>Add your first {activeResource.singular} using the form, or get a head start with our default catalog.</p>
-                                            <button type="button" className="os-text-button" onClick={handleSeed} disabled={seeding}> {seeding ? 'Initializing…' : 'Start with defaults'} <FiArrowRight /></button>
-                                        </div>
-                                    ) : (
-                                        <ul className="os-item-list">{items.map((item) => {
-                                            let subtitle = item.code || '';
-                                            if (activeTab === 'teams' && item.departmentId) {
-                                                const dn = deptNameById(catalog.departments, item.departmentId);
-                                                subtitle = [subtitle, dn].filter(Boolean).join(' · ');
-                                            }
-                                            if (activeTab === 'jobRoles' && Array.isArray(item.departmentIds)) {
-                                                const names = item.departmentIds.map((id) => deptNameById(catalog.departments, id)).filter(Boolean);
-                                                subtitle = [subtitle, ...names].filter(Boolean).join(' · ');
-                                            }
-                                            return <li key={item._id}><span className="os-item-icon"><ActiveIcon /></span><div className="os-item-text"><strong>{item.name}</strong>{subtitle && <span>{subtitle}</span>}</div><button type="button" onClick={() => handleDelete(item._id)} className="os-delete" aria-label={`Deactivate ${item.name}`} title="Deactivate"><FiTrash2 /></button></li>;
-                                        })}</ul>
-                                    )}
-                                    <div className="os-list-footer"><span className="os-status-dot" />{loading ? 'Loading catalog' : `${items.length} ${items.length === 1 ? activeResource.singular : activeResource.label.toLowerCase()} in your organization`}</div>
+                            <div className="os-section-heading">
+                                <div><h2>{activeResource.label} <span>{loading ? '—' : items.length}</span></h2><p>{activeResource.description}</p></div>
+                                <div className="os-toolbar">
+                                    <label className="os-search"><FiSearch /><input aria-label={`Search ${activeResource.label.toLowerCase()}`} placeholder={`Search ${activeResource.label.toLowerCase()}…`} value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><FiX /></button>}</label>
+                                    <button type="button" onClick={() => setShowForm(!showForm)} aria-expanded={showForm} aria-controls="os-create-form" disabled={loading || saving} className="os-button os-button-primary"><FiPlus />Add {activeResource.singular}</button>
                                 </div>
-
-                                <form onSubmit={handleCreate} className="os-form-panel">
-                                    <span className="os-form-icon"><FiPlus /></span>
-                                    <h3>Add {activeResource.singular}</h3>
-                                    <p>{activeResource.help}</p>
-                                    {(activeTab === 'teams' || activeTab === 'jobRoles') && <label htmlFor="os-department">Department {activeTab === 'jobRoles' && <span>(optional)</span>}<select id="os-department" className={inputClass} value={activeTab === 'teams' ? teamDepartmentId : jobRoleDepartmentId} onChange={(e) => activeTab === 'teams' ? setTeamDepartmentId(e.target.value) : setJobRoleDepartmentId(e.target.value)} required={activeTab === 'teams'}><option value="">{activeTab === 'teams' ? 'Select a department' : 'All departments'}</option>{(catalog.departments || []).map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}</select></label>}
-                                    <label htmlFor="os-name">Name <span className="os-required">*</span><input id="os-name" className={inputClass} placeholder={activeResource.example} value={newName} onChange={(e) => setNewName(e.target.value)} required /></label>
-                                    <label htmlFor="os-code">Code <span>(optional)</span><input id="os-code" className={inputClass} placeholder="e.g. ENG" value={newCode} onChange={(e) => setNewCode(e.target.value)} /></label>
-                                    <p className="os-field-hint">A short identifier for easy reference.</p>
-                                    <button type="submit" disabled={saving || loading} className="os-button os-button-primary"><FiPlus />{saving ? 'Saving…' : `Add ${activeResource.singular}`}</button>
-                                </form>
                             </div>
-                            <div className="os-guidance"><FiInfo /><p><strong>A little structure goes a long way.</strong> Create departments first, then teams and job roles. Use designations for seniority levels like Junior, Senior, or Manager.</p></div>
+
+                            {showForm && <form id="os-create-form" onSubmit={handleCreate} className="os-form-panel">
+                                <div className="os-form-heading"><div><h3>New {activeResource.singular}</h3><p>{activeResource.help}</p></div><button type="button" className="os-close" aria-label="Close add form" onClick={() => setShowForm(false)} disabled={saving}><FiX /></button></div>
+                                <div className="os-form-fields">
+                                    <label htmlFor="os-name">Name <span className="os-required">*</span><input id="os-name" className="org-structure-input" placeholder={activeResource.example} value={newName} onChange={(e) => setNewName(e.target.value)} required autoFocus disabled={saving} /></label>
+                                    <label htmlFor="os-code">Code <span>(optional)</span><input id="os-code" className="org-structure-input" placeholder="Short identifier" value={newCode} onChange={(e) => setNewCode(e.target.value)} disabled={saving} /></label>
+                                    {hasDepartment && <label htmlFor="os-department">Department {activeTab === 'jobRoles' && <span>(optional)</span>}<select id="os-department" className="org-structure-input" value={activeTab === 'teams' ? teamDepartmentId : jobRoleDepartmentId} onChange={(e) => activeTab === 'teams' ? setTeamDepartmentId(e.target.value) : setJobRoleDepartmentId(e.target.value)} required={activeTab === 'teams'} disabled={saving}><option value="">{activeTab === 'teams' ? 'Select a department' : 'All departments'}</option>{(catalog.departments || []).map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}</select></label>}
+                                    <div className="os-form-actions"><button type="button" className="os-button os-button-secondary" onClick={() => setShowForm(false)} disabled={saving}>Cancel</button><button type="submit" disabled={saving} className="os-button os-button-primary">{saving ? 'Saving…' : 'Save'}<FiArrowRight /></button></div>
+                                </div>
+                            </form>}
+
+                            <div className="os-list-panel">
+                                {loading ? <div className="os-empty" role="status"><FiRefreshCw className="os-spin" /><h3>Loading your catalog…</h3></div> : error ? <div className="os-empty" role="alert"><FiInfo /><h3>Unable to load your catalog</h3><p>Please try again to see your organization structure.</p><button type="button" className="os-text-button" onClick={reload}>Try again <FiRefreshCw /></button></div> : items.length === 0 ? (
+                                    <div className="os-empty"><span className="os-empty-icon"><ActiveIcon /></span><div><h3>No {activeResource.label.toLowerCase()} yet</h3><p>Add your first {activeResource.singular} or initialize the default catalog to get started.</p></div><button type="button" className="os-button os-button-secondary" onClick={openForm}><FiPlus />Create {activeResource.singular}</button><button type="button" className="os-text-button" onClick={handleSeed} disabled={seeding}>{seeding ? 'Initializing…' : 'Start with defaults'}<FiArrowRight /></button></div>
+                                ) : <>
+                                    <div className="os-table-scroll"><table className="os-table"><thead><tr><th scope="col">{activeResource.singular} name</th><th scope="col">Code</th>{hasDepartment && <th scope="col">Department</th>}<th scope="col">Status</th><th scope="col" className="os-actions-column">Actions</th></tr></thead><tbody>
+                                        {filteredItems.map((item) => <tr key={item._id}><td><div className="os-name-cell"><span className="os-item-icon"><ActiveIcon /></span><strong>{item.name}</strong></div></td><td data-label="Code"><span className="os-code">{item.code || '—'}</span></td>{hasDepartment && <td data-label="Department">{departmentNames(item) || (activeTab === 'jobRoles' ? 'All departments' : '—')}</td>}<td><span className="os-status"><span />Active</span></td><td className="os-actions-column"><button type="button" onClick={() => handleDelete(item._id)} className="os-delete" aria-label={`Deactivate ${item.name}`} title={`Deactivate ${item.name}`}><FiTrash2 /></button></td></tr>)}
+                                    </tbody></table></div>
+                                    {filteredItems.length === 0 && <div className="os-no-results" role="status"><FiSearch /><h3>No matching {activeResource.label.toLowerCase()}</h3><p>Try a different name, code, or department.</p><button type="button" className="os-text-button" onClick={() => setSearch('')}>Clear search</button></div>}
+                                </>}
+                                <div className="os-list-footer"><span>{loading ? 'Loading catalog' : error ? 'Catalog unavailable' : `Showing ${filteredItems.length} of ${items.length} ${activeResource.label.toLowerCase()}`}</span><span>{loading ? '—' : totalItems} entries across 7 categories</span></div>
+                            </div>
+                            <div className="os-guidance"><FiInfo /><p>Start with departments, then add teams and job roles. Designations describe seniority. Employee access is managed separately with System Roles.</p></div>
                         </section>
                     </div>
                 </div>
