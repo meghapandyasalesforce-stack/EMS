@@ -1,3 +1,4 @@
+import { employeeCreationDetails } from '../../helpers/employeeCreationDetails.js';
 import Employee from '../../models/employee.model.js';
 import User from '../../models/user.model.js';
 import Organization from '../../models/organization.model.js';
@@ -557,6 +558,7 @@ export const registerEmployee = async (req, res) => {
         // Create the employee (normalize email to lowercase)
         const joiningDate = joiningDateInput ? new Date(joiningDateInput) : new Date();
         const employee = new Employee({
+            ...employeeCreationDetails(req.body),
             organizationId,
             ...(linkedToExistingUser && orgOwnerUser ? { userId: orgOwnerUser._id } : {}),
             name,
@@ -811,6 +813,13 @@ export const registerEmployee = async (req, res) => {
             errorName: error.name
         });
         
+        // Report invalid onboarding profile values as field validation errors.
+        if (error.name === 'ValidationError') {
+            return sendValidationError(res, Object.fromEntries(
+                Object.entries(error.errors).map(([field, detail]) => [field, detail.message])
+            ));
+        }
+
         // Handle specific error types
         if (error.code === 11000) {
             return sendError(res, 

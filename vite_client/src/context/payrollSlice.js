@@ -25,7 +25,7 @@ export const fetchPayrolls = createAsyncThunk(
       const response = await axios.get(url);
       const data = response.data;
       const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-      return { list, pagination: data?.pagination ?? null };
+      return { list, pagination: data?.pagination ?? null, summary: data?.summary ?? null };
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
     }
@@ -85,6 +85,7 @@ const payrollSlice = createSlice({
   initialState: {
     data: [],
     pagination: null,
+    summary: null,
     status: 'idle',
     error: null,
   },
@@ -94,12 +95,14 @@ const payrollSlice = createSlice({
       .addCase(fetchPayrolls.pending, (state) => {
         state.status = 'loading';
         state.error = null;
+        state.summary = null;
       })
       .addCase(fetchPayrolls.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.error = null;
         state.data = action.payload.list;
         state.pagination = action.payload.pagination;
+        state.summary = action.payload.summary;
       })
       .addCase(fetchPayrolls.rejected, (state, action) => {
         state.status = 'failed';

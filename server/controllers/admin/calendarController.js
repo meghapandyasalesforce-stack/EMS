@@ -1,4 +1,6 @@
+import { withWfhWriteLock } from '../../helpers/wfhWriteLock.js';
 import Calendar from '../../models/calendar.model.js';
+import Employee from '../../models/employee.model.js';
 import AttendanceRule from '../../models/attendanceRule.model.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
@@ -10,7 +12,16 @@ import {
     findWfhEntryOnCalendar,
     parseLocalDate,
     toDateKey,
+    validateWfhScheduleConflicts,
 } from '../../helpers/wfhCalendarHelper.js';
+
+const rejectWfhScheduleConflicts = async (res, organizationId, days, entry) => {
+    const conflicts = await validateWfhScheduleConflicts({ organizationId, days, entry });
+    if (!conflicts.length) return false;
+    const dates = [...new Set(conflicts.flatMap((conflict) => conflict.dates))].sort();
+    sendError(res, `Pending or approved employee WFH requests conflict on: ${dates.join(', ')}. Resolve or cancel those requests first.`, 409, 'WFH_REQUEST_CONFLICT', { dates, conflicts });
+    return true;
+};
 
 const toStartOfDay = (value) => {
     const parsed = parseLocalDate(value);
@@ -358,7 +369,7 @@ export const deleteHoliday = async (req, res) => {
  * - office: day counts as normal office working day
  * - home: day counts as working + WFH enabled so employees can apply / punch home after approval
  */
-export const convertHolidayToWorkingDay = async (req, res) => {
+export const convertHolidayToWorkingDay = withWfhWriteLock(async (req, res) => {
     try {
         const yearNum = parseInt(req.params.year, 10);
         const { holidayId } = req.params;
@@ -384,6 +395,8 @@ export const convertHolidayToWorkingDay = async (req, res) => {
         if (holiday.isActive === false) {
             return sendValidationError(res, { holiday: 'Inactive holidays cannot be converted' });
         }
+
+        if (workMode === 'home' && await rejectWfhScheduleConflicts(res, organizationId, [parseLocalDate(holiday.date)], findWfhEntryOnCalendar(calendar, holiday.date) || { employeeAccess: 'all_except', excludedEmployeeIds: [] })) return;
 
         holiday.workModeOverride = workMode;
         const dayKey = toDateKey(holiday.date);
@@ -415,6 +428,7 @@ export const convertHolidayToWorkingDay = async (req, res) => {
 
         calendar.markModified('holidays');
         calendar.markModified('wfhDates');
+        await req.assertWfhWriteLock?.();
         await calendar.save({ validateBeforeSave: true });
         await calendar.populate({
             path: 'wfhDates.excludedEmployeeIds',
@@ -429,16 +443,17 @@ export const convertHolidayToWorkingDay = async (req, res) => {
             ? 'Holiday converted to working day (Work From Home)'
             : 'Holiday converted to working day (Office)');
     } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
         logger.error('Convert holiday to working day error', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to convert holiday', error);
     }
-};
+});
 
 /**
  * Restore a converted holiday back to a normal off day.
  * Removes auto-enabled WFH for that date when it was converted to home.
  */
-export const restoreHolidayFromWorkingDay = async (req, res) => {
+export const restoreHolidayFromWorkingDay = withWfhWriteLock(async (req, res) => {
     try {
         const yearNum = parseInt(req.params.year, 10);
         const { holidayId } = req.params;
@@ -468,6 +483,7 @@ export const restoreHolidayFromWorkingDay = async (req, res) => {
         }
 
         calendar.markModified('holidays');
+        await req.assertWfhWriteLock?.();
         await calendar.save({ validateBeforeSave: true });
 
         return sendSuccess(res, {
@@ -476,10 +492,11 @@ export const restoreHolidayFromWorkingDay = async (req, res) => {
             holidays: calendar.holidays || []
         }, 'Holiday restored as a non-working day');
     } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
         logger.error('Restore holiday error', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to restore holiday', error);
     }
-};
+});
 
 // Update working days
 export const updateWorkingDays = async (req, res) => {
@@ -764,7 +781,7 @@ export const importIndianHolidays = asyncHandler(async (req, res) => {
  * Enable WFH for a date or inclusive date range (creates missing day entries).
  * Body: { dateFrom, dateTo?, note?, excludedEmployeeIds? }
  */
-export const enableWfhDates = async (req, res) => {
+export const enableWfhDates = withWfhWriteLock(async (req, res) => {
     try {
         const yearNum = parseInt(req.params.year, 10);
         if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
@@ -787,6 +804,7 @@ export const enableWfhDates = async (req, res) => {
         }
 
         const days = expandDateRange(from, to);
+        if (!days.length) return sendValidationError(res, { dateFrom: 'A valid date range between 2020 and 2050 is required' });
         const outOfYear = days.filter((d) => d.getFullYear() !== yearNum);
         if (outOfYear.length) {
             return sendValidationError(res, {
@@ -806,8 +824,28 @@ export const enableWfhDates = async (req, res) => {
             });
         }
 
+        const validEmployees = exclusionIds.length ? await Employee.countDocuments({ _id: { $in: exclusionIds }, organizationId }) : 0;
+        if (validEmployees !== exclusionIds.length) return sendValidationError(res, { excludedEmployeeIds: 'Selected employees must belong to this organization' });
+
         const calendar = await ensureCalendarForYear(organizationId, yearNum);
         if (!Array.isArray(calendar.wfhDates)) calendar.wfhDates = [];
+
+        if (employeeAccess != null && !['all_except', 'only_these'].includes(employeeAccess)) {
+            return sendValidationError(res, { employeeAccess: 'Invalid employee coverage mode' });
+        }
+        const eligibleDays = days.filter((day) => isWfhEligibleDay(calendar, day));
+        if (await rejectWfhScheduleConflicts(res, organizationId, eligibleDays, { employeeAccess: accessMode, excludedEmployeeIds: exclusionIds })) return;
+        const originalDates = Array.isArray(req.body.replaceDates) ? req.body.replaceDates.map(toDateKey) : [];
+        if (originalDates.some((key) => !key || Number(key.slice(0, 4)) !== yearNum)) {
+            return sendValidationError(res, { replaceDates: 'Original schedule dates must be valid dates in this calendar year' });
+        }
+        const existingDates = days.map(toDateKey).filter((key) => calendar.wfhDates.some((entry) => toDateKey(entry.date) === key));
+        if (existingDates.length && (req.body.updateExisting !== true || (originalDates.length && existingDates.some((key) => !originalDates.includes(key))))) {
+            return sendError(res, `WFH is already scheduled on: ${existingDates.join(', ')}. Open the existing schedule to edit its coverage.`, 409, 'WFH_SCHEDULE_CONFLICT', { dates: existingDates });
+        }
+        // Moving/resizing an explicitly edited schedule removes its former dates.
+        const nextKeys = new Set(days.map(toDateKey));
+        calendar.wfhDates = calendar.wfhDates.filter((entry) => !originalDates.includes(toDateKey(entry.date)) || nextKeys.has(toDateKey(entry.date)));
 
         const actor = actorEmployeeId(req);
         let added = 0;
@@ -882,6 +920,7 @@ export const enableWfhDates = async (req, res) => {
 
         // Nested array mutations are not always detected — force persistence.
         calendar.markModified('wfhDates');
+        await req.assertWfhWriteLock?.();
         await calendar.save({ validateBeforeSave: true });
         await calendar.populate({
             path: 'wfhDates.excludedEmployeeIds',
@@ -894,16 +933,17 @@ export const enableWfhDates = async (req, res) => {
             wfhDates: calendar.wfhDates || []
         }, `WFH enabled for ${added + updated} date(s)`);
     } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
         logger.error('Enable WFH dates error', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to enable WFH dates', error);
     }
-};
+});
 
 /**
  * Disable WFH for a date or inclusive date range (removes day entries).
  * Body: { dateFrom, dateTo? } or { dates: ['YYYY-MM-DD', ...] }
  */
-export const disableWfhDates = async (req, res) => {
+export const disableWfhDates = withWfhWriteLock(async (req, res) => {
     try {
         const yearNum = parseInt(req.params.year, 10);
         if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
@@ -943,6 +983,7 @@ export const disableWfhDates = async (req, res) => {
         calendar.set('wfhDates', remaining);
         calendar.markModified('wfhDates');
         const removed = before - remaining.length;
+        await req.assertWfhWriteLock?.();
         await calendar.save({ validateBeforeSave: true });
 
         return sendSuccess(res, {
@@ -950,16 +991,17 @@ export const disableWfhDates = async (req, res) => {
             wfhDates: calendar.wfhDates || []
         }, `WFH disabled for ${removed} date(s)`);
     } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
         logger.error('Disable WFH dates error', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to disable WFH dates', error);
     }
-};
+});
 
 /**
  * Replace excluded employees for one WFH-enabled date.
  * Body: { date, excludedEmployeeIds: [] }
  */
-export const updateWfhExclusions = async (req, res) => {
+export const updateWfhExclusions = withWfhWriteLock(async (req, res) => {
     try {
         const yearNum = parseInt(req.params.year, 10);
         if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
@@ -997,12 +1039,15 @@ export const updateWfhExclusions = async (req, res) => {
             );
         }
 
-        entry.excludedEmployeeIds = [
-            ...new Set(req.body.excludedEmployeeIds.map((id) => String(id)).filter(Boolean))
-        ];
+        const ids = [...new Set(req.body.excludedEmployeeIds.map((id) => String(id)).filter(Boolean))];
+        if (ids.length && await Employee.countDocuments({ _id: { $in: ids }, organizationId }) !== ids.length) return sendValidationError(res, { excludedEmployeeIds: 'Selected employees must belong to this organization' });
+        if (entry.employeeAccess === 'only_these' && !ids.length) return sendValidationError(res, { excludedEmployeeIds: 'Select at least one employee' });
+        if (await rejectWfhScheduleConflicts(res, organizationId, [date], { employeeAccess: entry.employeeAccess, excludedEmployeeIds: ids })) return;
+        entry.excludedEmployeeIds = ids;
         entry.updatedBy = actorEmployeeId(req);
         entry.markModified?.('excludedEmployeeIds');
         calendar.markModified('wfhDates');
+        await req.assertWfhWriteLock?.();
         await calendar.save();
         await calendar.populate({
             path: 'wfhDates.excludedEmployeeIds',
@@ -1012,7 +1057,8 @@ export const updateWfhExclusions = async (req, res) => {
         const refreshed = findWfhEntryOnCalendar(calendar, date);
         return sendSuccess(res, { entry: refreshed, wfhDates: calendar.wfhDates || [] }, 'WFH exclusions updated');
     } catch (error) {
+        if (error.code === 'WFH_WRITE_LOCK_LOST') return res.status(409).json({ success: false, code: error.code, message: error.message });
         logger.error('Update WFH exclusions error', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to update WFH exclusions', error);
     }
-};
+});

@@ -11,6 +11,7 @@ const AdminPayroll = () => {
     const dispatch = useDispatch();
     const payrollData = useSelector((state) => state.payroll.data) || [];
     const payrollPagination = useSelector((state) => state.payroll.pagination);
+    const payrollSummary = useSelector((state) => state.payroll.summary);
     const loading = useSelector((state) => state.payroll.status === 'loading');
     const error = useSelector((state) => state.payroll.error);
 
@@ -371,61 +372,92 @@ const AdminPayroll = () => {
         }).format(amount || 0);
     };
 
-    return (
-        <div className="p-5 transition-all duration-300 ease-in-out min-h-screen bg-gray-50">
-            {/* Mobile header - only shown on small screens */}
-            <div className="sm:block lg:hidden md:hidden mb-4 bg-white p-4 rounded-lg shadow">
-                <h2 className="text-xl font-semibold text-gray-800">Employee Payroll</h2>
-            </div>
+    const formatCompactInr = (amount) => {
+        const value = Number(amount) || 0;
+        const abs = Math.abs(value);
+        if (abs >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
+        if (abs >= 100000) return `₹${(value / 100000).toFixed(2)} L`;
+        return formatCurrency(value);
+    };
 
-            <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-2xl font-semibold text-gray-800 hidden sm:hidden lg:block">Employee Payroll</h2>
+    const payrollChangeLabel = () => {
+        const change = payrollSummary?.payrollChangePercent;
+        if (change == null || Number.isNaN(Number(change))) return 'No payroll last month';
+        const rounded = Number(change);
+        const sign = rounded > 0 ? '+' : '';
+        return `${sign}${rounded.toFixed(1)}% from last month`;
+    };
+
+    const complianceLabel = () => {
+        if (!payrollSummary || !payrollSummary.generatedCount) return 'No payroll generated';
+        if (payrollSummary.compliancePercent === 100) return 'All runs closed';
+        return `${payrollSummary.closedCount} of ${payrollSummary.generatedCount} closed`;
+    };
+
+    const outlineButton = 'inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
+    const primaryButton = 'inline-flex h-9 items-center justify-center rounded-full bg-[#0E9370] px-3.5 text-sm font-semibold text-white hover:bg-[#0B7458] disabled:opacity-50';
+
+    return (
+        <div className="min-h-screen bg-[#F3F7F5]">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0">
+                    <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Payroll</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                        {months[selectedMonth].label} {selectedYear}
+                    </p>
+                </div>
                 <div className="flex flex-wrap gap-2">
                     <button
                         type="button"
                         onClick={() => runGenerate('preview')}
                         disabled={loading}
-                        className="bg-slate-700 text-white px-4 py-2 rounded hover:opacity-90 text-sm disabled:opacity-50"
+                        className={outlineButton}
                     >
-                        Preview payroll
+                        Preview
                     </button>
                     <button
                         type="button"
                         onClick={() => runGenerate('final')}
                         disabled={loading}
-                        className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 text-sm disabled:opacity-50"
+                        className={outlineButton}
                     >
                         Run final payroll
                     </button>
                     <button
-                        className="px-3 py-2 bg-slate-600 text-white rounded disabled:opacity-50"
+                        type="button"
+                        className={outlineButton}
                         onClick={handleDisbursePreview}
                         disabled={previewLoading || !isCEO}
                         title={isCEO ? 'Preview who will be paid before disbursement' : 'Only CEO can preview disbursement'}
                     >
-                        {previewLoading ? 'Loading preview…' : 'Preview Disbursement'}
+                        {previewLoading ? 'Loading preview…' : 'Preview disbursement'}
                     </button>
                     <button
-                        className="px-3 py-2 bg-theme-secondary text-white rounded disabled:opacity-50"
+                        type="button"
+                        className={primaryButton}
                         onClick={handleDisburse}
                         disabled={disburseLoading || !isCEO}
                         title={isCEO ? "Disburse in-hand amounts to employees' bank accounts (CEO only)" : "Only CEO can disburse payroll"}
                     >
-                        {disburseLoading ? 'Disbursing…' : 'Disburse Salaries'}
+                        {disburseLoading ? 'Disbursing…' : 'Disburse'}
                     </button>
                     <Link to="/add-payroll">
                         <button
+                            type="button"
                             onClick={handleCreatePayroll}
-                            className="bg-theme-secondary text-white px-4 py-2 rounded hover:opacity-90 text-sm"
+                            className={outlineButton}
                         >
-                            + Create Payroll
+                            Create payroll
                         </button>
                     </Link>
                 </div>
             </div>
 
             {disburseResult && (
-                <div className={`p-3 rounded mb-4 ${disburseResult.success ? 'bg-theme-primary/10' : 'bg-red-50'}`}>
+                <div className={`rounded-2xl border p-4 ${disburseResult.success ? 'border-emerald-100 bg-emerald-50' : 'border-red-100 bg-red-50'}`}>
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="font-medium">{disburseResult.success ? 'Disbursement complete' : 'Disbursement failed'}</div>
@@ -478,7 +510,7 @@ const AdminPayroll = () => {
             )}
 
             {disbursePreview && (
-                <div className={`p-3 rounded mb-4 ${disbursePreview.success ? 'bg-blue-50 border border-blue-100' : 'bg-red-50'}`}>
+                <div className={`rounded-2xl border p-4 ${disbursePreview.success ? 'border-slate-200 bg-white' : 'border-red-100 bg-red-50'}`}>
                     <div className="font-medium mb-1">
                         {disbursePreview.success ? 'Disbursement preview' : 'Preview failed'}
                     </div>
@@ -518,23 +550,23 @@ const AdminPayroll = () => {
                 </div>
             )}
 
-            <div className="bg-white p-5 rounded-lg shadow">
-                <div className="flex flex-col md:flex-row gap-5 mb-5">
-                    <div className="flex flex-col gap-1 flex-1">
-                        <label className="font-medium text-gray-700">Search Employee</label>
+            <div className="rounded-2xl border border-[rgba(14,43,61,0.08)] bg-white p-4 shadow-sm sm:p-5">
+                <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Search employee</label>
                         <input
                             type="text"
-                            className="p-2 border border-gray-300 rounded-md text-sm"
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#0E9370]"
                             placeholder="Search by name..."
                             value={searchTerm}
                             onChange={(e) => { setListPage(1); setSearchTerm(e.target.value); }}
                             disabled={loading}
                         />
                     </div>
-                    <div className="flex flex-col gap-1 flex-1">
-                        <label className="font-medium text-gray-700">Month</label>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Month</label>
                         <select
-                            className="p-2 border border-gray-300 rounded-md text-sm"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#0E9370]"
                             value={selectedMonth}
                             onChange={(e) => {
                                 setListPage(1);
@@ -557,10 +589,10 @@ const AdminPayroll = () => {
                                 ))}
                         </select>
                     </div>
-                    <div className="flex flex-col gap-1 flex-1">
-                        <label className="font-medium text-gray-700">Year</label>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Year</label>
                         <select
-                            className="p-2 border border-gray-300 rounded-md text-sm"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#0E9370]"
                             value={selectedYear}
                             onChange={(e) => {
                                 setListPage(1);
@@ -591,46 +623,90 @@ const AdminPayroll = () => {
                     </div>
                 )}
 
+                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                        {
+                            label: 'Total payroll',
+                            value: payrollSummary ? formatCompactInr(payrollSummary.totalPayroll) : '—',
+                            exact: payrollSummary ? formatCurrency(payrollSummary.totalPayroll) : '',
+                            detail: payrollChangeLabel(),
+                            detailClass: Number(payrollSummary?.payrollChangePercent) < 0 ? 'text-rose-600' : 'text-emerald-700',
+                        },
+                        {
+                            label: 'EPF / ESI deductions',
+                            value: payrollSummary ? formatCompactInr(payrollSummary.epfEsi) : '—',
+                            exact: payrollSummary ? formatCurrency(payrollSummary.epfEsi) : '',
+                            detail: 'Employee PF and ESI',
+                            detailClass: 'text-slate-500',
+                        },
+                        {
+                            label: 'Net disbursement',
+                            value: payrollSummary ? formatCompactInr(payrollSummary.netDisbursement) : '—',
+                            exact: payrollSummary ? formatCurrency(payrollSummary.netDisbursement) : '',
+                            detail: payrollSummary?.periodEndLabel
+                                ? `Period ends ${payrollSummary.periodEndLabel}`
+                                : 'Selected month',
+                            detailClass: 'text-slate-500',
+                        },
+                        {
+                            label: 'Compliance status',
+                            value: payrollSummary?.compliancePercent == null ? '—' : `${payrollSummary.compliancePercent}%`,
+                            exact: payrollSummary?.generatedCount
+                                ? `${payrollSummary.closedCount} of ${payrollSummary.generatedCount} processed or paid`
+                                : '',
+                            detail: complianceLabel(),
+                            detailClass: payrollSummary?.compliancePercent === 100 ? 'text-emerald-700' : 'text-slate-500',
+                        },
+                    ].map((card) => (
+                        <div key={card.label} className="rounded-2xl border border-slate-200 bg-[#F3F7F5] px-4 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
+                            <p className="mt-1 text-2xl font-semibold text-slate-900" title={card.exact}>{card.value}</p>
+                            <p className={`mt-1 text-xs font-medium ${card.detailClass}`}>{card.detail}</p>
+                        </div>
+                    ))}
+                </div>
+
                 {loading ? (
                     <div className="text-center text-gray-500 py-6">Loading payroll data...</div>
                 ) : payrollData.length > 0 ? (
                     <div className="overflow-x-auto overscroll-x-contain">
                         <table className="w-full min-w-[720px] table-auto border-collapse">
                             <thead>
-                                <tr className="bg-gray-100">
-                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Name</th>
-                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Total Earnings</th>
-                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Leaves</th>
-                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Net Salary</th>
-                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Status</th>
-                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Actions</th>
+                                <tr className="border-b border-slate-200 text-left">
+                                    <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Name</th>
+                                    <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total earnings</th>
+                                    <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Leaves</th>
+                                    <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Net salary</th>
+                                    <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                    <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {(Array.isArray(payrollData) ? payrollData : []).map((employee, index) => {
                                     const status = getPayrollStatus(employee);
                                     return (
-                                        <tr key={employee._id || employee.employeeId || `employee-${index}`} className="hover:bg-gray-50">
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{[employee.name, employee.lastName].filter(Boolean).join(' ')}</td>
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.totalEarnings)}</td>
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.leaves}</td>
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.inHandSalary)}</td>
-                                            <td className="py-2 px-2 sm:px-4">
+                                        <tr key={employee._id || employee.employeeId || `employee-${index}`} className="border-b border-slate-100 hover:bg-slate-50">
+                                            <td className="px-3 py-3 text-sm font-medium text-slate-900">{[employee.name, employee.lastName].filter(Boolean).join(' ')}</td>
+                                            <td className="px-3 py-3 text-sm tabular-nums text-slate-700">{formatCurrency(employee.totalEarnings)}</td>
+                                            <td className="px-3 py-3 text-sm text-slate-700">{employee.leaves}</td>
+                                            <td className="px-3 py-3 text-sm font-medium tabular-nums text-slate-900">{formatCurrency(employee.inHandSalary)}</td>
+                                            <td className="px-3 py-3">
                                                 <span className={`inline-flex items-center ${UI_BADGE_TEXT_CLASS} px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full ${getStatusBadgeClass(status)}`}>
                                                     {formatStatusLabel(status)}
                                                 </span>
                                             </td>
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">
-                                                <div className="flex flex-col gap-1 sm:flex-row sm:space-x-2">
+                                            <td className="px-3 py-3 text-sm">
+                                                <div className="flex flex-wrap gap-2">
                                                     <button
-                                                        className="bg-theme-primary text-white px-3 py-1 rounded hover:opacity-90 text-sm"
+                                                        type="button"
+                                                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                                         onClick={() => handleViewDetails(employee)}
                                                     >
-                                                        View Details
+                                                        View
                                                     </button>
                                                     <Link to={`/admin-employee-payroll/${employee.employeeId}`}>
-                                                        <button className="bg-theme-secondary text-white px-3 py-1 rounded hover:opacity-90 text-sm">
-                                                            Manage Payroll
+                                                        <button type="button" className="rounded-full bg-[#0E9370]/10 px-3 py-1 text-xs font-semibold text-[#0E9370] hover:bg-[#0E9370]/15">
+                                                            Manage
                                                         </button>
                                                     </Link>
                                                 </div>
@@ -642,7 +718,7 @@ const AdminPayroll = () => {
                         </table>
                     </div>
                 ) : (
-                    <div className="text-center text-gray-600 bg-gray-100 p-4 rounded">
+                    <div className="rounded-xl bg-[#F3F7F5] p-6 text-center text-sm text-slate-500">
                         No payroll data available for the selected period
                     </div>
                 )}
@@ -898,6 +974,9 @@ const AdminPayroll = () => {
                     </div>
                 </div>
             )}
+            </div>
+            </div>
+            </div>
         </div>
     );
 };

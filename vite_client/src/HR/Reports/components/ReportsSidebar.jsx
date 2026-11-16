@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { FaDownload, FaChartBar, FaBars, FaTimes } from 'react-icons/fa';
 import { REPORT_NAV, MINT_GRADIENT } from '../constants';
+import { useReportAccess } from '../useReportAccess';
 
 const navLinkClass = ({ isActive }) =>
     `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition whitespace-nowrap ${
@@ -13,6 +14,10 @@ const navLinkClass = ({ isActive }) =>
 const ReportsSidebar = () => {
     const navigate = useNavigate();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const { payrollOnly } = useReportAccess();
+    const items = payrollOnly ? REPORT_NAV.filter((item) => item.path === 'payroll') : REPORT_NAV;
+    const title = payrollOnly ? 'Payroll reports' : 'HR Reports';
+    const subtitle = payrollOnly ? 'Compensation' : 'Enterprise Analytics';
 
     return (
         <>
@@ -27,9 +32,9 @@ const ReportsSidebar = () => {
                             <FaChartBar className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-slate-900">HR Reports</p>
+                            <p className="truncate text-sm font-bold text-slate-900">{title}</p>
                             <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                                Enterprise Analytics
+                                {subtitle}
                             </p>
                         </div>
                     </div>
@@ -45,7 +50,7 @@ const ReportsSidebar = () => {
 
                 <div className="overflow-x-auto px-2 pb-2">
                     <nav className="flex min-w-max gap-1">
-                        {REPORT_NAV.map(({ path, label, icon: Icon }) => (
+                        {items.map(({ path, label, icon: Icon }) => (
                             <NavLink
                                 key={path}
                                 to={`/admin/reports/${path}`}
@@ -65,7 +70,7 @@ const ReportsSidebar = () => {
                     </nav>
                 </div>
 
-                {mobileOpen && (
+                {mobileOpen && !payrollOnly && (
                     <div className="border-t border-slate-100 px-3 py-3">
                         <button
                             type="button"
@@ -94,16 +99,16 @@ const ReportsSidebar = () => {
                             <FaChartBar className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-slate-900">HR Reports</p>
+                            <p className="text-sm font-bold text-slate-900">{title}</p>
                             <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                                Enterprise Analytics
+                                {subtitle}
                             </p>
                         </div>
                     </div>
                 </div>
 
                 <nav className="flex-1 space-y-0.5 px-2 py-4">
-                    {REPORT_NAV.map(({ path, label, icon: Icon }) => (
+                    {items.map(({ path, label, icon: Icon }) => (
                         <NavLink key={path} to={`/admin/reports/${path}`} className={navLinkClass}>
                             <Icon className="h-4 w-4 shrink-0" />
                             {label}
@@ -111,6 +116,7 @@ const ReportsSidebar = () => {
                     ))}
                 </nav>
 
+                {!payrollOnly && (
                 <div className="border-t border-slate-100 p-3">
                     <button
                         type="button"
@@ -122,6 +128,7 @@ const ReportsSidebar = () => {
                         Advanced Analytics
                     </button>
                 </div>
+                )}
             </aside>
         </>
     );

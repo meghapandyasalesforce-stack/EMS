@@ -1,0 +1,108 @@
+.ooo-schedule-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgb(15 23 42 / 45%);
+    backdrop-filter: blur(3px);
+}
+
+.ooo-schedule-dialog {
+    display: flex;
+    flex-direction: column;
+    width: 840px;
+    max-width: 100%;
+    max-height: calc(100dvh - 48px);
+    overflow: hidden;
+    border-radius: 16px;
+    background: white;
+    box-shadow: 0 24px 80px rgb(15 23 42 / 22%);
+}
+
+.ooo-schedule-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.ooo-schedule-form { display: flex; flex-direction: column; min-height: 0; }
+.ooo-schedule-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+    padding: 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.ooo-schedule-details { display: grid; gap: 16px; min-width: 0; }
+.ooo-schedule-details > .grid { gap: 12px; }
+.ooo-schedule-body label.uppercase {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+    color: #475569;
+    margin-bottom: 6px;
+}
+.ooo-schedule-dialog input:not([type='checkbox']),
+.ooo-schedule-dialog select,
+.ooo-schedule-dialog textarea {
+    min-height: 40px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+.ooo-schedule-dialog textarea { resize: vertical; min-height: 84px; }
+.ooo-schedule-agenda { min-width: 0; border-left: 1px solid #e2e8f0; padding-left: 24px; }
+.ooo-agenda-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    color: #0a8f6c;
+    font-size: 12px;
+    font-weight: 600;
+}
+.ooo-agenda-add:hover { background: #ecfdf5; }
+.ooo-agenda-item { padding: 12px 0; border-top: 1px solid #f1f5f9; }
+.ooo-schedule-notice {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+}
+.ooo-schedule-footer {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 24px;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+.ooo-schedule-footer button { width: auto; padding: 10px 18px; border-radius: 8px; box-shadow: none; }
+.ooo-schedule-dialog button:focus-visible { outline: 2px solid #0a8f6c; outline-offset: 2px; }
+
+@media (max-width: 639px) {
+    .ooo-schedule-overlay { padding: 12px; }
+    .ooo-schedule-dialog { max-height: calc(100dvh - 24px); border-radius: 12px; }
+    .ooo-schedule-header { padding: 16px; }
+    .ooo-schedule-body { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 20px; }
+    .ooo-schedule-details > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ooo-schedule-agenda { border-left: 0; border-top: 1px solid #e2e8f0; padding: 16px 0 0; }
+    .ooo-schedule-footer { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+    .ooo-schedule-dialog input:not([type='checkbox']),
+    .ooo-schedule-dialog select,
+    .ooo-schedule-dialog textarea { font-size: 16px; }
+}

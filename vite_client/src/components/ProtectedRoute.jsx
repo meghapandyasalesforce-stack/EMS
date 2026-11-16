@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import LoadingSpinner from './LoadingSpinner';
+import InitialDashboardRedirect from './InitialDashboardRedirect';
 import { isManager, isHR } from '../utils/managerHelper';
 import { isProjectManager } from '../utils/projectManagerHelper';
 import { isExecutive } from '../utils/navigationConfig';
@@ -15,6 +16,7 @@ import { featureKeyForPath, isSaasFeatureEnabled } from '../constants/saasFeatur
 const ProtectedRoute = ({
   children,
   allowedRoles = [],
+  requireRoleMatch = false,
   requiredPermissions = [],
   redirectTo,
   orgOwnerOnly = false,
@@ -72,7 +74,7 @@ const ProtectedRoute = ({
   if (userIsProjectManager) effectiveRoles.push('project_manager');
   if (userIsHR) effectiveRoles.push('hr');
   if (userIsExecutive) effectiveRoles.push('executive');
-  if (isFinanceDept) effectiveRoles.push('finance');
+  if (isFinanceDept || permissionFlags.isPayrollAdmin) effectiveRoles.push('finance');
   if (isTechDept) effectiveRoles.push('tech');
   effectiveRoles.push('employee');
 
@@ -82,6 +84,7 @@ const ProtectedRoute = ({
     isOrgOwner: !!permissionFlags.isOrgOwner,
     allowedRoles,
     effectiveRoles,
+    requireRoleMatch,
   });
 
   const isHrOnlyRoute =
@@ -116,7 +119,7 @@ const ProtectedRoute = ({
     );
   }
 
-  return <>{children}</>;
+  return <InitialDashboardRedirect>{children}</InitialDashboardRedirect>;
 };
 
 export default ProtectedRoute;

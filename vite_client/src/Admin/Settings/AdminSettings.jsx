@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import '../../styles/adminSettings.css';
+import SettingsSectionPicker from './SettingsSectionPicker';
 import { useDispatch, useSelector } from 'react-redux';
 import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave, FaUserCheck, FaFileAlt, FaClock } from 'react-icons/fa';
 import { FiToggleLeft, FiToggleRight, FiX } from 'react-icons/fi';
@@ -22,6 +25,13 @@ import { DEFAULT_TIMEZONE } from '../../utils/timezoneOptions';
 import { setUser } from '../../context/Auth/authSlice';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { fetchEmployees } from '../../context/employeeSlice';
+
+const SETTINGS_GROUPS = [
+    { id: 'workforce', name: 'Workforce', icon: <FaUserCheck />, sections: ['attendance-rules', 'shift-settings', 'leave-policy', 'payroll-settings'] },
+    { id: 'communication', name: 'Communication', icon: <FaEnvelope />, sections: ['notifications', 'email'] },
+    { id: 'access', name: 'Access & security', icon: <FaLock />, sections: ['security', 'permissions'] },
+    { id: 'organization', name: 'Organization', icon: <FaCog />, sections: ['general', 'document-settings', 'theme', 'reports'] },
+];
 
 const AdminSettings = () => {
     const [activeTab, setActiveTab] = useState('email'); // Default to email settings for troubleshooting
@@ -101,57 +111,21 @@ const AdminSettings = () => {
         }
     ];
 
-    const activeComponent = settingsTabs.find(tab => tab.id === activeTab)?.component;
+    const activeSection = settingsTabs.find(tab => tab.id === activeTab) || settingsTabs[5];
 
     return (
-        <div className="page-shell min-h-screen w-full min-w-0 bg-[var(--color-bg-soft)] text-[var(--color-text)]">
-            <div className="page-shell-inner hrms-stack">
-                {/* Header */}
-                <div className="rounded-lg bg-white p-4 shadow-md sm:p-5 md:p-6">
-                    <h1 className="flex items-center text-xl font-bold text-gray-900 sm:text-2xl md:text-3xl">
-                        <FaCog className="mr-2 flex-shrink-0 text-[var(--color-primary)] sm:mr-3" />
-                        <span className="leading-tight">Admin Settings</span>
-                    </h1>
-                    <p className="mt-1.5 text-sm text-gray-600 sm:mt-2 sm:text-base">
-                        Manage system settings and configurations
-                    </p>
-                </div>
-
-                <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12 lg:gap-6">
-                    {/* Sidebar Navigation */}
-                    <aside className="min-w-0 lg:col-span-3">
-                        <div className="rounded-lg bg-white p-3 shadow-md sm:p-4 lg:sticky lg:top-4">
-                            <h2 className="mb-3 px-1 text-base font-semibold text-gray-800 sm:mb-4 sm:text-lg">
-                                Settings
-                            </h2>
-                            {/* Mobile / tablet: horizontal scroll; desktop: stacked list */}
-                            <nav className="hrms-tabs-scroll lg:flex-col lg:space-y-1.5 lg:overflow-visible lg:pb-0">
-                                {settingsTabs.map((tab) => (
-                                    <button
-                                        key={tab.id}
-                                        type="button"
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`flex flex-shrink-0 items-center space-x-2.5 rounded-lg px-3 py-2.5 text-left transition-colors sm:space-x-3 sm:px-4 sm:py-3 ${
-                                            activeTab === tab.id
-                                                ? 'bg-[var(--color-primary)] text-white'
-                                                : 'text-gray-700 hover:bg-gray-100'
-                                        } lg:w-full`}
-                                    >
-                                        <span className="flex-shrink-0 text-lg sm:text-xl">{tab.icon}</span>
-                                        <span className="whitespace-nowrap text-sm font-medium sm:text-base">
-                                            {tab.name}
-                                        </span>
-                                    </button>
-                                ))}
-                            </nav>
-                        </div>
-                    </aside>
-
-                    {/* Main Content Area */}
-                    <div className="min-w-0 lg:col-span-9">
-                        <div className="overflow-hidden rounded-lg bg-white shadow-md">
-                            {activeComponent}
-                        </div>
+        <div className="page-shell admin-settings">
+            <div className="page-shell-inner admin-settings__workspace">
+                <header className="admin-settings__header">
+                    <div>
+                        <h1>Admin Settings</h1>
+                        <p>Organization preferences and policies</p>
+                    </div>
+                    <SettingsSectionPicker groups={SETTINGS_GROUPS} sections={settingsTabs} value={activeTab} onChange={setActiveTab} />
+                </header>
+                <div className="admin-settings__layout">
+                    <div id="admin-settings-content" className="admin-settings__panel" role="region" aria-label={activeSection.name}>
+                        {activeSection.component}
                     </div>
                 </div>
             </div>
@@ -186,9 +160,9 @@ const PermissionsSettings = () => (
             <div className="rounded-lg bg-gray-50 p-4">
                 <h3 className="mb-2 font-medium">Role-based Access Control</h3>
                 <p className="text-sm text-gray-600">Manage access permissions for different user roles</p>
-                <button type="button" className="mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
+                <Link to="/role-hierarchy" className="settings-action mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
                     Manage Roles
-                </button>
+                </Link>
             </div>
         </div>
     </div>
@@ -201,9 +175,9 @@ const ReportsSettings = () => (
             <div className="rounded-lg bg-gray-50 p-4">
                 <h3 className="mb-2 font-medium">Report Generation</h3>
                 <p className="text-sm text-gray-600">Configure report settings and schedules</p>
-                <button type="button" className="mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
+                <Link to="/admin/reports" className="settings-action mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
                     Configure Reports
-                </button>
+                </Link>
             </div>
         </div>
     </div>

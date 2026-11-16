@@ -1578,10 +1578,11 @@ const DocumentsPage = () => {
                     <button
                         type="button"
                         onClick={closePreview}
-                        className="absolute top-[7px] right-[10px] z-10 inline-flex items-center gap-1.5 px-3 py-[7px] text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition shadow-lg"
+                        aria-label="Close preview"
+                        className="absolute right-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-800 shadow-lg transition hover:bg-slate-100"
+                        style={{ top: 'calc(var(--ui-topbar-height, 3.5rem) + 0.75rem)' }}
                     >
-                        <FaTimes className="w-3 h-3" />
-                        Close
+                        <FaTimes className="h-4 w-4" />
                     </button>
                     <div className="flex-1 min-h-0 overflow-hidden">
                         {previewDoc.mimeType?.startsWith('image/') ? (

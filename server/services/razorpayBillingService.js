@@ -109,6 +109,10 @@ export const nextPeriodEnd = (from = new Date()) => {
 
 export const applyPlanToOrganization = (org, planId, extras = {}) => {
   const id = String(planId || 'free').toLowerCase();
+  if (org.subscriptionPlan !== id || id === 'free' ||
+      (extras.razorpaySubscriptionId && extras.razorpaySubscriptionId !== org.razorpaySubscriptionId)) {
+    org.cancelAtPeriodEnd = false;
+  }
   org.subscriptionPlan = id;
   org.maxEmployees = extras.maxEmployees ?? getPlanMaxEmployees(id) ?? org.maxEmployees;
   if (extras.subscriptionStatus) org.subscriptionStatus = extras.subscriptionStatus;
@@ -454,10 +458,13 @@ export const ensureRazorpayPlan = async (planId) => {
   return created.id;
 };
 
-export const cancelRazorpaySubscription = async (subscriptionId, { cancelAtCycleEnd = false } = {}) => {
+export const cancelRazorpaySubscription = async (subscriptionId, { cancelAtCycleEnd = false, strict = false } = {}) => {
   if (!subscriptionId || String(subscriptionId).startsWith('sub_mock_')) return null;
   const razorpay = getRazorpay();
-  if (!razorpay) return null;
+  if (!razorpay) {
+    if (strict) throw Object.assign(new Error('Payment provider is not configured. Auto-renewal was not changed.'), { statusCode: 503 });
+    return null;
+  }
   try {
     return await razorpay.subscriptions.cancel(subscriptionId, cancelAtCycleEnd);
   } catch (error) {
@@ -465,6 +472,7 @@ export const cancelRazorpaySubscription = async (subscriptionId, { cancelAtCycle
       subscriptionId,
       error: error.message,
     });
+    if (strict) throw error;
     return null;
   }
 };
@@ -605,13 +613,13 @@ export const createBillingPortalSession = async (organization) => {
   if (getBillingMode() === 'mock') {
     return {
       mode: 'mock',
-      url: `${frontendBase()}/organization/subscription?portal=mock`,
+      url: `${frontendBase()}/organization/billing`,
       message: 'Mock mode — manage your plan on this page.',
     };
   }
   return {
     mode: 'razorpay',
-    url: `${frontendBase()}/organization/subscription`,
+    url: `${frontendBase()}/organization/billing`,
     message: organization?.razorpaySubscriptionId
       ? 'Manage upgrades or cancel from this page. Recurring charges are handled by Razorpay.'
       : 'Manage your plan on this page.',
@@ -789,6 +797,7 @@ export const processRazorpayWebhookEvent = async (event) => {
     });
     if (org) {
       org.subscriptionStatus = 'cancelled';
+      org.cancelAtPeriodEnd = false;
       await org.save();
       await BillingWebhookEvent.updateOne(
         { eventId },

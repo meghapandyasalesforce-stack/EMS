@@ -18,6 +18,78 @@ import { DateTime } from "luxon";
 
 const MONTH_ORDER = { January: 1, February: 2, March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10, November: 11, December: 12 };
 
+function previousPayrollPeriod(month, year) {
+    const names = Object.keys(MONTH_ORDER);
+    const index = names.findIndex((name) => name.toLowerCase() === String(month || '').toLowerCase());
+    if (index < 0) return null;
+    if (index === 0) return { month: 'December', year: Number(year) - 1 };
+    return { month: names[index - 1], year: Number(year) };
+}
+
+function periodEndLabel(month, year) {
+    const monthIndex = MONTH_ORDER[month];
+    if (!monthIndex) return '';
+    const end = new Date(Number(year), monthIndex, 0);
+    return end.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function pfEsiForRows(payrolls) {
+    const aggregated = aggregatePayrollPeriod(payrolls);
+    const adjustments = (aggregated?.adjustments || []).filter(
+        (row) => row?.status === 'Processed' || row?.status === 'Paid'
+    );
+    const fullOverride = adjustments
+        .filter((row) => row?.adjustmentMode === 'full_override')
+        .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))[0] || null;
+    const base = fullOverride || aggregated?.monthly;
+    let pf = Number(base?.deductions?.pfEmployee) || 0;
+    let esi = Number(base?.deductions?.esiEmployee) || 0;
+    const cutoff = fullOverride
+        ? new Date(fullOverride.createdAt || fullOverride.updatedAt || 0).getTime()
+        : null;
+    for (const row of adjustments) {
+        if (row?.adjustmentMode === 'full_override') continue;
+        if (fullOverride) {
+            const ts = new Date(row.createdAt || row.updatedAt || 0).getTime();
+            if (!Number.isFinite(ts) || ts < cutoff) continue;
+        }
+        pf += Number(row?.deductions?.pfEmployee) || 0;
+        esi += Number(row?.deductions?.esiEmployee) || 0;
+    }
+    const status = String(aggregated?.monthly?.status || '');
+    return {
+        earnings: Number(aggregated?.final?.earningsTotal) || 0,
+        net: Number(aggregated?.final?.net) || 0,
+        pfEsi: pf + esi,
+        generated: Boolean(aggregated?.monthly),
+        closed: status === 'Processed' || status === 'Paid',
+    };
+}
+
+function summarizePayrollPeriod(rowsByEmployee) {
+    let totalPayroll = 0;
+    let epfEsi = 0;
+    let netDisbursement = 0;
+    let generatedCount = 0;
+    let closedCount = 0;
+    for (const rows of rowsByEmployee.values()) {
+        const totals = pfEsiForRows(rows);
+        totalPayroll += totals.earnings;
+        epfEsi += totals.pfEsi;
+        netDisbursement += totals.net;
+        if (totals.generated) {
+            generatedCount += 1;
+            if (totals.closed) closedCount += 1;
+        }
+    }
+    return { totalPayroll, epfEsi, netDisbursement, generatedCount, closedCount };
+}
+
+function payrollChangePercent(current, previous) {
+    if (!previous) return null;
+    return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
 function sortPayrollsByYearMonth(payrolls, descending = true) {
     return payrolls.slice().sort((a, b) => {
         const yA = a.year || 0, yB = b.year || 0;
@@ -1008,7 +1080,7 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
 // Get all employees' payroll data for admin (Optimized - No N+1 queries)
 export const getAllEmployeesPayroll = async (req, res) => {
     try {
-        const { parsePagination, sendPaginatedResponse } = await import('../../helpers/paginationHelper.js');
+        const { parsePagination, createPaginationMeta } = await import('../../helpers/paginationHelper.js');
         const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
         
         // Parse pagination
@@ -1018,38 +1090,36 @@ export const getAllEmployeesPayroll = async (req, res) => {
         const month = req.query.month || new Date().toLocaleString('default', { month: 'long' });
         const year = parseInt(req.query.year) || new Date().getFullYear();
 
-        // Build query with organization filter
-        const query = addOrganizationFilter(req, { salary: { $exists: true } });
+        // Build query with organization filter. KPIs ignore the name search.
+        const scopedQuery = addOrganizationFilter(req, { salary: { $exists: true } });
 
-        // Search by employee name
-        const search = (req.query.search || '').trim();
-        if (search) {
-            const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-            query.$or = [
-                { name: searchRegex },
-                { lastName: searchRegex }
-            ];
-        }
-
-        // If user is a manager (not admin or HR), filter by manager field
         const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
-                if (query.$or) {
-                    query.$and = [{ $or: query.$or }, { $or: managerQuery.$or }];
-                    delete query.$or;
-                } else {
-                    query.$or = managerQuery.$or;
-                }
+                scopedQuery.$or = managerQuery.$or;
             }
-            query.status = 'active';
-            
+            scopedQuery.status = 'active';
+
             const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
             logger.info('Manager filtering employee payrolls by manager field', {
                 managerId: req.employee._id,
                 managerName: managerName
             });
+        }
+
+        const query = { ...scopedQuery };
+        if (scopedQuery.$or) query.$or = scopedQuery.$or;
+        const search = (req.query.search || '').trim();
+        if (search) {
+            const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const searchClause = { $or: [{ name: searchRegex }, { lastName: searchRegex }] };
+            if (query.$or) {
+                query.$and = [{ $or: query.$or }, searchClause];
+                delete query.$or;
+            } else {
+                query.$or = searchClause.$or;
+            }
         }
 
         // Get employees with pagination
@@ -1134,7 +1204,53 @@ export const getAllEmployeesPayroll = async (req, res) => {
             };
         });
 
-        return sendPaginatedResponse(res, payrollSummaries, page, limit, totalEmployees, 'Payroll data retrieved successfully');
+        const previous = previousPayrollPeriod(month, year);
+        const kpiEmployees = await Employee.find(scopedQuery).select('_id').lean();
+        const kpiIds = kpiEmployees.map((employee) => employee._id);
+        const periodClauses = [{ month, year }];
+        if (previous) periodClauses.push({ month: previous.month, year: previous.year });
+        const kpiPayrolls = kpiIds.length
+            ? await Payroll.find(addOrganizationFilter(req, {
+                employeeId: { $in: kpiIds },
+                $or: periodClauses,
+            })).select('employeeId month year type status adjustmentMode earnings.totalEarnings deductions.pfEmployee deductions.esiEmployee deductions.total createdAt updatedAt').lean()
+            : [];
+
+        const groupRows = (period) => {
+            const grouped = new Map();
+            for (const row of kpiPayrolls) {
+                if (row.month !== period.month || Number(row.year) !== Number(period.year)) continue;
+                const key = String(row.employeeId);
+                if (!grouped.has(key)) grouped.set(key, []);
+                grouped.get(key).push(row);
+            }
+            return grouped;
+        };
+
+        const currentTotals = summarizePayrollPeriod(groupRows({ month, year }));
+        const previousTotals = previous ? summarizePayrollPeriod(groupRows(previous)) : null;
+        const summary = {
+            totalPayroll: currentTotals.totalPayroll,
+            payrollChangePercent: previousTotals?.generatedCount
+                ? payrollChangePercent(currentTotals.totalPayroll, previousTotals.totalPayroll)
+                : null,
+            epfEsi: currentTotals.epfEsi,
+            netDisbursement: currentTotals.netDisbursement,
+            periodEndLabel: periodEndLabel(month, year),
+            generatedCount: currentTotals.generatedCount,
+            closedCount: currentTotals.closedCount,
+            compliancePercent: currentTotals.generatedCount
+                ? Math.round((currentTotals.closedCount / currentTotals.generatedCount) * 100)
+                : null,
+        };
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payroll data retrieved successfully',
+            data: payrollSummaries,
+            pagination: createPaginationMeta(page, limit, totalEmployees),
+            summary,
+        });
     } catch (error) {
         logger.error('Admin Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });

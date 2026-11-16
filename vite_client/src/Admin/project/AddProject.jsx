@@ -1,3 +1,5 @@
+import Grid from '@mui/material/GridLegacy';
+import './projectWorkspace.css';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Button,
@@ -18,7 +20,6 @@ import {
   useMediaQuery,
   useTheme,
   InputAdornment,
-  Grid
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -31,7 +32,7 @@ import {
   canViewProjectFinancials,
   projectFinancialPayload,
 } from '../../utils/projectFinancialsHelper';
-import { FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiFolder, FiUsers, FiCheck, FiArrowUpRight, FiTarget, FiCalendar, FiLayers } from 'react-icons/fi';
 
 /** @typedef {{ title: string, description: string, assignees: string[], dueDate: string, priority: string, subtasks: { title: string, description: string }[] }} WorkPlanRow */
 
@@ -279,7 +280,7 @@ function AddProject() {
     }
 
     return (
-        <Box
+        <Box className="project-create"
             sx={{
                 width: '100%',
                 minWidth: 0,
@@ -291,21 +292,22 @@ function AddProject() {
             <Box
                 sx={{
                     width: '100%',
-                    maxWidth: { xs: '100%', sm: 720, md: 860, lg: 920 },
+                    maxWidth: 1100,
                     mx: 'auto',
                 }}
             >
-                <Typography
-                    variant="h4"
-                    sx={{
-                        fontWeight: 700,
-                        mb: { xs: 2, sm: 2.5 },
-                        fontSize: { xs: '1.35rem', sm: '1.75rem', md: '2rem' },
-                        lineHeight: 1.3,
-                    }}
-                >
-                    Add New Project
-                </Typography>
+                <Button onClick={() => navigate('/projects')} sx={{ mb: 1, color: '#526784', textTransform: 'none', px: 0 }}>← Back to Projects</Button>
+                <header className="creation-hero">
+                    <div>
+                        <span className="creation-eyebrow"><FiLayers /> PROJECT WORKSPACE</span>
+                        <h1>Great work starts with a plan.</h1>
+                        <p>Create your project, bring the right people together, and set a clear direction.</p>
+                    </div>
+                    <div className="creation-hero-icon" aria-hidden="true"><FiFolder /><span><FiPlus /></span></div>
+                </header>
+                <div className="creation-layout">
+                <div className="creation-main">
+                <h2 className="creation-page-title">Add New Project <span>New workspace</span></h2>
 
                 {error && (
                     <Alert severity="error" sx={{ mb: 2 }}>
@@ -319,19 +321,23 @@ function AddProject() {
                     </Box>
                 )}
 
-                <Paper
-                    elevation={3}
+                <Paper className="creation-form-card"
+                    elevation={0}
                     sx={{
                         p: { xs: 2, sm: 2.5, md: 3.5 },
                         borderRadius: 2,
                         overflow: 'hidden',
                     }}
                 >
-                    <form onSubmit={handleSubmit}>
+                    <form className="project-create-form" onSubmit={handleSubmit}>
+                        <div className="project-section-heading"><span className="creation-section-icon"><FiFolder /></span><div><h2>Project details</h2><p>The essentials that give your project a clear identity.</p></div></div>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 0.5, sm: 1 } }}>
+                            <div className="project-identity">
                             <TextField
                                 fullWidth
                                 label="Project Name"
+                                InputLabelProps={{ shrink: true }}
+                                placeholder="e.g. Customer experience redesign"
                                 name="name"
                                 value={form.name}
                                 onChange={handleChange}
@@ -342,18 +348,32 @@ function AddProject() {
 
                             <TextField
                                 fullWidth
+                                label="Category"
+                                InputLabelProps={{ shrink: true }}
+                                name="category"
+                                value={form.category}
+                                onChange={handleChange}
+                                margin="none"
+                                placeholder="e.g., Development, Marketing, Research"
+                                size={isMobile ? 'small' : 'medium'}
+                            />
+                            </div>
+                            <TextField
+                                fullWidth
                                 label="Description"
+                                InputLabelProps={{ shrink: true }}
+                                placeholder="What are we building, and what does success look like?"
                                 name="description"
                                 value={form.description}
                                 onChange={handleChange}
                                 margin="normal"
                                 multiline
-                                rows={isMobile ? 3 : 4}
+                                rows={3}
                                 size={isMobile ? 'small' : 'medium'}
                             />
 
                             <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-                                <Grid item xs={12} sm={6}>
+                                <Grid item xs={12} sm={6} md={3}>
                                     <FormControl fullWidth margin="normal" size={isMobile ? 'small' : 'medium'}>
                                         <InputLabel>Project Status</InputLabel>
                                         <Select
@@ -370,7 +390,7 @@ function AddProject() {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid item xs={12} sm={6} md={3}>
                                     <FormControl fullWidth margin="normal" size={isMobile ? 'small' : 'medium'}>
                                         <InputLabel>Priority</InputLabel>
                                         <Select
@@ -386,7 +406,7 @@ function AddProject() {
                                         </Select>
                                     </FormControl>
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid item xs={12} sm={6} md={3}>
                                     <TextField
                                         fullWidth
                                         label="Start Date"
@@ -399,7 +419,7 @@ function AddProject() {
                                         size={isMobile ? 'small' : 'medium'}
                                     />
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid item xs={12} sm={6} md={3}>
                                     <TextField
                                         fullWidth
                                         label="End Date"
@@ -415,8 +435,9 @@ function AddProject() {
                             </Grid>
                         </Box>
 
+                        <div className="project-section-heading team-heading"><span className="creation-section-icon"><FiUsers /></span><div><h2>Team &amp; ownership</h2><p>Great projects start with the right people.</p></div></div>
                         {/* Project Leader Section */}
-                        <Box
+                        <Box className="creation-team-field"
                             sx={{
                                 mt: { xs: 3, sm: 3.5 },
                                 pt: { xs: 2.5, sm: 3 },
@@ -479,7 +500,7 @@ function AddProject() {
                         </Box>
 
                         {/* Project Members Section */}
-                        <Box
+                        <Box className="creation-team-field"
                             sx={{
                                 mt: { xs: 3, sm: 3.5 },
                                 pt: { xs: 2.5, sm: 3 },
@@ -565,11 +586,12 @@ function AddProject() {
                         </Box>
 
                         {canViewFinancials && (
-                            <Box
+                            <Box className="project-cost-fields"
                                 sx={{
                                     mt: { xs: 3, sm: 3.5 },
                                     p: { xs: 2, sm: 2.5 },
-                                    bgcolor: '#e3f2fd',
+                                    bgcolor: '#f3fdf9',
+                                    border: '1px solid #c8f5e4',
                                     borderRadius: 2,
                                 }}
                             >
@@ -581,13 +603,13 @@ function AddProject() {
                                         fontSize: { xs: '1.05rem', sm: '1.15rem', md: '1.25rem' },
                                     }}
                                 >
-                                    Cost Tracking
+                                    <FiTarget className="creation-inline-icon" /> Cost tracking
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                                     Track project budget, costs, and revenue.
                                 </Typography>
                                 <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid item xs={12} sm={6} md={3}>
                                         <TextField
                                             fullWidth
                                             label="Budget"
@@ -602,7 +624,7 @@ function AddProject() {
                                             }}
                                         />
                                     </Grid>
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid item xs={12} sm={6} md={3}>
                                         <FormControl fullWidth margin="normal" size={isMobile ? 'small' : 'medium'}>
                                             <InputLabel>Currency</InputLabel>
                                             <Select
@@ -620,7 +642,7 @@ function AddProject() {
                                             </Select>
                                         </FormControl>
                                     </Grid>
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid item xs={12} sm={6} md={3}>
                                         <TextField
                                             fullWidth
                                             label="Actual Cost"
@@ -635,7 +657,7 @@ function AddProject() {
                                             }}
                                         />
                                     </Grid>
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid item xs={12} sm={6} md={3}>
                                         <TextField
                                             fullWidth
                                             label="Revenue"
@@ -655,7 +677,7 @@ function AddProject() {
                         )}
 
                         {/* Work plan: tasks & subtasks (optional) */}
-                        <Box
+                        <Box className="creation-work-plan"
                             sx={{
                                 mt: { xs: 3, sm: 3.5 },
                                 pt: { xs: 2.5, sm: 3 },
@@ -671,7 +693,7 @@ function AddProject() {
                                     fontSize: { xs: '1.05rem', sm: '1.15rem', md: '1.25rem' },
                                 }}
                             >
-                                Work plan{' '}
+                                <FiLayers className="creation-inline-icon" /> Work plan{' '}
                                 <Typography component="span" variant="body2" color="text.secondary">
                                     (optional)
                                 </Typography>
@@ -963,28 +985,8 @@ function AddProject() {
                             ))}
                         </Box>
 
-                        {/* Category */}
-                        <Box
-                            sx={{
-                                mt: { xs: 3, sm: 3.5 },
-                                pt: { xs: 2.5, sm: 3 },
-                                borderTop: 1,
-                                borderColor: 'divider',
-                            }}
-                        >
-                            <TextField
-                                fullWidth
-                                label="Category"
-                                name="category"
-                                value={form.category}
-                                onChange={handleChange}
-                                margin="none"
-                                placeholder="e.g., Development, Marketing, Research"
-                                size={isMobile ? 'small' : 'medium'}
-                            />
-                        </Box>
 
-                        <Box
+                        <Box className="creation-actions"
                             sx={{
                                 mt: { xs: 3, sm: 4 },
                                 pt: { xs: 2.5, sm: 3 },
@@ -1006,7 +1008,7 @@ function AddProject() {
                                 size={isMobile ? 'medium' : 'large'}
                                 sx={{ minWidth: { sm: 140 } }}
                             >
-                                {projectStatus === 'loading' ? 'Saving...' : 'Save Project'}
+                                {projectStatus === 'loading' ? 'Saving...' : <><FiCheck style={{ marginRight: 8 }} /> Create project</>}
                             </Button>
 
                             <Button
@@ -1033,6 +1035,34 @@ function AddProject() {
                         </Box>
                     </form>
                 </Paper>
+                </div>
+                <aside className="creation-sidebar" aria-label="Project summary">
+                    <div className="creation-preview">
+                        <div className="creation-preview-top"><span><FiFolder /> PROJECT PREVIEW</span><span className="creation-live-dot">Live</span></div>
+                        <div className="creation-preview-icon"><FiFolder /></div>
+                        <h2>{form.name.trim() || 'Your next big project'}</h2>
+                        <p>{form.description.trim() || 'Your project overview will appear here as you fill in the details.'}</p>
+                        <div className="creation-preview-tags"><span>{form.category.trim() || 'Uncategorized'}</span><span>{form.priority} priority</span></div>
+                        <dl>
+                            <div><dt><FiUsers /> Project lead</dt><dd>{selectedLeader ? [selectedLeader.name, selectedLeader.lastName].filter(Boolean).join(' ') : 'Not assigned'}</dd></div>
+                            <div><dt><FiUsers /> Team members</dt><dd>{form.projectMembers.length} selected</dd></div>
+                            <div><dt><FiCalendar /> Timeline</dt><dd>{form.startDate && form.endDate ? `${form.startDate} → ${form.endDate}` : 'Dates to be confirmed'}</dd></div>
+                            {canViewFinancials && <div><dt><FiTarget /> Budget</dt><dd>{form.currency} {Number(form.budget || 0).toLocaleString()}</dd></div>}
+                        </dl>
+                    </div>
+                    <div className="creation-checklist">
+                        <h3>Ready for takeoff?</h3>
+                        <p>A few details will get your workspace started.</p>
+                        {[
+                            ['Give your project a name', Boolean(form.name.trim()), true],
+                            ['Assign a project leader', Boolean(form.projectLeader), true],
+                            ['Set your timeline', Boolean(form.startDate && form.endDate), false],
+                            ['Bring your team onboard', form.projectMembers.length > 0, false],
+                        ].map(([label, done, required]) => <div className={`creation-check ${done ? 'is-done' : ''}`} key={label}><span>{done ? <FiCheck /> : <span />}</span><span>{label}{required && <small>Required</small>}</span></div>)}
+                    </div>
+                    <div className="creation-tip"><FiArrowUpRight /><div><strong>Start simple. Build as you go.</strong><p>You can add tasks, update your team, and fine-tune the details after creating your project.</p></div></div>
+                </aside>
+                </div>
             </Box>
         </Box>
     );

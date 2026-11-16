@@ -45,6 +45,7 @@ import {
 import { deleteEmployee } from '../../context/employeeSlice';
 import { BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
 import axiosInstance, { openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
+import useOrgStructureCatalog from '../../Hooks/useOrgStructureCatalog';
 import { DETAIL_TABS } from './employeeDetails/constants';
 import EmployeeDetailsHeader from './employeeDetails/EmployeeDetailsHeader';
 import PersonalTab from './employeeDetails/tabs/PersonalTab';
@@ -106,6 +107,7 @@ function getAllowedProbationStatuses(currentStatus, allowAfterJoining) {
 
 const EmployeeDetailsPage = () => {
   const { employeeId } = useParams();
+  const { catalog } = useOrgStructureCatalog();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('personal');
@@ -136,6 +138,7 @@ const EmployeeDetailsPage = () => {
     probationEndDate: '',
     probationConfirmedAt: '',
     shiftId: '',
+    locationId: '',
   });
   const [editNameForm, setEditNameForm] = useState({ name: '', lastName: '' });
   const [shiftOptions, setShiftOptions] = useState([
@@ -411,6 +414,7 @@ const EmployeeDetailsPage = () => {
       probationEndDate: toDateInput(employee.probation?.endDate),
       probationConfirmedAt: toDateInput(employee.probation?.confirmedAt),
       shiftId: employee.shiftId || '',
+      locationId: employee.locationId?._id || employee.locationId || '',
     });
     setOpenEditWorkDialog(true);
   };
@@ -539,6 +543,7 @@ const EmployeeDetailsPage = () => {
         endDate: editWorkForm.probationEndDate || null,
         confirmedAt: editWorkForm.probationConfirmedAt || null,
       },
+      locationId: editWorkForm.locationId || '',
       shiftId: editWorkForm.shiftId || '',
       shiftName: editWorkForm.shiftId
         ? (shiftOptions.find((s) => s.key === editWorkForm.shiftId) || {}).name || ''
@@ -1166,6 +1171,37 @@ const EmployeeDetailsPage = () => {
               placeholder="dd-mm-yyyy"
               InputLabelProps={{ shrink: true }}
             />
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel id="edit-work-location-label" shrink>
+                Branch
+              </InputLabel>
+              <Select
+                labelId="edit-work-location-label"
+                value={editWorkForm.locationId || ''}
+                onChange={handleEditWorkFormChange('locationId')}
+                label="Branch"
+                notched
+                displayEmpty
+              >
+                <MenuItem value="">
+                  <span style={{ color: '#94a3b8' }}>No branch (organization punch pin)</span>
+                </MenuItem>
+                {(catalog.locations || []).map((loc) => {
+                  const lat = Number(loc.coordinates?.latitude);
+                  const lng = Number(loc.coordinates?.longitude);
+                  const hasPin = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+                  return (
+                    <MenuItem key={loc._id} value={String(loc._id)}>
+                      {hasPin ? loc.name : `${loc.name} (no punch pin)`}
+                    </MenuItem>
+                  );
+                })}
+                {editWorkForm.locationId &&
+                  !(catalog.locations || []).some((loc) => String(loc._id) === String(editWorkForm.locationId)) && (
+                    <MenuItem value={String(editWorkForm.locationId)}>Current branch</MenuItem>
+                  )}
+              </Select>
+            </FormControl>
             <FormControl fullWidth size="small" variant="outlined">
               <InputLabel id="edit-work-shift-label" shrink>
                 Shift

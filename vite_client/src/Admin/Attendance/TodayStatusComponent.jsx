@@ -280,6 +280,8 @@ const TodayStatusComponent = ({ embedded = false, onHistory }) => {
                       : !!(emp.clockInLocation?.latitude && emp.clockInLocation?.longitude);
                   const locationAddress = emp.clockInLocation?.address || 'Not provided';
                   const locationDistance = emp.clockInLocation?.locationDistance;
+                  const punchSiteName = emp.clockInLocation?.siteName
+                    || (emp.workLocation === 'work_from_home' ? 'Work from home' : 'Office');
                   const e = emp.employee;
                   const name = [e?.name, e?.lastName].filter(Boolean).join(' ').trim();
 
@@ -325,17 +327,18 @@ const TodayStatusComponent = ({ embedded = false, onHistory }) => {
                         </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
+                        <p className="font-medium text-slate-800">{punchSiteName}</p>
                         {locationMatch ? (
-                          <span className="inline-flex items-center gap-1" style={{ color: TEAL }}>
-                            <FiCheckCircle className="w-4 h-4 shrink-0" />
+                          <span className="mt-0.5 inline-flex items-center gap-1 text-xs" style={{ color: TEAL }}>
+                            <FiCheckCircle className="w-3.5 h-3.5 shrink-0" />
                             Verified
                           </span>
                         ) : (
                           <span
-                            className="inline-flex items-center gap-1 text-amber-600"
+                            className="mt-0.5 inline-flex items-center gap-1 text-xs text-amber-600"
                             title={locationDistance ? `${locationAddress} (${Math.round(locationDistance)}m)` : locationAddress}
                           >
-                            <FiAlertCircle className="w-4 h-4 shrink-0" />
+                            <FiAlertCircle className="w-3.5 h-3.5 shrink-0" />
                             Not verified
                           </span>
                         )}

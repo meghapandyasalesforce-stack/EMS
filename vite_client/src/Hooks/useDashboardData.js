@@ -210,7 +210,11 @@ export const useExpenses = (options = {}) => {
           axios.get('/v1/both/expense', { withCredentials: true }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.expenses || [];
+        const payload = response.data;
+        if (Array.isArray(payload)) return payload;
+        if (Array.isArray(payload?.data)) return payload.data;
+        if (Array.isArray(payload?.expenses)) return payload.expenses;
+        return [];
       } catch (error) {
         // Handle backend unavailable (503) gracefully
         if (error.response?.status === 503 || error.isBackendUnavailable) {

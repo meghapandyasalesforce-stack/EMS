@@ -20,8 +20,8 @@ const PortalSwitcher = ({ compact = false, lightTheme = false }) => {
   const handleSelect = (portal) => {
     if (portal.id === activePortal) return;
     dispatch(switchPortal(portal.id));
-    // Older persisted portal objects may still point Me to a manager dashboard.
-    navigate(portal.id === 'employee' ? PORTAL_META.employee.home : portal.home);
+    // Every workspace has a canonical home; persisted objects may contain old URLs.
+    navigate(PORTAL_META[portal.id]?.home || portal.home);
     if (portal.id === 'employee') {
       dispatch(checkAuthSession());
       dispatch(fetchEmployeeOwnInfo());

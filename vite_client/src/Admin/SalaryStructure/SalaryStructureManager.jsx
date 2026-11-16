@@ -24,6 +24,7 @@ const SalaryStructureManager = () => {
   const [structures, setStructures] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -67,29 +68,41 @@ const SalaryStructureManager = () => {
   });
 
   useEffect(() => {
-    fetchStructures();
-    fetchEmployees();
+    let active = true;
+    const isActive = () => active;
+    fetchStructures(isActive);
+    fetchEmployees(isActive);
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const fetchStructures = async () => {
+  const fetchStructures = async (isActive = () => true) => {
     try {
       const response = await axios.get('/v1/admin/salary-structure');
-      setStructures(response.data);
+      if (!isActive()) return;
+      setStructures(Array.isArray(response.data) ? response.data : []);
+      setLoadError('');
     } catch (error) {
-      // Removed console.error for production
-      toast.error('Failed to fetch salary structures');
+      if (!isActive()) return;
+      const message = error.response?.data?.message || 'Failed to fetch salary structures';
+      setLoadError(message);
+      toast.error(message);
     } finally {
-      setLoading(false);
+      if (isActive()) setLoading(false);
     }
   };
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (isActive = () => true) => {
     try {
       const response = await axios.get('/v1/employee/auth/get-all-employees');
-      setEmployees(response.data);
+      if (!isActive()) return;
+      const payload = response.data;
+      const list = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
+      setEmployees(list);
     } catch (error) {
-      // Removed console.error for production
-      toast.error('Failed to fetch employees');
+      if (!isActive()) return;
+      toast.error(error.response?.data?.message || 'Failed to fetch employees');
     }
   };
 
@@ -403,18 +416,35 @@ const SalaryStructureManager = () => {
 
         {structures.length === 0 && (
           <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-            <h3 className="text-xl font-semibold text-slate-900">No Salary Structures</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
-              Create your first structure to start assigning salary components to employees.
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-              style={{ backgroundColor: "var(--color-primary)" }}
-            >
-              <FiPlus className="h-4 w-4" />
-              Create First Structure
-            </button>
+            {loadError ? (
+              <>
+                <h3 className="text-xl font-semibold text-slate-900">Couldn't load salary structures</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">{loadError}</p>
+                <button
+                  type="button"
+                  onClick={() => fetchStructures()}
+                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                  style={{ backgroundColor: "var(--color-primary)" }}
+                >
+                  Try again
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-semibold text-slate-900">No Salary Structures</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+                  Create your first structure to start assigning salary components to employees.
+                </p>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                  style={{ backgroundColor: "var(--color-primary)" }}
+                >
+                  <FiPlus className="h-4 w-4" />
+                  Create First Structure
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

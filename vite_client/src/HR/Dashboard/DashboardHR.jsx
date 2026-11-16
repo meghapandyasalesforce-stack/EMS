@@ -41,7 +41,6 @@ import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
 import axios from '../../utils/axios';
-import { toast } from 'react-toastify';
 import { useEmployees, useLeaves } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
 import { BOTH_ATTENDANCE_ENDPOINT, BOTH_CELEBRATION_ENDPOINT } from '../../utils/constant';
@@ -1723,10 +1722,6 @@ const DashboardHR = () => {
             <AddEmployeeModal
                 open={addEmployeeOpen}
                 onClose={() => setAddEmployeeOpen(false)}
-                onContinueFull={(prefill) => {
-                    setAddEmployeeOpen(false);
-                    navigate('/add-employee', { state: { quickPrefill: prefill } });
-                }}
             />
             <JobsDrawer
                 open={jobsDrawerOpen}

@@ -1,0 +1,375 @@
+/* Only the Daily Updates tab; existing page contents and controls are retained. */
+.project-daily-view {
+  margin-left: 0 !important;
+  padding: 24px 28px 36px !important;
+  min-width: 0;
+  background: #f7f8fd;
+  color: #172b41;
+  min-height: 100vh;
+}
+.project-daily-view * {
+  box-sizing: border-box;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-toolbar {
+  margin-bottom: 20px;
+  gap: 16px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-toolbar > .MuiBox-root {
+  gap: 8px;
+}
+.project-daily-view .MuiButton-root {
+  text-transform: none;
+  border-radius: 8px;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  min-height: 36px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-toolbar > .MuiButton-root {
+  color: #64738b;
+  border-color: transparent;
+  background: transparent;
+  padding-left: 0;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-toolbar .MuiButton-containedInfo,
+:is(.project-daily-view, .project-update-history) .project-daily-toolbar .MuiButton-containedPrimary {
+  background: #edf2ff;
+  color: #344761;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-toolbar .MuiButton-containedSuccess {
+  background: #087657;
+  color: white;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-toolbar .MuiButton-containedError {
+  background: #ffdddd;
+  color: #bc263f;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-tabs {
+  border-bottom: 1px solid #e8edf4;
+  margin-bottom: 0;
+  min-height: 48px;
+  background: #fff;
+  border-radius: 12px 12px 0 0;
+  padding: 0 12px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-tabs .MuiTab-root {
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #67766e;
+  padding: 14px 16px;
+  min-height: 48px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-tabs .MuiTab-root.Mui-selected {
+  color: #123e35;
+  font-weight: 650;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-tabs .MuiTabs-indicator {
+  background: #11b58b;
+  height: 3px;
+  border-radius: 2px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-panel {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+  margin-bottom: 0;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-header {
+  padding: 27px 24px;
+  margin-bottom: 26px;
+  gap: 16px;
+  flex-wrap: wrap;
+  min-height: 100px;
+  background:
+    radial-gradient(ellipse at 95% 0%, #e1f3f2, transparent 70%),
+    linear-gradient(100deg, #fff 60%, #f1f8ff);
+  border: 1px solid #e9edf4;
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 2px 4px #21375503;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-header > .MuiTypography-h6 {
+  font-size: 27px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.7px;
+  color: #152d43;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-header > .MuiButton-root {
+  background: #10b88b;
+  color: #fff;
+  box-shadow: 0 3px 7px #078d7315;
+  padding: 10px 17px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-header > .MuiButton-root:hover {
+  background: #079d77;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-feed {
+  position: relative;
+  padding: 0 0 0 30px;
+  gap: 18px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-feed::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 30px;
+  bottom: 30px;
+  width: 2px;
+  background: #d9e5fb;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card {
+  position: relative;
+  overflow: visible;
+  border: 1px solid #edf0f6;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 5px #23354c03;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card::before {
+  content: "";
+  position: absolute;
+  left: -28px;
+  top: 28px;
+  width: 16px;
+  height: 16px;
+  border: 4px solid #f7f8fd;
+  border-radius: 50%;
+  background: #8793aa;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card:first-child::before {
+  background: #10b58a;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card > .MuiCardContent-root {
+  padding: 22px 24px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 17px;
+  border-bottom: 1px solid #eff3f8;
+  padding-bottom: 16px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header > .MuiBox-root {
+  min-width: 0;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiAvatar-root {
+  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  background: #087653;
+  font-size: 16px;
+  font-weight: 650;
+  flex-shrink: 0;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiTypography-subtitle1 {
+  font-size: 14px;
+  font-weight: 650;
+  color: #20324d;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiTypography-caption {
+  font-size: 11px;
+  color: #8794aa;
+  flex-wrap: wrap;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiChip-root {
+  border-radius: 6px;
+  font-size: 10px;
+  height: 24px;
+  font-weight: 600;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiChip-colorPrimary,
+:is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiChip-colorSuccess {
+  background: #e6f7ef;
+  color: #08765c;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiChip-colorWarning {
+  background: #fff6e3;
+  color: #ad7622;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-text {
+  font-size: 14px;
+  line-height: 1.85;
+  color: #52665f;
+  margin-bottom: 18px;
+  overflow-wrap: anywhere;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-progress {
+  padding: 12px 14px 3px;
+  background: #fafcfb;
+  border: 1px solid #edf3ef;
+  border-radius: 9px;
+  margin-bottom: 15px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-progress .MuiTypography-caption {
+  font-size: 10px;
+  color: #5e7d71;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-progress .MuiSlider-root {
+  color: #12a985;
+  height: 4px;
+  padding: 9px 0;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-progress .MuiSlider-thumb {
+  width: 9px;
+  height: 9px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-progress .MuiSlider-rail {
+  background: #dbece5;
+  opacity: 1;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-blocker,
+:is(.project-daily-view, .project-update-history) .project-daily-next-steps {
+  padding: 12px 15px;
+  border-radius: 7px;
+  border-left: 3px solid #f38b98;
+  background: #fff5f6;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-blocker {
+  margin-bottom: 10px;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-next-steps {
+  background: #f0faf6;
+  border-left-color: #73c9ae;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-blocker .MuiTypography-caption,
+:is(.project-daily-view, .project-update-history) .project-daily-next-steps .MuiTypography-caption {
+  font-size: 11px;
+  font-weight: 650;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-blocker .MuiTypography-body2,
+:is(.project-daily-view, .project-update-history) .project-daily-next-steps .MuiTypography-body2 {
+  margin-left: 0;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #65736f;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+:is(.project-daily-view, .project-update-history) .project-daily-next-steps .MuiTypography-caption {
+  color: #087d60;
+}
+@media (max-width: 900px) {
+  .project-daily-view {
+    padding: 20px !important;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-toolbar {
+    align-items: stretch;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-toolbar > .MuiBox-root {
+    gap: 7px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-header {
+    padding: 22px 20px;
+  }
+}
+@media (max-width: 600px) {
+  .project-daily-view {
+    padding: 14px 12px 24px !important;
+  }
+  .project-daily-view .MuiButton-root {
+    font-size: 11px;
+    padding: 7px 10px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-toolbar > .MuiButton-root {
+    align-self: flex-start;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-tabs {
+    padding: 0 3px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-tabs .MuiTab-root {
+    font-size: 12px;
+    padding: 12px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-header {
+    padding: 20px 17px;
+    margin-bottom: 20px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-header > .MuiTypography-h6 {
+    font-size: 23px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-feed {
+    padding-left: 22px;
+    gap: 14px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-feed::before {
+    left: 7px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-card::before {
+    left: -23px;
+    width: 15px;
+    height: 15px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-card > .MuiCardContent-root {
+    padding: 17px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-text {
+    font-size: 13px;
+  }
+  :is(.project-daily-view, .project-update-history) .project-daily-card-header .MuiAvatar-root {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    font-size: 14px;
+  }
+}
+
+/* Portalled daily update composer — scoped independently from the page shell. */
+.project-update-dialog .MuiBackdrop-root { background: rgba(16, 43, 53, .42); backdrop-filter: blur(4px); }
+.project-update-dialog .MuiDialog-paper { width: calc(100% - 48px); max-width: 760px; max-height: calc(100dvh - 48px); margin: 24px; border: 1px solid #e0e9ed; border-radius: 18px; box-shadow: 0 24px 80px #123d4330; color: #173f46; }
+.project-update-dialog .project-update-dialog-header { display: flex; align-items: center; gap: 14px; padding: 24px 28px; border-bottom: 1px solid #e7eeef; background: linear-gradient(115deg, #fff, #f0f8f5); flex-shrink: 0; }
+.project-update-dialog-icon { display: grid; place-items: center; width: 46px; height: 46px; flex-shrink: 0; background: #e2f3eb; color: #07866d; border: 1px solid #cce8dc; border-radius: 13px; }
+.project-update-dialog-icon svg { width: 22px; height: 22px; }
+.project-update-dialog-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.project-update-dialog-heading > span:first-child { font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: -.5px; }
+.project-update-dialog-heading > span:last-child { font-size: 12px; line-height: 1.6; color: #758b93; font-weight: 400; }
+.project-update-dialog-header .MuiIconButton-root { margin-left: auto; padding: 8px; color: #78908f; background: #ffffff90; border: 1px solid #dfebe6; border-radius: 8px; flex-shrink: 0; }
+.project-update-dialog .MuiDialog-paper > .MuiDialogContent-root { padding: 22px 28px 26px; }
+.project-update-dialog-fields { display: flex; flex-direction: column; gap: 20px; }
+.project-update-dialog-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.project-update-dialog .MuiFormControl-root { min-width: 0; padding-top: 22px; margin: 0; }
+.project-update-dialog .MuiInputLabel-root { position: absolute; left: 0; top: 0; transform: none; max-width: 100%; color: #526e7a; font-size: 12px; font-weight: 600; line-height: 16px; }
+.project-update-dialog .MuiInputLabel-asterisk { color: #c76656; }
+.project-update-dialog .MuiOutlinedInput-root { min-height: 46px; background: #fff; border-radius: 9px; padding: 0 14px; color: #254755; font-size: 14px; }
+.project-update-dialog .MuiOutlinedInput-notchedOutline { top: 0; border-color: #dbe5eb; }
+.project-update-dialog .MuiOutlinedInput-notchedOutline legend { display: none; }
+.project-update-dialog .MuiOutlinedInput-input { height: 22px; min-height: 0; padding: 12px 0; margin: 0; border: 0; border-radius: 0; line-height: 22px; font: inherit; box-sizing: content-box; box-shadow: none; background: transparent; }
+.project-update-dialog .MuiSelect-select { padding-right: 24px; }
+.project-update-dialog .MuiOutlinedInput-root.MuiInputBase-multiline { padding: 12px 14px; }
+.project-update-dialog .MuiInputBase-inputMultiline { height: auto; padding: 0; line-height: 1.7; }
+.project-update-dialog textarea::placeholder { color: #95a5ae; opacity: 1; }
+.project-update-dialog .MuiOutlinedInput-root.Mui-focused { box-shadow: 0 0 0 3px #07866d12; }
+.project-update-dialog .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline { border-color: #07866d; border-width: 1px; }
+.project-update-dialog-progress { padding: 16px 22px 20px; background: #f3f9f6; border: 1px solid #dfede6; border-radius: 11px; }
+.project-update-dialog-progress .MuiTypography-root { font-size: 13px; font-weight: 600; color: #46685e; }
+.project-update-dialog-progress .project-update-progress-value { padding: 4px 10px; background: #dff0e7; color: #07866d; border-radius: 7px; font-size: 12px; }
+.project-update-dialog-progress .MuiSlider-root { color: #07866d; margin: 8px 0 0; width: 100%; }
+.project-update-dialog-progress .MuiSlider-thumb { width: 15px; height: 15px; background: white; border: 3px solid #07866d; box-shadow: 0 2px 5px #123d4320; }
+.project-update-dialog-progress .MuiSlider-rail { opacity: 1; background: #d8eae2; }
+.project-update-dialog-progress .MuiSlider-markLabel { font-size: 11px; color: #7a9388; }
+.project-update-dialog .MuiDialogActions-root { padding: 18px 28px; gap: 10px; background: #f8fafb; border-top: 1px solid #e7eef0; flex-shrink: 0; }
+.project-update-dialog .MuiDialogActions-root > .MuiTypography-root { margin-right: auto; color: #81929c; font-size: 11px; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-root { text-transform: none; font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 9px; box-shadow: none; min-height: 42px; margin: 0; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-text { color: #526f7c; background: #fff; border: 1px solid #dbe6ec; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-contained { background: #07866d; color: #fff; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-contained:hover { background: #066d59; }
+.project-update-dialog .MuiDialogActions-root .MuiButton-contained.Mui-disabled { color: #8ba69d; background: #e3eee8; }
+@media (max-width: 600px) {
+  .project-update-dialog .MuiDialog-paper { width: calc(100% - 24px); margin: 12px; max-height: calc(100dvh - 24px); border-radius: 14px; }
+  .project-update-dialog .project-update-dialog-header { padding: 18px; gap: 10px; align-items: flex-start; }
+  .project-update-dialog-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .project-update-dialog-heading > span:first-child { font-size: 19px; }
+  .project-update-dialog-heading > span:last-child { font-size: 11px; }
+  .project-update-dialog .MuiDialog-paper > .MuiDialogContent-root { padding: 18px; }
+  .project-update-dialog-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .project-update-dialog-fields { gap: 18px; }
+  .project-update-dialog .MuiDialogActions-root { padding: 14px 18px; flex-wrap: wrap; }
+  .project-update-dialog .MuiDialogActions-root > .MuiTypography-root { flex-basis: 100%; }
+  .project-update-dialog .MuiDialogActions-root .MuiButton-root { flex: 1; }
+}

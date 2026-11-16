@@ -10,7 +10,6 @@ import {
     FaPlus,
     FaTimes,
     FaHeart,
-    FaChevronRight,
     FaSearch,
     FaEye,
 } from 'react-icons/fa';
@@ -24,24 +23,10 @@ const inputClass =
     'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20';
 
 const ActionCard = ({ label, count, icon: Icon, accent, onClick }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        className="group w-full rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-left transition hover:border-[#20C997]/30 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#20C997]/25 sm:rounded-2xl sm:p-4"
-    >
-        <div className="flex items-start justify-between gap-2">
-            <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl"
-                style={{ backgroundColor: `${accent}18`, color: accent }}
-            >
-                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            </div>
-            <FaChevronRight className="mt-1 hidden h-3 w-3 shrink-0 text-slate-300 transition group-hover:text-[#20C997] sm:block" />
-        </div>
-        <p className="mt-2 text-xl font-bold tabular-nums text-slate-900 sm:mt-3 sm:text-2xl">{count}</p>
-        <p className="mt-0.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-            {label}
-        </p>
+    <button type="button" onClick={onClick} className="employee-engagement-count">
+        <Icon style={{ color: accent }} aria-hidden="true" />
+        <span>{label}</span>
+        <strong>{count}</strong>
     </button>
 );
 
@@ -526,15 +511,15 @@ const EmployeeEngagementPage = () => {
                         </div>
                         <div className="min-w-0">
                             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 sm:text-xs">
-                                My Workspace
+                                Your voice matters
                             </p>
                             <h1 className="truncate text-xl font-bold text-slate-900 sm:text-2xl md:text-3xl">
                                 My Engagement
                             </h1>
+                            <p className="employee-engagement-subtitle">Share feedback, celebrate colleagues, and help shape your workplace.</p>
                         </div>
                     </div>
-                </header>
-                    <div className="employee-engagement-summary grid grid-cols-3 gap-2 sm:gap-3">
+                    <div className="employee-engagement-summary">
                         <ActionCard
                             label="Surveys"
                             count={pendingSurveys.length}
@@ -563,6 +548,7 @@ const EmployeeEngagementPage = () => {
                             }}
                         />
                     </div>
+                </header>
 
                 <nav
                     aria-label="Engagement sections"
@@ -651,7 +637,7 @@ const EmployeeEngagementPage = () => {
                                     {searchQuery ? 'No surveys match your search.' : 'No surveys assigned.'}
                                 </p>
                             ) : (
-                                <div className="employee-survey-grid grid gap-4 md:grid-cols-2">
+                                <div className="employee-survey-grid">
                                     {filteredSurveys.map((s) => (
                                         <article
                                             key={s._id}
@@ -673,7 +659,7 @@ const EmployeeEngagementPage = () => {
                                                 </span>
                                             </div>
                                             {s.description && <p className="employee-survey-description">{s.description}</p>}
-                                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                                            <div className="employee-survey-meta">
                                                 <span className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-100">
                                                     {s.anonymous ? 'Anonymous' : 'Identified'}
                                                 </span>

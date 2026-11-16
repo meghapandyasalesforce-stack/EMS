@@ -109,8 +109,9 @@ export const hasAnyPermission = (permissions, keys = [], { isOrgOwner = false } 
 export const canAccess = (
   permissions,
   requiredPermissions = [],
-  { isOrgOwner = false, allowedRoles = [], effectiveRoles = [] } = {}
+  { isOrgOwner = false, allowedRoles = [], effectiveRoles = [], requireRoleMatch = false } = {}
 ) => {
+  if (requireRoleMatch && !allowedRoles.some((role) => effectiveRoles.includes(role))) return false;
   if (!requiredPermissions.length) {
     if (!allowedRoles.length) return true;
     return allowedRoles.some((r) => effectiveRoles.includes(r));

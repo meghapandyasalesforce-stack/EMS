@@ -30,6 +30,7 @@ const createProtectedLazyRoute = (route) => {
     component: Component,
     message,
     allowedRoles = [],
+    requireRoleMatch = false,
     requiredPermissions = [],
     redirectTo,
     orgOwnerOnly = false,
@@ -43,6 +44,7 @@ const createProtectedLazyRoute = (route) => {
       element={
         <ProtectedRoute
           allowedRoles={allowedRoles}
+          requireRoleMatch={requireRoleMatch}
           requiredPermissions={requiredPermissions}
           redirectTo={redirectTo}
           orgOwnerOnly={orgOwnerOnly}
@@ -302,9 +304,10 @@ export const organizationRoutes = [
   { path: '/organization/dashboard', component: lazy(() => import('../Admin/Organization/OrganizationDashboard')), message: 'Loading organization dashboard...', allowedRoles: ['admin', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.orgSettings },
   { path: '/organization/settings', component: lazy(() => import('../Admin/Organization/OrganizationSettings')), message: 'Loading organization settings...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/structure', component: lazy(() => import('../Admin/Organization/OrgStructurePage')), message: 'Loading organization structure...', allowedRoles: ['admin', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.orgSettings },
-  { path: '/organization/chart', component: lazy(() => import('../Admin/Organization/OrganizationChartPage')), message: 'Loading organization chart...', allowedRoles: ['admin', 'hr', 'manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.employees },
+  { path: '/organization/chart', component: lazy(() => import('../Admin/Organization/OrganizationChartPage')), message: 'Loading organization chart...', allowedRoles: ['admin', 'hr', 'executive'], requireRoleMatch: true, requiredPermissions: ROUTE_PERMISSIONS.employees },
   { path: '/organization/onboarding', component: lazy(() => import('../Admin/Organization/OrganizationOnboarding')), message: 'Loading onboarding...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/subscription', component: lazy(() => import('../Admin/Organization/SubscriptionManagement')), message: 'Loading subscription...', allowedRoles: ['admin', 'executive'] },
+  { path: '/organization/billing', component: lazy(() => import('../Admin/Organization/BillingManagement')), message: 'Loading billing...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/checkout', component: lazy(() => import('../Admin/Organization/CheckoutPaymentPage')), message: 'Loading checkout...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/verification', component: lazy(() => import('../Admin/Organization/OrganizationVerification')), message: 'Loading verification...', allowedRoles: ['admin', 'executive'] },
   { path: '/organization/analytics', component: lazy(() => import('../Admin/Organization/OrganizationAnalytics')), message: 'Loading analytics...', allowedRoles: ['admin', 'executive'] },
@@ -380,7 +383,7 @@ export const hrRoutes = [
   { path: '/workforce', component: lazy(() => import('../HR/Workforce/WorkforcePage')), message: 'Loading workforce planning...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/workforce/:id', component: lazy(() => import('../HR/Workforce/WorkforceDetailPage')), message: 'Loading workforce plan details...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/helpdesk', component: lazy(() => import('../HR/Helpdesk/HelpdeskPage')), message: 'Loading helpdesk...', allowedRoles: [] },
-  { path: '/admin/reports/*', component: lazy(() => import('../HR/Reports/HRReportsLayout')), message: 'Loading HR reports...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/admin/reports/*', component: lazy(() => import('../HR/Reports/HRReportsLayout')), message: 'Loading reports...', allowedRoles: ['admin', 'hr', 'executive', 'finance'] },
   { path: '/hr/analytics', component: lazy(() => import('../HR/Analytics/HRAnalyticsPage')), message: 'Loading HR analytics...', allowedRoles: ['admin', 'hr', 'executive'] }
 ];
 

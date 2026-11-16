@@ -113,13 +113,15 @@ const attendanceSchema = new mongoose.Schema({
         address: { type: String },
         accuracy: { type: Number },
         locationMatch: { type: Boolean, default: false },
-        locationDistance: { type: Number }
+        locationDistance: { type: Number },
+        siteName: { type: String, trim: true },
     },
     clockOutLocation: {
         latitude: { type: Number },
         longitude: { type: Number },
         address: { type: String },
-        accuracy: { type: Number }
+        accuracy: { type: Number },
+        siteName: { type: String, trim: true },
     },
     
     // Network tracking

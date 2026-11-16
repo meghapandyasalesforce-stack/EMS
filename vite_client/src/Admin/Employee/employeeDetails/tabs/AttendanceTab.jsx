@@ -278,7 +278,8 @@ const AttendanceTab = ({ employeeId }) => {
       clockIn: formatPunchTime(record.clockIn || record.checkIn),
       clockOut: formatPunchTime(record.clockOut || record.checkOut),
       hours: formatHours(record.effectiveHours) || '0h',
-      note: record.workLocation === 'work_from_home' ? 'Work from home' : 'Office',
+      note: record.clockInLocation?.siteName
+        || (record.workLocation === 'work_from_home' ? 'Work from home' : 'Office'),
     };
   }, [selectedDay, usingDemo]);
 

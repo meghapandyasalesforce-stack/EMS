@@ -1,11 +1,15 @@
 import { createPortal } from 'react-dom';
 import TodayStatusComponent from './TodayStatusComponent';
 import './attendanceSuite.css';
+import '../../styles/attendanceHistory.css';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
   FiSearch,
+  FiCalendar,
+  FiCheckCircle,
+  FiFilter,
   FiDownload,
   FiActivity,
   FiChevronLeft,
@@ -235,6 +239,11 @@ const AllAttendanceStatsComponent = () => {
   const { employeeDetails, employeeStats } = attendanceState;
   const team = attendanceState.teamAttendanceHistory ?? EMPTY_TEAM_HISTORY;
   const orgTimezone = useSelector((s) => s.timezone?.timezone) || 'UTC';
+  const isManagerView = useSelector((s) =>
+    s.auth?.activePortal
+      ? s.auth.activePortal === 'line_manager'
+      : s.auth?.user?.role === 'manager'
+  );
 
   const formatRowDate = useCallback(
     (row) => formatAttendanceDateKey(resolveAttendanceDateKeyFromRow(row, orgTimezone), 'd MMM yyyy', orgTimezone),
@@ -257,6 +266,7 @@ const AllAttendanceStatsComponent = () => {
     ...monthRange(now.getFullYear(), now.getMonth()),
   }));
   const [search, setSearch] = useState('');
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -704,11 +714,13 @@ const AllAttendanceStatsComponent = () => {
         const isWfh = r.uiStatus === 'wfh' || r.workLocation === 'work_from_home';
         const hasPunch = !!r.clockIn;
         const loc =
-          r.uiStatus === 'wfh'
-            ? 'Remote'
-            : r.uiStatus === 'absent' || r.uiStatus === 'leave'
-              ? '—'
-              : 'Office';
+          r.punchSiteName
+            ? r.punchSiteName
+            : r.uiStatus === 'wfh'
+              ? 'Remote'
+              : r.uiStatus === 'absent' || r.uiStatus === 'leave'
+                ? '—'
+                : 'Office';
         const attendanceType = !hasPunch ? '—' : isWfh ? 'Work From Home' : 'Office';
         const verifiedStatus = !hasPunch || isWfh
           ? 'N/A'
@@ -833,6 +845,7 @@ const AllAttendanceStatsComponent = () => {
                     <th className="px-6 py-3">Total Hours</th>
                     <th className="px-6 py-3">Break</th>
                     <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3">Branch</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -846,6 +859,10 @@ const AllAttendanceStatsComponent = () => {
                       <td className="px-6 py-3">{formatHours(record.effectiveHours)}</td>
                       <td className="px-6 py-3 whitespace-nowrap">{formatBreakMinutes(toBreakMinutes(record))}</td>
                       <td className="px-6 py-3 capitalize">{record.status}</td>
+                      <td className="px-6 py-3 whitespace-nowrap text-slate-700">
+                        {record.clockInLocation?.siteName
+                          || (record.workLocation === 'work_from_home' ? 'Work from home' : record.clockIn ? 'Office' : '—')}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -934,18 +951,20 @@ const AllAttendanceStatsComponent = () => {
           </select>
           <details className="attendance-history__dates"><summary>{startDate} - {endDate}</summary><div className="attendance-history__date-panel">            <div className="grid grid-cols-2 gap-3 items-end">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">From</label>
+                <label htmlFor="attendance-startDate" className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">From</label>
                 <input
                   type="date"
+                  id="attendance-startDate"
                   value={startDate}
                   onChange={(e) => setRange({ startDate: e.target.value, endDate })}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">To</label>
+                <label htmlFor="attendance-endDate" className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">To</label>
                 <input
                   type="date"
+                  id="attendance-endDate"
                   value={endDate}
                   onChange={(e) => setRange({ startDate, endDate: e.target.value })}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
@@ -957,6 +976,7 @@ const AllAttendanceStatsComponent = () => {
         <details className="attendance-history__advanced"><summary>More filters &amp; columns</summary><div className="attendance-history__advanced-body">          <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-2">Year</span>
             <select
+              aria-label="Attendance year"
               value={filterYear}
               onChange={(e) => selectYear(Number(e.target.value))}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -969,11 +989,12 @@ const AllAttendanceStatsComponent = () => {
             </select>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="attendance-history-months">
             {MONTH_SHORT.map((label, idx) => (
               <button
                 key={label}
                 type="button"
+                aria-pressed={activeMonth === idx}
                 onClick={() => selectMonth(idx)}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                   activeMonth === idx ? 'text-white shadow' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
@@ -988,8 +1009,9 @@ const AllAttendanceStatsComponent = () => {
           </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-2">Sort by</label>
+              <label htmlFor="attendance-sortBy" className="block text-xs font-semibold text-slate-500 mb-2">Sort by</label>
               <select
+                id="attendance-sortBy"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-0 w-full sm:min-w-[200px]"
@@ -1024,18 +1046,20 @@ const AllAttendanceStatsComponent = () => {
                   const displayName = [emp?.name, emp?.lastName].filter(Boolean).join(' ').trim();
                   const hasPunch = row.clockIn || row.clockOut;
                   const locMeta =
-                    row.uiStatus === 'wfh'
-                      ? { Icon: FiHome, label: 'Remote' }
-                      : row.uiStatus === 'absent' || row.uiStatus === 'leave'
-                        ? null
-                        : { Icon: FiBriefcase, label: 'Office' };
+                    row.punchSiteName
+                      ? { Icon: row.uiStatus === 'wfh' ? FiHome : FiBriefcase, label: row.punchSiteName }
+                      : row.uiStatus === 'wfh'
+                        ? { Icon: FiHome, label: 'Remote' }
+                        : row.uiStatus === 'absent' || row.uiStatus === 'leave'
+                          ? null
+                          : { Icon: FiBriefcase, label: 'Office' };
                   const LocIcon = locMeta?.Icon;
                   const empId = emp?._id;
                   const canOpenProfile = !!empId;
 
                   return (
                     <tr key={row._id} className="hover:bg-[#fafcfc] transition-colors">
-                      <td className="px-4 py-4 pl-6 whitespace-nowrap">
+                      <td data-label="Team member" className="px-4 py-4 pl-6 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <RowAvatar employee={emp} />
                           <div>
@@ -1044,7 +1068,7 @@ const AllAttendanceStatsComponent = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-700">
+                      <td data-label="Shift" className="px-4 py-4 whitespace-nowrap text-slate-700">
                         {row.shiftName || emp?.shiftName || '—'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-slate-700">
@@ -1059,7 +1083,7 @@ const AllAttendanceStatsComponent = () => {
                           formatHours(row.effectiveHours)
                         )}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                      <td data-label="Break" className="px-4 py-4 text-slate-700 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className="font-semibold text-slate-800">
                             {formatBreakMinutes(toBreakMinutes(row))}
@@ -1076,8 +1100,8 @@ const AllAttendanceStatsComponent = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">{statusBadge(row.uiStatus)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-slate-600">
+                      <td data-label="Status" className="px-4 py-4 whitespace-nowrap">{statusBadge(row.uiStatus)}</td>
+                      <td data-label="Location" className="px-4 py-4 whitespace-nowrap text-slate-600">
                         {locMeta && LocIcon ? (
                           <span className="inline-flex items-center gap-1">
                             <LocIcon className="h-4 w-4 shrink-0" />
@@ -1098,13 +1122,15 @@ const AllAttendanceStatsComponent = () => {
           </div>
 
           {!team.records?.length && !team.loading ? (
-            <p className="py-8 sm:py-10 text-center text-slate-500 text-sm">No attendance rows match your filters.</p>
+            <div className="attendance-history-empty attendance-history-records-empty"><span><FiSearch /></span><strong>No matching attendance records</strong><p>Adjust the filters above to find your team’s attendance.</p></div>
           ) : null}
 
-          <footer className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+          <footer className="attendance-history-pagination flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
             <div className="flex items-center gap-2 text-sm text-slate-600">
-              <span>Rows per page</span>
+              <label htmlFor="attendance-page-size">{isManagerView ? 'Rows' : 'Rows per page'}</label>
               <select
+                id="attendance-page-size"
+                aria-label="Rows per page"
                 value={rowsPerPage}
                 onChange={(e) => setRowsPerPage(Number(e.target.value))}
                 className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
@@ -1125,6 +1151,7 @@ const AllAttendanceStatsComponent = () => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                aria-label="Previous page"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
@@ -1136,6 +1163,7 @@ const AllAttendanceStatsComponent = () => {
               </span>
               <button
                 type="button"
+                aria-label="Next page"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
                 className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
@@ -1284,6 +1312,7 @@ const AllAttendanceStatsComponent = () => {
                   <button
                     type="button"
                     onClick={handleCloseBreaksModal}
+                    aria-label="Close break details"
                     className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
                   >
                     <FiX className="h-6 w-6" />

@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ReportsSidebar from './components/ReportsSidebar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { useReportAccess } from './useReportAccess';
 
 const HeadcountReport = lazy(() => import('./pages/HeadcountReport'));
 const AttritionReport = lazy(() => import('./pages/AttritionReport'));
@@ -11,25 +12,37 @@ const PerformanceReport = lazy(() => import('./pages/PerformanceReport'));
 const RecruitmentReport = lazy(() => import('./pages/RecruitmentReport'));
 const ComplianceReport = lazy(() => import('./pages/ComplianceReport'));
 
-const HRReportsLayout = () => (
-    <div className="flex min-h-[calc(100vh-64px)] flex-col bg-transparent lg:flex-row">
-        <ReportsSidebar />
-        <main className="min-w-0 flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
-            <Suspense fallback={<LoadingSpinner message="Loading report..." />}>
-                <Routes>
-                    <Route index element={<Navigate to="headcount" replace />} />
-                    <Route path="headcount" element={<HeadcountReport />} />
-                    <Route path="attrition" element={<AttritionReport />} />
-                    <Route path="payroll" element={<PayrollReport />} />
-                    <Route path="attendance" element={<AttendanceReport />} />
-                    <Route path="performance" element={<PerformanceReport />} />
-                    <Route path="recruitment" element={<RecruitmentReport />} />
-                    <Route path="compliance" element={<ComplianceReport />} />
-                    <Route path="*" element={<Navigate to="headcount" replace />} />
-                </Routes>
-            </Suspense>
-        </main>
-    </div>
-);
+const HRReportsLayout = () => {
+    const { payrollOnly } = useReportAccess();
+
+    return (
+        <div className="flex min-h-[calc(100vh-64px)] flex-col bg-transparent lg:flex-row">
+            <ReportsSidebar />
+            <main className="min-w-0 flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
+                <Suspense fallback={<LoadingSpinner message="Loading report..." />}>
+                    {payrollOnly ? (
+                        <Routes>
+                            <Route index element={<Navigate to="payroll" replace />} />
+                            <Route path="payroll" element={<PayrollReport />} />
+                            <Route path="*" element={<Navigate to="payroll" replace />} />
+                        </Routes>
+                    ) : (
+                        <Routes>
+                            <Route index element={<Navigate to="headcount" replace />} />
+                            <Route path="headcount" element={<HeadcountReport />} />
+                            <Route path="attrition" element={<AttritionReport />} />
+                            <Route path="payroll" element={<PayrollReport />} />
+                            <Route path="attendance" element={<AttendanceReport />} />
+                            <Route path="performance" element={<PerformanceReport />} />
+                            <Route path="recruitment" element={<RecruitmentReport />} />
+                            <Route path="compliance" element={<ComplianceReport />} />
+                            <Route path="*" element={<Navigate to="headcount" replace />} />
+                        </Routes>
+                    )}
+                </Suspense>
+            </main>
+        </div>
+    );
+};
 
 export default HRReportsLayout;
