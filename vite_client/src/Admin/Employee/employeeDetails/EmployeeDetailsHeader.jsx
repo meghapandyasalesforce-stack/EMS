@@ -12,8 +12,10 @@ import {
   FiTrash2,
   FiUserCheck,
   FiDollarSign,
+  FiDownload,
 } from 'react-icons/fi';
 import ProfilePicture from '../../../Shared/ProfilePicture';
+import { exportToCSV } from '../../../utils/exportUtils';
 import {
   formatDate,
   formatSalary,
@@ -94,6 +96,34 @@ const EmployeeDetailsHeader = ({
     if (verified === docs.length) return '100% Verified';
     return `${verified}/${docs.length} Verified`;
   }, [employee]);
+
+  const handleExport = () => {
+    const details = {
+      'Employee ID': employee.employeeId || '',
+      'Full Name': getFullName(employee),
+      'Job Title': employee.jobTitle || '',
+      Department: employee.department || '',
+      Position: employee.position || '',
+      'Employment Type': employmentType || '',
+      Status: status,
+      Email: employee.email || '',
+      Phone: phone || '',
+      Location: location || '',
+      'Joining Date': formatDate(employee.joiningDate),
+      'Reports To': reportsToLabel,
+      ...(!hidePayrollFields ? { 'Annual CTC': employee.salary ?? '' } : {}),
+    };
+    // Spreadsheet applications interpret leading formula characters even in quoted CSV cells.
+    const safeDetails = Object.fromEntries(
+      Object.entries(details).map(([key, value]) => [
+        key,
+        typeof value === 'string' && /^[\s]*[=+@-]/.test(value) ? `'${value}` : value,
+      ])
+    );
+    const filename = String(employee.employeeId || getFullName(employee))
+      .replace(/[^a-zA-Z0-9_-]/g, '_');
+    exportToCSV([safeDetails], `${filename}-profile.csv`);
+  };
 
   const statusDotClass = isTerminated
     ? 'emp-dossier__status-dot emp-dossier__status-dot--term'
@@ -211,6 +241,14 @@ const EmployeeDetailsHeader = ({
 
         {canManageEmployeeActions ? (
           <div className="emp-dossier__actions">
+            <button
+              type="button"
+              onClick={handleExport}
+              className="emp-dossier__btn emp-dossier__btn--soft"
+            >
+              <FiDownload className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Export
+            </button>
             <button
               type="button"
               onClick={onStatusClick}
