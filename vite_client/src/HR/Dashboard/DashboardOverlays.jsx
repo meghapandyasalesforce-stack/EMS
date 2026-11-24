@@ -1093,47 +1093,6 @@ export function AnnouncementsListModal({ open, items = [], onClose, onNew }) {
     );
 }
 
-export function ProfilePeekModal({ open, user, onClose }) {
-    if (!open || !user) return null;
-    const name = user?.name || 'HR Manager';
-    return (
-        <ModalShell
-            eyebrow="Profile"
-            title={name}
-            onClose={onClose}
-            footer={
-                <>
-                    <button type="button" className="hr-ov-btn hr-ov-btn--ghost" onClick={onClose}>
-                        Cancel
-                    </button>
-                    <button type="button" className="hr-ov-btn hr-ov-btn--primary" onClick={onClose}>
-                        Done
-                    </button>
-                </>
-            }
-        >
-            <div className="hr-ov-metric-grid">
-                <div className="hr-ov-metric">
-                    <p className="hr-ov-metric__label">Role</p>
-                    <p className="hr-ov-metric__value">{user?.jobTitle || user?.position || user?.role || 'HR Manager'}</p>
-                </div>
-                <div className="hr-ov-metric">
-                    <p className="hr-ov-metric__label">Email</p>
-                    <p className="hr-ov-metric__value truncate">{user?.email || '—'}</p>
-                </div>
-                <div className="hr-ov-metric">
-                    <p className="hr-ov-metric__label">Department</p>
-                    <p className="hr-ov-metric__value">{user?.department || '—'}</p>
-                </div>
-                <div className="hr-ov-metric">
-                    <p className="hr-ov-metric__label">Employee ID</p>
-                    <p className="hr-ov-metric__value">{user?.employeeId || '—'}</p>
-                </div>
-            </div>
-        </ModalShell>
-    );
-}
-
 export function AddEmployeeModal({ open, onClose }) {
     if (!open) return null;
     return (

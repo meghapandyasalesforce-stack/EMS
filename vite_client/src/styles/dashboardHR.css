@@ -124,23 +124,6 @@
   color: var(--hd-primary-deep);
 }
 
-.hr-dash__profile-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: var(--hd-radius-control);
-  border: 1px solid var(--hd-outline);
-  background: var(--hd-surface);
-  padding: 0.35rem 0.75rem 0.35rem 0.35rem;
-  text-align: left;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.hr-dash__profile-btn:hover {
-  border-color: rgba(14, 147, 112, 0.35);
-  background: var(--hd-primary-softer);
-}
-
 /* Stat / KPI tiles */
 .hr-dash__stat {
   background: var(--hd-surface);

@@ -18,7 +18,6 @@ import {
     FiUserPlus,
     FiUsers,
 } from 'react-icons/fi';
-import { HiOutlineBell } from 'react-icons/hi2';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS, hasAnyPermission } from '../../utils/permissions';
 import {
@@ -37,7 +36,6 @@ import {
 } from 'recharts';
 import { format, startOfMonth, subMonths } from 'date-fns';
 import PasswordResetPopup from '../../Employee/PasswordResetPopup';
-import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
 import axios from '../../utils/axios';
@@ -56,7 +54,6 @@ import {
     JobsDrawer,
     LeaveDrawer,
     ModalShell,
-    ProfilePeekModal,
     WishModal,
 } from './DashboardOverlays';
 import '../../styles/dashboardHR.css';
@@ -420,7 +417,6 @@ const DashboardHR = () => {
     const [escalatedBannerDismissed, setEscalatedBannerDismissed] = useState(false);
     const [announcementsListOpen, setAnnouncementsListOpen] = useState(false);
     const [jobsDrawerOpen, setJobsDrawerOpen] = useState(false);
-    const [profilePeekOpen, setProfilePeekOpen] = useState(false);
 
     const canManageAnnouncements = permissionFlags.isHrManager || permissionFlags.isHrExecutive;
     const canAddEmployee =
@@ -1098,41 +1094,16 @@ const DashboardHR = () => {
                                     className="hr-dash__search"
                                 />
                             </label>
-                            <div className="flex shrink-0 items-center gap-2">
-                                {canAddEmployee ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setAddEmployeeOpen(true)}
-                                        className="hr-dash__btn-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm"
-                                    >
-                                        <FiPlus className="h-4 w-4" />
-                                        Add Employee
-                                    </button>
-                                ) : null}
+                            {canAddEmployee ? (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        loadAnnouncements(20);
-                                        setAnnouncementsListOpen(true);
-                                    }}
-                                    className="hr-dash__icon-btn"
-                                    aria-label="Announcements"
+                                    onClick={() => setAddEmployeeOpen(true)}
+                                    className="hr-dash__btn-primary inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm"
                                 >
-                                    <HiOutlineBell className="h-5 w-5" />
+                                    <FiPlus className="h-4 w-4" />
+                                    Add Employee
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setProfilePeekOpen(true)}
-                                    className="hr-dash__profile-btn"
-                                >
-                                    <ProfilePicture user={user} size="sm" />
-                                    <div className="hidden min-w-0 sm:block">
-                                        <p className="truncate text-sm font-semibold text-[#111C2D]">
-                                            {user?.name || 'HR'}
-                                        </p>
-                                    </div>
-                                </button>
-                            </div>
+                            ) : null}
                         </div>
                     </div>
                 </header>
@@ -1740,11 +1711,6 @@ const DashboardHR = () => {
                           }
                         : undefined
                 }
-            />
-            <ProfilePeekModal
-                open={profilePeekOpen}
-                user={user}
-                onClose={() => setProfilePeekOpen(false)}
             />
         </div>
     );
