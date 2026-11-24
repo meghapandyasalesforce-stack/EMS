@@ -425,29 +425,7 @@ export default defineConfig(({ mode }) => {
             return 'vendor';
           }
           
-          // Split by feature areas for better code splitting
-          // CRITICAL FIX: Don't split admin chunks separately - causes React initialization error
-          // Admin chunks must load after React is initialized to prevent "Cannot set properties of undefined" error
-          if (id.includes('/Admin/')) {
-            // Return undefined to prevent splitting - ensures React loads first
-            // Admin code will load with main bundle or after React is ready
-            return; // Prevents admin chunk from loading before React initializes
-          }
-          
-          // HR features
-          if (id.includes('/HR/')) {
-            return 'hr';
-          }
-          
-          // Employee features
-          if (id.includes('/Employee/')) {
-            return 'employee';
-          }
-          
-          // Dashboard features
-          if (id.includes('/Dashboard') || id.includes('/dashboard')) {
-            return 'dashboard';
-          }
+          // Let Rollup split route code at the dynamic import boundaries.
         },
         // Optimize chunk file names
         chunkFileNames: 'assets/js/[name]-[hash].js',

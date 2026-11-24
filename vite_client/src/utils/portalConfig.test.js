@@ -103,6 +103,24 @@ describe('portalConfig — SaaS portal switching policy', () => {
     expect(portals.length).toBe(1);
   });
 
+  it('uses the employee home even when a previous account saved a manager route', () => {
+    localStorage.setItem('employeeDashboardRoute', '/dashboard-manager');
+    try {
+      expect(deriveAvailablePortals(pureEmployee)[0].home).toBe('/dashboard-employee');
+    } finally {
+      localStorage.removeItem('employeeDashboardRoute');
+    }
+  });
+
+  it('uses the admin home for an admin with a linked manager profile', () => {
+    const portals = deriveAvailablePortals({
+      ...lineManager,
+      user: { role: 'admin', _id: '2' },
+      permissionFlags: { ...lineManager.permissionFlags, jwtRole: 'admin' },
+    });
+    expect(portals.map((portal) => portal.home)).toEqual(['/dashboard-admin']);
+  });
+
   it('resolvePrimaryPortalId skips admin for delegated roles', () => {
     const ids = deriveEntitledPortalIds(hrEmployee);
     expect(resolvePrimaryPortalId(ids)).toBe('hr_manager');

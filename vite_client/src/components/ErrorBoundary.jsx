@@ -1,6 +1,11 @@
 import React from 'react';
 import logger from '../utils/logger';
 
+const isModuleLoadError = (error) =>
+    /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|loading (?:css )?chunk .+ failed|unable to preload css/i.test(
+        error?.message || ''
+    );
+
 /**
  * Error Boundary Component
  * Catches React component errors and displays a fallback UI
@@ -28,15 +33,25 @@ class ErrorBoundary extends React.Component {
             error,
             errorInfo
         });
+
+        if (import.meta.env.PROD && isModuleLoadError(error) && navigator.onLine) {
+            // An open tab can still reference chunks from the previous deployment.
+            // Retry each failed import once per tab, even if the new page fails too.
+            const retryKey = `module-reload:${error.message}`;
+            try {
+                if (sessionStorage.getItem(retryKey)) return;
+                sessionStorage.setItem(retryKey, '1');
+            } catch {
+                return;
+            }
+            window.location.reload();
+        }
     }
 
     handleReset = () => {
         // React.lazy caches rejected imports. Resetting this boundary alone would
         // immediately throw the same rejection again; a fresh document retries it.
-        const isModuleLoadError = /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|loading (?:css )?chunk .+ failed/i.test(
-            this.state.error?.message || ''
-        );
-        if (this.props.resetOnReload || isModuleLoadError) {
+        if (this.props.resetOnReload || isModuleLoadError(this.state.error)) {
             window.location.reload();
             return;
         }

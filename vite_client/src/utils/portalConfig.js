@@ -207,15 +207,10 @@ export const resolvePrimaryPortalId = (entitledIds) => {
 };
 
 const buildPortalObjects = (ids, position) => {
-  const employeeHome =
-    typeof localStorage !== 'undefined'
-      ? localStorage.getItem('employeeDashboardRoute')
-      : null;
-
   return PORTAL_ORDER.filter((id) => ids.has(id)).map((id) => ({
     id,
     label: id === 'executive' ? executiveLabel(position) : PORTAL_META[id].label,
-    home: id === 'employee' && employeeHome ? employeeHome : PORTAL_META[id].home,
+    home: PORTAL_META[id].home,
     theme: PORTAL_META[id].theme,
   }));
 };
@@ -272,6 +267,10 @@ export const deriveAvailablePortals = (ctx = {}) => {
   }
 
   const sessionRole = resolveSessionRole(user, permissionFlags);
+  if (user?.role === 'admin' && sessionRole === 'admin') {
+    return allPortals.filter((p) => p.id === 'admin');
+  }
+
   if (sessionRole === 'employee') {
     const primaryId = resolvePrimaryPortalId(entitledIds);
     const primary =

@@ -250,10 +250,6 @@ function Login() {
             if (data.csrfToken) {
                 localStorage.setItem('csrfToken', data.csrfToken);
             }
-            if (data.employeeDashboardRoute) {
-                localStorage.setItem('employeeDashboardRoute', data.employeeDashboardRoute);
-            }
-
             const loginUser = data.user
                 ? {
                     ...data.user,
@@ -269,12 +265,14 @@ function Login() {
                 data.dashboardRoute ||
                 (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
 
+            const canSwitch = canSwitchPortals(loginUser, permissionFlags, data.roleBuckets || []);
             const { portals, activePortal } = syncPortalsForSession({
                 user: loginUser,
                 employee: data.employee || null,
                 roleBuckets: data.roleBuckets || [],
                 permissionFlags,
                 routeHint: dashboardRoute,
+                currentActivePortal: canSwitch ? 'admin' : null,
             });
             dispatch(initializePortals({ portals, activePortal }));
             localStorage.setItem('availablePortals', JSON.stringify(portals.map((p) => p.id)));
@@ -282,7 +280,7 @@ function Login() {
             localStorage.setItem('role', userRole);
             localStorage.setItem('email', form.email);
 
-            if (!canSwitchPortals(loginUser, permissionFlags, data.roleBuckets || [])) {
+            if (!canSwitch) {
                 localStorage.removeItem('activePortal');
             }
 
