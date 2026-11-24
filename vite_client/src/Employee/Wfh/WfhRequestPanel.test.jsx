@@ -62,12 +62,30 @@ describe("Independent WFH applications", () => {
     fill();
     await ready();
     submit();
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(
-        expect.stringContaining("2026-11-11"),
-      ),
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("2026-11-11");
+    expect(screen.getByRole("button", { name: "Submit WFH request" })).toBeEnabled();
     expect(axios.post).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/From date/), {
+      target: { value: "2026-11-12" },
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+  it.each([
+    ["WFH_HR_SCHEDULE_CONFLICT", "HR has already scheduled Work From Home for you on: 2026-11-11."],
+    ["WFH_REQUEST_CONFLICT", "You already have a pending or approved WFH request on: 2026-11-11."],
+  ])("displays a server-reported %s conflict inline", async (code, message) => {
+    axios.post.mockRejectedValue({
+      response: { data: { code, message } },
+    });
+    render(<WfhRequestPanel />);
+    fill();
+    await ready();
+    submit();
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(screen.getByRole("button", { name: "Submit WFH request" })).toBeEnabled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
   it("allows employees excluded from HR coverage to apply", async () => {
     schedules = [{ date: "2026-11-11", scheduled: false, excluded: true }];
@@ -77,7 +95,7 @@ describe("Independent WFH applications", () => {
     submit();
     await waitFor(() => expect(axios.post).toHaveBeenCalled());
   });
-  it.each(["pending", "approved"])(
+  it.each(["pending", "submitted", "approved"])(
     "blocks duplicate %s dates",
     async (status) => {
       requests = [{ _id: "r1", wfhDate: "2026-11-11", status }];
@@ -85,12 +103,12 @@ describe("Independent WFH applications", () => {
       fill();
       await ready();
       submit();
-      await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith(
-          expect.stringContaining("2026-11-11"),
-        ),
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "You already have a pending or approved WFH request on: 2026-11-11",
       );
+      expect(screen.getByRole("button", { name: "Submit WFH request" })).toBeEnabled();
       expect(axios.post).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
     },
   );
   it.each(["rejected", "cancelled"])(

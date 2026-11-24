@@ -78,6 +78,7 @@ const WfhRequestPanel = () => {
   const [remarks, setRemarks] = useState('');
   const [cancellingId, setCancellingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [dateWarning, setDateWarning] = useState('');
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [wfhAvailability, setWfhAvailability] = useState([]); // [{ date, excluded }]
@@ -94,6 +95,7 @@ const WfhRequestPanel = () => {
   }, [wfhAvailability]);
 
   const resetForm = () => {
+    setDateWarning('');
     setWfhDateFrom(emptyToday());
     setWfhDateTo(emptyToday());
     setIsHalfDay(false);
@@ -148,6 +150,7 @@ const WfhRequestPanel = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setDateWarning('');
     if (!wfhDateFrom) {
       toast.error('Please select the WFH start date');
       return;
@@ -172,14 +175,14 @@ const WfhRequestPanel = () => {
     const rangeKeys = expandLocalDateKeys(wfhDateFrom, wfhDateTo);
     const scheduled = rangeKeys.filter((key) => availabilityByDate.get(key)?.scheduled);
     if (scheduled.length) {
-      toast.error(`HR has already scheduled WFH for you on: ${scheduled.join(', ')}. Please choose a non-overlapping date range.`);
+      setDateWarning(`HR has already scheduled WFH for you on: ${scheduled.join(', ')}. Please choose a non-overlapping date range.`);
       return;
     }
     const duplicates = rangeKeys.filter((key) => requests.some((request) =>
       ['pending', 'submitted', 'approved'].includes(request.status) &&
       key >= toLocalDateKey(request.wfhDate) && key <= toLocalDateKey(request.wfhDateTo || request.wfhDate)));
     if (duplicates.length) {
-      toast.error(`You already have a pending or approved WFH request on: ${duplicates.join(', ')}`);
+      setDateWarning(`You already have a pending or approved WFH request on: ${duplicates.join(', ')}`);
       return;
     }
 
@@ -195,7 +198,12 @@ const WfhRequestPanel = () => {
       resetForm();
       fetchMyRequests();
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to submit Work From Home request');
+      const response = error?.response?.data;
+      if (['WFH_HR_SCHEDULE_CONFLICT', 'WFH_REQUEST_CONFLICT'].includes(response?.code)) {
+        setDateWarning(response.message);
+      } else {
+        toast.error(response?.message || 'Failed to submit Work From Home request');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -251,6 +259,7 @@ const WfhRequestPanel = () => {
               type="date"
               value={wfhDateFrom}
               onChange={(e) => {
+                setDateWarning('');
                 const next = e.target.value;
                 setWfhDateFrom(next);
                 if (wfhDateTo && next > wfhDateTo) {
@@ -275,6 +284,7 @@ const WfhRequestPanel = () => {
               value={wfhDateTo}
               min={wfhDateFrom}
               onChange={(e) => {
+                setDateWarning('');
                 const next = e.target.value;
                 setWfhDateTo(next);
                 if (isHalfDay && next !== wfhDateFrom) {
@@ -373,6 +383,11 @@ const WfhRequestPanel = () => {
             Cancel
           </button>
         </div>
+        {dateWarning && (
+          <p role="alert" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {dateWarning}
+          </p>
+        )}
       </form>
 
       <section className="wfh-ui__list">
