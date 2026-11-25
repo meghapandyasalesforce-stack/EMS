@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { FiArrowLeft } from 'react-icons/fi';
 import { submitLeave, resetStatus } from '../../context/employeeLeaveSlice';
 import { toast } from 'react-toastify';
 import { useMediaQuery } from 'react-responsive';
@@ -110,6 +111,7 @@ function getSickDaysUsedInMonth(leaves, year, monthIndex) {
 
 const LeaveApplication = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { loading: submitting, success, error } = useSelector((state) => state.employeeLeave);
   const user = useSelector((state) => state.auth.user);
   const isMobile = useMediaQuery({ query: '(max-width: 768px)' });
@@ -370,6 +372,22 @@ const LeaveApplication = () => {
   return (
     <div className="page-shell w-full min-w-0">
       <div className="page-shell-inner">
+        {isMobile && (
+          <button
+            type="button"
+            className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800"
+            onClick={() => {
+              if (window.history.state?.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/my-leave', { replace: true });
+              }
+            }}
+          >
+            <FiArrowLeft aria-hidden="true" />
+            Back
+          </button>
+        )}
         <div className="mt-4 w-full min-w-0 rounded-xl bg-white p-3 shadow-md transition-all duration-300 sm:p-4 md:p-6 lg:mt-6">
         <h2 className="mb-2 text-xl font-bold text-gray-800 md:text-2xl">Leave Application Form</h2>
         <p className="mb-4 text-sm text-gray-600 md:mb-6">{submitNotice}</p>
