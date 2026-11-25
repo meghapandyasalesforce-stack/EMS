@@ -27,7 +27,7 @@ import {
     FaCheckCircle,
     FaArrowRight,
 } from 'react-icons/fa';
-import { FiHeadphones } from 'react-icons/fi';
+import { FiCalendar, FiClock, FiFileText, FiFolder, FiHeadphones } from 'react-icons/fi';
 import Todo from './Todo';
 import AttendanceBox from '../Attendance/AttendanceBox';
 import NotificationFeed from './NotificationFeed';
@@ -761,17 +761,19 @@ function DashboardEmployee() {
                             </div>
                             <nav aria-label="Employee shortcuts" className="grid w-full grid-cols-2 gap-2 sm:hidden">
                                 {[
-                                    { to: '/leave', label: 'Apply leave', Icon: FaCalendarAlt },
-                                    { to: '/employee-payroll', label: 'My payroll', Icon: FaRegFileAlt },
-                                    { to: '/employee/documents-id', label: 'Documents', Icon: FaFolderOpen },
-                                    { to: '/helpdesk', label: 'Helpdesk', Icon: FiHeadphones },
+                                    { to: '/leave', label: 'Apply leave', Icon: FiCalendar },
+                                    { to: '/employee-payroll', label: 'My payroll', Icon: FiFileText },
+                                    { to: '/employee/documents-id', label: 'Documents', Icon: FiFolder },
+                                    { to: '/my-attendance-regularization', label: 'Regularization', Icon: FiClock },
                                 ].map(({ to, label, Icon }) => (
                                     <Link
                                         key={to}
                                         to={to}
-                                        className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-center text-xs font-semibold text-slate-900 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2"
+                                        className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-800 hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
                                     >
-                                        <Icon className="size-4 shrink-0 text-[#0E9370]" aria-hidden="true" />
+                                        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-emerald-50 text-emerald-800" aria-hidden="true">
+                                            <Icon className="size-4" />
+                                        </span>
                                         {label}
                                     </Link>
                                 ))}
