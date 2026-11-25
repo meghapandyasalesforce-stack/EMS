@@ -759,6 +759,23 @@ function DashboardEmployee() {
                                     </p>
                                 </div>
                             </div>
+                            <nav aria-label="Employee shortcuts" className="grid w-full grid-cols-2 gap-2 sm:hidden">
+                                {[
+                                    { to: '/leave', label: 'Apply leave', Icon: FaCalendarAlt },
+                                    { to: '/employee-payroll', label: 'My payroll', Icon: FaRegFileAlt },
+                                    { to: '/employee/documents-id', label: 'Documents', Icon: FaFolderOpen },
+                                    { to: '/helpdesk', label: 'Helpdesk', Icon: FiHeadphones },
+                                ].map(({ to, label, Icon }) => (
+                                    <Link
+                                        key={to}
+                                        to={to}
+                                        className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-center text-xs font-semibold text-slate-900 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2"
+                                    >
+                                        <Icon className="size-4 shrink-0 text-[#0E9370]" aria-hidden="true" />
+                                        {label}
+                                    </Link>
+                                ))}
+                            </nav>
                         </header>
 
                         <div className="employee-dash__attendance">
