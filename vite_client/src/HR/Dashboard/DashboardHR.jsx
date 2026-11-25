@@ -1163,7 +1163,7 @@ const DashboardHR = () => {
                                 onClick={card.onClick}
                             >
                                 <div className="hr-dash__queue-top">
-                                    <span className="hr-dash__icon-well !h-9 !w-9 text-[#0E9370]">
+                                    <span className="hr-dash__icon-well" aria-hidden="true">
                                         {card.icon}
                                     </span>
                                     <span className={`hr-dash__badge ${card.badgeClassName || 'bg-[#D1F5EA] text-[#07523E]'}`}>
