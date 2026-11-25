@@ -1083,14 +1083,15 @@ const DashboardHR = () => {
                                 {firstName} · {departmentLabel} · {todayLabel}
                             </p>
                         </div>
-                        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center xl:w-auto xl:max-w-2xl">
+                        <div className="flex w-full items-center gap-2 sm:gap-3 xl:w-auto xl:max-w-2xl">
                             <label className="relative block min-w-0 flex-1">
                                 <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={(event) => setSearchQuery(event.target.value)}
-                                    placeholder="Search employee or role..."
+                                    aria-label="Search employees by name or role"
+                                    placeholder="Search"
                                     className="hr-dash__search"
                                 />
                             </label>
@@ -1098,7 +1099,7 @@ const DashboardHR = () => {
                                 <button
                                     type="button"
                                     onClick={() => setAddEmployeeOpen(true)}
-                                    className="hr-dash__btn-primary inline-flex h-10 shrink-0 items-center justify-center gap-1.5 self-end px-3 text-sm max-sm:min-h-[44px] sm:self-auto sm:px-4"
+                                    className="hr-dash__btn-primary inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap px-2.5 text-sm max-sm:min-h-[44px] sm:px-4"
                                 >
                                     <FiPlus className="h-4 w-4" />
                                     Add Employee

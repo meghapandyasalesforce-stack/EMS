@@ -102,6 +102,13 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+@media (max-width: 639px) {
+  .hr-dash__search {
+    height: 44px;
+    padding-right: 0.5rem;
+  }
+}
+
 .hr-dash__search:focus {
   border-color: var(--hd-primary);
   box-shadow: 0 0 0 3px rgba(14, 147, 112, 0.15);
