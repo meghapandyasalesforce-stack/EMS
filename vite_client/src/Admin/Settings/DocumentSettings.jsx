@@ -77,7 +77,7 @@ const DocumentSettings = () => {
           type="button"
           onClick={handleSave}
           disabled={isSaving}
-          className="inline-flex items-center justify-center rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="inline-flex items-center justify-center self-start rounded-lg max-sm:min-h-[44px] sm:self-auto bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           <FiSave className="mr-2" />
           {isSaving ? 'Saving...' : 'Save Settings'}

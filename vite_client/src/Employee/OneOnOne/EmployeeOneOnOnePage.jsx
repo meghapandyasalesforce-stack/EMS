@@ -467,7 +467,7 @@ const EmployeeOneOnOnePage = ({
                     <button
                         type="button"
                         onClick={() => navigate('/one-on-one')}
-                        className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+                        className="inline-flex w-fit self-start max-sm:min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:self-auto"
                     >
                         Meeting Management
                     </button>

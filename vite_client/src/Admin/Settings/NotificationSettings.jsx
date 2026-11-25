@@ -145,11 +145,11 @@ const NotificationSettings = () => {
                     <FaBell className="mr-2 flex-shrink-0 text-theme-secondary sm:mr-3" />
                     Notification Settings
                 </h2>
-                <div className="flex flex-col gap-2 sm:flex-row sm:space-x-3 sm:gap-0">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     <button
                         type="button"
                         onClick={handleReset}
-                        className="flex w-full items-center justify-center rounded-lg bg-gray-200 px-4 py-2 text-gray-700 transition hover:bg-gray-300 sm:w-auto"
+                        className="flex w-fit self-start max-sm:min-h-[44px] items-center justify-center rounded-lg bg-gray-200 px-4 py-2 text-gray-700 transition hover:bg-gray-300 sm:self-auto"
                     >
                         <FaUndo className="mr-2" />
                         Reset to Default
@@ -158,7 +158,7 @@ const NotificationSettings = () => {
                         type="button"
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex w-full items-center justify-center rounded-lg bg-theme-primary px-4 py-2 text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
+                        className="flex w-fit self-start max-sm:min-h-[44px] items-center justify-center rounded-lg bg-theme-primary px-4 py-2 text-white transition hover:opacity-90 disabled:opacity-50 sm:self-auto"
                     >
                         <FaSave className="mr-2" />
                         {saving ? 'Saving...' : 'Save Settings'}

@@ -76,7 +76,7 @@
  .survey-ui--form .survey-form__heading { gap: 12px; align-items: flex-start; }
  .survey-ui--form .survey-form__heading > div:first-child { width: 40px; height: 40px; border-radius: 12px; }
  .survey-ui--form header h1 { font-size: 21px; }
- .survey-ui--form header > div > button { width: 100%; }
+ .survey-ui--form header > div > button { align-self: flex-start; min-height: 44px; }
  .survey-ui--form :where(input:not([type='checkbox']):not([type='radio']),select,textarea) { font-size: 16px; }
  .survey-ui .survey-form__actions > button { flex: 1 1 150px; justify-content: center; }
  .survey-ui .survey-questions-heading > div { width: 100%; }

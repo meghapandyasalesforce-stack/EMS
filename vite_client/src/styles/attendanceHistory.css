@@ -70,7 +70,7 @@
  .attendance-history { padding:12px!important; }
  .attendance-history .page-shell-inner { gap:12px; }
  .attendance-history-header > div:last-child { width:100%; }
- .attendance-history-header button { flex:1; font-size:11px; padding:8px 10px; }
+ .attendance-history-header button { min-height:44px; font-size:11px; padding:8px 10px; }
  .attendance-history-filters { padding:12px; gap:12px; }
  .attendance-history-section-title span { display:none; }
  .attendance-history-period { flex-direction:column; align-items:stretch; gap:8px; }

@@ -861,7 +861,7 @@ const LeaveManagement = () => {
           <button
             type="button"
             onClick={() => navigate('/leave')}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-md transition hover:opacity-95 sm:w-auto lg:hidden"
+            className="inline-flex w-fit self-start max-sm:min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-md transition hover:opacity-95 sm:self-auto lg:hidden"
             style={{ background: `linear-gradient(90deg, ${TEAL}, ${TEAL_DARK})` }}
           >
             + New Request

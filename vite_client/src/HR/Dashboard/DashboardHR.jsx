@@ -1098,7 +1098,7 @@ const DashboardHR = () => {
                                 <button
                                     type="button"
                                     onClick={() => setAddEmployeeOpen(true)}
-                                    className="hr-dash__btn-primary inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm"
+                                    className="hr-dash__btn-primary inline-flex h-10 shrink-0 items-center justify-center gap-1.5 self-start px-3 text-sm max-sm:min-h-[44px] sm:self-auto sm:px-4"
                                 >
                                     <FiPlus className="h-4 w-4" />
                                     Add Employee

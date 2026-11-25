@@ -733,7 +733,7 @@ const OffboardingHub = () => {
                             </div>
                         )}
                         {isHRView && (
-                            <CmButton variant="inverted" onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
+                            <CmButton variant="inverted" onClick={() => setShowCreateModal(true)} className="self-start max-sm:min-h-[44px] sm:self-auto">
                                 <FaSignOutAlt className="shrink-0 text-base" />
                                 <span>Initiate Exit Protocol</span>
                             </CmButton>

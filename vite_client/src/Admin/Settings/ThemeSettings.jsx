@@ -206,7 +206,7 @@ const ThemeSettings = () => {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 sm:w-auto"
+              className="inline-flex w-fit self-start max-sm:min-h-[44px] items-center justify-center rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 sm:self-auto"
             >
               {saving ? 'Saving...' : 'Save Theme'}
             </button>
@@ -229,7 +229,7 @@ const ThemeSettings = () => {
                 type="button"
                 onClick={handleSaveAsPreset}
                 disabled={saving || !presetName.trim()}
-                className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--color-secondary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 sm:w-auto"
+                className="inline-flex w-fit self-start max-sm:min-h-[44px] items-center justify-center rounded-lg bg-[var(--color-secondary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 sm:self-auto"
               >
                 Save preset
               </button>

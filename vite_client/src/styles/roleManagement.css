@@ -79,7 +79,7 @@
   #root .role-management-stats > div > div { flex-direction: column-reverse; align-items: flex-start; gap: 8px; }
   #root .role-management-stats p:first-child { min-height: 30px; }
   #root .role-management-header-actions { width: 100%; }
-  #root .role-management-header-actions button { flex: 1; justify-content: center; padding-inline: 8px; }
+  #root .role-management-header-actions button { min-height: 44px; justify-content: center; padding-inline: 8px; }
   #root .role-tree-actions { flex-wrap: wrap; }
 }
 @media (max-width: 639px) {

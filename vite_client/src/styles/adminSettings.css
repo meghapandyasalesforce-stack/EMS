@@ -59,7 +59,7 @@
   .admin-settings__panel .grid { grid-template-columns: minmax(0, 1fr); }
   .admin-settings__panel .grid > [class*='col-span-'] { grid-column: auto; }
   .admin-settings__panel :is(input, select, textarea):not([type='checkbox']):not([type='radio']):not([type='color']):not([type='range']):not([type='file']) { font-size: 16px; min-height: 42px; }
-  .admin-settings__panel button:is(.px-4, .px-6), .admin-settings__panel .settings-action { min-height: 42px; }
+  .admin-settings__panel button:is(.px-4, .px-6), .admin-settings__panel .settings-action { min-height: 44px; }
   .admin-settings__panel .flex:has(> input[type='color']) { flex-wrap: wrap; }
   .admin-settings__panel .flex:has(> input[type='color']) input[type='text'] { flex: 1; width: 0; min-width: 120px; }
 }

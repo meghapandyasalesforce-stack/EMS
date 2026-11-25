@@ -78,7 +78,7 @@ const OrganizationDashboard = () => {
                 <button
                     type="button"
                     onClick={() => navigate('/organization/profile')}
-                    className="inline-flex w-full items-center justify-center rounded-md bg-theme-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90 md:w-auto"
+                    className="inline-flex w-fit self-start max-md:min-h-[44px] items-center justify-center rounded-md bg-theme-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90 md:self-auto"
                 >
                     Organization Profile
                 </button>

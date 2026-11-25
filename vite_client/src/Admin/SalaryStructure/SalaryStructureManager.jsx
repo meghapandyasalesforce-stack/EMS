@@ -283,7 +283,7 @@ const SalaryStructureManager = () => {
           <div>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
+              className="inline-flex w-fit self-start max-sm:min-h-[44px] items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:self-auto"
               style={{ backgroundColor: "var(--color-primary)" }}
             >
               <FiPlus className="h-4 w-4" />

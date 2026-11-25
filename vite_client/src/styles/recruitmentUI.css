@@ -7907,28 +7907,11 @@
     gap: 0.4rem;
   }
 
-  .ats-ui .rec-hub__header-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    width: 100%;
-  }
-
   .ats-ui .rec-hub__header-actions .rec-hub__btn {
-    width: 100%;
-    min-width: 0;
-    height: 2.65rem;
-    padding: 0 0.65rem;
+    min-height: 44px;
+    height: auto;
+    padding: 0.4rem 0.65rem;
     font-size: 0.75rem;
-  }
-
-  .ats-ui .rec-hub__header-actions .rec-hub__btn--primary {
-    grid-column: 1 / -1;
-  }
-
-  /* If Career Portal is missing, stretch Screening Settings */
-  .ats-ui .rec-hub__header-actions > .rec-hub__btn:first-child:nth-last-child(2) {
-    grid-column: 1 / -1;
   }
 
   .ats-ui .rec-hub__quick {

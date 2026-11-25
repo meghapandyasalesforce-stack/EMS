@@ -361,7 +361,7 @@ const GeneralSettingsContent = () => {
                     type="button"
                     onClick={handleSaveSettings}
                     disabled={isSaving}
-                    className="inline-flex w-full items-center justify-center rounded-md bg-theme-primary px-4 py-2 text-white hover:opacity-90 disabled:opacity-50 sm:w-auto"
+                    className="inline-flex w-fit self-start max-sm:min-h-[44px] items-center justify-center rounded-md bg-theme-primary px-4 py-2 text-white hover:opacity-90 disabled:opacity-50 sm:self-auto"
                 >
                     {isSaving ? 'Saving...' : 'Save Settings'}
                 </button>

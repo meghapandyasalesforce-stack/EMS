@@ -82,7 +82,7 @@ const PolicyManager = () => {
                 <h1 className="text-2xl font-bold text-gray-800 sm:text-3xl">Company Policies</h1>
                 <button
                     onClick={() => navigate('/admin/policies/create')}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-theme-primary px-4 py-2.5 text-white hover:opacity-90 sm:w-auto"
+                    className="inline-flex w-fit self-start max-sm:min-h-[44px] items-center justify-center gap-2 rounded-lg bg-theme-primary px-4 py-2.5 text-white hover:opacity-90 sm:self-auto"
                 >
                     <FaPlus /> Create Policy
                 </button>
