@@ -95,8 +95,8 @@
  .manager-dashboard-shell { padding:12px !important; }
  .manager-hero { padding:14px; gap:12px; }
  .manager-hero-copy { flex-basis:100%; }
- .manager-hero-actions { width:100%; }
- .manager-hero-actions button { flex:1; padding:8px; }
+ .manager-hero-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+ .manager-hero-actions button { min-height:44px; min-width:0; padding:8px; }
  .manager-dashboard .manager-personal > div:first-child > div,.manager-metric { padding:12px 10px; }
  .manager-panel-heading h3 { font-size:14px; }
  .manager-attendance-summary { grid-template-columns:100px minmax(0,1fr); gap:10px; }

@@ -223,5 +223,5 @@
   #root .role-dashboard--employee .employee-dash__quick-actions > div { grid-template-columns: minmax(0,1fr); }
 }
 @container employee-home (max-width: 420px) {
-  #root .role-dashboard--employee .employee-dash__quick-actions > div { grid-template-columns: minmax(0,1fr); }
+  #root .role-dashboard--employee .employee-dash__shortcuts > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

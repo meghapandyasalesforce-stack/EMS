@@ -93,6 +93,8 @@ body.admin-dashboard-overlay .hr-ov-modal--wide { width:min(76rem,calc(100vw - 2
   .admin-dash__grid > * { grid-column:1; }
   .admin-dash .ui-page-header__actions { width:100%; }
   .admin-dash .ui-page-header__actions > div { justify-content:flex-start; }
+  .admin-dash .admin-dash__header-shortcuts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .admin-dash .admin-dash__header-shortcuts button { min-height:44px; min-width:0; white-space:normal; }
   .admin-dash__metric { gap:.5rem; }
   .admin-dash__metric-icon { width:2rem; height:2rem; font-size:1.2rem; }
   .admin-dash__metric-label,.admin-dash__metric small { font-size:.7rem; }

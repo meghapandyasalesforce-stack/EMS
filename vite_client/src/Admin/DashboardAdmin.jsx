@@ -481,7 +481,7 @@ function DashboardAdmin() {
       {showAnnouncementModal && <AnnouncementModal onClose={closeAnnouncementModal} onSent={handleAnnouncementSent} />}
       <div className="admin-dash role-dashboard role-dashboard--admin page-shell">
         <div className="page-shell-inner role-dashboard__stack">
-          <PageHeader className="role-dashboard__header" title={`${greeting}, ${greetingName}!`} subtitle="Here's what's happening in your organization today." actions={<div className="flex flex-wrap justify-end gap-2">{headerActions}</div>} />
+          <PageHeader className="role-dashboard__header" title={`${greeting}, ${greetingName}!`} subtitle="Here's what's happening in your organization today." actions={<div className="admin-dash__header-shortcuts flex flex-wrap justify-end gap-2">{headerActions}</div>} />
           {extrasError && <div role="alert" className="admin-dash__list-row"><span>{extrasError}</span><Button type="button" variant="outlined" onClick={() => setRefreshKey(value => value + 1)}>Refresh dashboard</Button></div>}
           {employeesError && <ErrorBanner message={employeesError.response?.data?.message || 'Failed to load employees'} />}
           <div className="admin-dash__metrics">

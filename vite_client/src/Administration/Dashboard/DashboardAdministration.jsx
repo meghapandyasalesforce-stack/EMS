@@ -618,14 +618,14 @@ const DashboardAdministration = () => {
             <p className="mb-3 text-[11px] text-slate-500">
               Pending items from leaves and expenses in this org (where your token can read them).
             </p>
-            <div className="space-y-1.5">
+            <div aria-label="Approval shortcuts" className="grid grid-cols-2 gap-1.5 sm:grid-cols-1">
               <button
                 type="button"
                 onClick={() => navigate("/leave-management")}
-                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs transition hover:border-emerald-200 hover:bg-emerald-50/50"
+                className="flex min-h-[44px] min-w-0 items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-2 text-left text-xs sm:px-2.5 transition hover:border-emerald-200 hover:bg-emerald-50/50"
               >
                 <span className="flex items-center gap-1.5 font-medium text-slate-800">
-                  <FiCalendar className="h-3.5 w-3.5 text-emerald-600" />
+                  <FiCalendar className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                   Pending leave approvals
                 </span>
                 <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
@@ -635,10 +635,10 @@ const DashboardAdministration = () => {
               <button
                 type="button"
                 onClick={() => navigate("/dashboard/finance")}
-                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs transition hover:border-emerald-200 hover:bg-emerald-50/50"
+                className="flex min-h-[44px] min-w-0 items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-2 text-left text-xs sm:px-2.5 transition hover:border-emerald-200 hover:bg-emerald-50/50"
               >
                 <span className="flex items-center gap-1.5 font-medium text-slate-800">
-                  <FiDollarSign className="h-3.5 w-3.5 text-emerald-600" />
+                  <FiDollarSign className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                   Expenses (finance)
                 </span>
                 <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
@@ -648,10 +648,10 @@ const DashboardAdministration = () => {
               <button
                 type="button"
                 onClick={() => navigate("/admin/pending-approvals")}
-                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs transition hover:border-emerald-200 hover:bg-emerald-50/50"
+                className="flex min-h-[44px] min-w-0 items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-2 text-left text-xs sm:px-2.5 transition hover:border-emerald-200 hover:bg-emerald-50/50"
               >
                 <span className="flex items-center gap-1.5 font-medium text-slate-800">
-                  <FiClipboard className="h-3.5 w-3.5 text-emerald-600" />
+                  <FiClipboard className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                   Full approvals queue
                 </span>
                 <FiArrowUpRight className="h-3.5 w-3.5 text-slate-400" />

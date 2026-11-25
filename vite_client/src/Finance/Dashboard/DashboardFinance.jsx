@@ -441,7 +441,7 @@ const DashboardFinance = () => {
                             )}
                         </section>
 
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div aria-label="Finance shortcuts" className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
                             {shortcuts.map((item) => {
                                 const Icon = item.icon;
                                 return (
@@ -449,16 +449,16 @@ const DashboardFinance = () => {
                                         key={item.title}
                                         type="button"
                                         onClick={item.onClick}
-                                        className="flex items-center gap-3 rounded-2xl border border-[rgba(14,43,61,0.08)] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                                        className="flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg md:gap-3 md:rounded-2xl border border-[rgba(14,43,61,0.08)] bg-white p-2 text-left md:p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                                     >
-                                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0E9370]/10 text-[#0E9370]">
-                                            <Icon className="h-5 w-5" />
+                                        <span className="flex size-6 shrink-0 md:size-11 items-center justify-center rounded-xl bg-[#0E9370]/10 text-[#0E9370]">
+                                            <Icon className="size-4 md:size-5" aria-hidden="true" />
                                         </span>
                                         <span className="min-w-0 flex-1">
-                                            <span className="block truncate text-sm font-semibold text-slate-900">{item.title}</span>
-                                            <span className="mt-0.5 block truncate text-xs text-slate-500">{item.detail}</span>
+                                            <span className="block break-words text-xs font-semibold md:truncate md:text-sm text-slate-900">{item.title}</span>
+                                            <span className="mt-0.5 hidden truncate md:block text-xs text-slate-500">{item.detail}</span>
                                         </span>
-                                        <FiArrowUpRight className="h-4 w-4 shrink-0 text-slate-400" />
+                                        <FiArrowUpRight className="hidden size-4 shrink-0 text-slate-400 md:block" aria-hidden="true" />
                                     </button>
                                 );
                             })}
