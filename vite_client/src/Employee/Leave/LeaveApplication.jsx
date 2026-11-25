@@ -372,24 +372,26 @@ const LeaveApplication = () => {
   return (
     <div className="page-shell w-full min-w-0">
       <div className="page-shell-inner">
-        {isMobile && (
-          <button
-            type="button"
-            className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800"
-            onClick={() => {
-              if (window.history.state?.idx > 0) {
-                navigate(-1);
-              } else {
-                navigate('/my-leave', { replace: true });
-              }
-            }}
-          >
-            <FiArrowLeft aria-hidden="true" />
-            Back
-          </button>
-        )}
         <div className="mt-4 w-full min-w-0 rounded-xl bg-white p-3 shadow-md transition-all duration-300 sm:p-4 md:p-6 lg:mt-6">
-        <h2 className="mb-2 text-xl font-bold text-gray-800 md:text-2xl">Leave Application Form</h2>
+        <div className="mb-2 flex items-center gap-1">
+          {isMobile && (
+            <button
+              type="button"
+              aria-label="Back"
+              className="inline-flex size-[44px] shrink-0 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2"
+              onClick={() => {
+                if (window.history.state?.idx > 0) {
+                  navigate(-1);
+                } else {
+                  navigate('/my-leave', { replace: true });
+                }
+              }}
+            >
+              <FiArrowLeft className="size-5" aria-hidden="true" />
+            </button>
+          )}
+          <h2 className="text-xl font-bold text-gray-800 md:text-2xl">Leave Application Form</h2>
+        </div>
         <p className="mb-4 text-sm text-gray-600 md:mb-6">{submitNotice}</p>
         <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 md:space-y-6">
           {/* Name and Email */}
