@@ -501,10 +501,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    // Suppress connection errors in the server log
-    hmr: {
-      overlay: false, // Disable error overlay for connection issues
-    },
   },
   };
 });
