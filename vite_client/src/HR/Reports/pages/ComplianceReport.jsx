@@ -51,7 +51,7 @@ const statusPill = (status) => {
             : s === 'ACTION REQUIRED'
               ? 'bg-orange-100 text-orange-700'
               : 'bg-slate-100 text-slate-600';
-    return <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${styles}`}>{status}</span>;
+    return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${styles}`}>{status}</span>;
 };
 
 const ComplianceReport = () => (
@@ -93,6 +93,7 @@ const ComplianceReport = () => (
 
         <ReportDataTable
             title="Operational Compliance List"
+            compactCards
             footer="Showing 4 of 24 active compliance items"
             columns={[
                 { key: 'name', label: 'Item Name' },
@@ -105,7 +106,7 @@ const ComplianceReport = () => (
                     label: 'Score',
                     render: (r) => (
                         <div className="flex items-center gap-2">
-                            <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-100">
+                            <div className="h-2 w-20 min-w-0 overflow-hidden rounded-full bg-slate-100">
                                 <div
                                     className="h-full rounded-full bg-[#0E9370]"
                                     style={{ width: `${r.score}%` }}
