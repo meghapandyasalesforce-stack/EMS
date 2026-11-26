@@ -1596,34 +1596,40 @@ const DashboardHR = () => {
                 </Panel>
 
                 <div className="hr-dash__life-grid">
-                    <div className="hr-dash__life-card">
-                        <div className="hr-dash__icon-well mb-3 text-[#0E9370]">
+                    <div className="hr-dash__life-card hr-dash__life-card--recruitment">
+                        <div className="hr-dash__icon-well" aria-hidden="true">
                             <FiUserPlus className="h-4 w-4" />
                         </div>
-                        <p className="text-xl font-bold text-[#111C2D]">{formatNumber(openPositions)} Open</p>
-                        <p className="text-xs text-[#666666]">Open Positions</p>
+                        <div>
+                            <p className="hr-dash__life-value">{formatNumber(openPositions)}</p>
+                            <p className="hr-dash__life-label">Open Positions</p>
+                        </div>
                         <button
                             type="button"
-                            className="hr-dash__queue-hint mt-3"
+                            className="hr-dash__life-action"
                             onClick={() => setJobsDrawerOpen(true)}
                         >
-                            Recruitment <FiArrowUpRight className="h-3 w-3" />
+                            Recruitment <FiArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                         </button>
                     </div>
                     <div className="hr-dash__life-card">
-                        <div className="hr-dash__icon-well mb-3 text-[#476175]">
+                        <div className="hr-dash__icon-well" aria-hidden="true">
                             <FiUsers className="h-4 w-4" />
                         </div>
-                        <p className="text-xl font-bold text-[#111C2D]">{formatNumber(newHires)} New</p>
-                        <p className="text-xs text-[#666666]">Recent Hires</p>
+                        <div>
+                            <p className="hr-dash__life-value">{formatNumber(newHires)}</p>
+                            <p className="hr-dash__life-label">Recent Hires</p>
+                        </div>
                     </div>
                     <div className="hr-dash__life-card">
-                        <div className="hr-dash__icon-well mb-3 text-[#F59E0B]">
+                        <div className="hr-dash__icon-well" aria-hidden="true">
                             <FiTrendingDown className="h-4 w-4" />
                         </div>
-                        <p className="text-xl font-bold text-[#111C2D]">{attritionRate}%</p>
-                        <p className="text-xs text-[#666666]">Attrition Rate</p>
-                        <p className="mt-1 text-[11px] text-[#94A3B8]">{terminatedEmployees} recorded exits</p>
+                        <div>
+                            <p className="hr-dash__life-value">{attritionRate}%</p>
+                            <p className="hr-dash__life-label">Attrition Rate</p>
+                            <p className="hr-dash__life-note">{terminatedEmployees} recorded exits</p>
+                        </div>
                     </div>
                 </div>
 
