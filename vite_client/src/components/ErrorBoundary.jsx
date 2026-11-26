@@ -48,6 +48,12 @@ class ErrorBoundary extends React.Component {
         }
     }
 
+    componentDidUpdate(previousProps) {
+        if (this.state.hasError && previousProps.resetKey !== this.props.resetKey) {
+            this.setState({ hasError: false, error: null, errorInfo: null });
+        }
+    }
+
     handleReset = () => {
         // React.lazy caches rejected imports. Resetting this boundary alone would
         // immediately throw the same rejection again; a fresh document retries it.

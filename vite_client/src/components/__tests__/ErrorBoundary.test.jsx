@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { ErrorBoundary } from '../ErrorBoundary';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
+import ErrorBoundary from '../ErrorBoundary';
+import RouteErrorBoundary from '../RouteErrorBoundary';
 
 describe('ErrorBoundary', () => {
     const ThrowError = ({ shouldThrow }) => {
@@ -33,5 +35,27 @@ describe('ErrorBoundary', () => {
         expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
         
         consoleSpy.mockRestore();
+    });
+    it('clears a route error when navigation reaches another page', () => {
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            render(
+                <MemoryRouter initialEntries={['/broken']}>
+                    <Link to="/working">Working page</Link>
+                    <RouteErrorBoundary>
+                        <Routes>
+                            <Route path="/broken" element={<ThrowError shouldThrow />} />
+                            <Route path="/working" element={<ThrowError shouldThrow={false} />} />
+                        </Routes>
+                    </RouteErrorBoundary>
+                </MemoryRouter>
+            );
+
+            expect(screen.getByRole('heading', { name: 'Something went wrong' })).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('link', { name: 'Working page' }));
+            expect(screen.getByText('No error')).toBeInTheDocument();
+        } finally {
+            consoleSpy.mockRestore();
+        }
     });
 });

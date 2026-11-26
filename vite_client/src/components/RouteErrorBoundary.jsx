@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import ErrorBoundary from './ErrorBoundary';
 
 /**
@@ -6,6 +7,7 @@ import ErrorBoundary from './ErrorBoundary';
  * Catches errors in route components and displays a fallback UI
  */
 const RouteErrorBoundary = ({ children, fallback }) => {
+  const { pathname } = useLocation();
   // Create a fallback function that handles both function and JSX fallbacks
   const fallbackFunction = fallback 
     ? (error, handleReset) => {
@@ -49,7 +51,7 @@ const RouteErrorBoundary = ({ children, fallback }) => {
       );
 
   return (
-    <ErrorBoundary fallback={fallbackFunction}>
+    <ErrorBoundary fallback={fallbackFunction} resetKey={pathname}>
       {children}
     </ErrorBoundary>
   );
