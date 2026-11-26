@@ -871,3 +871,102 @@
   padding: 1rem;
   box-shadow: var(--hd-shadow);
 }
+
+.hr-dash__charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hr-dash__charts > *,
+.hr-dash__headcount > * {
+  min-width: 0;
+}
+
+.hr-dash__table-head,
+.hr-dash__table-row {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr) auto;
+  align-items: center;
+}
+
+.hr-dash__hire-date-label {
+  display: none;
+}
+
+@container hr-dashboard (min-width: 800px) {
+  .hr-dash__charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container hr-dashboard (max-width: 679px) {
+  .hr-dash__table-head {
+    display: none;
+  }
+
+  .hr-dash__table-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "employee action"
+      "role role"
+      "date status";
+    gap: 0.625rem;
+    padding: 0.875rem;
+  }
+
+  .hr-dash__table-row:first-of-type {
+    border-top: 0;
+  }
+
+  .hr-dash__hire-name { grid-area: employee; }
+  .hr-dash__hire-role { grid-area: role; }
+  .hr-dash__hire-date { grid-area: date; }
+  .hr-dash__hire-status { grid-area: status; }
+  .hr-dash__hire-action { grid-area: action; justify-self: end; }
+  .hr-dash__hire-date-label { display: inline; }
+}
+
+@container hr-dashboard (max-width: 459px) {
+  .hr-dash__header {
+    padding: 1rem;
+  }
+
+  .hr-dash__header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hr-dash__header-actions > *,
+  .hr-dash__search {
+    min-height: 44px;
+  }
+
+  .hr-dash__search {
+    font-size: 1rem;
+  }
+
+  .hr-dash__headcount {
+    flex-direction: column;
+  }
+
+  .hr-dash__headcount > :last-child {
+    align-self: stretch;
+  }
+}
+
+@container hr-dashboard (max-width: 319px) {
+  .hr-dash__metrics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (pointer: coarse) {
+  .hr-dash__header-actions > button,
+  .hr-dash__search,
+  .hr-dash__launcher-btn {
+    min-height: 44px;
+  }
+
+  .hr-dash__search {
+    font-size: 1rem;
+  }
+}

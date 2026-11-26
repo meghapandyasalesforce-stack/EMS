@@ -1083,7 +1083,7 @@ const DashboardHR = () => {
                                 {firstName} · {departmentLabel} · {todayLabel}
                             </p>
                         </div>
-                        <div className="flex w-full items-center gap-2 sm:gap-3 xl:w-auto xl:max-w-2xl">
+                        <div className="hr-dash__header-actions flex w-full items-center gap-2 sm:gap-3 xl:w-auto xl:max-w-2xl">
                             <label className="relative block min-w-0 flex-1">
                                 <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
                                 <input
@@ -1306,7 +1306,7 @@ const DashboardHR = () => {
                     </section>
                 ) : null}
 
-                <div className="hrms-main-rail gap-4">
+                <div className="hr-dash__charts gap-4">
                     <Panel title="Monthly Hiring vs Attrition">
                         <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-[#666666]">
                             <span className="inline-flex items-center gap-2">
@@ -1361,7 +1361,8 @@ const DashboardHR = () => {
                                         dataKey="day"
                                         axisLine={false}
                                         tickLine={false}
-                                        interval={0}
+                                        interval="preserveStartEnd"
+                                        minTickGap={12}
                                         padding={{ left: 12, right: 12 }}
                                         tick={{ fill: '#64748B', fontSize: 11, fontWeight: 600 }}
                                         dy={6}
@@ -1390,12 +1391,12 @@ const DashboardHR = () => {
                     </Panel>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="hr-dash__charts gap-4">
                     <section className="hr-dash__panel">
                         <h2 className="hr-dash__panel-title mb-4 font-bold" style={{ color: HEADCOUNT_CHART.title }}>
                             Headcount by Department
                         </h2>
-                        <div className="flex items-center gap-4">
+                        <div className="hr-dash__headcount flex items-center gap-4">
                             <div className="relative h-[148px] w-[148px] shrink-0">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -1528,70 +1529,69 @@ const DashboardHR = () => {
                         </p>
                     </div>
 
-                    <div className="hr-dash__table overscroll-x-contain">
-                        <div className="min-w-[640px]">
-                            <div className="hr-dash__table-head grid-cols-[1.4fr_1fr_1fr_0.8fr_auto]">
-                                <span>Employee</span>
-                                <span>Role</span>
-                                <span>Date Joined</span>
-                                <span>Status</span>
-                                <span className="sr-only">Action</span>
-                            </div>
+                    <div className="hr-dash__table">
+                        <div className="hr-dash__table-head">
+                            <span>Employee</span>
+                            <span>Role</span>
+                            <span>Date Joined</span>
+                            <span>Status</span>
+                            <span className="sr-only">Action</span>
+                        </div>
 
-                            {recentHires.length > 0 ? (
-                                recentHires.map((employeeItem) => (
-                                    <button
-                                        key={employeeItem._id}
-                                        type="button"
-                                        onClick={() => setEmployeeQuickView({ open: true, employee: employeeItem })}
-                                        className="hr-dash__table-row grid-cols-[1.4fr_1fr_1fr_0.8fr_auto]"
-                                    >
-                                        <span className="flex min-w-0 items-center gap-3">
-                                            <span className="hr-dash__avatar">
-                                                {getEmployeeName(employeeItem).slice(0, 2).toUpperCase()}
-                                            </span>
-                                            <span className="min-w-0">
-                                                <span className="block truncate font-semibold text-[#111C2D]">
-                                                    {getEmployeeName(employeeItem)}
-                                                </span>
-                                                <span className="block truncate text-xs text-[#666666]">
-                                                    {employeeItem?.employeeId || employeeItem?.department || 'Department pending'}
-                                                </span>
-                                            </span>
+                        {recentHires.length > 0 ? (
+                            recentHires.map((employeeItem) => (
+                                <button
+                                    key={employeeItem._id}
+                                    type="button"
+                                    onClick={() => setEmployeeQuickView({ open: true, employee: employeeItem })}
+                                    className="hr-dash__table-row"
+                                >
+                                    <span className="hr-dash__hire-name flex min-w-0 items-center gap-3">
+                                        <span className="hr-dash__avatar shrink-0">
+                                            {getEmployeeName(employeeItem).slice(0, 2).toUpperCase()}
                                         </span>
                                         <span className="min-w-0">
-                                            <span className="block truncate text-sm text-[#111C2D]">
-                                                {employeeItem?.jobTitle || employeeItem?.position || '--'}
+                                            <span className="block truncate font-semibold text-[#111C2D]">
+                                                {getEmployeeName(employeeItem)}
                                             </span>
                                             <span className="block truncate text-xs text-[#666666]">
-                                                {employeeItem?.department || ''}
+                                                {employeeItem?.employeeId || employeeItem?.department || 'Department pending'}
                                             </span>
                                         </span>
-                                        <span className="text-sm text-[#475569]">
-                                            {formatShortDate(employeeItem?.joiningDate || employeeItem?.createdAt)}
+                                    </span>
+                                    <span className="hr-dash__hire-role min-w-0">
+                                        <span className="block truncate text-sm text-[#111C2D]">
+                                            {employeeItem?.jobTitle || employeeItem?.position || '--'}
                                         </span>
-                                        <span>
-                                            <span
-                                                className={`hr-dash__status ${
-                                                    normalizeText(employeeItem?.status) === 'active'
-                                                        ? 'hr-dash__status--active'
-                                                        : 'hr-dash__status--other'
-                                                }`}
-                                            >
-                                                {employeeItem?.status || 'Onboarding'}
-                                            </span>
+                                        <span className="block truncate text-xs text-[#666666]">
+                                            {employeeItem?.department || ''}
                                         </span>
-                                        <span className="flex items-center text-[#94A3B8]" aria-hidden="true">
-                                            <FiEye className="h-4 w-4" />
+                                    </span>
+                                    <span className="hr-dash__hire-date text-sm text-[#475569]">
+                                        <span className="hr-dash__hire-date-label">Joined </span>
+                                        {formatShortDate(employeeItem?.joiningDate || employeeItem?.createdAt)}
+                                    </span>
+                                    <span className="hr-dash__hire-status">
+                                        <span
+                                            className={`hr-dash__status ${
+                                                normalizeText(employeeItem?.status) === 'active'
+                                                    ? 'hr-dash__status--active'
+                                                    : 'hr-dash__status--other'
+                                            }`}
+                                        >
+                                            {employeeItem?.status || 'Onboarding'}
                                         </span>
-                                    </button>
-                                ))
-                            ) : (
-                                <div className="px-5 py-10 text-center text-sm text-[#666666]">
-                                    No hires matched your current search.
-                                </div>
-                            )}
-                        </div>
+                                    </span>
+                                    <span className="hr-dash__hire-action flex items-center text-[#94A3B8]" aria-hidden="true">
+                                        <FiEye className="h-4 w-4" />
+                                    </span>
+                                </button>
+                            ))
+                        ) : (
+                            <div className="px-5 py-10 text-center text-sm text-[#666666]">
+                                No hires matched your current search.
+                            </div>
+                        )}
                     </div>
                 </Panel>
 
