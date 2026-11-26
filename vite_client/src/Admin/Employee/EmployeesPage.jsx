@@ -376,10 +376,10 @@ const EmployeesPage = () => {
                 <FaSearch aria-hidden="true" />
                 <input
                   type="text"
-                  placeholder="Search by name, ID, role, or department..."
+                  placeholder="Search employees"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  aria-label="Search team"
+                  aria-label="Search employees by name, ID, role, or department"
                 />
                 {searchTerm ? (
                   <button
@@ -388,16 +388,17 @@ const EmployeesPage = () => {
                     onClick={() => setSearchTerm('')}
                     aria-label="Clear search"
                   >
-                    <FaTimes />
+                    <FaTimes aria-hidden="true" />
                   </button>
                 ) : null}
               </div>
-              <div className="emp-directory__pills" role="toolbar" aria-label="Quick filters">
+              <div className="emp-directory__pills" role="group" aria-label="Employee filters">
                 {quickFilters.map((pill) => (
                   <button
                     key={pill.id}
                     type="button"
                     onClick={() => setActiveFilter(pill.id)}
+                    aria-pressed={activeFilter === pill.id}
                     className={`emp-directory__pill${activeFilter === pill.id ? ' is-active' : ''}`}
                   >
                     {pill.label}
