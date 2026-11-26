@@ -34,8 +34,8 @@ class ErrorBoundary extends React.Component {
             errorInfo
         });
 
-        if (import.meta.env.PROD && isModuleLoadError(error) && navigator.onLine) {
-            // An open tab can still reference chunks from the previous deployment.
+        if (isModuleLoadError(error) && navigator.onLine) {
+            // An open tab can reference old modules after a dev-server restart or deployment.
             // Retry each failed import once per tab, even if the new page fails too.
             const retryKey = `module-reload:${error.message}`;
             try {
